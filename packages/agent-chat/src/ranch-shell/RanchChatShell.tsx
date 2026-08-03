@@ -26,6 +26,23 @@ function chatTitle(c: ChatSummary): string {
   return (c.title && c.title.trim()) || c.agent_id || c.chat_id.slice(0, 8);
 }
 
+/** Short agent id for same-name disambiguation (UUID prefix; strip acn:). */
+function shortAgentId(agentId?: string | null): string {
+  if (!agentId) return "";
+  const s = agentId.replace(/^acn:/i, "").trim();
+  if (!s) return "";
+  return s.length > 8 ? s.slice(0, 8) : s;
+}
+
+function agentStatusLabel(status?: string | null): string | null {
+  if (!status) return null;
+  const s = status.toLowerCase();
+  if (s === "active") return "online";
+  if (s === "busy") return "busy";
+  if (s === "idle" || s === "offline") return "away";
+  return s;
+}
+
 function isGroupChat(c: ChatSummary): boolean {
   return c.type === "group" || c.type === "GROUP";
 }
@@ -972,11 +989,24 @@ export function RanchChatShell(props: RanchChatShellProps) {
           ) : (
             filtered.map((c) => {
               const selected = active?.chat_id === c.chat_id;
+              const title = chatTitle(c);
+              const titleDup =
+                !isGroupChat(c) &&
+                filtered.filter((x) => !isGroupChat(x) && chatTitle(x) === title).length > 1;
+              const sid = shortAgentId(c.agent_id);
+              const status = agentStatusLabel(c.agent_status);
+              const preview =
+                c.last_message_content || (isGroupChat(c) ? "Group chat" : "No messages yet");
+              const metaBits = [
+                !isGroupChat(c) && sid ? sid : null,
+                status,
+              ].filter(Boolean);
               return (
                 <button
                   key={c.chat_id}
                   type="button"
                   onClick={() => void openConversation(c)}
+                  title={!isGroupChat(c) && c.agent_id ? c.agent_id : undefined}
                   style={{
                     ...listItem,
                     background: selected ? colors.accentSoft : "transparent",
@@ -995,7 +1025,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       flexShrink: 0,
                     }}
                   >
-                    {chatTitle(c).slice(0, 1).toUpperCase()}
+                    {title.slice(0, 1).toUpperCase()}
                   </span>
                   <span style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                     <span
@@ -1015,12 +1045,35 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {chatTitle(c)}
+                        {title}
+                        {titleDup && sid ? (
+                          <span style={{ color: colors.muted, fontWeight: 500, fontSize: 11 }}>
+                            {" "}
+                            · {sid}
+                          </span>
+                        ) : null}
                       </span>
                       <span style={{ fontSize: 10, color: colors.muted, flexShrink: 0 }}>
                         {formatRelativeTime(c.last_message_at)}
                       </span>
                     </span>
+                    {metaBits.length > 0 ? (
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: 10,
+                          color: colors.muted,
+                          marginBottom: 2,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          fontFamily:
+                            'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
+                        }}
+                      >
+                        {metaBits.join(" · ")}
+                      </span>
+                    ) : null}
                     <span
                       style={{
                         display: "block",
@@ -1031,7 +1084,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {c.last_message_content || (c.type === "group" ? "Group chat" : "No messages yet")}
+                      {preview}
                     </span>
                   </span>
                 </button>
@@ -1099,16 +1152,36 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       ←
                     </button>
                   )}
-                  <strong
-                    style={{
-                      fontSize: 15,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {chatTitle(active)}
-                  </strong>
+                  <div style={{ minWidth: 0 }}>
+                    <strong
+                      style={{
+                        display: "block",
+                        fontSize: 15,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                      title={active.agent_id || undefined}
+                    >
+                      {chatTitle(active)}
+                    </strong>
+                    {!isGroupChat(active) && active.agent_id ? (
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: 11,
+                          color: colors.muted,
+                          fontFamily:
+                            'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
+                        }}
+                      >
+                        {shortAgentId(active.agent_id)}
+                        {agentStatusLabel(active.agent_status)
+                          ? ` · ${agentStatusLabel(active.agent_status)}`
+                          : ""}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -1247,11 +1320,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
 }
 
 const listHeader: CSSProperties = {
-  height: 56,
+  minHeight: 56,
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  padding: "0 14px",
+  padding: "10px 14px",
   borderBottom: `1px solid ${colors.border}`,
   flexShrink: 0,
 };
