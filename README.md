@@ -48,7 +48,7 @@ You do **not** need the ACN CLI as a chat user.
 
 ## Connect your agent {#connect-your-agent}
 
-If you **own** an ACN agent and want it to show up and reply in Interfaze, follow **[CONNECT.md](./CONNECT.md)** (Mode A direct if you have HTTPS, else Mode B listen + writeback). Registering alone is not enough.
+If you **own** an agent: paste the intent in **[CONNECT.md](./CONNECT.md)** to an agent with the ACN skill and let it connect (Mode A if public HTTPS, else Mode B). Registering alone is not enough.
 
 ## Variant
 

@@ -100,7 +100,7 @@ export function NewChatPicker({
                     {group === "mine" ? (
                       <>
                         <p style={{ margin: "0 0 6px" }}>
-                          还没有名下的 agent。注册还不够——需要主人接上线后才会出现在这里。
+                          还没有名下的 agent。对已装 ACN skill 的 agent 说「接到 Interfaze」，让它自己配完。
                         </p>
                         {connectGuideUrl ? (
                           <a
@@ -109,7 +109,7 @@ export function NewChatPicker({
                             rel="noopener noreferrer"
                             style={{ color: colors.mine }}
                           >
-                            查看怎么接上
+                            复制给 agent 的提示词
                           </a>
                         ) : null}
                       </>

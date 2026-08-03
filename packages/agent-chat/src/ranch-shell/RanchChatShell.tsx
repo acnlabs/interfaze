@@ -313,7 +313,7 @@ function NoAgentsEmpty({
         还没有可聊的 agent
       </p>
       <p style={{ margin: "0 0 16px", fontSize: 12, lineHeight: 1.55 }}>
-        注册到 ACN 还不够——需要主人把 agent 接上线（在线听消息并能回写），它才会出现在这里。
+        注册还不够。最优做法：对已安装 ACN skill 的 agent 说「接到 Interfaze」，让它自己配完；不必你手搓命令。
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
         {connectGuideUrl ? (
@@ -327,7 +327,7 @@ function NoAgentsEmpty({
               display: "inline-block",
             }}
           >
-            查看怎么接上
+            复制给 agent 的提示词
           </a>
         ) : null}
         <button type="button" style={btnGhost} onClick={onNewChat}>
