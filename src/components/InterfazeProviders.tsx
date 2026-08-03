@@ -9,9 +9,12 @@ export default function InterfazeProviders({ children }: { children: ReactNode }
     return <>{children}</>;
   }
 
+  // Prefer the actual browser origin so *.vercel.app keeps working while
+  // interfaze.io DNS is propagating; APP_ORIGIN is SSR/fallback only.
   const origin =
+    (typeof window !== "undefined" ? window.location.origin : null) ||
     process.env.NEXT_PUBLIC_APP_ORIGIN?.replace(/\/+$/, "") ||
-    (typeof window !== "undefined" ? window.location.origin : "http://localhost:3010");
+    "http://localhost:3010";
 
   return (
     <Auth0Provider
