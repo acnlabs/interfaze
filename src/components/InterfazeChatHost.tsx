@@ -6,28 +6,15 @@ import { RanchChatShell, type AgentDirectoryItem } from "@acnlabs/agent-chat";
 import { AUTH0_AUDIENCE, isAuth0Configured } from "@/lib/auth0";
 import { getGatewayBaseUrl } from "@/lib/gateway";
 
-const OFFICIAL_FALLBACK: AgentDirectoryItem[] = [
-  {
-    agent_id: "sys:nova",
-    name: "Nova",
-    description: "Official system assistant",
-    group: "recommended",
-  },
-  {
-    agent_id: "sys:coder",
-    name: "Coder",
-    description: "Official coding assistant",
-    group: "recommended",
-  },
-];
-
 /**
  * Interfaze host — ranch-ported shell chrome + Chat Gateway.
+ * Legacy platform sys:* assistants (Nova/Coder) are not offered; official
+ * agents will be reintroduced via ACN when ready.
  */
 export default function InterfazeChatHost() {
   const { getAccessTokenSilently, isAuthenticated, user, logout } = useAuth0();
   const gatewayBaseUrl = getGatewayBaseUrl();
-  const [directoryAgents, setDirectoryAgents] = useState<AgentDirectoryItem[]>(OFFICIAL_FALLBACK);
+  const [directoryAgents, setDirectoryAgents] = useState<AgentDirectoryItem[]>([]);
 
   const handleLogout = useCallback(() => {
     logout({ logoutParams: { returnTo: typeof window !== "undefined" ? window.location.origin : undefined } });
@@ -54,8 +41,6 @@ export default function InterfazeChatHost() {
       if (token) headers.Authorization = `Bearer ${token}`;
 
       const mine: AgentDirectoryItem[] = [];
-      const recommended: AgentDirectoryItem[] = [...OFFICIAL_FALLBACK];
-
       const owner = user?.sub;
       if (owner) {
         try {
@@ -68,7 +53,7 @@ export default function InterfazeChatHost() {
             const data = (await res.json()) as { agents?: Array<Record<string, unknown>> };
             for (const a of data.agents ?? []) {
               const id = String(a.agent_id ?? a.id ?? "").trim();
-              if (!id) continue;
+              if (!id || id.startsWith("sys:")) continue;
               mine.push({
                 agent_id: id,
                 name: typeof a.name === "string" ? a.name : null,
@@ -82,36 +67,7 @@ export default function InterfazeChatHost() {
         }
       }
 
-      try {
-        const res = await fetch(`${gatewayBaseUrl}/api/agents?source=system&limit=20`, { headers });
-        if (res.ok) {
-          const data = (await res.json()) as
-            | { agents?: Array<Record<string, unknown>> }
-            | Array<Record<string, unknown>>;
-          const list = Array.isArray(data) ? data : (data.agents ?? []);
-          const seen = new Set(recommended.map((r) => r.agent_id));
-          for (const a of list) {
-            const id = String(a.agent_id ?? a.id ?? "").trim();
-            if (!id || seen.has(id)) continue;
-            seen.add(id);
-            recommended.push({
-              agent_id: id,
-              name:
-                typeof a.name === "string"
-                  ? a.name
-                  : typeof a.display_name === "string"
-                    ? a.display_name
-                    : null,
-              description: typeof a.description === "string" ? a.description : null,
-              group: "recommended",
-            });
-          }
-        }
-      } catch {
-        /* keep fallback */
-      }
-
-      if (!cancelled) setDirectoryAgents([...mine, ...recommended]);
+      if (!cancelled) setDirectoryAgents(mine);
     })();
 
     return () => {

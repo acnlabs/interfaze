@@ -162,7 +162,7 @@ export function NewChatPicker({
             <input
               value={manualId}
               onChange={(e) => setManualId(e.target.value)}
-              placeholder="acn:… or sys:nova"
+              placeholder="ACN agent id…"
               style={inputStyle}
             />
           </div>
