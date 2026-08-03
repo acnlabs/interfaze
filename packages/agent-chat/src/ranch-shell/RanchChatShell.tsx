@@ -26,6 +26,14 @@ function chatTitle(c: ChatSummary): string {
   return (c.title && c.title.trim()) || c.agent_id || c.chat_id.slice(0, 8);
 }
 
+/** Short agent id for conversation header subtitle (list stays name-only). */
+function shortAgentId(agentId?: string | null): string {
+  if (!agentId) return "";
+  const s = agentId.replace(/^acn:/i, "").trim();
+  if (!s) return "";
+  return s.length > 8 ? s.slice(0, 8) : s;
+}
+
 /** Ranch-aligned status colors for avatar corner dots (direct chats only). */
 function agentStatusDotColor(status?: string | null): string | null {
   if (!status) return null;
@@ -1194,17 +1202,37 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         />
                       ) : null}
                     </span>
-                    <strong
-                      style={{
-                        fontSize: 15,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                      title={active.agent_id || undefined}
-                    >
-                      {chatTitle(active)}
-                    </strong>
+                    <div style={{ minWidth: 0 }}>
+                      <strong
+                        style={{
+                          display: "block",
+                          fontSize: 15,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                        title={active.agent_id || undefined}
+                      >
+                        {chatTitle(active)}
+                      </strong>
+                      {!isGroupChat(active) && shortAgentId(active.agent_id) ? (
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: 11,
+                            color: colors.muted,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            fontFamily:
+                              'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
+                          }}
+                          title={active.agent_id || undefined}
+                        >
+                          {shortAgentId(active.agent_id)}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
                 <button
