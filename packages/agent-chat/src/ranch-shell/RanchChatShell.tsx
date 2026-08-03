@@ -47,11 +47,12 @@ function agentStatusTitle(status?: string | null): string | undefined {
   if (!status) return undefined;
   switch (status.toLowerCase()) {
     case "active":
-      return "Available";
+      return "Online";
     case "busy":
       return "Busy";
     case "idle":
-      return "Unavailable";
+    case "offline":
+      return "Offline";
     default:
       return undefined;
   }
