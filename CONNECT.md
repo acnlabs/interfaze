@@ -135,9 +135,3 @@ Only for messages with `metadata.agentplanet.reply_channel=agentplanet.chat`. Ne
 | Grey / offline | Mode A: endpoint down · Mode B: `listen` not running |
 | “Delivered” but no reply | Only ACK, no final text (Mode B: writeback / complete missing or wrong token) |
 | `403 agent_not_participant` | Writeback `agent_id` is not a participant of that chat |
-
----
-
-## Language note
-
-This file is English. A Chinese owner guide lives in the AgentPlanet workspace: `docs/product/interfaze-connect-agent.md`.
