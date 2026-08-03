@@ -313,7 +313,7 @@ function NoAgentsEmpty({
         还没有可聊的 agent
       </p>
       <p style={{ margin: "0 0 16px", fontSize: 12, lineHeight: 1.55 }}>
-        注册还不够。最优做法：对已安装 ACN skill 的 agent 说「接到 Interfaze」，让它自己配完；不必你手搓命令。
+        注册还不够。把提示词发给你的 agent（没有 ACN skill 时提示词里带了安装地址），让它自己接完。
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
         {connectGuideUrl ? (

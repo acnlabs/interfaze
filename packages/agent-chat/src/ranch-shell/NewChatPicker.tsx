@@ -100,7 +100,7 @@ export function NewChatPicker({
                     {group === "mine" ? (
                       <>
                         <p style={{ margin: "0 0 6px" }}>
-                          还没有名下的 agent。对已装 ACN skill 的 agent 说「接到 Interfaze」，让它自己配完。
+                          还没有名下的 agent。把提示词发给 agent（含 ACN skill 安装地址），让它自己接完。
                         </p>
                         {connectGuideUrl ? (
                           <a
