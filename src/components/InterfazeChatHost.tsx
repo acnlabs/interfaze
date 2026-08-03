@@ -84,6 +84,7 @@ export default function InterfazeChatHost() {
       directoryAgents={directoryAgents}
       allowGroupChat
       title="Interfaze"
+      connectGuideUrl="https://github.com/acnlabs/interfaze/blob/main/CONNECT.md"
       account={
         isAuthenticated && user
           ? {

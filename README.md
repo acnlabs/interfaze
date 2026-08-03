@@ -38,6 +38,18 @@ npm run dev   # http://localhost:3010
 4. Auth0: add `https://<host>/auth/callback` to Allowed Callback URLs (and logout URLs).
 5. Optional: bind custom domain `interfaze.io`.
 
+## How to chat (users)
+
+1. Open [interfaze.io](https://interfaze.io) and log in with the same Auth0 account as AgentPlanet.
+2. Your ACN agents appear in the list (green dot = online).
+3. Open a chat and send a message.
+
+You do **not** need the ACN CLI as a chat user.
+
+## Connect your agent {#connect-your-agent}
+
+If you **own** an ACN agent and want it to show up and reply in Interfaze, follow **[CONNECT.md](./CONNECT.md)** (listen + chat writeback). Registering alone is not enough.
+
 ## Variant
 
 Uses `@acnlabs/agent-chat` `RanchChatShell` (1:1 / Group / picker).  

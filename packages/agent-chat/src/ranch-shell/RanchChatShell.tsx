@@ -34,7 +34,7 @@ function shortAgentId(agentId?: string | null): string {
   return s.length > 8 ? s.slice(0, 8) : s;
 }
 
-/** Ranch-aligned status colors for avatar corner dots (direct chats only). */
+/** Status colors for avatar corner dots (direct chats only). */
 function agentStatusDotColor(status?: string | null): string | null {
   if (!status) return null;
   switch (status.toLowerCase()) {
@@ -43,12 +43,17 @@ function agentStatusDotColor(status?: string | null): string | null {
     case "busy":
       return "#eab308"; // yellow-500
     case "idle":
-      return "#94a3b8"; // slate-400
     case "offline":
-      return null; // ranch hides offline dots
+      return "#64748b"; // slate-500 — visible "not listening"
     default:
       return null;
   }
+}
+
+function isAgentOffline(status?: string | null): boolean {
+  if (!status) return false;
+  const s = status.toLowerCase();
+  return s === "offline" || s === "idle";
 }
 
 function agentStatusTitle(status?: string | null): string | undefined {
@@ -226,8 +231,20 @@ function AgentReplyPendingBubble() {
   );
 }
 
-/** Bot-style timeout: explicit error in agent slot + retry (not a silent blank). */
-function AgentReplyTimeoutBubble({ onRetry }: { onRetry: () => void }) {
+type ReplyTimeoutReason = "offline" | "timeout";
+
+/** Explicit error in agent slot + retry (not a silent blank / endless spinner). */
+function AgentReplyTimeoutBubble({
+  reason,
+  onRetry,
+}: {
+  reason: ReplyTimeoutReason;
+  onRetry: () => void;
+}) {
+  const message =
+    reason === "offline"
+      ? "对方当前不在线，消息已排队。等对方上线后再试，或请主人确认 agent 是否在听。"
+      : "对方长时间没有回复。可能离线，或还没接上聊天回写。";
   return (
     <div
       style={{
@@ -239,31 +256,35 @@ function AgentReplyTimeoutBubble({ onRetry }: { onRetry: () => void }) {
         alignItems: "flex-start",
       }}
       aria-live="assertive"
-      aria-label="回复超时"
+      aria-label={message}
     >
       <div
         style={{
           background: colors.agentBubble,
           borderRadius: 12,
           padding: "10px 14px",
-          fontSize: 14,
+          fontSize: 13,
           lineHeight: 1.5,
-          display: "inline-flex",
-          alignItems: "center",
+          display: "flex",
+          flexDirection: "column",
           gap: 8,
           color: colors.danger,
         }}
       >
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
-          <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M8 5v4.2M8 11.2h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
+        <span style={{ display: "inline-flex", alignItems: "flex-start", gap: 8 }}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden style={{ flexShrink: 0, marginTop: 2 }}>
+            <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M8 5v4.2M8 11.2h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+          <span>{message}</span>
+        </span>
         <button
           type="button"
           onClick={onRetry}
           style={{
+            alignSelf: "flex-start",
             margin: 0,
-            padding: "2px 8px",
+            padding: "4px 10px",
             borderRadius: 6,
             border: `1px solid ${colors.danger}`,
             background: "transparent",
@@ -273,6 +294,44 @@ function AgentReplyTimeoutBubble({ onRetry }: { onRetry: () => void }) {
           }}
         >
           重试
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function NoAgentsEmpty({
+  connectGuideUrl,
+  onNewChat,
+}: {
+  connectGuideUrl?: string;
+  onNewChat: () => void;
+}) {
+  return (
+    <div style={{ textAlign: "center", padding: "28px 20px", color: colors.muted }}>
+      <p style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 600, color: colors.text }}>
+        还没有可聊的 agent
+      </p>
+      <p style={{ margin: "0 0 16px", fontSize: 12, lineHeight: 1.55 }}>
+        注册到 ACN 还不够——需要主人把 agent 接上线（在线听消息并能回写），它才会出现在这里。
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
+        {connectGuideUrl ? (
+          <a
+            href={connectGuideUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              ...btnPrimary,
+              textDecoration: "none",
+              display: "inline-block",
+            }}
+          >
+            查看怎么接上
+          </a>
+        ) : null}
+        <button type="button" style={btnGhost} onClick={onNewChat}>
+          粘贴 agent id 试试
         </button>
       </div>
     </div>
@@ -452,6 +511,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     allowGroupChat = true,
     account,
     onLogout,
+    connectGuideUrl,
   } = props;
 
   const [internalOpen, setInternalOpen] = useState(true);
@@ -482,10 +542,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
-  /** Agent-slot: typing → timeout+retry (bot-style). */
-  const [replySlot, setReplySlot] = useState<null | { chatId: string; phase: "pending" | "timeout" }>(
-    null,
-  );
+  /** Agent-slot: typing → timeout+retry (not endless spinner). */
+  const [replySlot, setReplySlot] = useState<null | {
+    chatId: string;
+    phase: "pending" | "timeout";
+    reason?: ReplyTimeoutReason;
+  }>(null);
   const replySlotChatIdRef = useRef<string | null>(null);
   const awaitingSinceRef = useRef(0);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -513,9 +575,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setReplySlot({ chatId, phase: "pending" });
   }, []);
 
-  const markReplyTimeout = useCallback((chatId: string) => {
+  const markReplyTimeout = useCallback((chatId: string, reason: ReplyTimeoutReason = "timeout") => {
     if (replySlotChatIdRef.current !== chatId) return;
-    setReplySlot({ chatId, phase: "timeout" });
+    setReplySlot({ chatId, phase: "timeout", reason });
   }, []);
 
   const noteAgentActivity = useCallback(
@@ -531,17 +593,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
         clearReplySlot(chatId);
         return;
       }
-      // Transport delivery failed → stop waiting; user bubble already shows !.
+      // Transport delivery failed / queued offline → stop spinning with a clear reason.
       const recentUser = [...msgs].reverse().find((m) => m.sender_type === "user");
-      if (
-        recentUser &&
-        Date.parse(recentUser.created_at) >= since - 2000 &&
-        recentUser.metadata?.delivery === "failed"
-      ) {
+      if (!recentUser || Date.parse(recentUser.created_at) < since - 2000) return;
+      const delivery = recentUser.metadata?.delivery;
+      if (delivery === "failed") {
         clearReplySlot(chatId);
+        return;
+      }
+      if (delivery === "queued") {
+        markReplyTimeout(chatId, "offline");
       }
     },
-    [clearReplySlot],
+    [clearReplySlot, markReplyTimeout],
   );
 
   const refreshChats = useCallback(async () => {
@@ -788,6 +852,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       }
       const mentions = group ? resolveGroupMentions(text, agentIdsRef.current) : undefined;
       beginAwaitingReply(chatId);
+      const sentWhileOffline = !group && isAgentOffline(active?.agent_status);
       await client.sendMessage(chatId, text, mentions);
       setDraft("");
       await reloadMessages(chatId, seq);
@@ -816,21 +881,26 @@ export function RanchChatShell(props: RanchChatShellProps) {
               return;
             }
             noteAgentActivity(chatId, msgs);
+            // Already offline at send: don't spin the full window before explaining.
+            if (sentWhileOffline && i >= 2) {
+              markReplyTimeout(chatId, "offline");
+              return;
+            }
           } catch {
             /* ignore transient poll errors */
           }
         }
-        // Bot-style: past the wait window → timeout + retry (not a silent blank).
-        markReplyTimeout(chatId);
+        // Past the wait window → timeout + retry (not a silent blank).
+        markReplyTimeout(chatId, sentWhileOffline ? "offline" : "timeout");
       })();
     } catch (e) {
       clearReplySlot(chatId);
       setError(
         e instanceof ChatGatewayError
           ? e.code === "agent_unreachable"
-            ? "Agent unreachable"
+            ? "对方暂时联系不上（离线或未在听）。"
             : e.message
-          : "Send failed",
+          : "发送失败",
       );
       try {
         await reloadMessages(chatId, seq);
@@ -897,9 +967,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
         setError(
           e instanceof ChatGatewayError
             ? e.code === "agent_unreachable"
-              ? "Agent unreachable"
+              ? "对方暂时联系不上（离线或未在听）。"
               : e.message
-            : "Send failed",
+            : "发送失败",
         );
       } finally {
         setBusy(false);
@@ -921,6 +991,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
     replySlot?.phase === "pending" && replySlot.chatId === active?.chat_id;
   const showAgentReplyTimeout =
     replySlot?.phase === "timeout" && replySlot.chatId === active?.chat_id;
+  const replyTimeoutReason: ReplyTimeoutReason = replySlot?.reason ?? "timeout";
+  const mineAgents = directoryAgents.filter((a) => a.group === "mine" && a.agent_id.trim());
+  const hasMineAgents = mineAgents.length > 0;
+  const activeOffline = active && !isGroupChat(active) && isAgentOffline(active.agent_status);
 
   return (
     <div style={shellRoot(mode)} data-ranch-chat-shell data-mode={mode}>
@@ -1005,12 +1079,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
           {loadingChats ? (
             <p style={{ color: colors.muted, textAlign: "center", padding: 24 }}>Loading…</p>
           ) : filtered.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 32, color: colors.muted }}>
-              <p style={{ margin: "0 0 12px" }}>No chats yet</p>
-              <button type="button" style={btnPrimary} onClick={() => setShowPicker(true)}>
-                Start a chat
-              </button>
-            </div>
+            hasMineAgents ? (
+              <div style={{ textAlign: "center", padding: 32, color: colors.muted }}>
+                <p style={{ margin: "0 0 12px" }}>还没有会话</p>
+                <button type="button" style={btnPrimary} onClick={() => setShowPicker(true)}>
+                  开始聊天
+                </button>
+              </div>
+            ) : (
+              <NoAgentsEmpty
+                connectGuideUrl={connectGuideUrl}
+                onNewChat={() => setShowPicker(true)}
+              />
+            )
           ) : (
             filtered.map((c) => {
               const selected = active?.chat_id === c.chat_id;
@@ -1116,6 +1197,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             directoryAgents={directoryAgents}
             allowGroupChat={allowGroupChat}
             busy={busy}
+            connectGuideUrl={connectGuideUrl}
             onClose={() => setShowPicker(false)}
             onOpenDirect={(id) => void startDirect(id)}
             onCreateGroup={(t, ids) => void startGroup(t, ids)}
@@ -1136,22 +1218,38 @@ export function RanchChatShell(props: RanchChatShellProps) {
           }}
         >
           {!active ? (
-            <div
-              style={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: colors.muted,
-                flexDirection: "column",
-                gap: 12,
-              }}
-            >
-              <p style={{ margin: 0 }}>Select a chat or start a new one</p>
-              <button type="button" style={btnPrimary} onClick={() => setShowPicker(true)}>
-                New chat
-              </button>
-            </div>
+            hasMineAgents ? (
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: colors.muted,
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
+                <p style={{ margin: 0 }}>选择一个会话，或新建聊天</p>
+                <button type="button" style={btnPrimary} onClick={() => setShowPicker(true)}>
+                  新建聊天
+                </button>
+              </div>
+            ) : (
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <NoAgentsEmpty
+                  connectGuideUrl={connectGuideUrl}
+                  onNewChat={() => setShowPicker(true)}
+                />
+              </div>
+            )
           ) : (
             <>
               <div style={listHeader}>
@@ -1249,6 +1347,34 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 </button>
               </div>
 
+              {activeOffline ? (
+                <div
+                  style={{
+                    padding: "8px 14px",
+                    fontSize: 12,
+                    lineHeight: 1.45,
+                    color: "#fbbf24",
+                    background: "rgba(234,179,8,0.1)",
+                    borderBottom: `1px solid ${colors.border}`,
+                  }}
+                >
+                  对方当前不在线。消息可能排队；等绿点亮起后再聊更稳。
+                  {connectGuideUrl ? (
+                    <>
+                      {" "}
+                      <a
+                        href={connectGuideUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "#fcd34d" }}
+                      >
+                        主人怎么接上线
+                      </a>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+
               <div
                 ref={listRef}
                 style={{
@@ -1262,7 +1388,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
               >
                 {messages.length === 0 && (
                   <p style={{ color: colors.muted, fontSize: 13, margin: 0 }}>
-                    Say hello to start the conversation.
+                    {activeOffline
+                      ? "对方离线时也可以发消息，但可能要等上线后才有回复。"
+                      : "打个招呼开始对话。"}
                   </p>
                 )}
                 {messages.filter((m) => !isLegacyDeliveryAckBubble(m)).map((m) => {
@@ -1303,7 +1431,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 })}
                 {showAgentReplyPending ? <AgentReplyPendingBubble /> : null}
                 {showAgentReplyTimeout ? (
-                  <AgentReplyTimeoutBubble onRetry={retryLastUserMessage} />
+                  <AgentReplyTimeoutBubble
+                    reason={replyTimeoutReason}
+                    onRetry={retryLastUserMessage}
+                  />
                 ) : null}
               </div>
 

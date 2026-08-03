@@ -8,6 +8,7 @@ type Props = {
   directoryAgents: AgentDirectoryItem[];
   allowGroupChat: boolean;
   busy: boolean;
+  connectGuideUrl?: string;
   onClose: () => void;
   onOpenDirect: (agentId: string) => void;
   onCreateGroup: (title: string, agentIds: string[]) => void;
@@ -29,6 +30,7 @@ export function NewChatPicker({
   directoryAgents,
   allowGroupChat,
   busy,
+  connectGuideUrl,
   onClose,
   onOpenDirect,
   onCreateGroup,
@@ -94,9 +96,27 @@ export function NewChatPicker({
                   {cfg.label}
                 </div>
                 {rows.length === 0 ? (
-                  <p style={{ color: colors.muted, fontSize: 12, margin: 0 }}>
-                    {group === "mine" ? "No claimed agents yet" : "No recommended agents"}
-                  </p>
+                  <div style={{ color: colors.muted, fontSize: 12 }}>
+                    {group === "mine" ? (
+                      <>
+                        <p style={{ margin: "0 0 6px" }}>
+                          还没有名下的 agent。注册还不够——需要主人接上线后才会出现在这里。
+                        </p>
+                        {connectGuideUrl ? (
+                          <a
+                            href={connectGuideUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: colors.mine }}
+                          >
+                            查看怎么接上
+                          </a>
+                        ) : null}
+                      </>
+                    ) : (
+                      <p style={{ margin: 0 }}>暂无推荐 agent</p>
+                    )}
+                  </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {rows.map((a) => {

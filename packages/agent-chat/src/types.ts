@@ -92,6 +92,11 @@ export type RanchChatShellProps = {
   /** Optional account strip at bottom of chat list (host owns IdP). */
   account?: RanchChatAccount | null;
   onLogout?: () => void;
+  /**
+   * Link for empty-state / owner setup ("how to connect an agent").
+   * Host should point at a short plain-language guide.
+   */
+  connectGuideUrl?: string;
 };
 
 /** Outbound delivery on user messages (Chat Gateway → ACN). */
