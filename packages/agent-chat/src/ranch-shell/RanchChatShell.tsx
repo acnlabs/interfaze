@@ -902,6 +902,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   if (!open) return null;
 
   const filtered = chats.filter((c) => {
+    // Legacy platform sys:* assistants are retired from Interfaze surfaces.
+    if ((c.agent_id || "").startsWith("sys:")) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return chatTitle(c).toLowerCase().includes(q) || (c.agent_id ?? "").toLowerCase().includes(q);
