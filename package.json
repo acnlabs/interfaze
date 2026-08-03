@@ -10,7 +10,7 @@
     "lint": "echo 'no lint config yet'"
   },
   "dependencies": {
-    "@acnlabs/agent-chat": "file:../packages/agent-chat",
+    "@acnlabs/agent-chat": "file:./packages/agent-chat",
     "@auth0/auth0-react": "^2.15.0",
     "next": "^16.2.2",
     "react": "^19.2.1",

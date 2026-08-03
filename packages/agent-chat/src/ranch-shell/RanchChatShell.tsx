@@ -1,0 +1,1270 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { ChatGatewayError, createGatewayClient } from "../gateway";
+import type { ChatMessage, ChatSummary, RanchChatAccount, RanchChatShellProps } from "../types";
+import { connectChatSocket, type ChatSocket } from "../ws";
+import { NewChatPicker } from "./NewChatPicker";
+import { btnGhost, btnIcon, btnPrimary, colors, inputStyle, shellRoot } from "./styles";
+
+function formatRelativeTime(iso?: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const diffMs = Date.now() - date.getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString();
+}
+
+function chatTitle(c: ChatSummary): string {
+  return (c.title && c.title.trim()) || c.agent_id || c.chat_id.slice(0, 8);
+}
+
+function isGroupChat(c: ChatSummary): boolean {
+  return c.type === "group" || c.type === "GROUP";
+}
+
+/** Legacy system bubbles from before delivery icons — hide in the transcript. */
+function isLegacyDeliveryAckBubble(m: ChatMessage): boolean {
+  if (m.sender_type !== "system") return false;
+  const c = (m.content || "").toLowerCase();
+  return (
+    c.includes("delivered to agent") ||
+    c.includes("waiting for a reply") ||
+    c.includes("mode b / local-receiver") ||
+    c.includes("queued in acn inbox")
+  );
+}
+
+function parseMessageMetadata(raw: unknown): ChatMessage["metadata"] {
+  if (!raw || typeof raw !== "object") return null;
+  return raw as ChatMessage["metadata"];
+}
+
+function DeliveryStatusIcon({ delivery }: { delivery?: string | null }) {
+  if (!delivery) return null;
+  const common: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 14,
+    height: 14,
+  };
+  const stroke =
+    delivery === "failed"
+      ? colors.danger
+      : delivery === "pending"
+        ? colors.muted
+        : delivery === "sent"
+          ? colors.muted
+          : "#93c5fd";
+  const title =
+    delivery === "pending"
+      ? "Sending"
+      : delivery === "sent"
+        ? "Sent"
+        : delivery === "queued"
+          ? "Queued (agent offline)"
+          : delivery === "failed"
+            ? "Delivery failed"
+            : "Delivered";
+
+  if (delivery === "pending") {
+    return (
+      <span title={title} aria-label={title} style={{ ...common, color: stroke }}>
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
+          <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" opacity="0.45" />
+          <path d="M8 4.5V8l2.2 1.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      </span>
+    );
+  }
+  if (delivery === "sent") {
+    // Single check — accepted by Gateway, not yet acked by agent transport.
+    return (
+      <span title={title} aria-label={title} style={{ ...common, color: stroke }}>
+        <svg width="12" height="12" viewBox="0 0 16 14" fill="none" aria-hidden>
+          <path
+            d="M2 7.2 5.6 10.5 13.5 2.8"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+    );
+  }
+  if (delivery === "queued") {
+    return (
+      <span title={title} aria-label={title} style={{ ...common, color: stroke }}>
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
+          <path
+            d="M3 5.5h10v7.2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5.5Z"
+            stroke="currentColor"
+            strokeWidth="1.4"
+          />
+          <path d="M3 5.5 8 9l5-3.5" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+        </svg>
+      </span>
+    );
+  }
+  if (delivery === "failed") {
+    return (
+      <span title={title} aria-label={title} style={{ ...common, color: stroke }}>
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
+          <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M8 5v4.2M8 11.2h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      </span>
+    );
+  }
+  // delivered — double check (ACN transport ACK)
+  return (
+    <span title={title} aria-label={title} style={{ ...common, color: stroke }}>
+      <svg width="14" height="12" viewBox="0 0 18 14" fill="none" aria-hidden>
+        <path
+          d="M1.5 7.5 4.8 10.5 10.5 3.5"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M7 10.5 8.2 11.6 14.5 3.5"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity="0.85"
+        />
+      </svg>
+    </span>
+  );
+}
+
+/** Typing indicator in the agent-bubble slot (Mode B writeback in flight). */
+function AgentReplyPendingBubble() {
+  return (
+    <div
+      style={{
+        alignSelf: "flex-start",
+        maxWidth: "85%",
+        display: "flex",
+        flexDirection: "column",
+        gap: 3,
+        alignItems: "flex-start",
+      }}
+      aria-live="polite"
+      aria-label="正在回复"
+    >
+      <div
+        style={{
+          background: colors.agentBubble,
+          borderRadius: 12,
+          padding: "10px 14px",
+          fontSize: 14,
+          lineHeight: 1.5,
+          display: "inline-flex",
+          alignItems: "center",
+          color: colors.muted,
+        }}
+      >
+        <span style={{ display: "inline-flex", gap: 3, alignItems: "center", height: 12 }} aria-hidden>
+          <span className="ranch-reply-dot" style={{ animationDelay: "0ms" }} />
+          <span className="ranch-reply-dot" style={{ animationDelay: "160ms" }} />
+          <span className="ranch-reply-dot" style={{ animationDelay: "320ms" }} />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Bot-style timeout: explicit error in agent slot + retry (not a silent blank). */
+function AgentReplyTimeoutBubble({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div
+      style={{
+        alignSelf: "flex-start",
+        maxWidth: "85%",
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        alignItems: "flex-start",
+      }}
+      aria-live="assertive"
+      aria-label="回复超时"
+    >
+      <div
+        style={{
+          background: colors.agentBubble,
+          borderRadius: 12,
+          padding: "10px 14px",
+          fontSize: 14,
+          lineHeight: 1.5,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          color: colors.danger,
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+          <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M8 5v4.2M8 11.2h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+        <button
+          type="button"
+          onClick={onRetry}
+          style={{
+            margin: 0,
+            padding: "2px 8px",
+            borderRadius: 6,
+            border: `1px solid ${colors.danger}`,
+            background: "transparent",
+            color: colors.danger,
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+        >
+          重试
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Group delivery requires mentions; shell defaults to all agents (implicit @all). */
+function resolveGroupMentions(text: string, agentIds: string[]): string[] {
+  if (agentIds.length === 0) return [];
+  if (/(^|\s)@all\b/i.test(text)) return [...agentIds];
+  const hit = agentIds.filter((id) =>
+    new RegExp(`(^|\\s)@${escapeRegExp(id)}\\b`, "i").test(text),
+  );
+  return hit.length > 0 ? hit : [...agentIds];
+}
+
+/**
+ * Ranch-ported chat chrome: list → conversation → new-chat picker.
+ * Transport: Chat Gateway only (not ranch /api/chat AI SDK).
+ */
+function IconExpand() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M2.5 6V3.5H5M10.5 3.5H13.5V6M13.5 10.5V13.5H10.5M5 13.5H2.5V10.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconCollapse() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M5.5 2.5H3.5V5.5M12.5 5.5V3.5H10.5M10.5 12.5H12.5V10.5M3.5 10.5V12.5H5.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconClose() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M4 4l8 8M12 4l-8 8"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function AccountFooter({
+  account,
+  onLogout,
+}: {
+  account: RanchChatAccount;
+  onLogout?: () => void;
+}) {
+  const label = (account.name || account.email || "Account").trim();
+  const initial = label.slice(0, 1).toUpperCase() || "?";
+  return (
+    <div
+      style={{
+        borderTop: `1px solid ${colors.border}`,
+        padding: "10px 12px",
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        flexShrink: 0,
+        background: colors.panel,
+      }}
+    >
+      {account.picture ? (
+        <img
+          src={account.picture}
+          alt=""
+          width={32}
+          height={32}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 999,
+            objectFit: "cover",
+            flexShrink: 0,
+            background: colors.border,
+          }}
+        />
+      ) : (
+        <span
+          aria-hidden
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 999,
+            background: "linear-gradient(135deg,#475569,#1e293b)",
+            color: "#fff",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 13,
+            fontWeight: 700,
+            flexShrink: 0,
+          }}
+        >
+          {initial}
+        </span>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {label}
+        </div>
+        {account.name && account.email ? (
+          <div
+            style={{
+              fontSize: 11,
+              color: colors.muted,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {account.email}
+          </div>
+        ) : null}
+      </div>
+      {onLogout ? (
+        <button
+          type="button"
+          onClick={onLogout}
+          style={{
+            ...btnGhost,
+            fontSize: 12,
+            padding: "4px 8px",
+            flexShrink: 0,
+          }}
+          aria-label="Log out"
+        >
+          Log out
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+export function RanchChatShell(props: RanchChatShellProps) {
+  const {
+    getAccessToken,
+    gatewayBaseUrl,
+    directoryAgents = [],
+    title = "Chats",
+    mode: modeProp = "side",
+    open: openProp,
+    onOpenChange,
+    onClose,
+    allowGroupChat = true,
+    account,
+    onLogout,
+  } = props;
+
+  const [internalOpen, setInternalOpen] = useState(true);
+  const open = openProp ?? internalOpen;
+  const [mode, setMode] = useState(modeProp);
+  const setOpen = useCallback(
+    (next: boolean) => {
+      onOpenChange?.(next);
+      if (openProp === undefined) setInternalOpen(next);
+      if (!next) onClose?.();
+    },
+    [onClose, onOpenChange, openProp],
+  );
+
+  const client = useMemo(
+    () => createGatewayClient(gatewayBaseUrl, getAccessToken),
+    [gatewayBaseUrl, getAccessToken],
+  );
+
+  const [view, setView] = useState<"list" | "conversation">("list");
+  const [showPicker, setShowPicker] = useState(false);
+  const [search, setSearch] = useState("");
+  const [chats, setChats] = useState<ChatSummary[]>([]);
+  const [loadingChats, setLoadingChats] = useState(true);
+  const [active, setActive] = useState<ChatSummary | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [healthOk, setHealthOk] = useState<boolean | null>(null);
+  /** Agent-slot: typing → timeout+retry (bot-style). */
+  const [replySlot, setReplySlot] = useState<null | { chatId: string; phase: "pending" | "timeout" }>(
+    null,
+  );
+  const replySlotChatIdRef = useRef<string | null>(null);
+  const awaitingSinceRef = useRef(0);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const socketRef = useRef<ChatSocket | null>(null);
+  /** Bumps on each conversation open / chat switch to ignore stale listMessages. */
+  const loadSeqRef = useRef(0);
+  /** Cancels in-flight post-send poll when chat switches or a newer send starts. */
+  const replyPollGenRef = useRef(0);
+  /** Active agent participant ids for group mention delivery. */
+  const agentIdsRef = useRef<string[]>([]);
+  const activeChatIdRef = useRef<string | null>(null);
+  activeChatIdRef.current = active?.chat_id ?? null;
+
+  const clearReplySlot = useCallback((chatId?: string) => {
+    setReplySlot((cur) => {
+      if (chatId != null && cur && cur.chatId !== chatId) return cur;
+      replySlotChatIdRef.current = null;
+      return null;
+    });
+  }, []);
+
+  const beginAwaitingReply = useCallback((chatId: string) => {
+    awaitingSinceRef.current = Date.now();
+    replySlotChatIdRef.current = chatId;
+    setReplySlot({ chatId, phase: "pending" });
+  }, []);
+
+  const markReplyTimeout = useCallback((chatId: string) => {
+    if (replySlotChatIdRef.current !== chatId) return;
+    setReplySlot({ chatId, phase: "timeout" });
+  }, []);
+
+  const noteAgentActivity = useCallback(
+    (chatId: string, msgs: ChatMessage[]) => {
+      if (replySlotChatIdRef.current !== chatId) return;
+      const since = awaitingSinceRef.current;
+      const hasReply = msgs.some(
+        (m) =>
+          m.sender_type === "agent" &&
+          Date.parse(m.created_at) >= since - 2000,
+      );
+      if (hasReply) {
+        clearReplySlot(chatId);
+        return;
+      }
+      // Transport delivery failed → stop waiting; user bubble already shows !.
+      const recentUser = [...msgs].reverse().find((m) => m.sender_type === "user");
+      if (
+        recentUser &&
+        Date.parse(recentUser.created_at) >= since - 2000 &&
+        recentUser.metadata?.delivery === "failed"
+      ) {
+        clearReplySlot(chatId);
+      }
+    },
+    [clearReplySlot],
+  );
+
+  const refreshChats = useCallback(async () => {
+    setLoadingChats(true);
+    try {
+      const list = await client.listChats();
+      setChats(list);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load chats");
+    } finally {
+      setLoadingChats(false);
+    }
+  }, [client]);
+
+  const reloadMessages = useCallback(
+    async (chatId: string, seq?: number) => {
+      const msgs = await client.listMessages(chatId);
+      if (seq != null && seq !== loadSeqRef.current) return;
+      if (activeChatIdRef.current !== chatId) return;
+      setMessages(msgs);
+    },
+    [client],
+  );
+
+  useEffect(() => {
+    setMode(modeProp);
+  }, [modeProp]);
+
+  useEffect(() => {
+    if (!open) return;
+    void refreshChats();
+    (async () => {
+      try {
+        const h = await client.health();
+        setHealthOk(h.ok);
+      } catch {
+        setHealthOk(false);
+      }
+    })();
+  }, [open, client, refreshChats]);
+
+  /** Ensure host "mine" ACN agents always have a direct chat row in the list. */
+  const ensuredMineKeyRef = useRef("");
+  useEffect(() => {
+    if (!open) return;
+    const mine = directoryAgents.filter((a) => a.group === "mine" && a.agent_id.trim());
+    if (mine.length === 0) return;
+    const key = mine
+      .map((a) => a.agent_id)
+      .sort()
+      .join("|");
+    if (ensuredMineKeyRef.current === key) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await client.listChats();
+        if (cancelled) return;
+        const have = new Set(
+          list.map((c) => (c.agent_id || "").trim()).filter(Boolean),
+        );
+        const missing = mine.filter((a) => !have.has(a.agent_id));
+        for (const a of missing) {
+          if (cancelled) return;
+          await client.createOrGetDirectChat(a.agent_id);
+        }
+        if (cancelled) return;
+        ensuredMineKeyRef.current = key;
+        if (missing.length > 0) await refreshChats();
+      } catch {
+        /* best-effort — picker still works */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, directoryAgents, client, refreshChats]);
+
+  const openConversation = useCallback(
+    async (chat: ChatSummary) => {
+      const seq = ++loadSeqRef.current;
+      activeChatIdRef.current = chat.chat_id;
+      setActive(chat);
+      setView("conversation");
+      setError(null);
+      setMessages([]);
+      setDraft("");
+      clearReplySlot();
+      agentIdsRef.current = [];
+      try {
+        const [msgs, participants] = await Promise.all([
+          client.listMessages(chat.chat_id),
+          isGroupChat(chat)
+            ? client.listParticipants(chat.chat_id).catch(() => [])
+            : Promise.resolve([]),
+        ]);
+        if (seq !== loadSeqRef.current) return;
+        setMessages(msgs);
+        agentIdsRef.current = participants
+          .filter((p) => p.participant_type === "agent" && p.is_active !== false)
+          .map((p) => p.participant_id);
+      } catch (e) {
+        if (seq !== loadSeqRef.current) return;
+        setError(e instanceof Error ? e.message : "Failed to load messages");
+      }
+    },
+    [client, clearReplySlot],
+  );
+
+  useEffect(() => {
+    if (!open || !active?.chat_id || view !== "conversation") {
+      socketRef.current?.close();
+      socketRef.current = null;
+      return;
+    }
+    let cancelled = false;
+    const chatId = active.chat_id;
+    (async () => {
+      const token = await getAccessToken();
+      if (cancelled) return;
+      const sock = connectChatSocket({
+        gatewayBaseUrl,
+        token,
+        onEvent: (ev) => {
+          if (ev.chat_id && ev.chat_id !== chatId) return;
+          if (ev.type === "message.new" && ev.data) {
+            const d = ev.data;
+            const messageId = d.message_id != null ? String(d.message_id) : "";
+            if (!messageId) return;
+            const m: ChatMessage = {
+              message_id: messageId,
+              chat_id: chatId,
+              sender_type: String(d.sender_type ?? "agent"),
+              sender_id: String(d.sender_id ?? ""),
+              content: typeof d.content === "string" ? d.content : null,
+              created_at:
+                typeof d.created_at === "string" ? d.created_at : new Date().toISOString(),
+              metadata: parseMessageMetadata(d.metadata),
+            };
+            setMessages((prev) => {
+              const next = prev.some((x) => x.message_id === m.message_id) ? prev : [...prev, m];
+              if (m.sender_type === "agent") {
+                queueMicrotask(() => noteAgentActivity(chatId, next));
+              }
+              return next;
+            });
+            void refreshChats();
+          }
+          // Streaming chunks may omit final content on message.new; resync on end.
+          // Also used when delivery metadata updates (sent → delivered).
+          if (ev.type === "message.stream_end") {
+            void (async () => {
+              const msgs = await client.listMessages(chatId);
+              if (activeChatIdRef.current !== chatId) return;
+              setMessages(msgs);
+              noteAgentActivity(chatId, msgs);
+              void refreshChats();
+            })();
+          }
+        },
+      });
+      sock.subscribe(chatId);
+      socketRef.current = sock;
+    })();
+    return () => {
+      cancelled = true;
+      socketRef.current?.close();
+      socketRef.current = null;
+    };
+  }, [
+    open,
+    active?.chat_id,
+    view,
+    gatewayBaseUrl,
+    getAccessToken,
+    refreshChats,
+    client,
+    noteAgentActivity,
+  ]);
+
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
+  }, [messages, view, replySlot]);
+
+  const startDirect = async (agentId: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const c = await client.createOrGetDirectChat(agentId);
+      setShowPicker(false);
+      await refreshChats();
+      await openConversation(c);
+    } catch (e) {
+      setError(
+        e instanceof ChatGatewayError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Failed to start chat",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startGroup = async (groupTitle: string, agentIds: string[]) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const c = await client.createGroupChat(groupTitle, agentIds);
+      setShowPicker(false);
+      await refreshChats();
+      await openConversation(c);
+    } catch (e) {
+      setError(
+        e instanceof ChatGatewayError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Failed to create group",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const send = async () => {
+    const text = draft.trim();
+    if (!text || !active) return;
+    const chatId = active.chat_id;
+    const group = isGroupChat(active);
+    const seq = loadSeqRef.current;
+    const pollGen = ++replyPollGenRef.current;
+    setBusy(true);
+    setError(null);
+    try {
+      if (group && agentIdsRef.current.length === 0) {
+        const participants = await client.listParticipants(chatId);
+        if (seq !== loadSeqRef.current) return;
+        agentIdsRef.current = participants
+          .filter((p) => p.participant_type === "agent" && p.is_active !== false)
+          .map((p) => p.participant_id);
+      }
+      const mentions = group ? resolveGroupMentions(text, agentIdsRef.current) : undefined;
+      beginAwaitingReply(chatId);
+      await client.sendMessage(chatId, text, mentions);
+      setDraft("");
+      await reloadMessages(chatId, seq);
+      await refreshChats();
+      // Mode B writeback is async (~5–30s). WS message.new can be missed; poll DB.
+      void (async () => {
+        const baseline = awaitingSinceRef.current;
+        for (let i = 0; i < 20; i++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          if (replyPollGenRef.current !== pollGen) return;
+          if (activeChatIdRef.current !== chatId) return;
+          if (seq !== loadSeqRef.current) return;
+          try {
+            const msgs = await client.listMessages(chatId);
+            if (replyPollGenRef.current !== pollGen) return;
+            if (activeChatIdRef.current !== chatId) return;
+            setMessages(msgs);
+            const hasNewAgent = msgs.some(
+              (m) =>
+                m.sender_type === "agent" &&
+                Date.parse(m.created_at) >= baseline - 2000,
+            );
+            if (hasNewAgent) {
+              clearReplySlot(chatId);
+              void refreshChats();
+              return;
+            }
+            noteAgentActivity(chatId, msgs);
+          } catch {
+            /* ignore transient poll errors */
+          }
+        }
+        // Bot-style: past the wait window → timeout + retry (not a silent blank).
+        markReplyTimeout(chatId);
+      })();
+    } catch (e) {
+      clearReplySlot(chatId);
+      setError(
+        e instanceof ChatGatewayError
+          ? e.code === "agent_unreachable"
+            ? "Agent unreachable"
+            : e.message
+          : "Send failed",
+      );
+      try {
+        await reloadMessages(chatId, seq);
+      } catch {
+        /* ignore */
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const retryLastUserMessage = () => {
+    if (!active) return;
+    const lastUser = [...messages].reverse().find((m) => m.sender_type === "user");
+    const text = (lastUser?.content || "").trim();
+    if (!text) return;
+    setDraft(text);
+    // Re-send on next tick so draft is set; call send path directly.
+    void (async () => {
+      const chatId = active.chat_id;
+      const group = isGroupChat(active);
+      const seq = loadSeqRef.current;
+      const pollGen = ++replyPollGenRef.current;
+      setBusy(true);
+      setError(null);
+      try {
+        const mentions = group ? resolveGroupMentions(text, agentIdsRef.current) : undefined;
+        beginAwaitingReply(chatId);
+        await client.sendMessage(chatId, text, mentions);
+        setDraft("");
+        await reloadMessages(chatId, seq);
+        await refreshChats();
+        void (async () => {
+          const baseline = awaitingSinceRef.current;
+          for (let i = 0; i < 20; i++) {
+            await new Promise((r) => setTimeout(r, 2000));
+            if (replyPollGenRef.current !== pollGen) return;
+            if (activeChatIdRef.current !== chatId) return;
+            if (seq !== loadSeqRef.current) return;
+            try {
+              const msgs = await client.listMessages(chatId);
+              if (replyPollGenRef.current !== pollGen) return;
+              if (activeChatIdRef.current !== chatId) return;
+              setMessages(msgs);
+              const hasNewAgent = msgs.some(
+                (m) =>
+                  m.sender_type === "agent" &&
+                  Date.parse(m.created_at) >= baseline - 2000,
+              );
+              if (hasNewAgent) {
+                clearReplySlot(chatId);
+                void refreshChats();
+                return;
+              }
+              noteAgentActivity(chatId, msgs);
+            } catch {
+              /* ignore */
+            }
+          }
+          markReplyTimeout(chatId);
+        })();
+      } catch (e) {
+        clearReplySlot(chatId);
+        setError(
+          e instanceof ChatGatewayError
+            ? e.code === "agent_unreachable"
+              ? "Agent unreachable"
+              : e.message
+            : "Send failed",
+        );
+      } finally {
+        setBusy(false);
+      }
+    })();
+  };
+
+  if (!open) return null;
+
+  const filtered = chats.filter((c) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return chatTitle(c).toLowerCase().includes(q) || (c.agent_id ?? "").toLowerCase().includes(q);
+  });
+
+  const showAgentReplyPending =
+    replySlot?.phase === "pending" && replySlot.chatId === active?.chat_id;
+  const showAgentReplyTimeout =
+    replySlot?.phase === "timeout" && replySlot.chatId === active?.chat_id;
+
+  return (
+    <div style={shellRoot(mode)} data-ranch-chat-shell data-mode={mode}>
+      <style>{`
+        @keyframes ranch-reply-bounce {
+          0%, 80%, 100% { transform: translateY(0); opacity: 0.35; }
+          40% { transform: translateY(-3px); opacity: 1; }
+        }
+        .ranch-reply-dot {
+          width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          background: currentColor;
+          display: inline-block;
+          animation: ranch-reply-bounce 1.2s ease-in-out infinite;
+        }
+      `}</style>
+      <div
+        style={{
+          width: mode === "full" ? 360 : "100%",
+          maxWidth: mode === "full" ? 360 : undefined,
+          borderRight: mode === "full" ? `1px solid ${colors.border}` : undefined,
+          display: view === "list" || mode === "full" ? "flex" : "none",
+          flexDirection: "column",
+          minWidth: 0,
+          height: "100%",
+          background: colors.panel,
+          position: "relative",
+        }}
+      >
+        <div style={listHeader}>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 650, display: "flex", alignItems: "center", gap: 8 }}>
+            <span aria-hidden>💬</span> {title}
+          </h2>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            {mode === "side" ? (
+              <button
+                type="button"
+                style={btnIcon}
+                onClick={() => setMode("full")}
+                aria-label="全屏"
+                title="全屏"
+              >
+                <IconExpand />
+              </button>
+            ) : (
+              <button
+                type="button"
+                style={btnIcon}
+                onClick={() => setMode("side")}
+                aria-label="收起"
+                title="收起"
+              >
+                <IconCollapse />
+              </button>
+            )}
+            <button type="button" style={btnIcon} onClick={() => setOpen(false)} aria-label="关闭" title="关闭">
+              <IconClose />
+            </button>
+          </div>
+        </div>
+
+        <div style={{ padding: 12, borderBottom: `1px solid ${colors.border}`, display: "flex", gap: 8 }}>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search chats…"
+            style={{ ...inputStyle, flex: 1 }}
+          />
+          <button type="button" style={btnPrimary} onClick={() => setShowPicker(true)}>
+            + New
+          </button>
+        </div>
+
+        {healthOk === false && (
+          <div style={{ padding: "8px 12px", color: colors.danger, fontSize: 12 }}>
+            Gateway unavailable
+          </div>
+        )}
+
+        <div style={{ flex: 1, overflow: "auto", padding: 8 }}>
+          {loadingChats ? (
+            <p style={{ color: colors.muted, textAlign: "center", padding: 24 }}>Loading…</p>
+          ) : filtered.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 32, color: colors.muted }}>
+              <p style={{ margin: "0 0 12px" }}>No chats yet</p>
+              <button type="button" style={btnPrimary} onClick={() => setShowPicker(true)}>
+                Start a chat
+              </button>
+            </div>
+          ) : (
+            filtered.map((c) => {
+              const selected = active?.chat_id === c.chat_id;
+              return (
+                <button
+                  key={c.chat_id}
+                  type="button"
+                  onClick={() => void openConversation(c)}
+                  style={{
+                    ...listItem,
+                    background: selected ? colors.accentSoft : "transparent",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: c.type === "group" ? 10 : 999,
+                      background: "linear-gradient(135deg,#334155,#1e293b)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 700,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {chatTitle(c).slice(0, 1).toUpperCase()}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                    <span
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        marginBottom: 2,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          fontSize: 13,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {chatTitle(c)}
+                      </span>
+                      <span style={{ fontSize: 10, color: colors.muted, flexShrink: 0 }}>
+                        {formatRelativeTime(c.last_message_at)}
+                      </span>
+                    </span>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: 12,
+                        color: colors.muted,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {c.last_message_content || (c.type === "group" ? "Group chat" : "No messages yet")}
+                    </span>
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        {account ? <AccountFooter account={account} onLogout={onLogout} /> : null}
+
+        {showPicker && (
+          <NewChatPicker
+            directoryAgents={directoryAgents}
+            allowGroupChat={allowGroupChat}
+            busy={busy}
+            onClose={() => setShowPicker(false)}
+            onOpenDirect={(id) => void startDirect(id)}
+            onCreateGroup={(t, ids) => void startGroup(t, ids)}
+          />
+        )}
+      </div>
+
+      {(view === "conversation" || mode === "full") && (
+        <div
+          style={{
+            flex: 1,
+            // full: always show right pane (empty state when no selection)
+            display: mode === "full" || view === "conversation" ? "flex" : "none",
+            flexDirection: "column",
+            minWidth: 0,
+            height: "100%",
+            background: colors.bg,
+          }}
+        >
+          {!active ? (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: colors.muted,
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              <p style={{ margin: 0 }}>Select a chat or start a new one</p>
+              <button type="button" style={btnPrimary} onClick={() => setShowPicker(true)}>
+                New chat
+              </button>
+            </div>
+          ) : (
+            <>
+              <div style={listHeader}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  {mode === "side" && (
+                    <button
+                      type="button"
+                      style={btnGhost}
+                      onClick={() => {
+                        setView("list");
+                        setActive(null);
+                      }}
+                    >
+                      ←
+                    </button>
+                  )}
+                  <strong
+                    style={{
+                      fontSize: 15,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {chatTitle(active)}
+                  </strong>
+                </div>
+                <button
+                  type="button"
+                  style={btnGhost}
+                  onClick={() => {
+                    if (mode === "side") {
+                      setView("list");
+                      setActive(null);
+                    } else setOpen(false);
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div
+                ref={listRef}
+                style={{
+                  flex: 1,
+                  overflow: "auto",
+                  padding: 16,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                }}
+              >
+                {messages.length === 0 && (
+                  <p style={{ color: colors.muted, fontSize: 13, margin: 0 }}>
+                    Say hello to start the conversation.
+                  </p>
+                )}
+                {messages.filter((m) => !isLegacyDeliveryAckBubble(m)).map((m) => {
+                  const isUser = m.sender_type === "user";
+                  const delivery =
+                    isUser && typeof m.metadata?.delivery === "string" ? m.metadata.delivery : null;
+                  return (
+                    <div
+                      key={m.message_id}
+                      style={{
+                        alignSelf: isUser ? "flex-end" : "flex-start",
+                        maxWidth: "85%",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 3,
+                        alignItems: isUser ? "flex-end" : "flex-start",
+                      }}
+                    >
+                      <div
+                        style={{
+                          background: isUser ? colors.userBubble : colors.agentBubble,
+                          borderRadius: 12,
+                          padding: "8px 12px",
+                          fontSize: 14,
+                          lineHeight: 1.5,
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {m.content}
+                      </div>
+                      {delivery ? (
+                        <div style={{ paddingRight: 2, lineHeight: 1 }}>
+                          <DeliveryStatusIcon delivery={delivery} />
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+                {showAgentReplyPending ? <AgentReplyPendingBubble /> : null}
+                {showAgentReplyTimeout ? (
+                  <AgentReplyTimeoutBubble onRetry={retryLastUserMessage} />
+                ) : null}
+              </div>
+
+              {error && (
+                <div style={{ padding: "8px 14px", color: colors.danger, fontSize: 12 }}>{error}</div>
+              )}
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void send();
+                }}
+                style={{
+                  borderTop: `1px solid ${colors.border}`,
+                  padding: 12,
+                  display: "flex",
+                  gap: 8,
+                }}
+              >
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  rows={2}
+                  placeholder={healthOk === false ? "Gateway unavailable" : "Message…"}
+                  disabled={busy || healthOk === false}
+                  style={{ ...inputStyle, resize: "none", flex: 1 }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void send();
+                    }
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={busy || !draft.trim() || healthOk === false}
+                  style={{ ...btnPrimary, alignSelf: "flex-end" }}
+                >
+                  Send
+                </button>
+              </form>
+            </>
+          )}
+        </div>
+      )}
+
+      {error && view === "list" && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: 12,
+            left: 12,
+            right: 12,
+            padding: 10,
+            borderRadius: 8,
+            background: "rgba(248,113,113,0.12)",
+            color: colors.danger,
+            fontSize: 12,
+          }}
+        >
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const listHeader: CSSProperties = {
+  height: 56,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "0 14px",
+  borderBottom: `1px solid ${colors.border}`,
+  flexShrink: 0,
+};
+
+const listItem: CSSProperties = {
+  width: "100%",
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 10,
+  padding: 8,
+  borderRadius: 10,
+  border: "none",
+  cursor: "pointer",
+  color: colors.text,
+  marginBottom: 2,
+};
