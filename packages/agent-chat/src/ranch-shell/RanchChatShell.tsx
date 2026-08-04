@@ -369,7 +369,50 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Group delivery requires mentions; shell defaults to all agents (implicit @all). */
+const STICKY_MENTION_TTL_MS = 15 * 60 * 1000;
+
+type StickyMention = { agentId: string; name: string; setAt: number };
+
+function stickyMentionStorageKey(chatId: string): string {
+  return `interfaze:stickyMention:${chatId}`;
+}
+
+function readStickyMention(chatId: string): StickyMention | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(stickyMentionStorageKey(chatId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StickyMention;
+    if (
+      !parsed ||
+      typeof parsed.agentId !== "string" ||
+      typeof parsed.name !== "string" ||
+      typeof parsed.setAt !== "number"
+    ) {
+      return null;
+    }
+    if (Date.now() - parsed.setAt > STICKY_MENTION_TTL_MS) {
+      sessionStorage.removeItem(stickyMentionStorageKey(chatId));
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeStickyMention(chatId: string, sticky: StickyMention | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    const key = stickyMentionStorageKey(chatId);
+    if (!sticky) sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, JSON.stringify(sticky));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Explicit @ / @all only — no silent @all fallback. */
 function resolveGroupMentions(
   text: string,
   agentIds: string[],
@@ -385,7 +428,25 @@ function resolveGroupMentions(
       hit.add(id);
     }
   }
-  return hit.size > 0 ? [...hit] : [...agentIds];
+  return [...hit];
+}
+
+function resolveStickyMentions(
+  text: string,
+  agentIds: string[],
+  names: Record<string, string>,
+  sticky: StickyMention | null,
+): { mentions: string[]; usedSticky: boolean } {
+  const explicit = resolveGroupMentions(text, agentIds, names);
+  if (explicit.length > 0) return { mentions: explicit, usedSticky: false };
+  if (
+    sticky &&
+    Date.now() - sticky.setAt <= STICKY_MENTION_TTL_MS &&
+    agentIds.includes(sticky.agentId)
+  ) {
+    return { mentions: [sticky.agentId], usedSticky: true };
+  }
+  return { mentions: [], usedSticky: false };
 }
 
 /** Trailing `@query` for mention autocomplete (ranch-style). */
@@ -790,6 +851,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [addMemberId, setAddMemberId] = useState("");
   const [mentionIndex, setMentionIndex] = useState(0);
   const [draft, setDraft] = useState("");
+  /** Group: continue with last @'d agent for 15m (chip above composer). */
+  const [stickyMention, setStickyMention] = useState<StickyMention | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
@@ -973,6 +1036,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setTitleDraft(chat.title?.trim() || "");
       setMentionIndex(0);
       setDraft("");
+      setStickyMention(isGroupChat(chat) ? readStickyMention(chat.chat_id) : null);
       clearReplySlot();
       agentIdsRef.current = [];
       try {
@@ -988,7 +1052,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
           (p) => p.participant_type === "agent" && p.is_active !== false,
         );
         agentIdsRef.current = agents.map((p) => p.participant_id);
-        setAgentNames(resolveParticipantLabels(agents, directoryAgents));
+        const labels = resolveParticipantLabels(agents, directoryAgents);
+        setAgentNames(labels);
+        setStickyMention((cur) => {
+          if (!isGroupChat(chat)) return null;
+          const sticky = cur ?? readStickyMention(chat.chat_id);
+          if (!sticky) return null;
+          if (!agentIdsRef.current.includes(sticky.agentId)) {
+            writeStickyMention(chat.chat_id, null);
+            return null;
+          }
+          const refreshed = {
+            ...sticky,
+            name: labels[sticky.agentId] || sticky.name,
+          };
+          writeStickyMention(chat.chat_id, refreshed);
+          return refreshed;
+        });
         void client.markChatAsRead(chat.chat_id).then(() => refreshChats()).catch(() => {});
       } catch (e) {
         if (seq !== loadSeqRef.current) return;
@@ -1005,12 +1085,38 @@ export function RanchChatShell(props: RanchChatShellProps) {
         (p) => p.participant_type === "agent" && p.is_active !== false,
       );
       agentIdsRef.current = agents.map((p) => p.participant_id);
-      setAgentNames(resolveParticipantLabels(agents, directoryAgents));
+      const labels = resolveParticipantLabels(agents, directoryAgents);
+      setAgentNames(labels);
+      setStickyMention((cur) => {
+        if (!cur) return null;
+        if (!agentIdsRef.current.includes(cur.agentId)) {
+          writeStickyMention(chatId, null);
+          return null;
+        }
+        const refreshed = { ...cur, name: labels[cur.agentId] || cur.name };
+        writeStickyMention(chatId, refreshed);
+        return refreshed;
+      });
       await refreshChats();
       const next = (await client.listChats()).find((c) => c.chat_id === chatId);
       if (next) setActive(next);
     },
     [client, directoryAgents, refreshChats],
+  );
+
+  const clearStickyMention = useCallback((chatId?: string) => {
+    const id = chatId ?? activeChatIdRef.current;
+    if (id) writeStickyMention(id, null);
+    setStickyMention(null);
+  }, []);
+
+  const setStickyForAgent = useCallback(
+    (chatId: string, agentId: string, name: string) => {
+      const next: StickyMention = { agentId, name, setAt: Date.now() };
+      writeStickyMention(chatId, next);
+      setStickyMention(next);
+    },
+    [],
   );
 
   useEffect(() => {
@@ -1149,12 +1255,32 @@ export function RanchChatShell(props: RanchChatShellProps) {
         agentIdsRef.current = agents.map((p) => p.participant_id);
         setAgentNames(resolveParticipantLabels(agents, directoryAgents));
       }
-      const mentions = group
-        ? resolveGroupMentions(text, agentIdsRef.current, agentNames)
-        : undefined;
+      let mentions: string[] | undefined;
+      if (group) {
+        const resolved = resolveStickyMentions(
+          text,
+          agentIdsRef.current,
+          agentNames,
+          stickyMention,
+        );
+        if (resolved.mentions.length === 0) {
+          setError(t.mentionRequired);
+          setBusy(false);
+          return;
+        }
+        mentions = resolved.mentions;
+      }
       beginAwaitingReply(chatId);
       const sentWhileOffline = !group && isAgentOffline(active?.agent_status);
       await client.sendMessage(chatId, text, mentions);
+      if (group && mentions) {
+        if (mentions.length === 1) {
+          const id = mentions[0]!;
+          setStickyForAgent(chatId, id, agentNames[id] || stickyMention?.name || shortAgentId(id));
+        } else {
+          clearStickyMention(chatId);
+        }
+      }
       setDraft("");
       await reloadMessages(chatId, seq);
       await refreshChats();
@@ -1228,11 +1354,31 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setBusy(true);
       setError(null);
       try {
-        const mentions = group
-          ? resolveGroupMentions(text, agentIdsRef.current, agentNames)
-          : undefined;
+        let mentions: string[] | undefined;
+        if (group) {
+          const resolved = resolveStickyMentions(
+            text,
+            agentIdsRef.current,
+            agentNames,
+            stickyMention,
+          );
+          if (resolved.mentions.length === 0) {
+            setError(t.mentionRequired);
+            setBusy(false);
+            return;
+          }
+          mentions = resolved.mentions;
+        }
         beginAwaitingReply(chatId);
         await client.sendMessage(chatId, text, mentions);
+        if (group && mentions) {
+          if (mentions.length === 1) {
+            const id = mentions[0]!;
+            setStickyForAgent(chatId, id, agentNames[id] || stickyMention?.name || shortAgentId(id));
+          } else {
+            clearStickyMention(chatId);
+          }
+        }
         setDraft("");
         await reloadMessages(chatId, seq);
         await refreshChats();
@@ -1319,7 +1465,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
       return next === prev ? `${prev.replace(/\s*$/, "")} @${label} `.replace(/^\s+/, "") : next;
     });
     setMentionIndex(0);
+    const chatId = active?.chat_id;
+    if (!chatId || !groupActive) return;
+    if (label === "all") {
+      clearStickyMention(chatId);
+      return;
+    }
+    const entry = Object.entries(agentNames).find(
+      ([, name]) => name === label || name.toLowerCase() === label.toLowerCase(),
+    );
+    if (entry) setStickyForAgent(chatId, entry[0], entry[1]);
   };
+
+  const stickyChipActive =
+    groupActive &&
+    !!stickyMention &&
+    Date.now() - stickyMention.setAt <= STICKY_MENTION_TTL_MS &&
+    agentIdsRef.current.includes(stickyMention.agentId);
 
   return (
     <div style={shellRoot(mode)} data-ranch-chat-shell data-mode={mode}>
@@ -1910,15 +2072,59 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   borderTop: `1px solid ${colors.border}`,
                   padding: 12,
                   display: "flex",
+                  flexDirection: "column",
                   gap: 8,
                   position: "relative",
                 }}
               >
+                {stickyChipActive && stickyMention ? (
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      alignSelf: "flex-start",
+                      gap: 6,
+                      padding: "4px 8px 4px 10px",
+                      borderRadius: 999,
+                      background: "rgba(147,197,253,0.12)",
+                      border: "1px solid rgba(147,197,253,0.28)",
+                      fontSize: 12,
+                      color: colors.text,
+                      maxWidth: "100%",
+                    }}
+                  >
+                    <span
+                      style={{
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {t.continueWith(stickyMention.name)}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={t.close}
+                      onClick={() => clearStickyMention(active?.chat_id)}
+                      style={{
+                        ...btnIcon,
+                        width: 20,
+                        height: 20,
+                        fontSize: 14,
+                        lineHeight: 1,
+                        color: colors.muted,
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : null}
+                <div style={{ display: "flex", gap: 8, position: "relative" }}>
                 {mentionOpen ? (
                   <div
                     style={{
                       position: "absolute",
-                      left: 12,
+                      left: 0,
                       right: 72,
                       bottom: "100%",
                       marginBottom: 8,
@@ -2030,6 +2236,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 >
                   {t.send}
                 </button>
+                </div>
               </form>
 
               {showMembersPanel && groupActive && active ? (

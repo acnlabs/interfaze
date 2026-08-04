@@ -64,6 +64,8 @@ export type RanchMessages = {
   openDirectChat: string;
   mentionAll: string;
   mentionAllHint: string;
+  continueWith: (name: string) => string;
+  mentionRequired: string;
   groupMessagePlaceholder: string;
   addMember: string;
   addMemberTitle: string;
@@ -150,6 +152,8 @@ const en: RanchMessages = {
   openDirectChat: "Message privately",
   mentionAll: "@all",
   mentionAllHint: "Mention all agents",
+  continueWith: (name) => `Continue with ${name}`,
+  mentionRequired: "Who should get this? Type @ or @all.",
   groupMessagePlaceholder: "Message… (Type @ to mention)",
   addMember: "Add member",
   addMemberTitle: "Add an agent",
@@ -236,6 +240,8 @@ const zh: RanchMessages = {
   openDirectChat: "私聊",
   mentionAll: "@all",
   mentionAllHint: "提及所有 agent",
+  continueWith: (name) => `继续问 ${name}`,
+  mentionRequired: "要 @ 谁？输入 @ 或 @all。",
   groupMessagePlaceholder: "输入消息…（输入 @ 点名）",
   addMember: "添加成员",
   addMemberTitle: "添加 agent",

@@ -111,7 +111,7 @@ export type RanchChatShellProps = {
 };
 
 /** Outbound delivery on user messages (Chat Gateway → ACN). */
-export type MessageDelivery = "pending" | "delivered" | "queued" | "failed";
+export type MessageDelivery = "pending" | "sent" | "delivered" | "queued" | "failed";
 
 export type ChatMessage = {
   message_id: string;
@@ -123,6 +123,8 @@ export type ChatMessage = {
   /** Parsed from API ``metadata``; used for delivery icons under user bubbles. */
   metadata?: {
     delivery?: MessageDelivery | string;
+    /** Per-agent delivery; aggregate ``delivery`` prefers any delivered. */
+    delivery_by_agent?: Record<string, MessageDelivery | string>;
     delivery_mode?: string;
     delivery_agent_id?: string;
     [key: string]: unknown;
