@@ -420,6 +420,36 @@ function IconClose() {
   );
 }
 
+/** Hide left chat list (lucide PanelLeftClose). */
+function IconSidebarCollapse() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5zM9 3v18M16 15l-3-3 3-3"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Show left chat list (lucide PanelLeftOpen). */
+function IconSidebarExpand() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5zM9 3v18M14 9l3 3-3 3"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 /** Ranch SystemHeader-style locale control: compact round chip + menu (scales). */
 function LanguageSwitcher({
   locale,
@@ -687,6 +717,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [internalOpen, setInternalOpen] = useState(true);
   const open = openProp ?? internalOpen;
   const [mode, setMode] = useState(modeProp);
+  /** Fullscreen only: hide/show the left chat list. */
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const setOpen = useCallback(
     (next: boolean) => {
       onOpenChange?.(next);
@@ -695,6 +727,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
     },
     [onClose, onOpenChange, openProp],
   );
+
+  useEffect(() => {
+    setMode(modeProp);
+    if (modeProp !== "full") setSidebarCollapsed(false);
+  }, [modeProp]);
+
+  const showSidebar = mode !== "full" || !sidebarCollapsed;
 
   const client = useMemo(
     () => createGatewayClient(gatewayBaseUrl, getAccessToken),
@@ -799,10 +838,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
     },
     [client],
   );
-
-  useEffect(() => {
-    setMode(modeProp);
-  }, [modeProp]);
 
   useEffect(() => {
     if (!open) return;
@@ -1187,7 +1222,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           width: mode === "full" ? 360 : "100%",
           maxWidth: mode === "full" ? 360 : undefined,
           borderRight: mode === "full" ? `1px solid ${colors.border}` : undefined,
-          display: view === "list" || mode === "full" ? "flex" : "none",
+          display: showSidebar && (view === "list" || mode === "full") ? "flex" : "none",
           flexDirection: "column",
           minWidth: 0,
           height: "100%",
@@ -1222,15 +1257,27 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 <IconCollapse />
               </button>
             )}
-            <button
-              type="button"
-              style={btnIcon}
-              onClick={() => setOpen(false)}
-              aria-label={t.close}
-              title={t.close}
-            >
-              <IconClose />
-            </button>
+            {mode === "full" ? (
+              <button
+                type="button"
+                style={btnIcon}
+                onClick={() => setSidebarCollapsed(true)}
+                aria-label={t.collapseSidebar}
+                title={t.collapseSidebar}
+              >
+                <IconSidebarCollapse />
+              </button>
+            ) : (
+              <button
+                type="button"
+                style={btnIcon}
+                onClick={() => setOpen(false)}
+                aria-label={t.close}
+                title={t.close}
+              >
+                <IconClose />
+              </button>
+            )}
           </div>
         </div>
 
@@ -1397,39 +1444,54 @@ export function RanchChatShell(props: RanchChatShellProps) {
           }}
         >
           {!active ? (
-            hasMineAgents ? (
-              <div
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: colors.muted,
-                  flexDirection: "column",
-                  gap: 12,
-                }}
-              >
-                <p style={{ margin: 0 }}>{t.selectOrStart}</p>
-                <button type="button" style={btnPrimary} onClick={() => setShowPicker(true)}>
-                  {t.startChat}
-                </button>
-              </div>
-            ) : (
-              <div
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <NoAgentsEmpty
-                  connectGuideUrl={connectGuideUrl}
-                  onNewChat={() => setShowPicker(true)}
-                  t={t}
-                />
-              </div>
-            )
+            <>
+              {mode === "full" && sidebarCollapsed ? (
+                <div style={{ ...listHeader, justifyContent: "flex-start" }}>
+                  <button
+                    type="button"
+                    style={btnIcon}
+                    onClick={() => setSidebarCollapsed(false)}
+                    aria-label={t.expandSidebar}
+                    title={t.expandSidebar}
+                  >
+                    <IconSidebarExpand />
+                  </button>
+                </div>
+              ) : null}
+              {hasMineAgents ? (
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: colors.muted,
+                    flexDirection: "column",
+                    gap: 12,
+                  }}
+                >
+                  <p style={{ margin: 0 }}>{t.selectOrStart}</p>
+                  <button type="button" style={btnPrimary} onClick={() => setShowPicker(true)}>
+                    {t.startChat}
+                  </button>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <NoAgentsEmpty
+                    connectGuideUrl={connectGuideUrl}
+                    onNewChat={() => setShowPicker(true)}
+                    t={t}
+                  />
+                </div>
+              )}
+            </>
           ) : (
             <>
               <div style={listHeader}>
@@ -1446,6 +1508,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       ←
                     </button>
                   )}
+                  {mode === "full" && sidebarCollapsed ? (
+                    <button
+                      type="button"
+                      style={btnIcon}
+                      onClick={() => setSidebarCollapsed(false)}
+                      aria-label={t.expandSidebar}
+                      title={t.expandSidebar}
+                    >
+                      <IconSidebarExpand />
+                    </button>
+                  ) : null}
                   <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                     <span style={{ position: "relative", width: 32, height: 32, flexShrink: 0 }}>
                       <span
@@ -1513,18 +1586,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     </div>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  style={btnGhost}
-                  onClick={() => {
-                    if (mode === "side") {
+                {mode === "side" ? (
+                  <button
+                    type="button"
+                    style={btnGhost}
+                    onClick={() => {
                       setView("list");
                       setActive(null);
-                    } else setOpen(false);
-                  }}
-                >
-                  ✕
-                </button>
+                    }}
+                    aria-label={t.close}
+                    title={t.close}
+                  >
+                    ✕
+                  </button>
+                ) : null}
               </div>
 
               {activeOffline ? (

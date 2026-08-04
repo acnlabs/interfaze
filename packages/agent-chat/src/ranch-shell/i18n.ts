@@ -31,6 +31,8 @@ export type RanchMessages = {
   expand: string;
   collapse: string;
   close: string;
+  collapseSidebar: string;
+  expandSidebar: string;
   searchChats: string;
   newChat: string;
   gatewayUnavailable: string;
@@ -92,6 +94,8 @@ const en: RanchMessages = {
   expand: "Expand",
   collapse: "Collapse",
   close: "Close",
+  collapseSidebar: "Hide sidebar",
+  expandSidebar: "Show sidebar",
   searchChats: "Search chats…",
   newChat: "New",
   gatewayUnavailable: "Gateway unavailable",
@@ -153,6 +157,8 @@ const zh: RanchMessages = {
   expand: "全屏",
   collapse: "收起",
   close: "关闭",
+  collapseSidebar: "收起侧栏",
+  expandSidebar: "打开侧栏",
   searchChats: "搜索会话…",
   newChat: "新建",
   gatewayUnavailable: "Gateway 不可用",
