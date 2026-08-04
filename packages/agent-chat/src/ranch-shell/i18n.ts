@@ -61,6 +61,7 @@ export type RanchMessages = {
   agentsCount: (n: number) => string;
   members: string;
   groupInfo: string;
+  agentInfo: string;
   openDirectChat: string;
   mentionAll: string;
   mentionAllHint: string;
@@ -72,7 +73,9 @@ export type RanchMessages = {
   removeMember: string;
   removeMemberConfirm: (name: string) => string;
   renameGroup: string;
+  renameChat: string;
   groupName: string;
+  chatName: string;
   save: string;
   deleteGroup: string;
   deleteGroupConfirm: string;
@@ -84,6 +87,7 @@ export type RanchMessages = {
   noMineAgents: string;
   noRecommended: string;
   orPasteAgentId: string;
+  pasteAgentIdAdvanced: string;
   agentIdPlaceholder: string;
   groupTitle: string;
   cancel: string;
@@ -149,6 +153,7 @@ const en: RanchMessages = {
   agentsCount: (n) => (n === 1 ? "1 agent" : `${n} agents`),
   members: "Members",
   groupInfo: "Group info",
+  agentInfo: "Agent info",
   openDirectChat: "Message privately",
   mentionAll: "@all",
   mentionAllHint: "Mention all agents",
@@ -160,11 +165,13 @@ const en: RanchMessages = {
   removeMember: "Remove",
   removeMemberConfirm: (name) => `Remove ${name} from this group?`,
   renameGroup: "Rename",
+  renameChat: "Rename chat",
   groupName: "Group name",
+  chatName: "Chat name",
   save: "Save",
   deleteGroup: "Delete group",
   deleteGroupConfirm: "Delete this group and all its messages? This cannot be undone.",
-  noAgentsToAdd: "No more agents to add from your list. Paste an id below.",
+  noAgentsToAdd: "No more agents to add. Search Discover or connect a new agent first.",
   noMessagesYet: "No messages yet",
   pickerTitle: "New chat",
   mineAgents: "MY AGENTS",
@@ -173,6 +180,7 @@ const en: RanchMessages = {
     "No agents under your account yet. Copy the connect prompt and paste it to your agent.",
   noRecommended: "No discoverable agents right now",
   orPasteAgentId: "Or paste agent id",
+  pasteAgentIdAdvanced: "Paste agent id (advanced)",
   agentIdPlaceholder: "ACN agent id…",
   groupTitle: "Group title",
   cancel: "Cancel",
@@ -237,6 +245,7 @@ const zh: RanchMessages = {
   agentsCount: (n) => `${n} 个 agent`,
   members: "成员",
   groupInfo: "群资料",
+  agentInfo: "Agent 资料",
   openDirectChat: "私聊",
   mentionAll: "@all",
   mentionAllHint: "提及所有 agent",
@@ -248,11 +257,13 @@ const zh: RanchMessages = {
   removeMember: "移除",
   removeMemberConfirm: (name) => `确定将 ${name} 移出本群？`,
   renameGroup: "改名",
+  renameChat: "重命名会话",
   groupName: "群名称",
+  chatName: "会话名称",
   save: "保存",
   deleteGroup: "解散群聊",
   deleteGroupConfirm: "确定解散此群并删除全部消息？此操作不可撤销。",
-  noAgentsToAdd: "名下没有更多可添加的 agent。也可在下方粘贴 id。",
+  noAgentsToAdd: "没有更多可添加的 agent。去发现里搜，或先接上新的 agent。",
   noMessagesYet: "暂无消息",
   pickerTitle: "新建聊天",
   mineAgents: "我的 AGENT",
@@ -260,6 +271,7 @@ const zh: RanchMessages = {
   noMineAgents: "还没有名下的 agent。复制提示词发给你的 agent，让它自己接完。",
   noRecommended: "暂时没有可发现的 agent",
   orPasteAgentId: "或粘贴 agent id",
+  pasteAgentIdAdvanced: "粘贴 agent id（高级）",
   agentIdPlaceholder: "ACN agent id…",
   groupTitle: "群名称",
   cancel: "取消",

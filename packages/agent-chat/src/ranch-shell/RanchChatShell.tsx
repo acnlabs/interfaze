@@ -936,6 +936,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [addMemberId, setAddMemberId] = useState("");
+  const [addMemberShowPaste, setAddMemberShowPaste] = useState(false);
+  const [addMemberDiscoverQ, setAddMemberDiscoverQ] = useState("");
+  const [addMemberDiscoverRows, setAddMemberDiscoverRows] = useState<AgentDirectoryItem[]>([]);
+  const [addMemberDiscoverLoading, setAddMemberDiscoverLoading] = useState(false);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [draft, setDraft] = useState("");
   /** Group: continue with last @'d agent for 15m (chip above composer). */
@@ -1035,6 +1039,30 @@ export function RanchChatShell(props: RanchChatShellProps) {
     },
     [client],
   );
+
+  useEffect(() => {
+    if (!showAddMember) return;
+    let cancelled = false;
+    const handle = window.setTimeout(() => {
+      setAddMemberDiscoverLoading(true);
+      void searchDiscover(addMemberDiscoverQ)
+        .then((rows) => {
+          if (!cancelled) {
+            setAddMemberDiscoverRows(rows.filter((a) => !agentNames[a.agent_id]));
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setAddMemberDiscoverRows([]);
+        })
+        .finally(() => {
+          if (!cancelled) setAddMemberDiscoverLoading(false);
+        });
+    }, addMemberDiscoverQ ? 280 : 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [showAddMember, addMemberDiscoverQ, searchDiscover, agentNames]);
 
   // Keep presence dots fresh while a conversation is open.
   useEffect(() => {
@@ -1951,9 +1979,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   <button
                     type="button"
                     onClick={() => {
-                      if (isGroupChat(active)) setShowMembersPanel(true);
+                      setShowAddMember(false);
+                      setEditingTitle(false);
+                      setShowMembersPanel(true);
                     }}
-                    disabled={!isGroupChat(active)}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -1964,10 +1993,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       border: "none",
                       background: "transparent",
                       color: "inherit",
-                      cursor: isGroupChat(active) ? "pointer" : "default",
+                      cursor: "pointer",
                       textAlign: "left",
                     }}
-                    title={isGroupChat(active) ? t.groupInfo : undefined}
+                    title={isGroupChat(active) ? t.groupInfo : t.agentInfo}
                   >
                     <span style={{ position: "relative", width: 32, height: 32, flexShrink: 0 }}>
                       <span
@@ -2384,7 +2413,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 </div>
               </form>
 
-              {showMembersPanel && groupActive && active ? (
+              {showMembersPanel && active ? (
                 <div
                   style={{
                     position: "absolute",
@@ -2408,7 +2437,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     >
                       ←
                     </button>
-                    <strong style={{ fontSize: 14 }}>{t.groupInfo}</strong>
+                    <strong style={{ fontSize: 14 }}>
+                      {groupActive ? t.groupInfo : t.agentInfo}
+                    </strong>
                     <span style={{ width: 40 }} />
                   </div>
                   <div
@@ -2420,26 +2451,50 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   >
                     <div
                       style={{
+                        position: "relative",
                         width: 56,
                         height: 56,
-                        borderRadius: 12,
                         margin: "0 auto 10px",
-                        background: "linear-gradient(135deg,#334155,#1e293b)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontWeight: 700,
-                        fontSize: 22,
                       }}
                     >
-                      {chatTitle(active).slice(0, 1).toUpperCase()}
+                      <div
+                        style={{
+                          width: 56,
+                          height: 56,
+                          borderRadius: groupActive ? 12 : 999,
+                          background: "linear-gradient(135deg,#334155,#1e293b)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontWeight: 700,
+                          fontSize: 22,
+                        }}
+                      >
+                        {chatTitle(active).slice(0, 1).toUpperCase()}
+                      </div>
+                      {!groupActive && agentStatusDotColor(active.agent_status) ? (
+                        <span
+                          aria-hidden
+                          title={agentStatusTitle(active.agent_status, t)}
+                          style={{
+                            position: "absolute",
+                            right: 0,
+                            bottom: 0,
+                            width: 14,
+                            height: 14,
+                            borderRadius: 999,
+                            background: agentStatusDotColor(active.agent_status)!,
+                            border: `2px solid ${colors.bg}`,
+                          }}
+                        />
+                      ) : null}
                     </div>
                     {editingTitle ? (
                       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                         <input
                           value={titleDraft}
                           onChange={(e) => setTitleDraft(e.target.value)}
-                          placeholder={t.groupName}
+                          placeholder={groupActive ? t.groupName : t.chatName}
                           style={{ ...inputStyle, textAlign: "center" }}
                           autoFocus
                         />
@@ -2483,16 +2538,54 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             setEditingTitle(true);
                           }}
                         >
-                          {t.renameGroup}
+                          {groupActive ? t.renameGroup : t.renameChat}
                         </button>
                       </>
                     )}
-                    <div style={{ fontSize: 12, color: colors.muted, marginTop: 8 }}>
-                      {t.agentsCount(Object.keys(agentNames).length)}
-                    </div>
+                    {groupActive ? (
+                      <div style={{ fontSize: 12, color: colors.muted, marginTop: 8 }}>
+                        {t.agentsCount(Object.keys(agentNames).length)}
+                      </div>
+                    ) : (
+                      <div style={{ marginTop: 8 }}>
+                        {agentStatusTitle(active.agent_status, t) ? (
+                          <div style={{ fontSize: 12, color: colors.muted }}>
+                            {agentStatusTitle(active.agent_status, t)}
+                          </div>
+                        ) : null}
+                        {shortAgentId(active.agent_id) ? (
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: colors.muted,
+                              marginTop: 4,
+                              fontFamily:
+                                'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                            }}
+                            title={active.agent_id || undefined}
+                          >
+                            {shortAgentId(active.agent_id)}
+                          </div>
+                        ) : null}
+                        {connectGuideUrl ? (
+                          <div style={{ marginTop: 12 }}>
+                            <a
+                              href={connectGuideUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: "#93c5fd", fontSize: 12 }}
+                            >
+                              {t.ownerHowToConnect}
+                            </a>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
 
-                  {!showAddMember ? (
+                  {!groupActive ? (
+                    <div style={{ flex: 1 }} />
+                  ) : !showAddMember ? (
                     <>
                       <div
                         style={{
@@ -2518,6 +2611,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           disabled={busy}
                           onClick={() => {
                             setAddMemberId("");
+                            setAddMemberShowPaste(false);
+                            setAddMemberDiscoverQ("");
                             setShowAddMember(true);
                           }}
                         >
@@ -2651,85 +2746,166 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       >
                         {t.addMemberTitle}
                       </div>
-                      <div style={{ flex: 1, overflow: "auto", padding: 8 }}>
-                        {directoryAgents.filter((a) => !agentNames[a.agent_id]).length === 0 ? (
-                          <p style={{ color: colors.muted, fontSize: 12, padding: 8, margin: 0 }}>
-                            {t.noAgentsToAdd}
-                          </p>
-                        ) : (
-                          directoryAgents
-                            .filter((a) => !agentNames[a.agent_id])
-                            .map((a) => (
-                              <button
-                                key={a.agent_id}
-                                type="button"
-                                disabled={busy}
-                                onClick={() => {
-                                  void (async () => {
-                                    setBusy(true);
-                                    try {
-                                      await client.addParticipant(active.chat_id, a.agent_id);
-                                      await reloadParticipants(active.chat_id);
-                                      setShowAddMember(false);
-                                    } catch (e) {
-                                      setError(e instanceof Error ? e.message : t.sendFailed);
-                                    } finally {
-                                      setBusy(false);
-                                    }
-                                  })();
-                                }}
+                      <div style={{ flex: 1, overflow: "auto", padding: 12 }}>
+                        {(() => {
+                          const addCandidate = async (agentId: string) => {
+                            setBusy(true);
+                            try {
+                              await client.addParticipant(active.chat_id, agentId);
+                              await reloadParticipants(active.chat_id);
+                              setShowAddMember(false);
+                              setAddMemberId("");
+                            } catch (e) {
+                              setError(e instanceof Error ? e.message : t.sendFailed);
+                            } finally {
+                              setBusy(false);
+                            }
+                          };
+                          const mineToAdd = directoryAgents.filter(
+                            (a) => a.group === "mine" && !agentNames[a.agent_id],
+                          );
+                          return (
+                            <>
+                              <div
                                 style={{
-                                  ...listItem,
-                                  background: "transparent",
-                                  textAlign: "left",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  letterSpacing: "0.06em",
+                                  color: colors.muted,
+                                  marginBottom: 8,
                                 }}
                               >
-                                <span style={{ fontWeight: 600, fontSize: 13 }}>
-                                  {a.name?.trim() || a.agent_id}
-                                </span>
-                                <span style={{ fontSize: 11, color: colors.muted }}>
-                                  {shortAgentId(a.agent_id)}
-                                </span>
+                                {t.mineAgents}
+                              </div>
+                              {mineToAdd.length === 0 ? (
+                                <p style={{ color: colors.muted, fontSize: 12, margin: "0 0 16px" }}>
+                                  {t.noMineAgents}
+                                </p>
+                              ) : (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 4,
+                                    marginBottom: 16,
+                                  }}
+                                >
+                                  {mineToAdd.map((a) => (
+                                    <button
+                                      key={a.agent_id}
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() => void addCandidate(a.agent_id)}
+                                      style={{
+                                        ...listItem,
+                                        background: "transparent",
+                                        textAlign: "left",
+                                      }}
+                                    >
+                                      <span style={{ fontWeight: 600, fontSize: 13 }}>
+                                        {a.name?.trim() || a.agent_id}
+                                      </span>
+                                      <span style={{ fontSize: 11, color: colors.muted }}>
+                                        {a.description?.trim() || shortAgentId(a.agent_id)}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                              <div
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  letterSpacing: "0.06em",
+                                  color: colors.muted,
+                                  marginBottom: 8,
+                                }}
+                              >
+                                {t.recommended}
+                              </div>
+                              <input
+                                value={addMemberDiscoverQ}
+                                onChange={(e) => setAddMemberDiscoverQ(e.target.value)}
+                                placeholder={t.searchAgents}
+                                style={{ ...inputStyle, marginBottom: 8, fontSize: 12 }}
+                              />
+                              {addMemberDiscoverLoading ? (
+                                <p style={{ color: colors.muted, fontSize: 12, margin: 0 }}>
+                                  {t.loading}
+                                </p>
+                              ) : addMemberDiscoverRows.length === 0 ? (
+                                <p style={{ color: colors.muted, fontSize: 12, margin: "0 0 12px" }}>
+                                  {mineToAdd.length === 0 ? t.noAgentsToAdd : t.noRecommended}
+                                </p>
+                              ) : (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 4,
+                                    marginBottom: 12,
+                                  }}
+                                >
+                                  {addMemberDiscoverRows.map((a) => (
+                                    <button
+                                      key={a.agent_id}
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() => void addCandidate(a.agent_id)}
+                                      style={{
+                                        ...listItem,
+                                        background: "transparent",
+                                        textAlign: "left",
+                                      }}
+                                    >
+                                      <span style={{ fontWeight: 600, fontSize: 13 }}>
+                                        {a.name?.trim() || a.agent_id}
+                                      </span>
+                                      <span style={{ fontSize: 11, color: colors.muted }}>
+                                        {a.description?.trim() || shortAgentId(a.agent_id)}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setAddMemberShowPaste((v) => !v)}
+                                style={{
+                                  ...btnGhost,
+                                  fontSize: 11,
+                                  padding: "4px 8px",
+                                  color: colors.muted,
+                                }}
+                              >
+                                {addMemberShowPaste
+                                  ? `▾ ${t.pasteAgentIdAdvanced}`
+                                  : `▸ ${t.pasteAgentIdAdvanced}`}
                               </button>
-                            ))
-                        )}
-                        <div style={{ padding: 8 }}>
-                          <div style={{ fontSize: 11, color: colors.muted, marginBottom: 6 }}>
-                            {t.orPasteAgentId}
-                          </div>
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <input
-                              value={addMemberId}
-                              onChange={(e) => setAddMemberId(e.target.value)}
-                              placeholder={t.agentIdPlaceholder}
-                              style={inputStyle}
-                            />
-                            <button
-                              type="button"
-                              style={btnPrimary}
-                              disabled={busy || !addMemberId.trim()}
-                              onClick={() => {
-                                const id = addMemberId.trim();
-                                if (!id) return;
-                                void (async () => {
-                                  setBusy(true);
-                                  try {
-                                    await client.addParticipant(active.chat_id, id);
-                                    await reloadParticipants(active.chat_id);
-                                    setShowAddMember(false);
-                                    setAddMemberId("");
-                                  } catch (e) {
-                                    setError(e instanceof Error ? e.message : t.sendFailed);
-                                  } finally {
-                                    setBusy(false);
-                                  }
-                                })();
-                              }}
-                            >
-                              {t.addMember}
-                            </button>
-                          </div>
-                        </div>
+                              {addMemberShowPaste ? (
+                                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                                  <input
+                                    value={addMemberId}
+                                    onChange={(e) => setAddMemberId(e.target.value)}
+                                    placeholder={t.agentIdPlaceholder}
+                                    style={inputStyle}
+                                  />
+                                  <button
+                                    type="button"
+                                    style={btnPrimary}
+                                    disabled={busy || !addMemberId.trim()}
+                                    onClick={() => {
+                                      const id = addMemberId.trim();
+                                      if (id) void addCandidate(id);
+                                    }}
+                                  >
+                                    {t.addMember}
+                                  </button>
+                                </div>
+                              ) : null}
+                            </>
+                          );
+                        })()}
                       </div>
                       <div style={{ padding: 12, borderTop: `1px solid ${colors.border}` }}>
                         <button

@@ -36,6 +36,7 @@ export function NewChatPicker({
   const [selected, setSelected] = useState<string[]>([]);
   const [groupTitle, setGroupTitle] = useState(t.defaultGroupTitle);
   const [manualId, setManualId] = useState("");
+  const [showPasteId, setShowPasteId] = useState(false);
   const [discoverQ, setDiscoverQ] = useState("");
   const [discoverRows, setDiscoverRows] = useState<AgentDirectoryItem[]>(() =>
     directoryAgents.filter((a) => a.group === "recommended"),
@@ -250,15 +251,26 @@ export function NewChatPicker({
           </div>
 
           <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 11, color: colors.muted, marginBottom: 6 }}>
-              {t.orPasteAgentId}
-            </div>
-            <input
-              value={manualId}
-              onChange={(e) => setManualId(e.target.value)}
-              placeholder={t.agentIdPlaceholder}
-              style={inputStyle}
-            />
+            <button
+              type="button"
+              onClick={() => setShowPasteId((v) => !v)}
+              style={{
+                ...btnGhost,
+                fontSize: 11,
+                padding: "4px 8px",
+                color: colors.muted,
+              }}
+            >
+              {showPasteId ? `▾ ${t.pasteAgentIdAdvanced}` : `▸ ${t.pasteAgentIdAdvanced}`}
+            </button>
+            {showPasteId ? (
+              <input
+                value={manualId}
+                onChange={(e) => setManualId(e.target.value)}
+                placeholder={t.agentIdPlaceholder}
+                style={{ ...inputStyle, marginTop: 8 }}
+              />
+            ) : null}
           </div>
 
           {mode === "group" && (
