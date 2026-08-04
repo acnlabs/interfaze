@@ -1,9 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { RanchChatShell, type AgentDirectoryItem } from "@acnlabs/agent-chat";
-import { AUTH0_AUDIENCE, isAuth0Configured } from "@/lib/auth0";
+import {
+  AUTH0_AUDIENCE,
+  AUTH0_SCOPE,
+  clearAuth0ClientCache,
+  isAuth0Configured,
+} from "@/lib/auth0";
 import { getGatewayBaseUrl } from "@/lib/gateway";
 
 /**
@@ -14,8 +19,10 @@ export default function InterfazeChatHost() {
   const { getAccessTokenSilently, isAuthenticated, user, logout, loginWithRedirect } = useAuth0();
   const gatewayBaseUrl = getGatewayBaseUrl();
   const [directoryAgents, setDirectoryAgents] = useState<AgentDirectoryItem[]>([]);
+  const reauthStarted = useRef(false);
 
   const handleLogout = useCallback(() => {
+    clearAuth0ClientCache();
     logout({
       logoutParams: {
         returnTo: typeof window !== "undefined" ? window.location.origin : undefined,
@@ -24,10 +31,13 @@ export default function InterfazeChatHost() {
   }, [logout]);
 
   const handleReauth = useCallback(() => {
+    if (reauthStarted.current) return;
+    reauthStarted.current = true;
+    clearAuth0ClientCache();
     void loginWithRedirect({
       authorizationParams: {
         audience: AUTH0_AUDIENCE,
-        scope: "openid profile email",
+        scope: AUTH0_SCOPE,
         prompt: "login",
       },
       appState: {
@@ -40,14 +50,34 @@ export default function InterfazeChatHost() {
     if (!isAuth0Configured() || !isAuthenticated) return null;
     try {
       return await getAccessTokenSilently({
-        authorizationParams: { audience: AUTH0_AUDIENCE, scope: "openid profile email" },
+        authorizationParams: { audience: AUTH0_AUDIENCE, scope: AUTH0_SCOPE },
         cacheMode: "on",
       });
     } catch {
-      // Expired refresh / consent — shell shows Sign in again via onReauth.
       return null;
     }
   }, [getAccessTokenSilently, isAuthenticated]);
+
+  // If Auth0 still has a user profile but no API access token (common after
+  // refresh-token expiry without offline_access), force a clean re-login.
+  useEffect(() => {
+    if (!isAuthenticated || !isAuth0Configured()) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getAccessTokenSilently({
+          authorizationParams: { audience: AUTH0_AUDIENCE, scope: AUTH0_SCOPE },
+          cacheMode: "off",
+        });
+        if (!cancelled && !token) handleReauth();
+      } catch {
+        if (!cancelled) handleReauth();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getAccessTokenSilently, handleReauth, isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -55,8 +85,11 @@ export default function InterfazeChatHost() {
 
     (async () => {
       const token = await tokenGetter();
-      const headers: Record<string, string> = { Accept: "application/json" };
-      if (token) headers.Authorization = `Bearer ${token}`;
+      if (!token) return;
+      const headers: Record<string, string> = {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      };
 
       const mine: AgentDirectoryItem[] = [];
       const owner = user?.sub;

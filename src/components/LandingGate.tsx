@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
-import { isAuth0Configured } from "@/lib/auth0";
+import { AUTH0_AUDIENCE, AUTH0_SCOPE, isAuth0Configured } from "@/lib/auth0";
 import InterfazeChatHost from "./InterfazeChatHost";
 
 const siteName = process.env.NEXT_PUBLIC_SITE_NAME ?? "Interfaze";
