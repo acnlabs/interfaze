@@ -955,8 +955,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     confirmLabel: string;
     onConfirm: () => void;
   } | null>(null);
-  /** Detail panel tab: Info (members/agent) vs Topics. */
-  const [infoTab, setInfoTab] = useState<"info" | "topics">("info");
+  /** Detail panel tab. Group: members | topics. Direct: info | topics. */
+  const [infoTab, setInfoTab] = useState<"info" | "members" | "topics">("info");
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [activeTopic, setActiveTopic] = useState<ThreadSummary | null>(null);
   const [showCreateTopic, setShowCreateTopic] = useState(false);
@@ -1167,7 +1167,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setShowMembersPanel(false);
       setShowAddMember(false);
       setEditingTitle(false);
-      setInfoTab("info");
+      setInfoTab(isGroupChat(chat) ? "members" : "info");
       setShowCreateTopic(false);
       setTopicTitleDraft("");
       setTopicDescDraft("");
@@ -2081,7 +2081,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     onClick={() => {
                       setShowAddMember(false);
                       setEditingTitle(false);
-                      setInfoTab(activeTopic ? "topics" : "info");
+                      setInfoTab(
+                        activeTopic
+                          ? "topics"
+                          : active && isGroupChat(active)
+                            ? "members"
+                            : "info",
+                      );
                       setShowMembersPanel(true);
                       if (active) void loadTopics(active.chat_id);
                     }}
@@ -2647,11 +2653,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       ←
                     </button>
                     <strong style={{ fontSize: 14 }}>
-                      {infoTab === "topics"
-                        ? t.topics
-                        : groupActive
-                          ? t.groupInfo
-                          : t.agentInfo}
+                      {groupActive ? t.groupInfo : t.agentInfo}
                     </strong>
                     <span style={{ width: 40 }} />
                   </div>
@@ -2773,11 +2775,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       borderBottom: `1px solid ${colors.border}`,
                     }}
                   >
-                    {(
-                      [
-                        ["info", t.infoTab],
-                        ["topics", t.topics],
-                      ] as const
+                    {(groupActive
+                      ? ([
+                          ["members", t.members],
+                          ["topics", t.topics],
+                        ] as const)
+                      : ([
+                          ["info", t.infoTab],
+                          ["topics", t.topics],
+                        ] as const)
                     ).map(([key, label]) => (
                       <button
                         key={key}
@@ -2952,7 +2958,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </div>
                       ) : null}
                     </>
-                  ) : !groupActive ? (
+                  ) : infoTab === "info" && !groupActive ? (
                     <>
                       <div
                         style={{
@@ -3071,19 +3077,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           padding: "10px 14px 6px",
                           display: "flex",
                           alignItems: "center",
-                          justifyContent: "space-between",
+                          justifyContent: "flex-end",
                         }}
                       >
-                        <span
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 700,
-                            letterSpacing: "0.06em",
-                            color: colors.muted,
-                          }}
-                        >
-                          {t.members}
-                        </span>
                         <button
                           type="button"
                           style={{ ...btnGhost, fontSize: 11 }}
