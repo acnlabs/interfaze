@@ -28,7 +28,15 @@ import {
   type RanchLocale,
   type RanchMessages,
 } from "./i18n";
-import { btnGhost, btnIcon, btnPrimary, colors, inputStyle, shellRoot } from "./styles";
+import {
+  btnGhost,
+  btnIcon,
+  btnPrimary,
+  colors,
+  inputStyle,
+  memberChip,
+  shellRoot,
+} from "./styles";
 
 function formatRelativeTime(iso: string | null | undefined, t: RanchMessages): string {
   if (!iso) return "";
@@ -370,13 +378,25 @@ function escapeRegExp(s: string): string {
 }
 
 /** Group delivery requires mentions; shell defaults to all agents (implicit @all). */
-function resolveGroupMentions(text: string, agentIds: string[]): string[] {
+function resolveGroupMentions(
+  text: string,
+  agentIds: string[],
+  names: Record<string, string> = {},
+  chipTargets: string[] = [],
+): string[] {
   if (agentIds.length === 0) return [];
+  const chips = chipTargets.filter((id) => agentIds.includes(id));
+  if (chips.length > 0) return [...new Set(chips)];
   if (/(^|\s)@all\b/i.test(text)) return [...agentIds];
-  const hit = agentIds.filter((id) =>
-    new RegExp(`(^|\\s)@${escapeRegExp(id)}\\b`, "i").test(text),
-  );
-  return hit.length > 0 ? hit : [...agentIds];
+  const hit = new Set<string>();
+  for (const id of agentIds) {
+    if (new RegExp(`(^|\\s)@${escapeRegExp(id)}\\b`, "i").test(text)) hit.add(id);
+    const label = (names[id] || "").trim();
+    if (label && new RegExp(`(^|\\s)@${escapeRegExp(label)}\\b`, "i").test(text)) {
+      hit.add(id);
+    }
+  }
+  return hit.size > 0 ? [...hit] : [...agentIds];
 }
 
 /** Prefer Gateway/ACN display name; fall back to host directory, then short id. */
@@ -767,6 +787,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   /** agent_id → display name (group chats). */
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
+  /** Empty = message everyone; otherwise only these agent ids get mentions. */
+  const [mentionTargets, setMentionTargets] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -945,6 +967,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setError(null);
       setMessages([]);
       setAgentNames({});
+      setMentionTargets([]);
       setDraft("");
       clearReplySlot();
       agentIdsRef.current = [];
@@ -1106,7 +1129,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
         agentIdsRef.current = agents.map((p) => p.participant_id);
         setAgentNames(resolveParticipantLabels(agents, directoryAgents));
       }
-      const mentions = group ? resolveGroupMentions(text, agentIdsRef.current) : undefined;
+      const mentions = group
+        ? resolveGroupMentions(text, agentIdsRef.current, agentNames, mentionTargets)
+        : undefined;
       beginAwaitingReply(chatId);
       const sentWhileOffline = !group && isAgentOffline(active?.agent_status);
       await client.sendMessage(chatId, text, mentions);
@@ -1183,7 +1208,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setBusy(true);
       setError(null);
       try {
-        const mentions = group ? resolveGroupMentions(text, agentIdsRef.current) : undefined;
+        const mentions = group
+          ? resolveGroupMentions(text, agentIdsRef.current, agentNames, mentionTargets)
+          : undefined;
         beginAwaitingReply(chatId);
         await client.sendMessage(chatId, text, mentions);
         setDraft("");
@@ -1702,6 +1729,102 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 </div>
               ) : null}
 
+              {active && isGroupChat(active) && Object.keys(agentNames).length > 0 ? (
+                <div
+                  style={{
+                    padding: "8px 14px",
+                    borderBottom: `1px solid ${colors.border}`,
+                    background: "rgba(15,23,42,0.55)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: "0.06em",
+                      color: colors.muted,
+                      marginBottom: 8,
+                    }}
+                  >
+                    {t.members}
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 6,
+                      alignItems: "center",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setMentionTargets([])}
+                      style={{
+                        ...memberChip,
+                        borderColor:
+                          mentionTargets.length === 0
+                            ? "rgba(59,130,246,0.55)"
+                            : colors.border,
+                        background:
+                          mentionTargets.length === 0
+                            ? colors.accentSoft
+                            : "transparent",
+                        color: colors.text,
+                      }}
+                    >
+                      {t.askAll}
+                    </button>
+                    {Object.entries(agentNames).map(([id, name]) => {
+                      const on = mentionTargets.includes(id);
+                      return (
+                        <span
+                          key={id}
+                          style={{ display: "inline-flex", gap: 4, alignItems: "center" }}
+                        >
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              setMentionTargets((prev) =>
+                                prev.includes(id)
+                                  ? prev.filter((x) => x !== id)
+                                  : [...prev, id],
+                              );
+                            }}
+                            style={{
+                              ...memberChip,
+                              borderColor: on
+                                ? "rgba(16,185,129,0.55)"
+                                : colors.border,
+                              background: on ? "rgba(16,185,129,0.15)" : "transparent",
+                              color: colors.text,
+                            }}
+                            title={id}
+                          >
+                            {name}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void startDirect(id)}
+                            style={{
+                              ...memberChip,
+                              padding: "4px 8px",
+                              fontSize: 11,
+                              color: colors.muted,
+                            }}
+                            title={t.openDirectChat}
+                          >
+                            {t.openDirectChat}
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
               <div
                 ref={listRef}
                 style={{
@@ -1807,7 +1930,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   rows={2}
-                  placeholder={healthOk === false ? t.gatewayUnavailable : t.messagePlaceholder}
+                  placeholder={
+                    healthOk === false
+                      ? t.gatewayUnavailable
+                      : active && isGroupChat(active)
+                        ? mentionTargets.length === 0
+                          ? t.groupMessageAll
+                          : mentionTargets.length === 1
+                            ? t.groupMessageOne(
+                                agentNames[mentionTargets[0]] ||
+                                  shortAgentId(mentionTargets[0]) ||
+                                  mentionTargets[0],
+                              )
+                            : t.groupMessageSome(mentionTargets.length)
+                        : t.messagePlaceholder
+                  }
                   disabled={busy || healthOk === false}
                   style={{ ...inputStyle, resize: "none", flex: 1 }}
                   onKeyDown={(e) => {
