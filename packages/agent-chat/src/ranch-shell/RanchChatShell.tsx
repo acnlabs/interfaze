@@ -453,7 +453,6 @@ function LanguageSwitcher({
         type="button"
         style={{
           ...btnIcon,
-          borderRadius: 999,
           fontSize: 10,
           fontWeight: 700,
           letterSpacing: "0.04em",
