@@ -379,6 +379,30 @@ function resolveGroupMentions(text: string, agentIds: string[]): string[] {
   return hit.length > 0 ? hit : [...agentIds];
 }
 
+/** Prefer Gateway/ACN display name; fall back to host directory, then short id. */
+function resolveParticipantLabels(
+  agents: Array<{ participant_id: string; name?: string | null }>,
+  directoryAgents: AgentDirectoryItem[],
+): Record<string, string> {
+  const dirNames: Record<string, string> = {};
+  for (const a of directoryAgents) {
+    const label = (a.name || "").trim();
+    if (label) dirNames[a.agent_id] = label;
+  }
+  const names: Record<string, string> = {};
+  for (const p of agents) {
+    const fromApi = (p.name || "").trim();
+    const looksLikeId = !fromApi || fromApi === p.participant_id;
+    names[p.participant_id] =
+      (!looksLikeId ? fromApi : null) ||
+      dirNames[p.participant_id] ||
+      fromApi ||
+      shortAgentId(p.participant_id) ||
+      p.participant_id;
+  }
+  return names;
+}
+
 /**
  * Ranch-ported chat chrome: list → conversation → new-chat picker.
  * Transport: Chat Gateway only (not ranch /api/chat AI SDK).
@@ -937,18 +961,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
           (p) => p.participant_type === "agent" && p.is_active !== false,
         );
         agentIdsRef.current = agents.map((p) => p.participant_id);
-        const names: Record<string, string> = {};
-        for (const p of agents) {
-          names[p.participant_id] =
-            (p.name || "").trim() || shortAgentId(p.participant_id) || p.participant_id;
-        }
-        setAgentNames(names);
+        setAgentNames(resolveParticipantLabels(agents, directoryAgents));
       } catch (e) {
         if (seq !== loadSeqRef.current) return;
         setError(e instanceof Error ? e.message : "Failed to load messages");
       }
     },
-    [client, clearReplySlot],
+    [client, clearReplySlot, directoryAgents],
   );
 
   useEffect(() => {
@@ -1085,12 +1104,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           (p) => p.participant_type === "agent" && p.is_active !== false,
         );
         agentIdsRef.current = agents.map((p) => p.participant_id);
-        const names: Record<string, string> = {};
-        for (const p of agents) {
-          names[p.participant_id] =
-            (p.name || "").trim() || shortAgentId(p.participant_id) || p.participant_id;
-        }
-        setAgentNames(names);
+        setAgentNames(resolveParticipantLabels(agents, directoryAgents));
       }
       const mentions = group ? resolveGroupMentions(text, agentIdsRef.current) : undefined;
       beginAwaitingReply(chatId);
