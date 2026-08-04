@@ -60,11 +60,11 @@ export type RanchMessages = {
   minTwoAgents: string;
   agentsCount: (n: number) => string;
   members: string;
-  askAll: string;
+  groupInfo: string;
   openDirectChat: string;
-  groupMessageAll: string;
-  groupMessageOne: (name: string) => string;
-  groupMessageSome: (n: number) => string;
+  mentionAll: string;
+  mentionAllHint: string;
+  groupMessagePlaceholder: string;
   noMessagesYet: string;
   pickerTitle: string;
   mineAgents: string;
@@ -136,11 +136,11 @@ const en: RanchMessages = {
   minTwoAgents: "Select at least 2 agents",
   agentsCount: (n) => (n === 1 ? "1 agent" : `${n} agents`),
   members: "Members",
-  askAll: "Everyone",
-  openDirectChat: "1:1",
-  groupMessageAll: "Message everyone…",
-  groupMessageOne: (name) => `Message ${name}…`,
-  groupMessageSome: (n) => `Message ${n} agents…`,
+  groupInfo: "Group info",
+  openDirectChat: "Message privately",
+  mentionAll: "@all",
+  mentionAllHint: "Mention all agents",
+  groupMessagePlaceholder: "Message… (Type @ to mention)",
   noMessagesYet: "No messages yet",
   pickerTitle: "New chat",
   mineAgents: "MY AGENTS",
@@ -212,11 +212,11 @@ const zh: RanchMessages = {
   minTwoAgents: "至少选择 2 个 agent",
   agentsCount: (n) => `${n} 个 agent`,
   members: "成员",
-  askAll: "全员",
+  groupInfo: "群资料",
   openDirectChat: "私聊",
-  groupMessageAll: "发给全员…",
-  groupMessageOne: (name) => `发给 ${name}…`,
-  groupMessageSome: (n) => `发给 ${n} 个成员…`,
+  mentionAll: "@all",
+  mentionAllHint: "提及所有 agent",
+  groupMessagePlaceholder: "输入消息…（输入 @ 点名）",
   noMessagesYet: "暂无消息",
   pickerTitle: "新建聊天",
   mineAgents: "我的 AGENT",

@@ -76,17 +76,6 @@ export const btnPrimary: CSSProperties = {
   fontWeight: 600,
 };
 
-/** Compact chip for group member targeting. */
-export const memberChip: CSSProperties = {
-  border: `1px solid ${colors.border}`,
-  background: "transparent",
-  borderRadius: 999,
-  padding: "5px 10px",
-  fontSize: 12,
-  cursor: "pointer",
-  lineHeight: 1.2,
-};
-
 export const inputStyle: CSSProperties = {
   width: "100%",
   background: "#1e293b",

@@ -28,15 +28,7 @@ import {
   type RanchLocale,
   type RanchMessages,
 } from "./i18n";
-import {
-  btnGhost,
-  btnIcon,
-  btnPrimary,
-  colors,
-  inputStyle,
-  memberChip,
-  shellRoot,
-} from "./styles";
+import { btnGhost, btnIcon, btnPrimary, colors, inputStyle, shellRoot } from "./styles";
 
 function formatRelativeTime(iso: string | null | undefined, t: RanchMessages): string {
   if (!iso) return "";
@@ -382,11 +374,8 @@ function resolveGroupMentions(
   text: string,
   agentIds: string[],
   names: Record<string, string> = {},
-  chipTargets: string[] = [],
 ): string[] {
   if (agentIds.length === 0) return [];
-  const chips = chipTargets.filter((id) => agentIds.includes(id));
-  if (chips.length > 0) return [...new Set(chips)];
   if (/(^|\s)@all\b/i.test(text)) return [...agentIds];
   const hit = new Set<string>();
   for (const id of agentIds) {
@@ -397,6 +386,12 @@ function resolveGroupMentions(
     }
   }
   return hit.size > 0 ? [...hit] : [...agentIds];
+}
+
+/** Trailing `@query` for mention autocomplete (ranch-style). */
+function trailingMentionQuery(text: string): string | null {
+  const m = text.match(/(?:^|\s)@([^\s@]*)$/);
+  return m ? m[1] : null;
 }
 
 /** Prefer Gateway/ACN display name; fall back to host directory, then short id. */
@@ -787,8 +782,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   /** agent_id → display name (group chats). */
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
-  /** Empty = message everyone; otherwise only these agent ids get mentions. */
-  const [mentionTargets, setMentionTargets] = useState<string[]>([]);
+  /** Ranch-style: tap header → members panel. */
+  const [showMembersPanel, setShowMembersPanel] = useState(false);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -967,7 +963,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setError(null);
       setMessages([]);
       setAgentNames({});
-      setMentionTargets([]);
+      setShowMembersPanel(false);
+      setMentionIndex(0);
       setDraft("");
       clearReplySlot();
       agentIdsRef.current = [];
@@ -1130,7 +1127,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         setAgentNames(resolveParticipantLabels(agents, directoryAgents));
       }
       const mentions = group
-        ? resolveGroupMentions(text, agentIdsRef.current, agentNames, mentionTargets)
+        ? resolveGroupMentions(text, agentIdsRef.current, agentNames)
         : undefined;
       beginAwaitingReply(chatId);
       const sentWhileOffline = !group && isAgentOffline(active?.agent_status);
@@ -1209,7 +1206,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setError(null);
       try {
         const mentions = group
-          ? resolveGroupMentions(text, agentIdsRef.current, agentNames, mentionTargets)
+          ? resolveGroupMentions(text, agentIdsRef.current, agentNames)
           : undefined;
         beginAwaitingReply(chatId);
         await client.sendMessage(chatId, text, mentions);
@@ -1278,6 +1275,28 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const mineAgents = directoryAgents.filter((a) => a.group === "mine" && a.agent_id.trim());
   const hasMineAgents = mineAgents.length > 0;
   const activeOffline = active && !isGroupChat(active) && isAgentOffline(active.agent_status);
+  const groupActive = !!(active && isGroupChat(active));
+  const mentionQuery = groupActive ? trailingMentionQuery(draft) : null;
+  const mentionOpen = mentionQuery !== null;
+  const mentionCandidates = Object.entries(agentNames)
+    .filter(([id, name]) => {
+      if (!mentionOpen) return false;
+      const q = (mentionQuery || "").toLowerCase();
+      if (!q) return true;
+      return (
+        name.toLowerCase().includes(q) ||
+        id.toLowerCase().includes(q) ||
+        "all".startsWith(q)
+      );
+    })
+    .map(([id, name]) => ({ id, name }));
+  const insertMention = (label: string) => {
+    setDraft((prev) => {
+      const next = prev.replace(/@[^\s@]*$/, `@${label} `);
+      return next === prev ? `${prev.replace(/\s*$/, "")} @${label} `.replace(/^\s+/, "") : next;
+    });
+    setMentionIndex(0);
+  };
 
   return (
     <div style={shellRoot(mode)} data-ranch-chat-shell data-mode={mode}>
@@ -1606,7 +1625,27 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       <IconSidebar />
                     </button>
                   ) : null}
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isGroupChat(active)) setShowMembersPanel(true);
+                    }}
+                    disabled={!isGroupChat(active)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      minWidth: 0,
+                      margin: 0,
+                      padding: 0,
+                      border: "none",
+                      background: "transparent",
+                      color: "inherit",
+                      cursor: isGroupChat(active) ? "pointer" : "default",
+                      textAlign: "left",
+                    }}
+                    title={isGroupChat(active) ? t.groupInfo : undefined}
+                  >
                     <span style={{ position: "relative", width: 32, height: 32, flexShrink: 0 }}>
                       <span
                         style={{
@@ -1683,7 +1722,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </span>
                       ) : null}
                     </div>
-                  </div>
+                  </button>
                 </div>
                 {mode === "side" ? (
                   <button
@@ -1726,102 +1765,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       </a>
                     </>
                   ) : null}
-                </div>
-              ) : null}
-
-              {active && isGroupChat(active) && Object.keys(agentNames).length > 0 ? (
-                <div
-                  style={{
-                    padding: "8px 14px",
-                    borderBottom: `1px solid ${colors.border}`,
-                    background: "rgba(15,23,42,0.55)",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: "0.06em",
-                      color: colors.muted,
-                      marginBottom: 8,
-                    }}
-                  >
-                    {t.members}
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 6,
-                      alignItems: "center",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => setMentionTargets([])}
-                      style={{
-                        ...memberChip,
-                        borderColor:
-                          mentionTargets.length === 0
-                            ? "rgba(59,130,246,0.55)"
-                            : colors.border,
-                        background:
-                          mentionTargets.length === 0
-                            ? colors.accentSoft
-                            : "transparent",
-                        color: colors.text,
-                      }}
-                    >
-                      {t.askAll}
-                    </button>
-                    {Object.entries(agentNames).map(([id, name]) => {
-                      const on = mentionTargets.includes(id);
-                      return (
-                        <span
-                          key={id}
-                          style={{ display: "inline-flex", gap: 4, alignItems: "center" }}
-                        >
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => {
-                              setMentionTargets((prev) =>
-                                prev.includes(id)
-                                  ? prev.filter((x) => x !== id)
-                                  : [...prev, id],
-                              );
-                            }}
-                            style={{
-                              ...memberChip,
-                              borderColor: on
-                                ? "rgba(16,185,129,0.55)"
-                                : colors.border,
-                              background: on ? "rgba(16,185,129,0.15)" : "transparent",
-                              color: colors.text,
-                            }}
-                            title={id}
-                          >
-                            {name}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void startDirect(id)}
-                            style={{
-                              ...memberChip,
-                              padding: "4px 8px",
-                              fontSize: 11,
-                              color: colors.muted,
-                            }}
-                            title={t.openDirectChat}
-                          >
-                            {t.openDirectChat}
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
                 </div>
               ) : null}
 
@@ -1924,30 +1867,112 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   padding: 12,
                   display: "flex",
                   gap: 8,
+                  position: "relative",
                 }}
               >
+                {mentionOpen ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 12,
+                      right: 72,
+                      bottom: "100%",
+                      marginBottom: 8,
+                      background: colors.panel,
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: 12,
+                      overflow: "hidden",
+                      boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+                      zIndex: 5,
+                      maxHeight: 240,
+                      overflowY: "auto",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => insertMention("all")}
+                      style={{
+                        ...mentionRow,
+                        borderBottom: `1px solid ${colors.border}`,
+                        background:
+                          mentionIndex === 0 ? colors.hover : "transparent",
+                      }}
+                    >
+                      <span style={{ fontWeight: 600 }}>{t.mentionAll}</span>
+                      <span style={{ fontSize: 11, color: colors.muted }}>
+                        {t.mentionAllHint}
+                      </span>
+                    </button>
+                    {mentionCandidates.map((a, i) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => insertMention(a.name)}
+                        style={{
+                          ...mentionRow,
+                          background:
+                            mentionIndex === i + 1 ? colors.hover : "transparent",
+                        }}
+                      >
+                        <span style={{ fontWeight: 600 }}>@{a.name}</span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: colors.muted,
+                            fontFamily:
+                              'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                          }}
+                        >
+                          {shortAgentId(a.id)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 <textarea
                   value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    setMentionIndex(0);
+                  }}
                   rows={2}
                   placeholder={
                     healthOk === false
                       ? t.gatewayUnavailable
-                      : active && isGroupChat(active)
-                        ? mentionTargets.length === 0
-                          ? t.groupMessageAll
-                          : mentionTargets.length === 1
-                            ? t.groupMessageOne(
-                                agentNames[mentionTargets[0]] ||
-                                  shortAgentId(mentionTargets[0]) ||
-                                  mentionTargets[0],
-                              )
-                            : t.groupMessageSome(mentionTargets.length)
+                      : groupActive
+                        ? t.groupMessagePlaceholder
                         : t.messagePlaceholder
                   }
                   disabled={busy || healthOk === false}
                   style={{ ...inputStyle, resize: "none", flex: 1 }}
                   onKeyDown={(e) => {
+                    if (mentionOpen) {
+                      const total = mentionCandidates.length + 1; // + @all
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setMentionIndex((i) => (i + 1) % total);
+                        return;
+                      }
+                      if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setMentionIndex((i) => (i - 1 + total) % total);
+                        return;
+                      }
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        setDraft((prev) => prev.replace(/@[^\s@]*$/, ""));
+                        return;
+                      }
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        if (mentionIndex === 0) insertMention("all");
+                        else {
+                          const pick = mentionCandidates[mentionIndex - 1];
+                          if (pick) insertMention(pick.name);
+                        }
+                        return;
+                      }
+                    }
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       void send();
@@ -1962,6 +1987,118 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   {t.send}
                 </button>
               </form>
+
+              {showMembersPanel && groupActive ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    zIndex: 30,
+                    background: colors.bg,
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <div style={listHeader}>
+                    <button
+                      type="button"
+                      style={btnGhost}
+                      onClick={() => setShowMembersPanel(false)}
+                      aria-label={t.close}
+                    >
+                      ←
+                    </button>
+                    <strong style={{ fontSize: 14 }}>{t.groupInfo}</strong>
+                    <span style={{ width: 40 }} />
+                  </div>
+                  <div style={{ padding: "20px 16px 12px", textAlign: "center", borderBottom: `1px solid ${colors.border}` }}>
+                    <div
+                      style={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: 12,
+                        margin: "0 auto 10px",
+                        background: "linear-gradient(135deg,#334155,#1e293b)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontWeight: 700,
+                        fontSize: 22,
+                      }}
+                    >
+                      {chatTitle(active!).slice(0, 1).toUpperCase()}
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 600 }}>{chatTitle(active!)}</div>
+                    <div style={{ fontSize: 12, color: colors.muted, marginTop: 4 }}>
+                      {t.agentsCount(Object.keys(agentNames).length)}
+                    </div>
+                  </div>
+                  <div style={{ padding: "10px 14px 6px", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: colors.muted }}>
+                    {t.members}
+                  </div>
+                  <div style={{ flex: 1, overflow: "auto", padding: "0 8px 16px" }}>
+                    {Object.entries(agentNames).map(([id, name]) => (
+                      <div
+                        key={id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "10px 8px",
+                          borderRadius: 10,
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 999,
+                            background: "linear-gradient(135deg,#0f766e,#1e293b)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontWeight: 700,
+                            fontSize: 14,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {name.slice(0, 1).toUpperCase()}
+                        </span>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ display: "block", fontWeight: 600, fontSize: 13 }}>
+                            {name}
+                          </span>
+                          <span
+                            style={{
+                              display: "block",
+                              fontSize: 11,
+                              color: colors.muted,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              fontFamily:
+                                'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                            }}
+                          >
+                            {shortAgentId(id)}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          style={btnGhost}
+                          disabled={busy}
+                          onClick={() => {
+                            setShowMembersPanel(false);
+                            void startDirect(id);
+                          }}
+                        >
+                          {t.openDirectChat}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </>
           )}
         </div>
@@ -2009,4 +2146,18 @@ const listItem: CSSProperties = {
   cursor: "pointer",
   color: colors.text,
   marginBottom: 2,
+};
+
+const mentionRow: CSSProperties = {
+  width: "100%",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "flex-start",
+  gap: 2,
+  padding: "10px 12px",
+  border: "none",
+  background: "transparent",
+  color: colors.text,
+  cursor: "pointer",
+  textAlign: "left",
 };
