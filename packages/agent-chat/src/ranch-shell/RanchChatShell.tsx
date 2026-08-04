@@ -853,6 +853,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [draft, setDraft] = useState("");
   /** Group: continue with last @'d agent for 15m (chip above composer). */
   const [stickyMention, setStickyMention] = useState<StickyMention | null>(null);
+  /** Group: forced recipient picker when send has no @ / sticky (ranch-style). */
+  const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
@@ -1036,6 +1038,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setTitleDraft(chat.title?.trim() || "");
       setMentionIndex(0);
       setDraft("");
+      setRecipientPickerOpen(false);
       setStickyMention(isGroupChat(chat) ? readStickyMention(chat.chat_id) : null);
       clearReplySlot();
       agentIdsRef.current = [];
@@ -1236,7 +1239,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     }
   };
 
-  const send = async () => {
+  const send = async (opts?: { forceMentions?: string[] }) => {
     const text = draft.trim();
     if (!text || !active) return;
     const chatId = active.chat_id;
@@ -1245,6 +1248,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const pollGen = ++replyPollGenRef.current;
     setBusy(true);
     setError(null);
+    setRecipientPickerOpen(false);
     try {
       if (group && agentIdsRef.current.length === 0) {
         const participants = await client.listParticipants(chatId);
@@ -1257,18 +1261,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
       }
       let mentions: string[] | undefined;
       if (group) {
-        const resolved = resolveStickyMentions(
-          text,
-          agentIdsRef.current,
-          agentNames,
-          stickyMention,
-        );
-        if (resolved.mentions.length === 0) {
-          setError(t.mentionRequired);
-          setBusy(false);
-          return;
+        if (opts?.forceMentions && opts.forceMentions.length > 0) {
+          mentions = opts.forceMentions;
+        } else {
+          const resolved = resolveStickyMentions(
+            text,
+            agentIdsRef.current,
+            agentNames,
+            stickyMention,
+          );
+          if (resolved.mentions.length === 0) {
+            setRecipientPickerOpen(true);
+            setMentionIndex(0);
+            setBusy(false);
+            return;
+          }
+          mentions = resolved.mentions;
         }
-        mentions = resolved.mentions;
       }
       beginAwaitingReply(chatId);
       const sentWhileOffline = !group && isAgentOffline(active?.agent_status);
@@ -1363,12 +1372,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
             stickyMention,
           );
           if (resolved.mentions.length === 0) {
-            setError(t.mentionRequired);
+            setRecipientPickerOpen(true);
+            setMentionIndex(0);
             setBusy(false);
             return;
           }
           mentions = resolved.mentions;
         }
+        setRecipientPickerOpen(false);
         beginAwaitingReply(chatId);
         await client.sendMessage(chatId, text, mentions);
         if (group && mentions) {
@@ -1446,7 +1457,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const activeOffline = active && !isGroupChat(active) && isAgentOffline(active.agent_status);
   const groupActive = !!(active && isGroupChat(active));
   const mentionQuery = groupActive ? trailingMentionQuery(draft) : null;
-  const mentionOpen = mentionQuery !== null;
+  const mentionOpen = mentionQuery !== null || recipientPickerOpen;
   const mentionCandidates = Object.entries(agentNames)
     .filter(([id, name]) => {
       if (!mentionOpen) return false;
@@ -1459,12 +1470,31 @@ export function RanchChatShell(props: RanchChatShellProps) {
       );
     })
     .map(([id, name]) => ({ id, name }));
+
+  /** Forced picker: pick → send immediately (no @ inserted into draft). */
+  const pickRecipientAndSend = (label: string) => {
+    if (label === "all") {
+      void send({ forceMentions: [...agentIdsRef.current] });
+      return;
+    }
+    const entry = Object.entries(agentNames).find(
+      ([, name]) => name === label || name.toLowerCase() === label.toLowerCase(),
+    );
+    if (!entry) return;
+    void send({ forceMentions: [entry[0]] });
+  };
+
   const insertMention = (label: string) => {
+    if (recipientPickerOpen && mentionQuery === null) {
+      pickRecipientAndSend(label);
+      return;
+    }
     setDraft((prev) => {
       const next = prev.replace(/@[^\s@]*$/, `@${label} `);
       return next === prev ? `${prev.replace(/\s*$/, "")} @${label} `.replace(/^\s+/, "") : next;
     });
     setMentionIndex(0);
+    setRecipientPickerOpen(false);
     const chatId = active?.chat_id;
     if (!chatId || !groupActive) return;
     if (label === "all") {
@@ -2138,6 +2168,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       overflowY: "auto",
                     }}
                   >
+                    {recipientPickerOpen && mentionQuery === null ? (
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 11,
+                          color: colors.muted,
+                          borderBottom: `1px solid ${colors.border}`,
+                        }}
+                      >
+                        {t.mentionRequired}
+                      </div>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => insertMention("all")}
@@ -2184,6 +2226,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   onChange={(e) => {
                     setDraft(e.target.value);
                     setMentionIndex(0);
+                    if (recipientPickerOpen && trailingMentionQuery(e.target.value) !== null) {
+                      setRecipientPickerOpen(false);
+                    }
                   }}
                   rows={2}
                   placeholder={
@@ -2210,6 +2255,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       }
                       if (e.key === "Escape") {
                         e.preventDefault();
+                        if (recipientPickerOpen && mentionQuery === null) {
+                          setRecipientPickerOpen(false);
+                          return;
+                        }
                         setDraft((prev) => prev.replace(/@[^\s@]*$/, ""));
                         return;
                       }
