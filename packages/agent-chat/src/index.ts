@@ -6,6 +6,7 @@ export {
   resolveRanchLocale,
   readStoredRanchLocale,
   writeStoredRanchLocale,
+  RANCH_LOCALE_OPTIONS,
   RANCH_LOCALE_STORAGE_KEY,
   type RanchLocale,
   type RanchMessages,

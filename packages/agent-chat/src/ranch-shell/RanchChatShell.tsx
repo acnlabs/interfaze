@@ -6,6 +6,7 @@ import type { ChatMessage, ChatSummary, RanchChatAccount, RanchChatShellProps } 
 import { connectChatSocket, type ChatSocket } from "../ws";
 import { NewChatPicker } from "./NewChatPicker";
 import {
+  RANCH_LOCALE_OPTIONS,
   ranchMessages,
   readStoredRanchLocale,
   resolveRanchLocale,
@@ -419,41 +420,40 @@ function LanguageSwitcher({
   onChange: (next: RanchLocale) => void;
   t: RanchMessages;
 }) {
-  const seg = (code: RanchLocale): CSSProperties => ({
-    margin: 0,
-    padding: "3px 8px",
-    fontSize: 11,
-    fontWeight: 650,
-    letterSpacing: "0.02em",
-    border: "none",
-    cursor: "pointer",
-    background: locale === code ? colors.accentSoft : "transparent",
-    color: locale === code ? colors.text : colors.muted,
-    borderRadius: 6,
-  });
   return (
-    <div
-      role="group"
+    <select
       aria-label={t.language}
       title={t.language}
+      value={locale}
+      onChange={(e) => onChange(resolveRanchLocale(e.target.value))}
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 2,
-        padding: 2,
-        borderRadius: 8,
-        border: `1px solid ${colors.border}`,
+        margin: 0,
+        padding: "4px 22px 4px 8px",
+        fontSize: 11,
+        fontWeight: 600,
+        lineHeight: 1.2,
+        color: colors.text,
         background: colors.bg,
+        border: `1px solid ${colors.border}`,
+        borderRadius: 8,
+        cursor: "pointer",
         flexShrink: 0,
+        maxWidth: 120,
+        appearance: "none",
+        WebkitAppearance: "none",
+        backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(
+          `<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='%2394a3b8' d='M3 4.5 6 8l3-3.5'/></svg>`,
+        )}")`,
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "right 6px center",
       }}
     >
-      <button type="button" style={seg("en")} onClick={() => onChange("en")} aria-pressed={locale === "en"}>
-        {t.langEn}
-      </button>
-      <button type="button" style={seg("zh")} onClick={() => onChange("zh")} aria-pressed={locale === "zh"}>
-        {t.langZh}
-      </button>
-    </div>
+      {RANCH_LOCALE_OPTIONS.map((opt) => (
+        <option key={opt.code} value={opt.code}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
   );
 }
 
