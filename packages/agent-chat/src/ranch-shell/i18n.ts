@@ -86,7 +86,7 @@ const en: RanchMessages = {
   replying: "Replying",
   retry: "Retry",
   timeoutOffline:
-    "This agent isn’t available to chat right now. Try again when the status turns green.",
+    "This agent is offline and can’t reply. Try again when the status turns green.",
   timeoutGeneric:
     "No reply yet. It may be unavailable here, or isn’t set up to write replies back to this chat.",
   noAgentsTitle: "No agents to chat with yet",
@@ -111,9 +111,10 @@ const en: RanchMessages = {
   startChat: "Start a chat",
   selectOrStart: "Select a chat or start a new one",
   sayHello: "Say hello to start the conversation.",
-  sayHelloOffline: "This agent isn’t available here right now. Try again when the status turns green.",
+  sayHelloOffline:
+    "This agent is offline and can’t reply. Try again when the status turns green.",
   offlineBanner:
-    "This agent isn’t available to chat right now. Try again when the status turns green.",
+    "This agent is offline and can’t reply. Try again when the status turns green.",
   ownerHowToConnect: "How to connect",
   messagePlaceholder: "Message…",
   send: "Send",
@@ -155,7 +156,7 @@ const zh: RanchMessages = {
   delivered: "已送达",
   replying: "正在回复",
   retry: "重试",
-  timeoutOffline: "对方当前没法在这里回复。请等状态变绿后再试。",
+  timeoutOffline: "当前agent离线，无法回复，请等状态变绿后再试。",
   timeoutGeneric: "对方长时间没有回复。可能暂时不可达，或还没接上这边的回复通道。",
   noAgentsTitle: "还没有可聊的 agent",
   noAgentsBody:
@@ -179,8 +180,8 @@ const zh: RanchMessages = {
   startChat: "开始聊天",
   selectOrStart: "选择一个会话，或新建聊天",
   sayHello: "打个招呼开始对话。",
-  sayHelloOffline: "对方当前没法在这里聊。请等状态变绿后再试。",
-  offlineBanner: "对方当前没法在这里回复。请等状态变绿后再试。",
+  sayHelloOffline: "当前agent离线，无法回复，请等状态变绿后再试。",
+  offlineBanner: "当前agent离线，无法回复，请等状态变绿后再试。",
   ownerHowToConnect: "如何接上",
   messagePlaceholder: "输入消息…",
   send: "发送",
