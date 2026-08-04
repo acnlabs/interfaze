@@ -2049,7 +2049,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             <>
               <div style={listHeader}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  {mode === "side" && (
+                  {(mode === "side" || activeTopic) && (
                     <button
                       type="button"
                       style={btnGhost}
@@ -2061,6 +2061,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         setView("list");
                         setActive(null);
                       }}
+                      aria-label={activeTopic ? t.backToMainChat : undefined}
+                      title={activeTopic ? t.backToMainChat : undefined}
                     >
                       ←
                     </button>
