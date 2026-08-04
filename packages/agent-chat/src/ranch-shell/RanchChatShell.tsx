@@ -57,6 +57,17 @@ function shortAgentId(agentId?: string | null): string {
   return s.length > 8 ? s.slice(0, 8) : s;
 }
 
+/** Normalize for membership checks (acn:uuid ↔ uuid). */
+function agentIdKey(agentId?: string | null): string {
+  return (agentId || "").replace(/^acn:/i, "").trim().toLowerCase();
+}
+
+function isAgentInGroup(agentId: string, names: Record<string, string>): boolean {
+  const key = agentIdKey(agentId);
+  if (!key) return false;
+  return Object.keys(names).some((id) => agentIdKey(id) === key);
+}
+
 /** Status colors for avatar corner dots (direct chats only). */
 function agentStatusDotColor(status?: string | null): string | null {
   if (!status) return null;
@@ -1048,7 +1059,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       void searchDiscover(addMemberDiscoverQ)
         .then((rows) => {
           if (!cancelled) {
-            setAddMemberDiscoverRows(rows.filter((a) => !agentNames[a.agent_id]));
+            setAddMemberDiscoverRows(rows.filter((a) => !isAgentInGroup(a.agent_id, agentNames)));
           }
         })
         .catch(() => {
@@ -2762,7 +2773,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             }
                           };
                           const mineToAdd = directoryAgents.filter(
-                            (a) => a.group === "mine" && !agentNames[a.agent_id],
+                            (a) => a.group === "mine" && !isAgentInGroup(a.agent_id, agentNames),
                           );
                           return (
                             <>
