@@ -569,6 +569,16 @@ function isSlashMenuDraft(text: string): boolean {
   return !/\s/.test(trimmed.slice(1));
 }
 
+function isAuthFailure(err: unknown): boolean {
+  if (err instanceof ChatGatewayError) {
+    return err.status === 401 || err.code === "not_authenticated";
+  }
+  if (err instanceof Error) {
+    return /not authenticated/i.test(err.message);
+  }
+  return false;
+}
+
 /** Prefer Gateway/ACN display name; fall back to host directory, then short id. */
 function resolveParticipantLabels(
   agents: Array<{ participant_id: string; name?: string | null }>,
@@ -879,6 +889,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     allowGroupChat = true,
     account,
     onLogout,
+    onReauth,
     connectGuideUrl,
     locale: localeProp,
     onLocaleChange,
@@ -1063,12 +1074,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
     try {
       const list = await client.listChats();
       setChats(list);
+      setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load chats");
+      setError(
+        isAuthFailure(e)
+          ? t.sessionExpired
+          : e instanceof Error
+            ? e.message
+            : "Failed to load chats",
+      );
     } finally {
       setLoadingChats(false);
     }
-  }, [client]);
+  }, [client, t.sessionExpired]);
 
   const searchDiscover = useCallback(
     async (q: string): Promise<AgentDirectoryItem[]> => {
@@ -2074,6 +2092,40 @@ export function RanchChatShell(props: RanchChatShellProps) {
             })
           )}
         </div>
+
+        {error ? (
+          <div
+            style={{
+              flexShrink: 0,
+              padding: "10px 12px",
+              borderTop: `1px solid ${colors.border}`,
+              background: "rgba(248,113,113,0.12)",
+              color: colors.danger,
+              fontSize: 12,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              zIndex: 2,
+            }}
+          >
+            <span>{error}</span>
+            {/session expired|登录已失效|not authenticated/i.test(error) &&
+            (onReauth || onLogout) ? (
+              <div style={{ display: "flex", gap: 8 }}>
+                {onReauth ? (
+                  <button type="button" style={btnPrimary} onClick={() => onReauth()}>
+                    {t.reLogin}
+                  </button>
+                ) : null}
+                {onLogout ? (
+                  <button type="button" style={btnGhost} onClick={() => onLogout()}>
+                    {t.logOut}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {account ? <AccountFooter account={account} onLogout={onLogout} t={t} /> : null}
 
@@ -3652,24 +3704,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
               ) : null}
             </>
           )}
-        </div>
-      )}
-
-      {error && view === "list" && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: 12,
-            left: 12,
-            right: 12,
-            padding: 10,
-            borderRadius: 8,
-            background: "rgba(248,113,113,0.12)",
-            color: colors.danger,
-            fontSize: 12,
-          }}
-        >
-          {error}
         </div>
       )}
 

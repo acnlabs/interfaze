@@ -11,21 +11,40 @@ import { getGatewayBaseUrl } from "@/lib/gateway";
  * Locale is owned by RanchChatShell (switcher + localStorage + browser fallback).
  */
 export default function InterfazeChatHost() {
-  const { getAccessTokenSilently, isAuthenticated, user, logout } = useAuth0();
+  const { getAccessTokenSilently, isAuthenticated, user, logout, loginWithRedirect } = useAuth0();
   const gatewayBaseUrl = getGatewayBaseUrl();
   const [directoryAgents, setDirectoryAgents] = useState<AgentDirectoryItem[]>([]);
 
   const handleLogout = useCallback(() => {
-    logout({ logoutParams: { returnTo: typeof window !== "undefined" ? window.location.origin : undefined } });
+    logout({
+      logoutParams: {
+        returnTo: typeof window !== "undefined" ? window.location.origin : undefined,
+      },
+    });
   }, [logout]);
+
+  const handleReauth = useCallback(() => {
+    void loginWithRedirect({
+      authorizationParams: {
+        audience: AUTH0_AUDIENCE,
+        scope: "openid profile email",
+        prompt: "login",
+      },
+      appState: {
+        returnTo: typeof window !== "undefined" ? window.location.pathname : "/",
+      },
+    });
+  }, [loginWithRedirect]);
 
   const tokenGetter = useCallback(async () => {
     if (!isAuth0Configured() || !isAuthenticated) return null;
     try {
       return await getAccessTokenSilently({
         authorizationParams: { audience: AUTH0_AUDIENCE, scope: "openid profile email" },
+        cacheMode: "on",
       });
     } catch {
+      // Expired refresh / consent — shell shows Sign in again via onReauth.
       return null;
     }
   }, [getAccessTokenSilently, isAuthenticated]);
@@ -94,6 +113,7 @@ export default function InterfazeChatHost() {
           : null
       }
       onLogout={isAuthenticated ? handleLogout : undefined}
+      onReauth={isAuthenticated ? handleReauth : undefined}
     />
   );
 }

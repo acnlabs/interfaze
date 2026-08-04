@@ -119,6 +119,8 @@ export type RanchMessages = {
   logOut: string;
   account: string;
   language: string;
+  sessionExpired: string;
+  reLogin: string;
 };
 
 const en: RanchMessages = {
@@ -234,6 +236,8 @@ const en: RanchMessages = {
   logOut: "Log out",
   account: "Account",
   language: "Language",
+  sessionExpired: "Session expired. Sign in again to keep chatting.",
+  reLogin: "Sign in again",
   waitingReply: "Waiting for reply…",
   searchAgents: "Search agents…",
   discoverAgents: "Discoverable",
@@ -346,6 +350,8 @@ const zh: RanchMessages = {
   logOut: "退出登录",
   account: "账户",
   language: "语言",
+  sessionExpired: "登录已失效，请重新登录后再聊。",
+  reLogin: "重新登录",
   waitingReply: "等待回复…",
   searchAgents: "搜索 agent…",
   discoverAgents: "可发现",

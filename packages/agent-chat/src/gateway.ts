@@ -80,11 +80,14 @@ export function createGatewayClient(
 ): GatewayClient {
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const token = await getAccessToken();
+    if (!token) {
+      throw new ChatGatewayError(401, "not_authenticated", "Not authenticated");
+    }
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...(init.headers as Record<string, string> | undefined),
+      Authorization: `Bearer ${token}`,
     };
-    if (token) headers.Authorization = `Bearer ${token}`;
 
     const res = await fetch(joinUrl(gatewayBaseUrl, path), { ...init, headers });
     if (!res.ok) throw await parseError(res);
