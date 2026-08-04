@@ -1246,11 +1246,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
         writeStickyMention(chatId, refreshed);
         return refreshed;
       });
-      await refreshChats();
-      const next = (await client.listChats()).find((c) => c.chat_id === chatId);
-      if (next) setActive(next);
+      // Patch member counts on the open chat only — full listChats refresh
+      // flashes the sidebar on every add/remove.
+      const totalMembers = agents.length;
+      const activeMembers = agents.filter(
+        (p) => (p.agent_status || "").toLowerCase() === "active",
+      ).length;
+      const patch = (c: ChatSummary): ChatSummary =>
+        c.chat_id === chatId
+          ? { ...c, total_members: totalMembers, active_members: activeMembers }
+          : c;
+      setChats((prev) => prev.map(patch));
+      setActive((cur) => (cur && cur.chat_id === chatId ? patch(cur) : cur));
     },
-    [client, directoryAgents, refreshChats],
+    [client, directoryAgents],
   );
 
   const clearStickyMention = useCallback((chatId?: string) => {
