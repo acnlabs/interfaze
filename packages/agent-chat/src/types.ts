@@ -137,6 +137,8 @@ export type ChatParticipant = {
   role: string;
   is_active: boolean;
   name?: string | null;
+  /** ACN presence for agents: active | busy | offline (null for users). */
+  agent_status?: string | null;
 };
 
 /** Window / document event to open the shell from Host UI. */

@@ -930,6 +930,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   /** agent_id → display name (group chats). */
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
+  /** agent_id → presence status (group chats; from participants API). */
+  const [agentStatuses, setAgentStatuses] = useState<Record<string, string>>({});
   /** Ranch-style: tap header → members panel. */
   const [showMembersPanel, setShowMembersPanel] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
@@ -1147,6 +1149,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setError(null);
       setMessages([]);
       setAgentNames({});
+      setAgentStatuses({});
       setShowMembersPanel(false);
       setShowAddMember(false);
       setEditingTitle(false);
@@ -1172,6 +1175,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
         agentIdsRef.current = agents.map((p) => p.participant_id);
         const labels = resolveParticipantLabels(agents, directoryAgents);
         setAgentNames(labels);
+        const statuses: Record<string, string> = {};
+        for (const p of agents) {
+          if (typeof p.agent_status === "string" && p.agent_status) {
+            statuses[p.participant_id] = p.agent_status;
+          }
+        }
+        setAgentStatuses(statuses);
         setStickyMention((cur) => {
           if (!isGroupChat(chat)) return null;
           const sticky = cur ?? readStickyMention(chat.chat_id);
@@ -1214,6 +1224,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
       agentIdsRef.current = agents.map((p) => p.participant_id);
       const labels = resolveParticipantLabels(agents, directoryAgents);
       setAgentNames(labels);
+      const statuses: Record<string, string> = {};
+      for (const p of agents) {
+        if (typeof p.agent_status === "string" && p.agent_status) {
+          statuses[p.participant_id] = p.agent_status;
+        }
+      }
+      setAgentStatuses(statuses);
       setStickyMention((cur) => {
         if (!cur) return null;
         if (!agentIdsRef.current.includes(cur.agentId)) {
@@ -1382,6 +1399,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
         );
         agentIdsRef.current = agents.map((p) => p.participant_id);
         setAgentNames(resolveParticipantLabels(agents, directoryAgents));
+        const statuses: Record<string, string> = {};
+        for (const p of agents) {
+          if (typeof p.agent_status === "string" && p.agent_status) {
+            statuses[p.participant_id] = p.agent_status;
+          }
+        }
+        setAgentStatuses(statuses);
       }
       let mentions: string[] | undefined;
       if (group) {
@@ -2330,7 +2354,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         {t.mentionAllHint}
                       </span>
                     </button>
-                    {mentionCandidates.map((a, i) => (
+                    {mentionCandidates.map((a, i) => {
+                      const status = agentStatuses[a.id];
+                      const statusLabel = agentStatusTitle(status, t);
+                      const dot = agentStatusDotColor(status);
+                      return (
                       <button
                         key={a.id}
                         type="button"
@@ -2341,19 +2369,65 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             mentionIndex === i + 1 ? colors.hover : "transparent",
                         }}
                       >
-                        <span style={{ fontWeight: 600 }}>@{a.name}</span>
                         <span
                           style={{
-                            fontSize: 11,
-                            color: colors.muted,
-                            fontFamily:
-                              'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            minWidth: 0,
                           }}
                         >
-                          {shortAgentId(a.id)}
+                          <span style={{ position: "relative", flexShrink: 0 }}>
+                            <span
+                              style={{
+                                width: 28,
+                                height: 28,
+                                borderRadius: 999,
+                                background: "linear-gradient(135deg,#0f766e,#1e293b)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontWeight: 700,
+                                fontSize: 12,
+                              }}
+                            >
+                              {a.name.slice(0, 1).toUpperCase()}
+                            </span>
+                            {dot ? (
+                              <span
+                                aria-hidden
+                                title={statusLabel}
+                                style={{
+                                  position: "absolute",
+                                  right: -1,
+                                  bottom: -1,
+                                  width: 9,
+                                  height: 9,
+                                  borderRadius: 999,
+                                  background: dot,
+                                  border: `2px solid ${colors.panel}`,
+                                }}
+                              />
+                            ) : null}
+                          </span>
+                          <span style={{ minWidth: 0, textAlign: "left" }}>
+                            <span style={{ display: "block", fontWeight: 600 }}>
+                              @{a.name}
+                            </span>
+                            <span
+                              style={{
+                                display: "block",
+                                fontSize: 11,
+                                color: colors.muted,
+                              }}
+                            >
+                              {statusLabel || shortAgentId(a.id)}
+                            </span>
+                          </span>
                         </span>
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : null}
                 <textarea
@@ -2633,7 +2707,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </button>
                       </div>
                       <div style={{ flex: 1, overflow: "auto", padding: "0 8px 8px" }}>
-                        {Object.entries(agentNames).map(([id, name]) => (
+                        {Object.entries(agentNames).map(([id, name]) => {
+                          const status = agentStatuses[id];
+                          const statusLabel = agentStatusTitle(status, t);
+                          const dot = agentStatusDotColor(status);
+                          return (
                           <div
                             key={id}
                             style={{
@@ -2646,19 +2724,43 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           >
                             <span
                               style={{
+                                position: "relative",
                                 width: 36,
                                 height: 36,
-                                borderRadius: 999,
-                                background: "linear-gradient(135deg,#0f766e,#1e293b)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontWeight: 700,
-                                fontSize: 14,
                                 flexShrink: 0,
                               }}
                             >
-                              {name.slice(0, 1).toUpperCase()}
+                              <span
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: 999,
+                                  background: "linear-gradient(135deg,#0f766e,#1e293b)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontWeight: 700,
+                                  fontSize: 14,
+                                }}
+                              >
+                                {name.slice(0, 1).toUpperCase()}
+                              </span>
+                              {dot ? (
+                                <span
+                                  aria-hidden
+                                  title={statusLabel}
+                                  style={{
+                                    position: "absolute",
+                                    right: -1,
+                                    bottom: -1,
+                                    width: 10,
+                                    height: 10,
+                                    borderRadius: 999,
+                                    background: dot,
+                                    border: `2px solid ${colors.bg}`,
+                                  }}
+                                />
+                              ) : null}
                             </span>
                             <span style={{ flex: 1, minWidth: 0 }}>
                               <span style={{ display: "block", fontWeight: 600, fontSize: 13 }}>
@@ -2672,11 +2774,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
                                   whiteSpace: "nowrap",
-                                  fontFamily:
-                                    'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
                                 }}
                               >
-                                {shortAgentId(id)}
+                                {statusLabel || shortAgentId(id)}
                               </span>
                             </span>
                             <button
@@ -2712,7 +2812,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               {t.removeMember}
                             </button>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                       <div style={{ padding: 12, borderTop: `1px solid ${colors.border}` }}>
                         <button
