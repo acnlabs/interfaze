@@ -2658,7 +2658,43 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   </div>
 
                   {!groupActive ? (
-                    <div style={{ flex: 1 }} />
+                    <>
+                      <div style={{ flex: 1 }} />
+                      <div style={{ padding: 12, borderTop: `1px solid ${colors.border}` }}>
+                        <button
+                          type="button"
+                          style={{
+                            ...btnGhost,
+                            width: "100%",
+                            color: colors.danger,
+                            borderColor: "rgba(248,113,113,0.35)",
+                          }}
+                          disabled={busy}
+                          onClick={() => {
+                            if (!window.confirm(t.deleteChatConfirm)) return;
+                            void (async () => {
+                              setBusy(true);
+                              try {
+                                await client.deleteChat(active.chat_id);
+                                setShowMembersPanel(false);
+                                setActive(null);
+                                setView("list");
+                                setMessages([]);
+                                setDraft("");
+                                clearReplySlot();
+                                await refreshChats();
+                              } catch (e) {
+                                setError(e instanceof Error ? e.message : t.sendFailed);
+                              } finally {
+                                setBusy(false);
+                              }
+                            })();
+                          }}
+                        >
+                          {t.deleteChat}
+                        </button>
+                      </div>
+                    </>
                   ) : !showAddMember ? (
                     <>
                       <div

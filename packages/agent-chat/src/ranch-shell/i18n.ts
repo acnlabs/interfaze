@@ -81,6 +81,8 @@ export type RanchMessages = {
   save: string;
   deleteGroup: string;
   deleteGroupConfirm: string;
+  deleteChat: string;
+  deleteChatConfirm: string;
   noAgentsToAdd: string;
   noMessagesYet: string;
   pickerTitle: string;
@@ -175,6 +177,8 @@ const en: RanchMessages = {
   save: "Save",
   deleteGroup: "Delete group",
   deleteGroupConfirm: "Delete this group and all its messages? This cannot be undone.",
+  deleteChat: "Delete chat",
+  deleteChatConfirm: "Delete this chat and all its messages? This cannot be undone.",
   noAgentsToAdd: "No more agents to add. Search Discover or connect a new agent first.",
   noMessagesYet: "No messages yet",
   pickerTitle: "New chat",
@@ -268,6 +272,8 @@ const zh: RanchMessages = {
   save: "保存",
   deleteGroup: "解散群聊",
   deleteGroupConfirm: "确定解散此群并删除全部消息？此操作不可撤销。",
+  deleteChat: "删除对话",
+  deleteChatConfirm: "确定删除此对话及全部消息？此操作不可撤销。",
   noAgentsToAdd: "没有更多可添加的 agent。去发现里搜，或先接上新的 agent。",
   noMessagesYet: "暂无消息",
   pickerTitle: "新建聊天",
