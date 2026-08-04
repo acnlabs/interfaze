@@ -208,6 +208,93 @@ function DeliveryStatusIcon({
   );
 }
 
+function deliveryStatusLabel(delivery: string, t: RanchMessages): string {
+  if (delivery === "pending") return t.sending;
+  if (delivery === "sent") return t.sent;
+  if (delivery === "queued") return t.queuedOffline;
+  if (delivery === "failed") return t.deliveryFailed;
+  return t.delivered;
+}
+
+/** Compact mark for per-agent delivery rows (keeps one line short). */
+function deliveryMark(delivery: string): { mark: string; color: string } {
+  if (delivery === "delivered") return { mark: "✓✓", color: "#93c5fd" };
+  if (delivery === "sent") return { mark: "✓", color: colors.muted };
+  if (delivery === "pending") return { mark: "…", color: colors.muted };
+  if (delivery === "failed") return { mark: "!", color: colors.danger };
+  if (delivery === "queued") return { mark: "–", color: colors.muted };
+  return { mark: "·", color: colors.muted };
+}
+
+function DeliveryStatusFooter({
+  delivery,
+  byAgent,
+  names,
+  t,
+}: {
+  delivery?: string | null;
+  byAgent?: Record<string, string> | null;
+  names: Record<string, string>;
+  t: RanchMessages;
+}) {
+  const entries =
+    byAgent && typeof byAgent === "object"
+      ? Object.entries(byAgent).filter(([, s]) => typeof s === "string" && s)
+      : [];
+
+  if (entries.length >= 2) {
+    const full = entries
+      .map(([id, status]) => {
+        const label = names[id]?.trim() || shortAgentId(id) || id;
+        return `${label} ${deliveryStatusLabel(status, t)}`;
+      })
+      .join(" · ");
+    return (
+      <div
+        title={full}
+        aria-label={full}
+        style={{
+          paddingRight: 2,
+          fontSize: 11,
+          lineHeight: 1.35,
+          color: colors.muted,
+          maxWidth: "100%",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          textAlign: "right",
+        }}
+      >
+        {entries.map(([id, status], i) => {
+          const label = names[id]?.trim() || shortAgentId(id) || id;
+          const { mark, color } = deliveryMark(status);
+          const showWord = status === "queued" || status === "failed";
+          return (
+            <span key={id}>
+              {i > 0 ? " · " : null}
+              <span style={{ color: colors.text }}>{label}</span>{" "}
+              {showWord ? (
+                <span style={{ color: status === "failed" ? colors.danger : colors.muted }}>
+                  {deliveryStatusLabel(status, t)}
+                </span>
+              ) : (
+                <span style={{ color, letterSpacing: status === "delivered" ? -1 : 0 }}>{mark}</span>
+              )}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (!delivery) return null;
+  return (
+    <div style={{ paddingRight: 2, lineHeight: 1 }}>
+      <DeliveryStatusIcon delivery={delivery} t={t} />
+    </div>
+  );
+}
+
 /** Typing indicator in the agent-bubble slot (Mode B writeback in flight). */
 function AgentReplyPendingBubble({ t }: { t: RanchMessages }) {
   return (
@@ -2024,6 +2111,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   const isUser = m.sender_type === "user";
                   const delivery =
                     isUser && typeof m.metadata?.delivery === "string" ? m.metadata.delivery : null;
+                  const deliveryByAgent =
+                    isUser &&
+                    m.metadata?.delivery_by_agent &&
+                    typeof m.metadata.delivery_by_agent === "object"
+                      ? (m.metadata.delivery_by_agent as Record<string, string>)
+                      : null;
                   const group = active ? isGroupChat(active) : false;
                   const senderLabel =
                     !isUser && group
@@ -2071,10 +2164,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       >
                         {m.content}
                       </div>
-                      {delivery ? (
-                        <div style={{ paddingRight: 2, lineHeight: 1 }}>
-                          <DeliveryStatusIcon delivery={delivery} t={t} />
-                        </div>
+                      {isUser && (delivery || deliveryByAgent) ? (
+                        <DeliveryStatusFooter
+                          delivery={delivery}
+                          byAgent={deliveryByAgent}
+                          names={agentNames}
+                          t={t}
+                        />
                       ) : null}
                     </div>
                   );
