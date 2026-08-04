@@ -1198,13 +1198,22 @@ export function RanchChatShell(props: RanchChatShellProps) {
           writeStickyMention(chat.chat_id, refreshed);
           return refreshed;
         });
-        void client.markChatAsRead(chat.chat_id).then(() => refreshChats()).catch(() => {});
+        // Clear unread locally — avoid full listChats refresh (list flash on every click).
+        void client.markChatAsRead(chat.chat_id)
+          .then(() => {
+            setChats((prev) =>
+              prev.map((c) =>
+                c.chat_id === chat.chat_id ? { ...c, unread_count: 0 } : c,
+              ),
+            );
+          })
+          .catch(() => {});
       } catch (e) {
         if (seq !== loadSeqRef.current) return;
         setError(e instanceof Error ? e.message : "Failed to load messages");
       }
     },
-    [client, clearReplySlot, directoryAgents, refreshChats],
+    [client, clearReplySlot, directoryAgents],
   );
 
   const reloadParticipants = useCallback(
