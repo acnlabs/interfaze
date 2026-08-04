@@ -1429,22 +1429,27 @@ export function RanchChatShell(props: RanchChatShellProps) {
             minWidth: 0,
             height: "100%",
             background: colors.bg,
+            position: "relative",
           }}
         >
           {!active ? (
             <>
               {mode === "full" && sidebarCollapsed ? (
-                <div style={{ ...listHeader, justifyContent: "flex-start" }}>
-                  <button
-                    type="button"
-                    style={btnIcon}
-                    onClick={() => setSidebarCollapsed(false)}
-                    aria-label={t.expandSidebar}
-                    title={t.expandSidebar}
-                  >
-                    <IconSidebar />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  style={{
+                    ...btnIcon,
+                    position: "absolute",
+                    top: 14,
+                    left: 14,
+                    zIndex: 5,
+                  }}
+                  onClick={() => setSidebarCollapsed(false)}
+                  aria-label={t.expandSidebar}
+                  title={t.expandSidebar}
+                >
+                  <IconSidebar />
+                </button>
               ) : null}
               {hasMineAgents ? (
                 <div
