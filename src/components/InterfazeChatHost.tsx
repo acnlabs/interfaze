@@ -6,28 +6,14 @@ import { RanchChatShell, type AgentDirectoryItem } from "@acnlabs/agent-chat";
 import { AUTH0_AUDIENCE, isAuth0Configured } from "@/lib/auth0";
 import { getGatewayBaseUrl } from "@/lib/gateway";
 
-function browserLocale(): string {
-  if (typeof navigator === "undefined") return "en";
-  return navigator.language || "en";
-}
-
 /**
  * Interfaze host — ranch-ported shell chrome + Chat Gateway.
- * Legacy platform sys:* assistants (Nova/Coder) are not offered; official
- * agents will be reintroduced via ACN when ready.
+ * Locale is owned by RanchChatShell (switcher + localStorage + browser fallback).
  */
 export default function InterfazeChatHost() {
   const { getAccessTokenSilently, isAuthenticated, user, logout } = useAuth0();
   const gatewayBaseUrl = getGatewayBaseUrl();
   const [directoryAgents, setDirectoryAgents] = useState<AgentDirectoryItem[]>([]);
-  const [locale, setLocale] = useState("en");
-
-  useEffect(() => {
-    const next = browserLocale();
-    setLocale(next);
-    const htmlLang = next.toLowerCase().startsWith("zh") ? "zh" : "en";
-    document.documentElement.lang = htmlLang;
-  }, []);
 
   const handleLogout = useCallback(() => {
     logout({ logoutParams: { returnTo: typeof window !== "undefined" ? window.location.origin : undefined } });
@@ -97,7 +83,6 @@ export default function InterfazeChatHost() {
       directoryAgents={directoryAgents}
       allowGroupChat
       title="Interfaze"
-      locale={locale}
       connectGuideUrl="https://github.com/acnlabs/interfaze/blob/main/CONNECT.md"
       account={
         isAuthenticated && user

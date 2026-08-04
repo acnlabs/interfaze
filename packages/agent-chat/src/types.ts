@@ -100,8 +100,11 @@ export type RanchChatShellProps = {
   /**
    * UI locale (BCP-47). Supported: `en` (default), `zh`.
    * Other values fall back to English.
+   * When omitted, shell uses stored preference → browser language → `en`.
    */
   locale?: string;
+  /** Called when the user switches language in the shell. */
+  onLocaleChange?: (locale: "en" | "zh") => void;
 };
 
 /** Outbound delivery on user messages (Chat Gateway → ACN). */

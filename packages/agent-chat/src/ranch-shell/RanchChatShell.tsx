@@ -5,7 +5,14 @@ import { ChatGatewayError, createGatewayClient } from "../gateway";
 import type { ChatMessage, ChatSummary, RanchChatAccount, RanchChatShellProps } from "../types";
 import { connectChatSocket, type ChatSocket } from "../ws";
 import { NewChatPicker } from "./NewChatPicker";
-import { ranchMessages, type RanchMessages } from "./i18n";
+import {
+  ranchMessages,
+  readStoredRanchLocale,
+  resolveRanchLocale,
+  writeStoredRanchLocale,
+  type RanchLocale,
+  type RanchMessages,
+} from "./i18n";
 import { btnGhost, btnIcon, btnPrimary, colors, inputStyle, shellRoot } from "./styles";
 
 function formatRelativeTime(iso: string | null | undefined, t: RanchMessages): string {
@@ -403,6 +410,53 @@ function IconClose() {
   );
 }
 
+function LanguageSwitcher({
+  locale,
+  onChange,
+  t,
+}: {
+  locale: RanchLocale;
+  onChange: (next: RanchLocale) => void;
+  t: RanchMessages;
+}) {
+  const seg = (code: RanchLocale, label: string): CSSProperties => ({
+    margin: 0,
+    padding: "3px 8px",
+    fontSize: 11,
+    fontWeight: 650,
+    letterSpacing: "0.02em",
+    border: "none",
+    cursor: "pointer",
+    background: locale === code ? colors.accentSoft : "transparent",
+    color: locale === code ? colors.text : colors.muted,
+    borderRadius: 6,
+  });
+  return (
+    <div
+      role="group"
+      aria-label={t.language}
+      title={t.language}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 2,
+        padding: 2,
+        borderRadius: 8,
+        border: `1px solid ${colors.border}`,
+        background: colors.bg,
+        flexShrink: 0,
+      }}
+    >
+      <button type="button" style={seg("en", t.langEn)} onClick={() => onChange("en")} aria-pressed={locale === "en"}>
+        {t.langEn}
+      </button>
+      <button type="button" style={seg("zh", t.langZh)} onClick={() => onChange("zh")} aria-pressed={locale === "zh"}>
+        {t.langZh}
+      </button>
+    </div>
+  );
+}
+
 function AccountFooter({
   account,
   onLogout,
@@ -520,10 +574,47 @@ export function RanchChatShell(props: RanchChatShellProps) {
     account,
     onLogout,
     connectGuideUrl,
-    locale,
+    locale: localeProp,
+    onLocaleChange,
   } = props;
 
-  const t = useMemo(() => ranchMessages(locale), [locale]);
+  const [uiLocale, setUiLocale] = useState<RanchLocale>(() => resolveRanchLocale(localeProp));
+  const t = useMemo(() => ranchMessages(uiLocale), [uiLocale]);
+
+  useEffect(() => {
+    const stored = readStoredRanchLocale();
+    if (stored) {
+      setUiLocale(stored);
+      return;
+    }
+    if (localeProp) {
+      setUiLocale(resolveRanchLocale(localeProp));
+      return;
+    }
+    if (typeof navigator !== "undefined") {
+      setUiLocale(resolveRanchLocale(navigator.language));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (localeProp == null) return;
+    setUiLocale(resolveRanchLocale(localeProp));
+  }, [localeProp]);
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.lang = uiLocale;
+    }
+  }, [uiLocale]);
+
+  const setLocale = useCallback(
+    (next: RanchLocale) => {
+      setUiLocale(next);
+      writeStoredRanchLocale(next);
+      onLocaleChange?.(next);
+    },
+    [onLocaleChange],
+  );
 
   const [internalOpen, setInternalOpen] = useState(true);
   const open = openProp ?? internalOpen;
@@ -1041,6 +1132,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             <span aria-hidden>💬</span> {title}
           </h2>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <LanguageSwitcher locale={uiLocale} onChange={setLocale} t={t} />
             {mode === "side" ? (
               <button
                 type="button"

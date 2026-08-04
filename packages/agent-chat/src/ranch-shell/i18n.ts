@@ -55,6 +55,9 @@ export type RanchMessages = {
   defaultGroupTitle: string;
   logOut: string;
   account: string;
+  language: string;
+  langEn: string;
+  langZh: string;
 };
 
 const en: RanchMessages = {
@@ -116,6 +119,9 @@ const en: RanchMessages = {
   defaultGroupTitle: "Agent group",
   logOut: "Log out",
   account: "Account",
+  language: "Language",
+  langEn: "EN",
+  langZh: "中文",
 };
 
 const zh: RanchMessages = {
@@ -176,6 +182,9 @@ const zh: RanchMessages = {
   defaultGroupTitle: "Agent 群",
   logOut: "退出登录",
   account: "账户",
+  language: "语言",
+  langEn: "EN",
+  langZh: "中文",
 };
 
 const catalogs: Record<RanchLocale, RanchMessages> = { en, zh };
@@ -189,4 +198,26 @@ export function resolveRanchLocale(locale?: string | null): RanchLocale {
 
 export function ranchMessages(locale?: string | null): RanchMessages {
   return catalogs[resolveRanchLocale(locale)];
+}
+
+export const RANCH_LOCALE_STORAGE_KEY = "acnlabs.ranch-chat.locale";
+
+export function readStoredRanchLocale(): RanchLocale | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const v = window.localStorage.getItem(RANCH_LOCALE_STORAGE_KEY);
+    if (v === "en" || v === "zh") return v;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+export function writeStoredRanchLocale(locale: RanchLocale): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(RANCH_LOCALE_STORAGE_KEY, locale);
+  } catch {
+    /* ignore */
+  }
 }
