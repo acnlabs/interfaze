@@ -420,32 +420,20 @@ function IconClose() {
   );
 }
 
-/** Hide left chat list (lucide PanelLeftClose). */
-function IconSidebarCollapse() {
+/** Simple left-rail panel (no chevron). Same glyph for collapse/expand. */
+function IconSidebar() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5zM9 3v18M16 15l-3-3 3-3"
+      <rect
+        x="3"
+        y="3"
+        width="18"
+        height="18"
+        rx="2"
         stroke="currentColor"
         strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
       />
-    </svg>
-  );
-}
-
-/** Show left chat list (lucide PanelLeftOpen). */
-function IconSidebarExpand() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5zM9 3v18M14 9l3 3-3 3"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M9 3v18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -1265,7 +1253,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 aria-label={t.collapseSidebar}
                 title={t.collapseSidebar}
               >
-                <IconSidebarCollapse />
+                <IconSidebar />
               </button>
             ) : (
               <button
@@ -1454,7 +1442,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     aria-label={t.expandSidebar}
                     title={t.expandSidebar}
                   >
-                    <IconSidebarExpand />
+                    <IconSidebar />
                   </button>
                 </div>
               ) : null}
@@ -1516,7 +1504,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       aria-label={t.expandSidebar}
                       title={t.expandSidebar}
                     >
-                      <IconSidebarExpand />
+                      <IconSidebar />
                     </button>
                   ) : null}
                   <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
