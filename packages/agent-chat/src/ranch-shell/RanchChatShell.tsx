@@ -2690,9 +2690,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               confirmLabel: t.deleteChat,
                               onConfirm: () => {
                                 void (async () => {
+                                  const chatId = active.chat_id;
                                   setBusy(true);
                                   try {
-                                    await client.deleteChat(active.chat_id);
+                                    await client.deleteChat(chatId);
                                     setConfirmDialog(null);
                                     setShowMembersPanel(false);
                                     setActive(null);
@@ -2700,7 +2701,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     setMessages([]);
                                     setDraft("");
                                     clearReplySlot();
-                                    await refreshChats();
+                                    setChats((prev) => prev.filter((c) => c.chat_id !== chatId));
                                   } catch (e) {
                                     setError(e instanceof Error ? e.message : t.sendFailed);
                                   } finally {
@@ -2880,15 +2881,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               confirmLabel: t.deleteGroup,
                               onConfirm: () => {
                                 void (async () => {
+                                  const chatId = active.chat_id;
                                   setBusy(true);
                                   try {
-                                    await client.deleteChat(active.chat_id);
+                                    await client.deleteChat(chatId);
                                     setConfirmDialog(null);
                                     setShowMembersPanel(false);
                                     setActive(null);
                                     setView("list");
                                     setMessages([]);
-                                    await refreshChats();
+                                    setChats((prev) => prev.filter((c) => c.chat_id !== chatId));
                                   } catch (e) {
                                     setError(e instanceof Error ? e.message : t.sendFailed);
                                   } finally {
