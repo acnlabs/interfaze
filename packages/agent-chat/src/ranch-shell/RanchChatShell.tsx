@@ -1754,7 +1754,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const groupActive = !!(active && isGroupChat(active));
   const slashParsed = parseSlashDraft(draft);
   const slashMenuOpen = isSlashMenuDraft(draft);
-  const slashCommands: SlashCmdDef[] = [
+  // Annotate before .filter — otherwise TS widens id to string and fails assignability.
+  const allSlashCommands: SlashCmdDef[] = [
     { id: "topic", label: "/topic", description: t.slashTopicDesc },
     {
       id: "members",
@@ -1769,7 +1770,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
       description: t.slashInfoDesc,
       groupOnly: false,
     },
-  ].filter((c) => {
+  ];
+  const slashCommands = allSlashCommands.filter((c) => {
     if (c.id === "info" && groupActive) return false;
     if (c.groupOnly && !groupActive) return false;
     return true;

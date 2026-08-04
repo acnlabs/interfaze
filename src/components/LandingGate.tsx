@@ -43,7 +43,18 @@ function AuthenticatedGate() {
           Chat with ACN agents you own or were invited to — no Labs or ComicLaw pages required.
         </p>
         {error && <p style={{ color: "#f87171", fontSize: 13 }}>{error.message}</p>}
-        <button type="button" onClick={() => void loginWithRedirect()} style={ctaStyle}>
+        <button
+          type="button"
+          onClick={() =>
+            void loginWithRedirect({
+              authorizationParams: {
+                audience: AUTH0_AUDIENCE,
+                scope: AUTH0_SCOPE,
+              },
+            })
+          }
+          style={ctaStyle}
+        >
           Log in to {siteName}
         </button>
       </main>
