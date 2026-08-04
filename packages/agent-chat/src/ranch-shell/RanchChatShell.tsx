@@ -543,6 +543,32 @@ function trailingMentionQuery(text: string): string | null {
   return m ? m[1] : null;
 }
 
+type SlashCmdId = "topic" | "members" | "info";
+
+type SlashCmdDef = {
+  id: SlashCmdId;
+  label: string;
+  description: string;
+  /** Hide in direct chats. */
+  groupOnly?: boolean;
+};
+
+/** Parse leading slash command: `/topic Title` → { cmd: "topic", arg: "Title" }. */
+function parseSlashDraft(text: string): { cmd: string; arg: string } | null {
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith("/")) return null;
+  const m = trimmed.match(/^\/(\S*)(?:\s+([\s\S]*))?$/);
+  if (!m) return null;
+  return { cmd: (m[1] || "").toLowerCase(), arg: (m[2] || "").trim() };
+}
+
+/** Menu open while typing the command token (no args yet). */
+function isSlashMenuDraft(text: string): boolean {
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith("/")) return false;
+  return !/\s/.test(trimmed.slice(1));
+}
+
 /** Prefer Gateway/ACN display name; fall back to host directory, then short id. */
 function resolveParticipantLabels(
   agents: Array<{ participant_id: string; name?: string | null }>,
@@ -944,6 +970,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [addMemberDiscoverRows, setAddMemberDiscoverRows] = useState<AgentDirectoryItem[]>([]);
   const [addMemberDiscoverLoading, setAddMemberDiscoverLoading] = useState(false);
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [slashIndex, setSlashIndex] = useState(0);
   const [draft, setDraft] = useState("");
   /** Group: continue with last @'d agent for 15m (chip above composer). */
   const [stickyMention, setStickyMention] = useState<StickyMention | null>(null);
@@ -1258,6 +1285,46 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setShowAddMember(false);
     setShowCreateTopic(false);
   }, []);
+
+  const runSlashCommand = useCallback(
+    async (cmdId: SlashCmdId, arg = "") => {
+      if (!active) return;
+      const group = isGroupChat(active);
+      if (cmdId === "topic") {
+        const title = arg.trim() || t.defaultTopicTitle;
+        setBusy(true);
+        setError(null);
+        try {
+          const created = await client.createThread(active.chat_id, { title });
+          setTopics((prev) => [created, ...prev.filter((tp) => tp.id !== created.id)]);
+          setDraft("");
+          openTopic(created);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : t.sendFailed);
+        } finally {
+          setBusy(false);
+        }
+        return;
+      }
+      if (cmdId === "members") {
+        if (!group) return;
+        setDraft("");
+        setShowAddMember(false);
+        setShowCreateTopic(false);
+        setInfoTab("members");
+        setShowMembersPanel(true);
+        return;
+      }
+      if (cmdId === "info") {
+        setDraft("");
+        setShowAddMember(false);
+        setShowCreateTopic(false);
+        setInfoTab(group ? "members" : "info");
+        setShowMembersPanel(true);
+      }
+    },
+    [active, client, openTopic, t.defaultTopicTitle, t.sendFailed],
+  );
 
   const reloadParticipants = useCallback(
     async (chatId: string) => {
@@ -1667,8 +1734,27 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const hasMineAgents = mineAgents.length > 0;
   const activeOffline = active && !isGroupChat(active) && isAgentOffline(active.agent_status);
   const groupActive = !!(active && isGroupChat(active));
+  const slashParsed = parseSlashDraft(draft);
+  const slashMenuOpen = isSlashMenuDraft(draft);
+  const slashCommands: SlashCmdDef[] = [
+    { id: "topic", label: "/topic", description: t.slashTopicDesc },
+    {
+      id: "members",
+      label: "/members",
+      description: t.slashMembersDesc,
+      groupOnly: true,
+    },
+    { id: "info", label: "/info", description: t.slashInfoDesc },
+  ].filter((c) => !(c.groupOnly && !groupActive));
+  const slashCandidates = slashCommands.filter((c) => {
+    if (!slashMenuOpen || !slashParsed) return false;
+    const q = slashParsed.cmd;
+    if (!q) return true;
+    return c.id.startsWith(q) || c.label.slice(1).startsWith(q);
+  });
   const mentionQuery = groupActive ? trailingMentionQuery(draft) : null;
-  const mentionOpen = mentionQuery !== null || recipientPickerOpen;
+  const mentionOpen =
+    !slashMenuOpen && (mentionQuery !== null || recipientPickerOpen);
   const mentionCandidates = Object.entries(agentNames)
     .filter(([id, name]) => {
       if (!mentionOpen) return false;
@@ -1681,6 +1767,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
       );
     })
     .map(([id, name]) => ({ id, name }));
+
+  const tryRunSlashFromDraft = () => {
+    const parsed = parseSlashDraft(draft);
+    if (!parsed) return false;
+    const match =
+      slashCommands.find((c) => c.id === parsed.cmd) ||
+      slashCommands.find((c) => c.label.slice(1) === parsed.cmd);
+    if (!match) return false;
+    void runSlashCommand(match.id, parsed.arg);
+    return true;
+  };
 
   /** Forced picker: pick → send immediately (no @ inserted into draft). */
   const pickRecipientAndSend = (label: string) => {
@@ -2400,6 +2497,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
+                  if (tryRunSlashFromDraft()) return;
                   void send();
                 }}
                 style={{
@@ -2454,6 +2552,60 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   </div>
                 ) : null}
                 <div style={{ display: "flex", gap: 8, position: "relative" }}>
+                {slashMenuOpen && slashCandidates.length > 0 ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      right: 72,
+                      bottom: "100%",
+                      marginBottom: 8,
+                      background: colors.panel,
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: 12,
+                      overflow: "hidden",
+                      boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+                      zIndex: 6,
+                      maxHeight: 240,
+                      overflowY: "auto",
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: "8px 12px",
+                        fontSize: 11,
+                        color: colors.muted,
+                        borderBottom: `1px solid ${colors.border}`,
+                      }}
+                    >
+                      {t.slashCommands}
+                    </div>
+                    {slashCandidates.map((cmd, i) => (
+                      <button
+                        key={cmd.id}
+                        type="button"
+                        onClick={() => {
+                          if (cmd.id === "topic") {
+                            setDraft("/topic ");
+                            setSlashIndex(0);
+                            return;
+                          }
+                          void runSlashCommand(cmd.id);
+                        }}
+                        style={{
+                          ...mentionRow,
+                          borderBottom: `1px solid ${colors.border}`,
+                          background: slashIndex === i ? colors.hover : "transparent",
+                        }}
+                      >
+                        <span style={{ fontWeight: 600 }}>{cmd.label}</span>
+                        <span style={{ fontSize: 11, color: colors.muted }}>
+                          {cmd.description}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 {mentionOpen ? (
                   <div
                     style={{
@@ -2567,6 +2719,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   onChange={(e) => {
                     setDraft(e.target.value);
                     setMentionIndex(0);
+                    setSlashIndex(0);
                     if (recipientPickerOpen && trailingMentionQuery(e.target.value) !== null) {
                       setRecipientPickerOpen(false);
                     }
@@ -2582,6 +2735,43 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   disabled={busy || healthOk === false}
                   style={{ ...inputStyle, resize: "none", flex: 1 }}
                   onKeyDown={(e) => {
+                    if (slashMenuOpen && slashCandidates.length > 0) {
+                      const total = slashCandidates.length;
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setSlashIndex((i) => (i + 1) % total);
+                        return;
+                      }
+                      if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setSlashIndex((i) => (i - 1 + total) % total);
+                        return;
+                      }
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        setDraft("");
+                        return;
+                      }
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        const pick = slashCandidates[slashIndex] || slashCandidates[0];
+                        if (!pick) return;
+                        if (pick.id === "topic") {
+                          // Keep drafting a title after the command.
+                          setDraft("/topic ");
+                          setSlashIndex(0);
+                          return;
+                        }
+                        void runSlashCommand(pick.id);
+                        return;
+                      }
+                      if (e.key === "Tab") {
+                        e.preventDefault();
+                        const pick = slashCandidates[slashIndex] || slashCandidates[0];
+                        if (pick) setDraft(`${pick.label} `);
+                        return;
+                      }
+                    }
                     if (mentionOpen) {
                       const total = mentionCandidates.length + 1; // + @all
                       if (e.key === "ArrowDown") {
@@ -2615,6 +2805,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     }
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
+                      if (tryRunSlashFromDraft()) return;
                       void send();
                     }
                   }}

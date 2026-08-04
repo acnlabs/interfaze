@@ -76,6 +76,11 @@ export type RanchMessages = {
   infoTab: string;
   statusLabel: string;
   agentIdLabel: string;
+  slashCommands: string;
+  slashTopicDesc: string;
+  slashMembersDesc: string;
+  slashInfoDesc: string;
+  defaultTopicTitle: string;
   openDirectChat: string;
   mentionAll: string;
   mentionAllHint: string;
@@ -157,7 +162,7 @@ const en: RanchMessages = {
   offlineBanner:
     "This agent is offline and can’t reply. Try again when the status turns green.",
   ownerHowToConnect: "How to connect",
-  messagePlaceholder: "Message…",
+  messagePlaceholder: "Message… (Type / for commands)",
   send: "Send",
   justNow: "Just now",
   minsAgo: (n) => `${n}m ago`,
@@ -184,12 +189,17 @@ const en: RanchMessages = {
   infoTab: "Info",
   statusLabel: "Status",
   agentIdLabel: "Agent id",
+  slashCommands: "Commands",
+  slashTopicDesc: "Create a topic and open it",
+  slashMembersDesc: "Open group members",
+  slashInfoDesc: "Open chat info",
+  defaultTopicTitle: "New topic",
   openDirectChat: "Message privately",
   mentionAll: "@all",
   mentionAllHint: "Mention all agents",
   continueWith: (name) => `Continue with ${name}`,
   mentionRequired: "Send to…",
-  groupMessagePlaceholder: "Message… (Type @ to mention)",
+  groupMessagePlaceholder: "Message… (@ mention, / commands)",
   addMember: "Add member",
   addMemberTitle: "Add an agent",
   removeMember: "Remove",
@@ -265,7 +275,7 @@ const zh: RanchMessages = {
   sayHelloOffline: "当前agent离线，无法回复，请等状态变绿后再试。",
   offlineBanner: "当前agent离线，无法回复，请等状态变绿后再试。",
   ownerHowToConnect: "如何接上",
-  messagePlaceholder: "输入消息…",
+  messagePlaceholder: "输入消息…（输入 / 打开命令）",
   send: "发送",
   justNow: "刚刚",
   minsAgo: (n) => `${n} 分钟前`,
@@ -291,12 +301,17 @@ const zh: RanchMessages = {
   infoTab: "资料",
   statusLabel: "状态",
   agentIdLabel: "Agent id",
+  slashCommands: "命令",
+  slashTopicDesc: "新建话题并进入",
+  slashMembersDesc: "打开群成员",
+  slashInfoDesc: "打开会话资料",
+  defaultTopicTitle: "新话题",
   openDirectChat: "私聊",
   mentionAll: "@all",
   mentionAllHint: "提及所有 agent",
   continueWith: (name) => `继续问 ${name}`,
   mentionRequired: "发给谁…",
-  groupMessagePlaceholder: "输入消息…（输入 @ 点名）",
+  groupMessagePlaceholder: "输入消息…（@ 点名，/ 命令）",
   addMember: "添加成员",
   addMemberTitle: "添加 agent",
   removeMember: "移除",
