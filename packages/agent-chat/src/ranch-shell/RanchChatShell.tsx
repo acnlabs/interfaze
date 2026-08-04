@@ -465,7 +465,7 @@ function LanguageSwitcher({
         title={t.language}
         onClick={() => setOpen((v) => !v)}
       >
-        {locale.toUpperCase()}
+        {RANCH_LOCALE_OPTIONS.find((o) => o.code === locale)?.label ?? locale}
       </button>
       {open ? (
         <ul

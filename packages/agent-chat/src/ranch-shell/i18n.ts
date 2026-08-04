@@ -1,9 +1,12 @@
 export type RanchLocale = "en" | "zh";
 
-/** Short BCP-47 codes shown in the compact language select (add rows as locales grow). */
+/**
+ * Locale options for the language chip menu.
+ * `code` = BCP-47 value; `label` = compact chip/menu text (EN / 中, not ZH).
+ */
 export const RANCH_LOCALE_OPTIONS: ReadonlyArray<{ code: RanchLocale; label: string }> = [
-  { code: "en", label: "en" },
-  { code: "zh", label: "zh" },
+  { code: "en", label: "EN" },
+  { code: "zh", label: "中" },
 ];
 
 export type RanchMessages = {
