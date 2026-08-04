@@ -2704,12 +2704,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         />
                       ) : null}
                     </div>
-                    {editingTitle ? (
+                    {editingTitle && groupActive ? (
                       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                         <input
                           value={titleDraft}
                           onChange={(e) => setTitleDraft(e.target.value)}
-                          placeholder={groupActive ? t.groupName : t.chatName}
+                          placeholder={t.groupName}
                           style={{ ...inputStyle, textAlign: "center" }}
                           autoFocus
                         />
@@ -2741,20 +2741,22 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     ) : (
                       <>
                         <div style={{ fontSize: 16, fontWeight: 600 }}>{chatTitle(active)}</div>
-                        <button
-                          type="button"
-                          style={{
-                            ...btnGhost,
-                            marginTop: 8,
-                            fontSize: 11,
-                          }}
-                          onClick={() => {
-                            setTitleDraft(chatTitle(active));
-                            setEditingTitle(true);
-                          }}
-                        >
-                          {groupActive ? t.renameGroup : t.renameChat}
-                        </button>
+                        {groupActive ? (
+                          <button
+                            type="button"
+                            style={{
+                              ...btnGhost,
+                              marginTop: 8,
+                              fontSize: 11,
+                            }}
+                            onClick={() => {
+                              setTitleDraft(chatTitle(active));
+                              setEditingTitle(true);
+                            }}
+                          >
+                            {t.renameGroup}
+                          </button>
+                        ) : null}
                       </>
                     )}
                     {groupActive ? (
