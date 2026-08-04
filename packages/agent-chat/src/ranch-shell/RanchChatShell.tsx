@@ -1744,8 +1744,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
       description: t.slashMembersDesc,
       groupOnly: true,
     },
-    { id: "info", label: "/info", description: t.slashInfoDesc },
-  ].filter((c) => !(c.groupOnly && !groupActive));
+    // Direct only — group detail has Members, not a separate Info tab.
+    {
+      id: "info",
+      label: "/info",
+      description: t.slashInfoDesc,
+      groupOnly: false,
+    },
+  ].filter((c) => {
+    if (c.id === "info" && groupActive) return false;
+    if (c.groupOnly && !groupActive) return false;
+    return true;
+  });
   const slashCandidates = slashCommands.filter((c) => {
     if (!slashMenuOpen || !slashParsed) return false;
     const q = slashParsed.cmd;
@@ -1771,10 +1781,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const tryRunSlashFromDraft = () => {
     const parsed = parseSlashDraft(draft);
     if (!parsed) return false;
+    // Bare "/" — keep menu open, don't send as chat text.
+    if (!parsed.cmd) {
+      return true;
+    }
     const match =
       slashCommands.find((c) => c.id === parsed.cmd) ||
       slashCommands.find((c) => c.label.slice(1) === parsed.cmd);
-    if (!match) return false;
+    if (!match) {
+      setError(t.slashUnknown(parsed.cmd));
+      return true;
+    }
+    setError(null);
     void runSlashCommand(match.id, parsed.arg);
     return true;
   };

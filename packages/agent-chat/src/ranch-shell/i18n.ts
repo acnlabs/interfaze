@@ -80,6 +80,7 @@ export type RanchMessages = {
   slashTopicDesc: string;
   slashMembersDesc: string;
   slashInfoDesc: string;
+  slashUnknown: (cmd: string) => string;
   defaultTopicTitle: string;
   openDirectChat: string;
   mentionAll: string;
@@ -193,6 +194,7 @@ const en: RanchMessages = {
   slashTopicDesc: "Create a topic and open it",
   slashMembersDesc: "Open group members",
   slashInfoDesc: "Open chat info",
+  slashUnknown: (cmd) => `Unknown command: /${cmd}`,
   defaultTopicTitle: "New topic",
   openDirectChat: "Message privately",
   mentionAll: "@all",
@@ -305,6 +307,7 @@ const zh: RanchMessages = {
   slashTopicDesc: "新建话题并进入",
   slashMembersDesc: "打开群成员",
   slashInfoDesc: "打开会话资料",
+  slashUnknown: (cmd) => `未知命令：/${cmd}`,
   defaultTopicTitle: "新话题",
   openDirectChat: "私聊",
   mentionAll: "@all",
