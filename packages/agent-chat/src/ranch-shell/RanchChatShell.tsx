@@ -427,25 +427,28 @@ function LanguageSwitcher({
       value={locale}
       onChange={(e) => onChange(resolveRanchLocale(e.target.value))}
       style={{
+        boxSizing: "border-box",
         margin: 0,
-        padding: "4px 22px 4px 8px",
+        width: 44,
+        padding: "3px 14px 3px 4px",
         fontSize: 11,
-        fontWeight: 600,
+        fontWeight: 650,
+        fontFamily:
+          'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
         lineHeight: 1.2,
         color: colors.text,
-        background: colors.bg,
+        backgroundColor: colors.bg,
         border: `1px solid ${colors.border}`,
-        borderRadius: 8,
+        borderRadius: 6,
         cursor: "pointer",
         flexShrink: 0,
-        maxWidth: 120,
         appearance: "none",
         WebkitAppearance: "none",
         backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(
-          `<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='%2394a3b8' d='M3 4.5 6 8l3-3.5'/></svg>`,
+          `<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'><path fill='%2394a3b8' d='M3 4.5 6 8l3-3.5'/></svg>`,
         )}")`,
         backgroundRepeat: "no-repeat",
-        backgroundPosition: "right 6px center",
+        backgroundPosition: "right 3px center",
       }}
     >
       {RANCH_LOCALE_OPTIONS.map((opt) => (

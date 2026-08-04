@@ -1,9 +1,9 @@
 export type RanchLocale = "en" | "zh";
 
-/** Native labels for the language dropdown (not translated — scales as locales grow). */
+/** Short BCP-47 codes shown in the compact language select (add rows as locales grow). */
 export const RANCH_LOCALE_OPTIONS: ReadonlyArray<{ code: RanchLocale; label: string }> = [
-  { code: "en", label: "English" },
-  { code: "zh", label: "中文" },
+  { code: "en", label: "en" },
+  { code: "zh", label: "zh" },
 ];
 
 export type RanchMessages = {
