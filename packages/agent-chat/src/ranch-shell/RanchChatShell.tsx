@@ -2262,11 +2262,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               >
                 {displayMessages.length === 0 && (
                   <p style={{ color: colors.muted, fontSize: 13, margin: 0 }}>
-                    {activeTopic
-                      ? t.noMessagesYet
-                      : activeOffline
-                        ? t.sayHelloOffline
-                        : t.sayHello}
+                    {activeTopic ? t.noMessagesYet : t.sayHello}
                   </p>
                 )}
                 {displayMessages.map((m) => {
