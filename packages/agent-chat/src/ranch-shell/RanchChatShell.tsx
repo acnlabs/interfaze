@@ -949,6 +949,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
   /** Group: forced recipient picker when send has no @ / sticky (ranch-style). */
   const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
   /** Agent-slot: typing → timeout+retry (not endless spinner). */
@@ -2671,24 +2676,30 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           }}
                           disabled={busy}
                           onClick={() => {
-                            if (!window.confirm(t.deleteChatConfirm)) return;
-                            void (async () => {
-                              setBusy(true);
-                              try {
-                                await client.deleteChat(active.chat_id);
-                                setShowMembersPanel(false);
-                                setActive(null);
-                                setView("list");
-                                setMessages([]);
-                                setDraft("");
-                                clearReplySlot();
-                                await refreshChats();
-                              } catch (e) {
-                                setError(e instanceof Error ? e.message : t.sendFailed);
-                              } finally {
-                                setBusy(false);
-                              }
-                            })();
+                            setConfirmDialog({
+                              message: t.deleteChatConfirm,
+                              confirmLabel: t.deleteChat,
+                              onConfirm: () => {
+                                void (async () => {
+                                  setBusy(true);
+                                  try {
+                                    await client.deleteChat(active.chat_id);
+                                    setConfirmDialog(null);
+                                    setShowMembersPanel(false);
+                                    setActive(null);
+                                    setView("list");
+                                    setMessages([]);
+                                    setDraft("");
+                                    clearReplySlot();
+                                    await refreshChats();
+                                  } catch (e) {
+                                    setError(e instanceof Error ? e.message : t.sendFailed);
+                                  } finally {
+                                    setBusy(false);
+                                  }
+                                })();
+                              },
+                            });
                           }}
                         >
                           {t.deleteChat}
@@ -2818,18 +2829,24 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               style={{ ...btnGhost, color: colors.danger }}
                               disabled={busy || Object.keys(agentNames).length <= 1}
                               onClick={() => {
-                                if (!window.confirm(t.removeMemberConfirm(name))) return;
-                                void (async () => {
-                                  setBusy(true);
-                                  try {
-                                    await client.removeParticipant(active.chat_id, id);
-                                    await reloadParticipants(active.chat_id);
-                                  } catch (e) {
-                                    setError(e instanceof Error ? e.message : t.sendFailed);
-                                  } finally {
-                                    setBusy(false);
-                                  }
-                                })();
+                                setConfirmDialog({
+                                  message: t.removeMemberConfirm(name),
+                                  confirmLabel: t.removeMember,
+                                  onConfirm: () => {
+                                    void (async () => {
+                                      setBusy(true);
+                                      try {
+                                        await client.removeParticipant(active.chat_id, id);
+                                        setConfirmDialog(null);
+                                        await reloadParticipants(active.chat_id);
+                                      } catch (e) {
+                                        setError(e instanceof Error ? e.message : t.sendFailed);
+                                      } finally {
+                                        setBusy(false);
+                                      }
+                                    })();
+                                  },
+                                });
                               }}
                             >
                               {t.removeMember}
@@ -2849,22 +2866,28 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           }}
                           disabled={busy}
                           onClick={() => {
-                            if (!window.confirm(t.deleteGroupConfirm)) return;
-                            void (async () => {
-                              setBusy(true);
-                              try {
-                                await client.deleteChat(active.chat_id);
-                                setShowMembersPanel(false);
-                                setActive(null);
-                                setView("list");
-                                setMessages([]);
-                                await refreshChats();
-                              } catch (e) {
-                                setError(e instanceof Error ? e.message : t.sendFailed);
-                              } finally {
-                                setBusy(false);
-                              }
-                            })();
+                            setConfirmDialog({
+                              message: t.deleteGroupConfirm,
+                              confirmLabel: t.deleteGroup,
+                              onConfirm: () => {
+                                void (async () => {
+                                  setBusy(true);
+                                  try {
+                                    await client.deleteChat(active.chat_id);
+                                    setConfirmDialog(null);
+                                    setShowMembersPanel(false);
+                                    setActive(null);
+                                    setView("list");
+                                    setMessages([]);
+                                    await refreshChats();
+                                  } catch (e) {
+                                    setError(e instanceof Error ? e.message : t.sendFailed);
+                                  } finally {
+                                    setBusy(false);
+                                  }
+                                })();
+                              },
+                            });
                           }}
                         >
                           {t.deleteGroup}
@@ -3079,6 +3102,73 @@ export function RanchChatShell(props: RanchChatShellProps) {
           {error}
         </div>
       )}
+
+      {confirmDialog ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 120,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+          onClick={() => {
+            if (!busy) setConfirmDialog(null);
+          }}
+        >
+          <div
+            style={{
+              width: "min(340px, 100%)",
+              background: colors.panel,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 12,
+              padding: 20,
+              boxShadow: "0 16px 48px rgba(0,0,0,0.45)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p
+              style={{
+                margin: "0 0 16px",
+                fontSize: 14,
+                lineHeight: 1.5,
+                color: colors.text,
+              }}
+            >
+              {confirmDialog.message}
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                style={btnGhost}
+                disabled={busy}
+                onClick={() => setConfirmDialog(null)}
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...btnGhost,
+                  background: "rgba(248,113,113,0.15)",
+                  borderColor: "rgba(248,113,113,0.45)",
+                  color: colors.danger,
+                  fontWeight: 600,
+                }}
+                disabled={busy}
+                onClick={() => confirmDialog.onConfirm()}
+              >
+                {confirmDialog.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
