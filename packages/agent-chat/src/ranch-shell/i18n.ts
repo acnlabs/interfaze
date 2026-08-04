@@ -59,6 +59,8 @@ export type RanchMessages = {
   groupMode: string;
   minTwoAgents: string;
   agentsCount: (n: number) => string;
+  /** Group subtitle: total agents + how many are online. */
+  agentsOnlineCount: (online: number, total: number) => string;
   members: string;
   groupInfo: string;
   agentInfo: string;
@@ -151,6 +153,8 @@ const en: RanchMessages = {
   groupMode: "Group",
   minTwoAgents: "Select at least 2 agents",
   agentsCount: (n) => (n === 1 ? "1 agent" : `${n} agents`),
+  agentsOnlineCount: (online, total) =>
+    total === 1 ? `1 agent · ${online} online` : `${total} agents · ${online} online`,
   members: "Members",
   groupInfo: "Group info",
   agentInfo: "Agent info",
@@ -243,6 +247,7 @@ const zh: RanchMessages = {
   groupMode: "群聊",
   minTwoAgents: "至少选择 2 个 agent",
   agentsCount: (n) => `${n} 个 agent`,
+  agentsOnlineCount: (online, total) => `${total} 个 agent · ${online} 在线`,
   members: "成员",
   groupInfo: "群资料",
   agentInfo: "Agent 资料",

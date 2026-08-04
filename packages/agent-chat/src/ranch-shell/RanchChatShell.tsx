@@ -2061,7 +2061,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             color: colors.muted,
                           }}
                         >
-                          {t.agentsCount(
+                          {t.agentsOnlineCount(
+                            active.active_members ?? 0,
                             Object.keys(agentNames).length || active.total_members || 0,
                           )}
                         </span>
@@ -2553,7 +2554,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     )}
                     {groupActive ? (
                       <div style={{ fontSize: 12, color: colors.muted, marginTop: 8 }}>
-                        {t.agentsCount(Object.keys(agentNames).length)}
+                        {t.agentsOnlineCount(
+                          active.active_members ?? 0,
+                          Object.keys(agentNames).length || active.total_members || 0,
+                        )}
                       </div>
                     ) : (
                       <div style={{ marginTop: 8 }}>
