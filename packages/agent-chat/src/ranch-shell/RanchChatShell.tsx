@@ -2363,6 +2363,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         key={a.id}
                         type="button"
                         onClick={() => insertMention(a.name)}
+                        title={statusLabel || undefined}
                         style={{
                           ...mentionRow,
                           background:
@@ -2396,7 +2397,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             {dot ? (
                               <span
                                 aria-hidden
-                                title={statusLabel}
                                 style={{
                                   position: "absolute",
                                   right: -1,
@@ -2410,20 +2410,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               />
                             ) : null}
                           </span>
-                          <span style={{ minWidth: 0, textAlign: "left" }}>
-                            <span style={{ display: "block", fontWeight: 600 }}>
-                              @{a.name}
-                            </span>
-                            <span
-                              style={{
-                                display: "block",
-                                fontSize: 11,
-                                color: colors.muted,
-                              }}
-                            >
-                              {statusLabel || shortAgentId(a.id)}
-                            </span>
-                          </span>
+                          <span style={{ fontWeight: 600 }}>@{a.name}</span>
                         </span>
                       </button>
                       );
