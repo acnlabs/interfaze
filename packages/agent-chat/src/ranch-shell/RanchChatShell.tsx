@@ -377,13 +377,14 @@ function resolveGroupMentions(text: string, agentIds: string[]): string[] {
  * Ranch-ported chat chrome: list → conversation → new-chat picker.
  * Transport: Chat Gateway only (not ranch /api/chat AI SDK).
  */
+/** Diagonal arrows outward — open / fullscreen (lucide Maximize2). */
 function IconExpand() {
   return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
-        d="M2.5 6V3.5H5M10.5 3.5H13.5V6M13.5 10.5V13.5H10.5M5 13.5H2.5V10.5"
+        d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"
         stroke="currentColor"
-        strokeWidth="1.5"
+        strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -391,13 +392,14 @@ function IconExpand() {
   );
 }
 
+/** Diagonal arrows inward — collapse / side (lucide Minimize2). */
 function IconCollapse() {
   return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
-        d="M5.5 2.5H3.5V5.5M12.5 5.5V3.5H10.5M10.5 12.5H12.5V10.5M3.5 10.5V12.5H5.5"
+        d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"
         stroke="currentColor"
-        strokeWidth="1.5"
+        strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
