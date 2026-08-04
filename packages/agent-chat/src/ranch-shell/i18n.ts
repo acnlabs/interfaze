@@ -74,6 +74,8 @@ export type RanchMessages = {
   topicMessages: (n: number) => string;
   backToMainChat: string;
   infoTab: string;
+  statusLabel: string;
+  agentIdLabel: string;
   openDirectChat: string;
   mentionAll: string;
   mentionAllHint: string;
@@ -180,6 +182,8 @@ const en: RanchMessages = {
   topicMessages: (n) => (n === 1 ? "1 message" : `${n} messages`),
   backToMainChat: "Main chat",
   infoTab: "Info",
+  statusLabel: "Status",
+  agentIdLabel: "Agent id",
   openDirectChat: "Message privately",
   mentionAll: "@all",
   mentionAllHint: "Mention all agents",
@@ -285,6 +289,8 @@ const zh: RanchMessages = {
   topicMessages: (n) => `${n} 条消息`,
   backToMainChat: "主会话",
   infoTab: "资料",
+  statusLabel: "状态",
+  agentIdLabel: "Agent id",
   openDirectChat: "私聊",
   mentionAll: "@all",
   mentionAllHint: "提及所有 agent",

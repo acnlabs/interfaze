@@ -2762,41 +2762,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           Object.keys(agentNames).length || active.total_members || 0,
                         )}
                       </div>
-                    ) : (
-                      <div style={{ marginTop: 8 }}>
-                        {agentStatusTitle(active.agent_status, t) ? (
-                          <div style={{ fontSize: 12, color: colors.muted }}>
-                            {agentStatusTitle(active.agent_status, t)}
-                          </div>
-                        ) : null}
-                        {shortAgentId(active.agent_id) ? (
-                          <div
-                            style={{
-                              fontSize: 11,
-                              color: colors.muted,
-                              marginTop: 4,
-                              fontFamily:
-                                'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                            }}
-                            title={active.agent_id || undefined}
-                          >
-                            {shortAgentId(active.agent_id)}
-                          </div>
-                        ) : null}
-                        {connectGuideUrl ? (
-                          <div style={{ marginTop: 12 }}>
-                            <a
-                              href={connectGuideUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{ color: "#93c5fd", fontSize: 12 }}
-                            >
-                              {t.ownerHowToConnect}
-                            </a>
-                          </div>
-                        ) : null}
-                      </div>
-                    )}
+                    ) : null}
                   </div>
 
                   <div
@@ -2988,7 +2954,72 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     </>
                   ) : !groupActive ? (
                     <>
-                      <div style={{ flex: 1 }} />
+                      <div
+                        style={{
+                          flex: 1,
+                          overflow: "auto",
+                          padding: "16px 16px 8px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 14,
+                        }}
+                      >
+                        <div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              letterSpacing: "0.06em",
+                              color: colors.muted,
+                              marginBottom: 6,
+                            }}
+                          >
+                            {t.statusLabel}
+                          </div>
+                          <div style={{ fontSize: 13, color: colors.text }}>
+                            {agentStatusTitle(active.agent_status, t) || t.offline}
+                          </div>
+                        </div>
+                        {shortAgentId(active.agent_id) ? (
+                          <div>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                letterSpacing: "0.06em",
+                                color: colors.muted,
+                                marginBottom: 6,
+                              }}
+                            >
+                              {t.agentIdLabel}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: colors.text,
+                                fontFamily:
+                                  'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                                wordBreak: "break-all",
+                              }}
+                              title={active.agent_id || undefined}
+                            >
+                              {active.agent_id}
+                            </div>
+                          </div>
+                        ) : null}
+                        {connectGuideUrl ? (
+                          <div>
+                            <a
+                              href={connectGuideUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: "#93c5fd", fontSize: 13 }}
+                            >
+                              {t.ownerHowToConnect}
+                            </a>
+                          </div>
+                        ) : null}
+                      </div>
                       <div style={{ padding: 12, borderTop: `1px solid ${colors.border}` }}>
                         <button
                           type="button"
