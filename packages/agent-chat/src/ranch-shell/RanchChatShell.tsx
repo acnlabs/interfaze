@@ -419,7 +419,7 @@ function LanguageSwitcher({
   onChange: (next: RanchLocale) => void;
   t: RanchMessages;
 }) {
-  const seg = (code: RanchLocale, label: string): CSSProperties => ({
+  const seg = (code: RanchLocale): CSSProperties => ({
     margin: 0,
     padding: "3px 8px",
     fontSize: 11,
@@ -447,10 +447,10 @@ function LanguageSwitcher({
         flexShrink: 0,
       }}
     >
-      <button type="button" style={seg("en", t.langEn)} onClick={() => onChange("en")} aria-pressed={locale === "en"}>
+      <button type="button" style={seg("en")} onClick={() => onChange("en")} aria-pressed={locale === "en"}>
         {t.langEn}
       </button>
-      <button type="button" style={seg("zh", t.langZh)} onClick={() => onChange("zh")} aria-pressed={locale === "zh"}>
+      <button type="button" style={seg("zh")} onClick={() => onChange("zh")} aria-pressed={locale === "zh"}>
         {t.langZh}
       </button>
     </div>
