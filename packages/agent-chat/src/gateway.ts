@@ -35,6 +35,14 @@ async function parseError(res: Response): Promise<ChatGatewayError> {
   return new ChatGatewayError(res.status, code, message);
 }
 
+export type ChatAgentSearchHit = {
+  agent_id: string;
+  name?: string | null;
+  description?: string | null;
+  status?: string | null;
+  acl_reason?: string | null;
+};
+
 export type GatewayClient = {
   health: () => Promise<{ status: string; gateway?: string; ok: boolean; error?: string }>;
   listChats: () => Promise<ChatSummary[]>;
@@ -47,6 +55,8 @@ export type GatewayClient = {
   listMessages: (chatId: string) => Promise<ChatMessage[]>;
   listParticipants: (chatId: string) => Promise<ChatParticipant[]>;
   sendMessage: (chatId: string, content: string, mentions?: string[]) => Promise<ChatMessage>;
+  /** D9-filtered discoverable agents (excludes caller's own). */
+  searchAgents: (q?: string, limit?: number) => Promise<ChatAgentSearchHit[]>;
 };
 
 export function createGatewayClient(
@@ -95,6 +105,15 @@ export function createGatewayClient(
     createOrGetDirectChat: createDirect,
     createGroup,
     createGroupChat: createGroup,
+    searchAgents: async (q = "", limit = 20) => {
+      const params = new URLSearchParams();
+      if (q.trim()) params.set("q", q.trim());
+      params.set("limit", String(limit));
+      const data = await request<{ agents?: ChatAgentSearchHit[] }>(
+        `/api/chat/agents/search?${params.toString()}`,
+      );
+      return data.agents ?? [];
+    },
     listMessages: (chatId) =>
       request<ChatMessage[]>(`/api/chats/${encodeURIComponent(chatId)}/messages?limit=50`),
     listParticipants: (chatId) =>

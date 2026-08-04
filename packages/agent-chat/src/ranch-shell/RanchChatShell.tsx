@@ -9,9 +9,16 @@ import {
   type CSSProperties,
 } from "react";
 import { ChatGatewayError, createGatewayClient } from "../gateway";
-import type { ChatMessage, ChatSummary, RanchChatAccount, RanchChatShellProps } from "../types";
+import type {
+  AgentDirectoryItem,
+  ChatMessage,
+  ChatSummary,
+  RanchChatAccount,
+  RanchChatShellProps,
+} from "../types";
 import { connectChatSocket, type ChatSocket } from "../ws";
 import { NewChatPicker } from "./NewChatPicker";
+import { CONNECT_PROMPTS, copyText } from "./connectPrompt";
 import {
   RANCH_LOCALE_OPTIONS,
   ranchMessages,
@@ -225,11 +232,11 @@ function AgentReplyPendingBubble({ t }: { t: RanchMessages }) {
         maxWidth: "85%",
         display: "flex",
         flexDirection: "column",
-        gap: 3,
+        gap: 4,
         alignItems: "flex-start",
       }}
       aria-live="polite"
-      aria-label={t.replying}
+      aria-label={t.waitingReply}
     >
       <div
         style={{
@@ -240,6 +247,7 @@ function AgentReplyPendingBubble({ t }: { t: RanchMessages }) {
           lineHeight: 1.5,
           display: "inline-flex",
           alignItems: "center",
+          gap: 10,
           color: colors.muted,
         }}
       >
@@ -248,6 +256,7 @@ function AgentReplyPendingBubble({ t }: { t: RanchMessages }) {
           <span className="ranch-reply-dot" style={{ animationDelay: "160ms" }} />
           <span className="ranch-reply-dot" style={{ animationDelay: "320ms" }} />
         </span>
+        <span style={{ fontSize: 12 }}>{t.waitingReply}</span>
       </div>
     </div>
   );
@@ -323,13 +332,16 @@ function AgentReplyTimeoutBubble({
 
 function NoAgentsEmpty({
   connectGuideUrl,
+  locale,
   onNewChat,
   t,
 }: {
   connectGuideUrl?: string;
+  locale: RanchLocale;
   onNewChat: () => void;
   t: RanchMessages;
 }) {
+  const [copied, setCopied] = useState(false);
   return (
     <div style={{ textAlign: "center", padding: "28px 20px", color: colors.muted }}>
       <p style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 600, color: colors.text }}>
@@ -337,18 +349,27 @@ function NoAgentsEmpty({
       </p>
       <p style={{ margin: "0 0 16px", fontSize: 12, lineHeight: 1.55 }}>{t.noAgentsBody}</p>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
+        <button
+          type="button"
+          style={btnPrimary}
+          onClick={() => {
+            void copyText(CONNECT_PROMPTS[locale]).then((ok) => {
+              if (!ok) return;
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 2000);
+            });
+          }}
+        >
+          {copied ? t.promptCopied : t.copyPromptForAgent}
+        </button>
         {connectGuideUrl ? (
           <a
             href={connectGuideUrl}
             target="_blank"
             rel="noopener noreferrer"
-            style={{
-              ...btnPrimary,
-              textDecoration: "none",
-              display: "inline-block",
-            }}
+            style={{ color: colors.muted, fontSize: 12 }}
           >
-            {t.copyPromptForAgent}
+            {t.viewConnectGuide}
           </a>
         ) : null}
         <button type="button" style={btnGhost} onClick={onNewChat}>
@@ -816,6 +837,32 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setLoadingChats(false);
     }
   }, [client]);
+
+  const searchDiscover = useCallback(
+    async (q: string): Promise<AgentDirectoryItem[]> => {
+      const hits = await client.searchAgents(q, 20);
+      return hits.map((h) => ({
+        agent_id: h.agent_id,
+        name: h.name,
+        description: h.description,
+        group: "recommended" as const,
+      }));
+    },
+    [client],
+  );
+
+  // Keep presence dots fresh while a conversation is open.
+  useEffect(() => {
+    if (!open || !active) return;
+    const tick = window.setInterval(() => {
+      void client.listChats().then((list) => {
+        setChats(list);
+        const next = list.find((c) => c.chat_id === active.chat_id);
+        if (next) setActive(next);
+      });
+    }, 20000);
+    return () => window.clearInterval(tick);
+  }, [open, active?.chat_id, client]);
 
   const reloadMessages = useCallback(
     async (chatId: string, seq?: number) => {
@@ -1301,6 +1348,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             ) : (
               <NoAgentsEmpty
                 connectGuideUrl={connectGuideUrl}
+                locale={uiLocale}
                 onNewChat={() => setShowPicker(true)}
                 t={t}
               />
@@ -1411,7 +1459,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
             allowGroupChat={allowGroupChat}
             busy={busy}
             connectGuideUrl={connectGuideUrl}
+            locale={uiLocale}
             messages={t}
+            onSearchDiscover={searchDiscover}
             onClose={() => setShowPicker(false)}
             onOpenDirect={(id) => void startDirect(id)}
             onCreateGroup={(titleText, ids) => void startGroup(titleText, ids)}
@@ -1479,6 +1529,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 >
                   <NoAgentsEmpty
                     connectGuideUrl={connectGuideUrl}
+                    locale={uiLocale}
                     onNewChat={() => setShowPicker(true)}
                     t={t}
                   />

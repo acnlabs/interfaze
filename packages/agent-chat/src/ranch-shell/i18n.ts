@@ -25,7 +25,12 @@ export type RanchMessages = {
   noAgentsTitle: string;
   noAgentsBody: string;
   copyPromptForAgent: string;
+  promptCopied: string;
+  viewConnectGuide: string;
   pasteAgentId: string;
+  waitingReply: string;
+  searchAgents: string;
+  discoverAgents: string;
   unreachable: string;
   sendFailed: string;
   expand: string;
@@ -86,8 +91,10 @@ const en: RanchMessages = {
     "No reply yet. The agent may be offline, or chat writeback is not set up.",
   noAgentsTitle: "No agents to chat with yet",
   noAgentsBody:
-    "Registering on ACN is not enough. Send the connect prompt to your agent (it includes the ACN skill install URL if needed) and let the agent finish setup.",
-  copyPromptForAgent: "Open connect prompt",
+    "Registering on ACN is not enough. Copy the prompt below, paste it to your agent, and let it finish setup (installs ACN skill if needed).",
+  copyPromptForAgent: "Copy prompt for agent",
+  promptCopied: "Copied",
+  viewConnectGuide: "Full guide",
   pasteAgentId: "Paste an agent id",
   unreachable: "Agent unreachable (offline or not listening).",
   sendFailed: "Send failed",
@@ -117,10 +124,10 @@ const en: RanchMessages = {
   noMessagesYet: "No messages yet",
   pickerTitle: "New chat",
   mineAgents: "MY AGENTS",
-  recommended: "RECOMMENDED",
+  recommended: "DISCOVER",
   noMineAgents:
-    "No agents under your account yet. Send the connect prompt to an agent (includes ACN skill install URL) and let it finish setup.",
-  noRecommended: "No recommended agents",
+    "No agents under your account yet. Copy the connect prompt and paste it to your agent.",
+  noRecommended: "No discoverable agents right now",
   orPasteAgentId: "Or paste agent id",
   agentIdPlaceholder: "ACN agent id…",
   groupTitle: "Group title",
@@ -131,6 +138,9 @@ const en: RanchMessages = {
   logOut: "Log out",
   account: "Account",
   language: "Language",
+  waitingReply: "Waiting for reply…",
+  searchAgents: "Search agents…",
+  discoverAgents: "Discoverable",
 };
 
 const zh: RanchMessages = {
@@ -149,8 +159,10 @@ const zh: RanchMessages = {
   timeoutGeneric: "对方长时间没有回复。可能离线，或还没接上聊天回写。",
   noAgentsTitle: "还没有可聊的 agent",
   noAgentsBody:
-    "注册还不够。把提示词发给你的 agent（没有 ACN skill 时提示词里带了安装地址），让它自己接完。",
-  copyPromptForAgent: "打开接上提示词",
+    "注册还不够。复制下面的提示词发给你的 agent，让它自己接完（没有 ACN skill 时会先安装）。",
+  copyPromptForAgent: "复制给 agent 的提示词",
+  promptCopied: "已复制",
+  viewConnectGuide: "完整说明",
   pasteAgentId: "粘贴 agent id 试试",
   unreachable: "对方暂时联系不上（离线或未在听）。",
   sendFailed: "发送失败",
@@ -180,10 +192,9 @@ const zh: RanchMessages = {
   noMessagesYet: "暂无消息",
   pickerTitle: "新建聊天",
   mineAgents: "我的 AGENT",
-  recommended: "推荐",
-  noMineAgents:
-    "还没有名下的 agent。把提示词发给 agent（含 ACN skill 安装地址），让它自己接完。",
-  noRecommended: "暂无推荐 agent",
+  recommended: "发现",
+  noMineAgents: "还没有名下的 agent。复制提示词发给你的 agent，让它自己接完。",
+  noRecommended: "暂时没有可发现的 agent",
   orPasteAgentId: "或粘贴 agent id",
   agentIdPlaceholder: "ACN agent id…",
   groupTitle: "群名称",
@@ -194,6 +205,9 @@ const zh: RanchMessages = {
   logOut: "退出登录",
   account: "账户",
   language: "语言",
+  waitingReply: "等待回复…",
+  searchAgents: "搜索 agent…",
+  discoverAgents: "可发现",
 };
 
 const catalogs: Record<RanchLocale, RanchMessages> = { en, zh };
