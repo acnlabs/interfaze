@@ -741,6 +741,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [loadingChats, setLoadingChats] = useState(true);
   const [active, setActive] = useState<ChatSummary | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  /** agent_id → display name (group chats). */
+  const [agentNames, setAgentNames] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -918,6 +920,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setView("conversation");
       setError(null);
       setMessages([]);
+      setAgentNames({});
       setDraft("");
       clearReplySlot();
       agentIdsRef.current = [];
@@ -930,9 +933,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
         ]);
         if (seq !== loadSeqRef.current) return;
         setMessages(msgs);
-        agentIdsRef.current = participants
-          .filter((p) => p.participant_type === "agent" && p.is_active !== false)
-          .map((p) => p.participant_id);
+        const agents = participants.filter(
+          (p) => p.participant_type === "agent" && p.is_active !== false,
+        );
+        agentIdsRef.current = agents.map((p) => p.participant_id);
+        const names: Record<string, string> = {};
+        for (const p of agents) {
+          names[p.participant_id] =
+            (p.name || "").trim() || shortAgentId(p.participant_id) || p.participant_id;
+        }
+        setAgentNames(names);
       } catch (e) {
         if (seq !== loadSeqRef.current) return;
         setError(e instanceof Error ? e.message : "Failed to load messages");
@@ -1071,9 +1081,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
       if (group && agentIdsRef.current.length === 0) {
         const participants = await client.listParticipants(chatId);
         if (seq !== loadSeqRef.current) return;
-        agentIdsRef.current = participants
-          .filter((p) => p.participant_type === "agent" && p.is_active !== false)
-          .map((p) => p.participant_id);
+        const agents = participants.filter(
+          (p) => p.participant_type === "agent" && p.is_active !== false,
+        );
+        agentIdsRef.current = agents.map((p) => p.participant_id);
+        const names: Record<string, string> = {};
+        for (const p of agents) {
+          names[p.participant_id] =
+            (p.name || "").trim() || shortAgentId(p.participant_id) || p.participant_id;
+        }
+        setAgentNames(names);
       }
       const mentions = group ? resolveGroupMentions(text, agentIdsRef.current) : undefined;
       beginAwaitingReply(chatId);
@@ -1595,7 +1612,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       >
                         {chatTitle(active)}
                       </strong>
-                      {!isGroupChat(active) && shortAgentId(active.agent_id) ? (
+                      {isGroupChat(active) ? (
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: 11,
+                            color: colors.muted,
+                          }}
+                        >
+                          {t.agentsCount(
+                            Object.keys(agentNames).length || active.total_members || 0,
+                          )}
+                        </span>
+                      ) : shortAgentId(active.agent_id) ? (
                         <span
                           style={{
                             display: "block",
@@ -1679,6 +1708,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   const isUser = m.sender_type === "user";
                   const delivery =
                     isUser && typeof m.metadata?.delivery === "string" ? m.metadata.delivery : null;
+                  const group = active ? isGroupChat(active) : false;
+                  const senderLabel =
+                    !isUser && group
+                      ? agentNames[m.sender_id]?.trim() ||
+                        shortAgentId(m.sender_id) ||
+                        m.sender_id
+                      : null;
                   return (
                     <div
                       key={m.message_id}
@@ -1691,6 +1727,22 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         alignItems: isUser ? "flex-end" : "flex-start",
                       }}
                     >
+                      {senderLabel ? (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: colors.muted,
+                            paddingLeft: 4,
+                            maxWidth: "100%",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                          title={m.sender_id}
+                        >
+                          {senderLabel}
+                        </span>
+                      ) : null}
                       <div
                         style={{
                           background: isUser ? colors.userBubble : colors.agentBubble,

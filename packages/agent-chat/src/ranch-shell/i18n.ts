@@ -56,6 +56,9 @@ export type RanchMessages = {
   hoursAgo: (n: number) => string;
   daysAgo: (n: number) => string;
   groupChat: string;
+  groupMode: string;
+  minTwoAgents: string;
+  agentsCount: (n: number) => string;
   noMessagesYet: string;
   pickerTitle: string;
   mineAgents: string;
@@ -123,6 +126,9 @@ const en: RanchMessages = {
   hoursAgo: (n) => `${n}h ago`,
   daysAgo: (n) => `${n}d ago`,
   groupChat: "Group chat",
+  groupMode: "Group",
+  minTwoAgents: "Select at least 2 agents",
+  agentsCount: (n) => (n === 1 ? "1 agent" : `${n} agents`),
   noMessagesYet: "No messages yet",
   pickerTitle: "New chat",
   mineAgents: "MY AGENTS",
@@ -190,6 +196,9 @@ const zh: RanchMessages = {
   hoursAgo: (n) => `${n} 小时前`,
   daysAgo: (n) => `${n} 天前`,
   groupChat: "群聊",
+  groupMode: "群聊",
+  minTwoAgents: "至少选择 2 个 agent",
+  agentsCount: (n) => `${n} 个 agent`,
   noMessagesYet: "暂无消息",
   pickerTitle: "新建聊天",
   mineAgents: "我的 AGENT",

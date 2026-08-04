@@ -68,6 +68,9 @@ export type ChatSummary = {
   last_message_content?: string | null;
   unread_count?: number;
   agent_status?: string | null;
+  /** Group chats: member counts from Gateway list/detail. */
+  total_members?: number;
+  active_members?: number;
 };
 
 /** Host-provided signed-in user for the shell sidebar footer (Auth0 / WeChat / etc.). */

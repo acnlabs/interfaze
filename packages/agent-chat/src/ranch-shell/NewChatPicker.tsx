@@ -69,6 +69,12 @@ export function NewChatPicker({
   }, [discoverQ, onSearchDiscover, directoryAgents]);
 
   const mineRows = directoryAgents.filter((a) => a.group === "mine");
+  const pickedIds = [
+    ...selected,
+    ...(manualId.trim() && !selected.includes(manualId.trim()) ? [manualId.trim()] : []),
+  ];
+  const canStartDirect = pickedIds.length > 0;
+  const canCreateGroup = pickedIds.length >= 2;
 
   const toggle = (id: string) => {
     setSelected((prev) =>
@@ -154,7 +160,7 @@ export function NewChatPicker({
               style={{ ...btnGhost, opacity: mode === "group" ? 1 : 0.5 }}
               onClick={() => setMode("group")}
             >
-              Group
+              {t.groupMode}
             </button>
           </div>
         )}
@@ -271,24 +277,27 @@ export function NewChatPicker({
           <button type="button" style={btnGhost} onClick={onClose} disabled={busy}>
             {t.cancel}
           </button>
-          <button
-            type="button"
-            style={btnPrimary}
-            disabled={busy || (!selected.length && !manualId.trim())}
-            onClick={() => {
-              const ids = [
-                ...selected,
-                ...(manualId.trim() && !selected.includes(manualId.trim())
-                  ? [manualId.trim()]
-                  : []),
-              ];
-              if (!ids.length) return;
-              if (mode === "direct") onOpenDirect(ids[0]);
-              else onCreateGroup(groupTitle.trim() || t.defaultGroupTitle, ids);
-            }}
-          >
-            {mode === "direct" ? t.startChatAction : t.createGroup}
-          </button>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+            {mode === "group" && pickedIds.length > 0 && !canCreateGroup ? (
+              <span style={{ fontSize: 11, color: colors.muted }}>{t.minTwoAgents}</span>
+            ) : null}
+            <button
+              type="button"
+              style={btnPrimary}
+              disabled={busy || (mode === "direct" ? !canStartDirect : !canCreateGroup)}
+              onClick={() => {
+                if (mode === "direct") {
+                  if (!canStartDirect) return;
+                  onOpenDirect(pickedIds[0]);
+                  return;
+                }
+                if (!canCreateGroup) return;
+                onCreateGroup(groupTitle.trim() || t.defaultGroupTitle, pickedIds);
+              }}
+            >
+              {mode === "direct" ? t.startChatAction : t.createGroup}
+            </button>
+          </div>
         </div>
       </div>
     </div>
