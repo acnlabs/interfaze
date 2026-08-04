@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties } from "react";
 import type { AgentDirectoryItem } from "../types";
+import type { RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 
 type Props = {
@@ -9,21 +10,10 @@ type Props = {
   allowGroupChat: boolean;
   busy: boolean;
   connectGuideUrl?: string;
+  messages: RanchMessages;
   onClose: () => void;
   onOpenDirect: (agentId: string) => void;
   onCreateGroup: (title: string, agentIds: string[]) => void;
-};
-
-const SOURCE: Record<
-  "mine" | "recommended",
-  { label: string; badge: string; border: string }
-> = {
-  mine: { label: "MY AGENTS", badge: colors.mine, border: "rgba(59,130,246,0.45)" },
-  recommended: {
-    label: "RECOMMENDED",
-    badge: colors.recommended,
-    border: "rgba(16,185,129,0.45)",
-  },
 };
 
 export function NewChatPicker({
@@ -31,14 +21,27 @@ export function NewChatPicker({
   allowGroupChat,
   busy,
   connectGuideUrl,
+  messages: t,
   onClose,
   onOpenDirect,
   onCreateGroup,
 }: Props) {
   const [mode, setMode] = useState<"direct" | "group">("direct");
   const [selected, setSelected] = useState<string[]>([]);
-  const [groupTitle, setGroupTitle] = useState("Agent group");
+  const [groupTitle, setGroupTitle] = useState(t.defaultGroupTitle);
   const [manualId, setManualId] = useState("");
+
+  const source: Record<
+    "mine" | "recommended",
+    { label: string; badge: string; border: string }
+  > = {
+    mine: { label: t.mineAgents, badge: colors.mine, border: "rgba(59,130,246,0.45)" },
+    recommended: {
+      label: t.recommended,
+      badge: colors.recommended,
+      border: "rgba(16,185,129,0.45)",
+    },
+  };
 
   const toggle = (id: string) => {
     setSelected((prev) =>
@@ -50,8 +53,8 @@ export function NewChatPicker({
     <div style={overlay}>
       <div style={card}>
         <div style={header}>
-          <strong style={{ fontSize: 16 }}>New chat</strong>
-          <button type="button" onClick={onClose} style={btnGhost} aria-label="Close">
+          <strong style={{ fontSize: 16 }}>{t.pickerTitle}</strong>
+          <button type="button" onClick={onClose} style={btnGhost} aria-label={t.close}>
             ✕
           </button>
         </div>
@@ -81,7 +84,7 @@ export function NewChatPicker({
         <div style={{ flex: 1, overflow: "auto", padding: "0 16px 16px" }}>
           {(["mine", "recommended"] as const).map((group) => {
             const rows = directoryAgents.filter((a) => a.group === group);
-            const cfg = SOURCE[group];
+            const cfg = source[group];
             return (
               <div key={group} style={{ marginBottom: 16 }}>
                 <div
@@ -99,9 +102,7 @@ export function NewChatPicker({
                   <div style={{ color: colors.muted, fontSize: 12 }}>
                     {group === "mine" ? (
                       <>
-                        <p style={{ margin: "0 0 6px" }}>
-                          还没有名下的 agent。把提示词发给 agent（含 ACN skill 安装地址），让它自己接完。
-                        </p>
+                        <p style={{ margin: "0 0 6px" }}>{t.noMineAgents}</p>
                         {connectGuideUrl ? (
                           <a
                             href={connectGuideUrl}
@@ -109,12 +110,12 @@ export function NewChatPicker({
                             rel="noopener noreferrer"
                             style={{ color: colors.mine }}
                           >
-                            复制给 agent 的提示词
+                            {t.copyPromptForAgent}
                           </a>
                         ) : null}
                       </>
                     ) : (
-                      <p style={{ margin: 0 }}>暂无推荐 agent</p>
+                      <p style={{ margin: 0 }}>{t.noRecommended}</p>
                     )}
                   </div>
                 ) : (
@@ -177,19 +178,19 @@ export function NewChatPicker({
 
           <div style={{ marginTop: 8 }}>
             <div style={{ fontSize: 11, color: colors.muted, marginBottom: 6 }}>
-              Or paste agent id
+              {t.orPasteAgentId}
             </div>
             <input
               value={manualId}
               onChange={(e) => setManualId(e.target.value)}
-              placeholder="ACN agent id…"
+              placeholder={t.agentIdPlaceholder}
               style={inputStyle}
             />
           </div>
 
           {mode === "group" && (
             <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 11, color: colors.muted, marginBottom: 6 }}>Group title</div>
+              <div style={{ fontSize: 11, color: colors.muted, marginBottom: 6 }}>{t.groupTitle}</div>
               <input
                 value={groupTitle}
                 onChange={(e) => setGroupTitle(e.target.value)}
@@ -201,7 +202,7 @@ export function NewChatPicker({
 
         <div style={footer}>
           <button type="button" style={btnGhost} onClick={onClose} disabled={busy}>
-            Cancel
+            {t.cancel}
           </button>
           <button
             type="button"
@@ -216,10 +217,10 @@ export function NewChatPicker({
               ];
               if (!ids.length) return;
               if (mode === "direct") onOpenDirect(ids[0]);
-              else onCreateGroup(groupTitle.trim() || "Agent group", ids);
+              else onCreateGroup(groupTitle.trim() || t.defaultGroupTitle, ids);
             }}
           >
-            {mode === "direct" ? "Start chat" : "Create group"}
+            {mode === "direct" ? t.startChatAction : t.createGroup}
           </button>
         </div>
       </div>

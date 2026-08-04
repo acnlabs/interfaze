@@ -97,6 +97,11 @@ export type RanchChatShellProps = {
    * Host should point at a short plain-language guide.
    */
   connectGuideUrl?: string;
+  /**
+   * UI locale (BCP-47). Supported: `en` (default), `zh`.
+   * Other values fall back to English.
+   */
+  locale?: string;
 };
 
 /** Outbound delivery on user messages (Chat Gateway → ACN). */

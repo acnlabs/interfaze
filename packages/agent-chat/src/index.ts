@@ -1,6 +1,7 @@
 export { AgentChatShell, openAgentChat } from "./AgentChatShell";
 /** @deprecated Prefer RanchChatShell for host UX (ranch chrome). */
 export { RanchChatShell } from "./ranch-shell/RanchChatShell";
+export { ranchMessages, resolveRanchLocale, type RanchLocale, type RanchMessages } from "./ranch-shell/i18n";
 export { createGatewayClient, ChatGatewayError } from "./gateway";
 export { connectChatSocket, type ChatSocket, type ChatWsEvent } from "./ws";
 export {
