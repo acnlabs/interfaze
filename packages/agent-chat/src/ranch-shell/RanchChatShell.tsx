@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { ChatGatewayError, createGatewayClient } from "../gateway";
 import type { ChatMessage, ChatSummary, RanchChatAccount, RanchChatShellProps } from "../types";
 import { connectChatSocket, type ChatSocket } from "../ws";
@@ -411,6 +418,7 @@ function IconClose() {
   );
 }
 
+/** Ranch SystemHeader-style locale control: compact round chip + menu (scales). */
 function LanguageSwitcher({
   locale,
   onChange,
@@ -420,43 +428,99 @@ function LanguageSwitcher({
   onChange: (next: RanchLocale) => void;
   t: RanchMessages;
 }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   return (
-    <select
-      aria-label={t.language}
-      title={t.language}
-      value={locale}
-      onChange={(e) => onChange(resolveRanchLocale(e.target.value))}
-      style={{
-        boxSizing: "border-box",
-        margin: 0,
-        width: 44,
-        padding: "3px 14px 3px 4px",
-        fontSize: 11,
-        fontWeight: 650,
-        fontFamily:
-          'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
-        lineHeight: 1.2,
-        color: colors.text,
-        backgroundColor: colors.bg,
-        border: `1px solid ${colors.border}`,
-        borderRadius: 6,
-        cursor: "pointer",
-        flexShrink: 0,
-        appearance: "none",
-        WebkitAppearance: "none",
-        backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(
-          `<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'><path fill='%2394a3b8' d='M3 4.5 6 8l3-3.5'/></svg>`,
-        )}")`,
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "right 3px center",
-      }}
-    >
-      {RANCH_LOCALE_OPTIONS.map((opt) => (
-        <option key={opt.code} value={opt.code}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
+    <div ref={rootRef} style={{ position: "relative", flexShrink: 0 }}>
+      <button
+        type="button"
+        style={{
+          ...btnIcon,
+          borderRadius: 999,
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: "0.04em",
+          color: colors.muted,
+          lineHeight: 1,
+        }}
+        aria-label={t.language}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title={t.language}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {locale.toUpperCase()}
+      </button>
+      {open ? (
+        <ul
+          role="listbox"
+          aria-label={t.language}
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            right: 0,
+            zIndex: 30,
+            margin: 0,
+            padding: 4,
+            listStyle: "none",
+            minWidth: 56,
+            background: colors.panel,
+            border: `1px solid ${colors.border}`,
+            borderRadius: 10,
+            boxShadow: "0 12px 28px rgba(0,0,0,0.45)",
+          }}
+        >
+          {RANCH_LOCALE_OPTIONS.map((opt) => {
+            const active = opt.code === locale;
+            return (
+              <li key={opt.code} role="option" aria-selected={active}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(opt.code);
+                    setOpen(false);
+                  }}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    margin: 0,
+                    padding: "6px 10px",
+                    border: "none",
+                    borderRadius: 6,
+                    background: active ? colors.accentSoft : "transparent",
+                    color: active ? colors.text : colors.muted,
+                    fontSize: 12,
+                    fontWeight: 650,
+                    letterSpacing: "0.04em",
+                    textAlign: "left",
+                    cursor: "pointer",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
