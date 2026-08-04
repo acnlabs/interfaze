@@ -131,13 +131,7 @@ function DeliveryStatusIcon({
     height: 14,
   };
   const stroke =
-    delivery === "failed"
-      ? colors.danger
-      : delivery === "pending"
-        ? colors.muted
-        : delivery === "sent"
-          ? colors.muted
-          : "#93c5fd";
+    delivery === "pending" || delivery === "sent" ? colors.muted : "#93c5fd";
   const title =
     delivery === "pending"
       ? t.sending
@@ -175,27 +169,18 @@ function DeliveryStatusIcon({
       </span>
     );
   }
-  if (delivery === "queued") {
+  // Queued / failed: plain label — icons (esp. envelope) read as email and confuse users.
+  if (delivery === "queued" || delivery === "failed") {
     return (
-      <span title={title} aria-label={title} style={{ ...common, color: stroke }}>
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
-          <path
-            d="M3 5.5h10v7.2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5.5Z"
-            stroke="currentColor"
-            strokeWidth="1.4"
-          />
-          <path d="M3 5.5 8 9l5-3.5" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-        </svg>
-      </span>
-    );
-  }
-  if (delivery === "failed") {
-    return (
-      <span title={title} aria-label={title} style={{ ...common, color: stroke }}>
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
-          <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M8 5v4.2M8 11.2h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
+      <span
+        aria-label={title}
+        style={{
+          fontSize: 11,
+          lineHeight: 1.2,
+          color: delivery === "failed" ? colors.danger : colors.muted,
+        }}
+      >
+        {title}
       </span>
     );
   }
