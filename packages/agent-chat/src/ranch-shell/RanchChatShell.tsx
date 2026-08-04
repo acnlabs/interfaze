@@ -212,7 +212,6 @@ function DeliveryStatusIcon({
           strokeWidth="1.6"
           strokeLinecap="round"
           strokeLinejoin="round"
-          opacity="0.85"
         />
       </svg>
     </span>
@@ -225,16 +224,6 @@ function deliveryStatusLabel(delivery: string, t: RanchMessages): string {
   if (delivery === "queued") return t.queuedOffline;
   if (delivery === "failed") return t.deliveryFailed;
   return t.delivered;
-}
-
-/** Compact mark for per-agent delivery rows (keeps one line short). */
-function deliveryMark(delivery: string): { mark: string; color: string } {
-  if (delivery === "delivered") return { mark: "✓✓", color: "#93c5fd" };
-  if (delivery === "sent") return { mark: "✓", color: colors.muted };
-  if (delivery === "pending") return { mark: "…", color: colors.muted };
-  if (delivery === "failed") return { mark: "!", color: colors.danger };
-  if (delivery === "queued") return { mark: "–", color: colors.muted };
-  return { mark: "·", color: colors.muted };
 }
 
 function DeliveryStatusFooter({
@@ -278,19 +267,19 @@ function DeliveryStatusFooter({
       >
         {entries.map(([id, status], i) => {
           const label = names[id]?.trim() || shortAgentId(id) || id;
-          const { mark, color } = deliveryMark(status);
-          const showWord = status === "queued" || status === "failed";
           return (
-            <span key={id}>
-              {i > 0 ? " · " : null}
-              <span style={{ color: colors.text }}>{label}</span>{" "}
-              {showWord ? (
-                <span style={{ color: status === "failed" ? colors.danger : colors.muted }}>
-                  {deliveryStatusLabel(status, t)}
-                </span>
-              ) : (
-                <span style={{ color, letterSpacing: status === "delivered" ? -1 : 0 }}>{mark}</span>
-              )}
+            <span
+              key={id}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                verticalAlign: "middle",
+              }}
+            >
+              {i > 0 ? <span style={{ margin: "0 4px" }}>·</span> : null}
+              <span style={{ color: colors.text }}>{label}</span>
+              <DeliveryStatusIcon delivery={status} t={t} />
             </span>
           );
         })}
