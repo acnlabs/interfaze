@@ -15,6 +15,7 @@ import type {
   ChatSummary,
   RanchChatAccount,
   RanchChatShellProps,
+  ThreadSummary,
 } from "../types";
 import { connectChatSocket, type ChatSocket } from "../ws";
 import { NewChatPicker } from "./NewChatPicker";
@@ -954,6 +955,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
     confirmLabel: string;
     onConfirm: () => void;
   } | null>(null);
+  /** Detail panel tab: Info (members/agent) vs Topics. */
+  const [infoTab, setInfoTab] = useState<"info" | "topics">("info");
+  const [topics, setTopics] = useState<ThreadSummary[]>([]);
+  const [activeTopic, setActiveTopic] = useState<ThreadSummary | null>(null);
+  const [showCreateTopic, setShowCreateTopic] = useState(false);
+  const [topicTitleDraft, setTopicTitleDraft] = useState("");
+  const [topicDescDraft, setTopicDescDraft] = useState("");
+  const [loadingTopics, setLoadingTopics] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
   /** Agent-slot: typing → timeout+retry (not endless spinner). */
@@ -1158,6 +1167,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setShowMembersPanel(false);
       setShowAddMember(false);
       setEditingTitle(false);
+      setInfoTab("info");
+      setShowCreateTopic(false);
+      setTopicTitleDraft("");
+      setTopicDescDraft("");
+      setActiveTopic(null);
+      setTopics([]);
       setTitleDraft(chat.title?.trim() || "");
       setMentionIndex(0);
       setDraft("");
@@ -1166,14 +1181,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
       clearReplySlot();
       agentIdsRef.current = [];
       try {
-        const [msgs, participants] = await Promise.all([
+        const [msgs, participants, threadList] = await Promise.all([
           client.listMessages(chat.chat_id),
           isGroupChat(chat)
             ? client.listParticipants(chat.chat_id).catch(() => [])
             : Promise.resolve([]),
+          client.listThreads(chat.chat_id).catch(() => [] as ThreadSummary[]),
         ]);
         if (seq !== loadSeqRef.current) return;
         setMessages(msgs);
+        setTopics(threadList);
         const agents = participants.filter(
           (p) => p.participant_type === "agent" && p.is_active !== false,
         );
@@ -1219,6 +1236,28 @@ export function RanchChatShell(props: RanchChatShellProps) {
     },
     [client, clearReplySlot, directoryAgents],
   );
+
+  const loadTopics = useCallback(
+    async (chatId: string) => {
+      setLoadingTopics(true);
+      try {
+        const list = await client.listThreads(chatId);
+        setTopics(list);
+      } catch {
+        /* keep previous topics on transient errors */
+      } finally {
+        setLoadingTopics(false);
+      }
+    },
+    [client],
+  );
+
+  const openTopic = useCallback((topic: ThreadSummary) => {
+    setActiveTopic(topic);
+    setShowMembersPanel(false);
+    setShowAddMember(false);
+    setShowCreateTopic(false);
+  }, []);
 
   const reloadParticipants = useCallback(
     async (chatId: string) => {
@@ -1443,7 +1482,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       }
       beginAwaitingReply(chatId);
       const sentWhileOffline = !group && isAgentOffline(active?.agent_status);
-      await client.sendMessage(chatId, text, mentions);
+      await client.sendMessage(chatId, text, mentions, activeTopic?.id ?? null);
       if (group && mentions) {
         if (mentions.length === 1) {
           const id = mentions[0]!;
@@ -1543,7 +1582,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
         }
         setRecipientPickerOpen(false);
         beginAwaitingReply(chatId);
-        await client.sendMessage(chatId, text, mentions);
+        await client.sendMessage(
+          chatId,
+          text,
+          mentions,
+          lastUser?.thread_id || activeTopic?.id || null,
+        );
         if (group && mentions) {
           if (mentions.length === 1) {
             const id = mentions[0]!;
@@ -1614,6 +1658,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const showAgentReplyTimeout =
     replySlot?.phase === "timeout" && replySlot.chatId === active?.chat_id;
   const replyTimeoutReason: ReplyTimeoutReason = replySlot?.reason ?? "timeout";
+  const displayMessages = messages.filter((m) => {
+    if (isLegacyDeliveryAckBubble(m)) return false;
+    if (!activeTopic) return true;
+    return m.thread_id === activeTopic.id;
+  });
   const mineAgents = directoryAgents.filter((a) => a.group === "mine" && a.agent_id.trim());
   const hasMineAgents = mineAgents.length > 0;
   const activeOffline = active && !isGroupChat(active) && isAgentOffline(active.agent_status);
@@ -2005,6 +2054,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       type="button"
                       style={btnGhost}
                       onClick={() => {
+                        if (activeTopic) {
+                          setActiveTopic(null);
+                          return;
+                        }
                         setView("list");
                         setActive(null);
                       }}
@@ -2028,7 +2081,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     onClick={() => {
                       setShowAddMember(false);
                       setEditingTitle(false);
+                      setInfoTab(activeTopic ? "topics" : "info");
                       setShowMembersPanel(true);
+                      if (active) void loadTopics(active.chat_id);
                     }}
                     style={{
                       display: "flex",
@@ -2043,7 +2098,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       cursor: "pointer",
                       textAlign: "left",
                     }}
-                    title={isGroupChat(active) ? t.groupInfo : t.agentInfo}
+                    title={
+                      activeTopic
+                        ? t.topics
+                        : isGroupChat(active)
+                          ? t.groupInfo
+                          : t.agentInfo
+                    }
                   >
                     <span style={{ position: "relative", width: 32, height: 32, flexShrink: 0 }}>
                       <span
@@ -2087,11 +2148,27 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
                         }}
-                        title={active.agent_id || undefined}
+                        title={
+                          activeTopic
+                            ? activeTopic.title || t.topics
+                            : active.agent_id || undefined
+                        }
                       >
-                        {chatTitle(active)}
+                        {activeTopic
+                          ? activeTopic.title?.trim() || t.topics
+                          : chatTitle(active)}
                       </strong>
-                      {isGroupChat(active) ? (
+                      {activeTopic ? (
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: 11,
+                            color: colors.muted,
+                          }}
+                        >
+                          {t.backToMainChat} · {chatTitle(active)}
+                        </span>
+                      ) : isGroupChat(active) ? (
                         <span
                           style={{
                             display: "block",
@@ -2129,11 +2206,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     type="button"
                     style={btnGhost}
                     onClick={() => {
+                      if (activeTopic) {
+                        setActiveTopic(null);
+                        return;
+                      }
                       setView("list");
                       setActive(null);
                     }}
-                    aria-label={t.close}
-                    title={t.close}
+                    aria-label={activeTopic ? t.backToMainChat : t.close}
+                    title={activeTopic ? t.backToMainChat : t.close}
                   >
                     ✕
                   </button>
@@ -2179,12 +2260,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   gap: 10,
                 }}
               >
-                {messages.length === 0 && (
+                {displayMessages.length === 0 && (
                   <p style={{ color: colors.muted, fontSize: 13, margin: 0 }}>
-                    {activeOffline ? t.sayHelloOffline : t.sayHello}
+                    {activeTopic
+                      ? t.noMessagesYet
+                      : activeOffline
+                        ? t.sayHelloOffline
+                        : t.sayHello}
                   </p>
                 )}
-                {messages.filter((m) => !isLegacyDeliveryAckBubble(m)).map((m) => {
+                {displayMessages.map((m) => {
                   const isUser = m.sender_type === "user";
                   const delivery =
                     isUser && typeof m.metadata?.delivery === "string" ? m.metadata.delivery : null;
@@ -2200,6 +2285,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       ? agentNames[m.sender_id]?.trim() ||
                         shortAgentId(m.sender_id) ||
                         m.sender_id
+                      : null;
+                  const topicLabel =
+                    !activeTopic && m.thread_id
+                      ? m.thread_title?.trim() ||
+                        topics.find((tp) => tp.id === m.thread_id)?.title?.trim() ||
+                        t.topics
                       : null;
                   return (
                     <div
@@ -2228,6 +2319,42 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         >
                           {senderLabel}
                         </span>
+                      ) : null}
+                      {topicLabel && m.thread_id ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const existing = topics.find((tp) => tp.id === m.thread_id);
+                            openTopic(
+                              existing || {
+                                id: m.thread_id!,
+                                chat_id: m.chat_id,
+                                title: topicLabel,
+                                objective: null,
+                                status: "active",
+                                message_count: 0,
+                                created_at: m.created_at,
+                                updated_at: m.created_at,
+                              },
+                            );
+                          }}
+                          style={{
+                            border: `1px solid ${colors.border}`,
+                            background: colors.accentSoft,
+                            color: "#93c5fd",
+                            borderRadius: 999,
+                            padding: "2px 8px",
+                            fontSize: 11,
+                            cursor: "pointer",
+                            maxWidth: "100%",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                          title={topicLabel}
+                        >
+                          # {topicLabel}
+                        </button>
                       ) : null}
                       <div
                         style={{
@@ -2517,13 +2644,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         setShowMembersPanel(false);
                         setShowAddMember(false);
                         setEditingTitle(false);
+                        setShowCreateTopic(false);
                       }}
                       aria-label={t.close}
                     >
                       ←
                     </button>
                     <strong style={{ fontSize: 14 }}>
-                      {groupActive ? t.groupInfo : t.agentInfo}
+                      {infoTab === "topics"
+                        ? t.topics
+                        : groupActive
+                          ? t.groupInfo
+                          : t.agentInfo}
                     </strong>
                     <span style={{ width: 40 }} />
                   </div>
@@ -2671,7 +2803,194 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     )}
                   </div>
 
-                  {!groupActive ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 4,
+                      padding: "8px 12px",
+                      borderBottom: `1px solid ${colors.border}`,
+                    }}
+                  >
+                    {(
+                      [
+                        ["info", t.infoTab],
+                        ["topics", t.topics],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => {
+                          setInfoTab(key);
+                          setShowAddMember(false);
+                          setShowCreateTopic(false);
+                          if (key === "topics") void loadTopics(active.chat_id);
+                        }}
+                        style={{
+                          ...btnGhost,
+                          flex: 1,
+                          fontWeight: infoTab === key ? 650 : 500,
+                          background: infoTab === key ? colors.accentSoft : "transparent",
+                          color: infoTab === key ? colors.text : colors.muted,
+                          borderColor: infoTab === key ? "rgba(59,130,246,0.35)" : colors.border,
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {infoTab === "topics" ? (
+                    <>
+                      <div style={{ flex: 1, overflow: "auto", padding: 12 }}>
+                        {showCreateTopic ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            <input
+                              value={topicTitleDraft}
+                              onChange={(e) => setTopicTitleDraft(e.target.value)}
+                              placeholder={t.topicTitle}
+                              style={inputStyle}
+                              autoFocus
+                            />
+                            <textarea
+                              value={topicDescDraft}
+                              onChange={(e) => setTopicDescDraft(e.target.value)}
+                              placeholder={t.topicDescription}
+                              rows={3}
+                              style={{
+                                ...inputStyle,
+                                resize: "vertical",
+                                minHeight: 72,
+                                fontFamily: "inherit",
+                              }}
+                            />
+                            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                              <button
+                                type="button"
+                                style={btnGhost}
+                                onClick={() => {
+                                  setShowCreateTopic(false);
+                                  setTopicTitleDraft("");
+                                  setTopicDescDraft("");
+                                }}
+                              >
+                                {t.cancel}
+                              </button>
+                              <button
+                                type="button"
+                                style={btnPrimary}
+                                disabled={busy || !topicTitleDraft.trim()}
+                                onClick={() => {
+                                  void (async () => {
+                                    setBusy(true);
+                                    try {
+                                      const created = await client.createThread(active.chat_id, {
+                                        title: topicTitleDraft.trim(),
+                                        objective: topicDescDraft.trim() || undefined,
+                                      });
+                                      setTopics((prev) => [
+                                        created,
+                                        ...prev.filter((tp) => tp.id !== created.id),
+                                      ]);
+                                      setShowCreateTopic(false);
+                                      setTopicTitleDraft("");
+                                      setTopicDescDraft("");
+                                      openTopic(created);
+                                    } catch (e) {
+                                      setError(e instanceof Error ? e.message : t.sendFailed);
+                                    } finally {
+                                      setBusy(false);
+                                    }
+                                  })();
+                                }}
+                              >
+                                {t.createTopic}
+                              </button>
+                            </div>
+                          </div>
+                        ) : loadingTopics && topics.length === 0 ? (
+                          <p style={{ color: colors.muted, textAlign: "center", padding: 24 }}>
+                            {t.loading}
+                          </p>
+                        ) : topics.length === 0 ? (
+                          <div
+                            style={{
+                              textAlign: "center",
+                              padding: "28px 12px",
+                              color: colors.muted,
+                            }}
+                          >
+                            <p style={{ margin: "0 0 6px", fontSize: 14, color: colors.text }}>
+                              {t.noTopicsYet}
+                            </p>
+                            <p style={{ margin: 0, fontSize: 12 }}>{t.noTopicsHint}</p>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            {topics.map((topic) => (
+                              <button
+                                key={topic.id}
+                                type="button"
+                                onClick={() => openTopic(topic)}
+                                style={{
+                                  ...listItem,
+                                  background:
+                                    activeTopic?.id === topic.id
+                                      ? colors.accentSoft
+                                      : "transparent",
+                                  textAlign: "left",
+                                }}
+                              >
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                  <div
+                                    style={{
+                                      fontWeight: 600,
+                                      fontSize: 13,
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    {topic.title?.trim() || t.topics}
+                                  </div>
+                                  {topic.objective?.trim() ? (
+                                    <div
+                                      style={{
+                                        fontSize: 11,
+                                        color: colors.muted,
+                                        marginTop: 2,
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      {topic.objective}
+                                    </div>
+                                  ) : null}
+                                  <div
+                                    style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}
+                                  >
+                                    {t.topicMessages(topic.message_count ?? 0)}
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {!showCreateTopic ? (
+                        <div style={{ padding: 12, borderTop: `1px solid ${colors.border}` }}>
+                          <button
+                            type="button"
+                            style={{ ...btnPrimary, width: "100%" }}
+                            onClick={() => setShowCreateTopic(true)}
+                          >
+                            {t.newTopic}
+                          </button>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : !groupActive ? (
                     <>
                       <div style={{ flex: 1 }} />
                       <div style={{ padding: 12, borderTop: `1px solid ${colors.border}` }}>
@@ -2696,6 +3015,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     await client.deleteChat(chatId);
                                     setConfirmDialog(null);
                                     setShowMembersPanel(false);
+                                    setActiveTopic(null);
+                                    setTopics([]);
                                     setActive(null);
                                     setView("list");
                                     setMessages([]);
@@ -2887,6 +3208,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     await client.deleteChat(chatId);
                                     setConfirmDialog(null);
                                     setShowMembersPanel(false);
+                                    setActiveTopic(null);
+                                    setTopics([]);
                                     setActive(null);
                                     setView("list");
                                     setMessages([]);

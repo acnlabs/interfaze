@@ -64,6 +64,16 @@ export type RanchMessages = {
   members: string;
   groupInfo: string;
   agentInfo: string;
+  topics: string;
+  newTopic: string;
+  createTopic: string;
+  topicTitle: string;
+  topicDescription: string;
+  noTopicsYet: string;
+  noTopicsHint: string;
+  topicMessages: (n: number) => string;
+  backToMainChat: string;
+  infoTab: string;
   openDirectChat: string;
   mentionAll: string;
   mentionAllHint: string;
@@ -160,6 +170,16 @@ const en: RanchMessages = {
   members: "Members",
   groupInfo: "Group info",
   agentInfo: "Agent info",
+  topics: "Topics",
+  newTopic: "New Topic",
+  createTopic: "Create",
+  topicTitle: "Topic title",
+  topicDescription: "Description (optional)",
+  noTopicsYet: "No topics yet",
+  noTopicsHint: "Create a topic to organize a discussion thread.",
+  topicMessages: (n) => (n === 1 ? "1 message" : `${n} messages`),
+  backToMainChat: "Main chat",
+  infoTab: "Info",
   openDirectChat: "Message privately",
   mentionAll: "@all",
   mentionAllHint: "Mention all agents",
@@ -255,6 +275,16 @@ const zh: RanchMessages = {
   members: "成员",
   groupInfo: "群资料",
   agentInfo: "Agent 资料",
+  topics: "话题",
+  newTopic: "新建话题",
+  createTopic: "创建",
+  topicTitle: "话题标题",
+  topicDescription: "说明（可选）",
+  noTopicsYet: "还没有话题",
+  noTopicsHint: "新建话题，把一段讨论收进独立线程。",
+  topicMessages: (n) => `${n} 条消息`,
+  backToMainChat: "主会话",
+  infoTab: "资料",
   openDirectChat: "私聊",
   mentionAll: "@all",
   mentionAllHint: "提及所有 agent",

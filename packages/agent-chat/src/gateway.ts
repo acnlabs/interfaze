@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatParticipant, ChatSummary } from "./types";
+import type { ChatMessage, ChatParticipant, ChatSummary, ThreadSummary } from "./types";
 
 export class ChatGatewayError extends Error {
   constructor(
@@ -54,7 +54,17 @@ export type GatewayClient = {
   createGroupChat: (title: string, agentIds: string[]) => Promise<ChatSummary>;
   listMessages: (chatId: string) => Promise<ChatMessage[]>;
   listParticipants: (chatId: string) => Promise<ChatParticipant[]>;
-  sendMessage: (chatId: string, content: string, mentions?: string[]) => Promise<ChatMessage>;
+  sendMessage: (
+    chatId: string,
+    content: string,
+    mentions?: string[],
+    threadId?: string | null,
+  ) => Promise<ChatMessage>;
+  listThreads: (chatId: string) => Promise<ThreadSummary[]>;
+  createThread: (
+    chatId: string,
+    body: { title?: string; objective?: string },
+  ) => Promise<ThreadSummary>;
   /** D9-filtered discoverable agents (excludes caller's own). */
   searchAgents: (q?: string, limit?: number) => Promise<ChatAgentSearchHit[]>;
   addParticipant: (chatId: string, agentId: string) => Promise<ChatParticipant>;
@@ -123,10 +133,25 @@ export function createGatewayClient(
       request<ChatMessage[]>(`/api/chats/${encodeURIComponent(chatId)}/messages?limit=50`),
     listParticipants: (chatId) =>
       request<ChatParticipant[]>(`/api/chats/${encodeURIComponent(chatId)}/participants`),
-    sendMessage: (chatId, content, mentions) =>
+    sendMessage: (chatId, content, mentions, threadId) =>
       request<ChatMessage>(`/api/chats/${encodeURIComponent(chatId)}/messages`, {
         method: "POST",
-        body: JSON.stringify({ content, mentions: mentions ?? null }),
+        body: JSON.stringify({
+          content,
+          mentions: mentions ?? null,
+          thread_id: threadId || null,
+        }),
+      }),
+    listThreads: async (chatId) => {
+      const data = await request<{ data?: ThreadSummary[]; total?: number }>(
+        `/api/chats/${encodeURIComponent(chatId)}/threads?limit=50&order=desc`,
+      );
+      return data.data ?? [];
+    },
+    createThread: (chatId, body) =>
+      request<ThreadSummary>(`/api/chats/${encodeURIComponent(chatId)}/threads`, {
+        method: "POST",
+        body: JSON.stringify(body),
       }),
     addParticipant: (chatId, agentId) =>
       request<ChatParticipant>(`/api/chats/${encodeURIComponent(chatId)}/participants`, {

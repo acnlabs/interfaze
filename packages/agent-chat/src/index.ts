@@ -26,5 +26,6 @@ export {
   type ChatSummary,
   type ChatMessage,
   type ChatParticipant,
+  type ThreadSummary,
   type MessageDelivery,
 } from "./types";

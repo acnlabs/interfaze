@@ -120,6 +120,10 @@ export type ChatMessage = {
   sender_id: string;
   content: string | null;
   created_at: string;
+  /** Topic/thread id when the message belongs to a Topic. */
+  thread_id?: string | null;
+  /** Topic title for badges (when provided by Gateway). */
+  thread_title?: string | null;
   /** Parsed from API ``metadata``; used for delivery icons under user bubbles. */
   metadata?: {
     delivery?: MessageDelivery | string;
@@ -129,6 +133,18 @@ export type ChatMessage = {
     delivery_agent_id?: string;
     [key: string]: unknown;
   } | null;
+};
+
+/** Chat Topic (API name: Thread). Response field is ``id``, not ``thread_id``. */
+export type ThreadSummary = {
+  id: string;
+  chat_id: string;
+  title?: string | null;
+  objective?: string | null;
+  status: string;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
 };
 
 export type ChatParticipant = {
