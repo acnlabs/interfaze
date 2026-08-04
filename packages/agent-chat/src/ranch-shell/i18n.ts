@@ -65,6 +65,16 @@ export type RanchMessages = {
   mentionAll: string;
   mentionAllHint: string;
   groupMessagePlaceholder: string;
+  addMember: string;
+  addMemberTitle: string;
+  removeMember: string;
+  removeMemberConfirm: (name: string) => string;
+  renameGroup: string;
+  groupName: string;
+  save: string;
+  deleteGroup: string;
+  deleteGroupConfirm: string;
+  noAgentsToAdd: string;
   noMessagesYet: string;
   pickerTitle: string;
   mineAgents: string;
@@ -141,6 +151,16 @@ const en: RanchMessages = {
   mentionAll: "@all",
   mentionAllHint: "Mention all agents",
   groupMessagePlaceholder: "Message… (Type @ to mention)",
+  addMember: "Add member",
+  addMemberTitle: "Add an agent",
+  removeMember: "Remove",
+  removeMemberConfirm: (name) => `Remove ${name} from this group?`,
+  renameGroup: "Rename",
+  groupName: "Group name",
+  save: "Save",
+  deleteGroup: "Delete group",
+  deleteGroupConfirm: "Delete this group and all its messages? This cannot be undone.",
+  noAgentsToAdd: "No more agents to add from your list. Paste an id below.",
   noMessagesYet: "No messages yet",
   pickerTitle: "New chat",
   mineAgents: "MY AGENTS",
@@ -217,6 +237,16 @@ const zh: RanchMessages = {
   mentionAll: "@all",
   mentionAllHint: "提及所有 agent",
   groupMessagePlaceholder: "输入消息…（输入 @ 点名）",
+  addMember: "添加成员",
+  addMemberTitle: "添加 agent",
+  removeMember: "移除",
+  removeMemberConfirm: (name) => `确定将 ${name} 移出本群？`,
+  renameGroup: "改名",
+  groupName: "群名称",
+  save: "保存",
+  deleteGroup: "解散群聊",
+  deleteGroupConfirm: "确定解散此群并删除全部消息？此操作不可撤销。",
+  noAgentsToAdd: "名下没有更多可添加的 agent。也可在下方粘贴 id。",
   noMessagesYet: "暂无消息",
   pickerTitle: "新建聊天",
   mineAgents: "我的 AGENT",

@@ -784,6 +784,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
   /** Ranch-style: tap header → members panel. */
   const [showMembersPanel, setShowMembersPanel] = useState(false);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [addMemberId, setAddMemberId] = useState("");
   const [mentionIndex, setMentionIndex] = useState(0);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -964,6 +968,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setMessages([]);
       setAgentNames({});
       setShowMembersPanel(false);
+      setShowAddMember(false);
+      setEditingTitle(false);
+      setTitleDraft(chat.title?.trim() || "");
       setMentionIndex(0);
       setDraft("");
       clearReplySlot();
@@ -982,12 +989,28 @@ export function RanchChatShell(props: RanchChatShellProps) {
         );
         agentIdsRef.current = agents.map((p) => p.participant_id);
         setAgentNames(resolveParticipantLabels(agents, directoryAgents));
+        void client.markChatAsRead(chat.chat_id).then(() => refreshChats()).catch(() => {});
       } catch (e) {
         if (seq !== loadSeqRef.current) return;
         setError(e instanceof Error ? e.message : "Failed to load messages");
       }
     },
-    [client, clearReplySlot, directoryAgents],
+    [client, clearReplySlot, directoryAgents, refreshChats],
+  );
+
+  const reloadParticipants = useCallback(
+    async (chatId: string) => {
+      const participants = await client.listParticipants(chatId);
+      const agents = participants.filter(
+        (p) => p.participant_type === "agent" && p.is_active !== false,
+      );
+      agentIdsRef.current = agents.map((p) => p.participant_id);
+      setAgentNames(resolveParticipantLabels(agents, directoryAgents));
+      await refreshChats();
+      const next = (await client.listChats()).find((c) => c.chat_id === chatId);
+      if (next) setActive(next);
+    },
+    [client, directoryAgents, refreshChats],
   );
 
   useEffect(() => {
@@ -1490,8 +1513,29 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       >
                         {title}
                       </span>
-                      <span style={{ fontSize: 10, color: colors.muted, flexShrink: 0 }}>
-                        {formatRelativeTime(c.last_message_at, t)}
+                      <span style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                        <span style={{ fontSize: 10, color: colors.muted }}>
+                          {formatRelativeTime(c.last_message_at, t)}
+                        </span>
+                        {(c.unread_count ?? 0) > 0 ? (
+                          <span
+                            style={{
+                              minWidth: 18,
+                              height: 18,
+                              padding: "0 5px",
+                              borderRadius: 999,
+                              background: colors.accent,
+                              color: "#fff",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            {c.unread_count! > 99 ? "99+" : c.unread_count}
+                          </span>
+                        ) : null}
                       </span>
                     </span>
                     <span
@@ -1988,7 +2032,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 </button>
               </form>
 
-              {showMembersPanel && groupActive ? (
+              {showMembersPanel && groupActive && active ? (
                 <div
                   style={{
                     position: "absolute",
@@ -2003,7 +2047,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     <button
                       type="button"
                       style={btnGhost}
-                      onClick={() => setShowMembersPanel(false)}
+                      onClick={() => {
+                        setShowMembersPanel(false);
+                        setShowAddMember(false);
+                        setEditingTitle(false);
+                      }}
                       aria-label={t.close}
                     >
                       ←
@@ -2011,7 +2059,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     <strong style={{ fontSize: 14 }}>{t.groupInfo}</strong>
                     <span style={{ width: 40 }} />
                   </div>
-                  <div style={{ padding: "20px 16px 12px", textAlign: "center", borderBottom: `1px solid ${colors.border}` }}>
+                  <div
+                    style={{
+                      padding: "20px 16px 12px",
+                      textAlign: "center",
+                      borderBottom: `1px solid ${colors.border}`,
+                    }}
+                  >
                     <div
                       style={{
                         width: 56,
@@ -2026,77 +2080,316 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         fontSize: 22,
                       }}
                     >
-                      {chatTitle(active!).slice(0, 1).toUpperCase()}
+                      {chatTitle(active).slice(0, 1).toUpperCase()}
                     </div>
-                    <div style={{ fontSize: 16, fontWeight: 600 }}>{chatTitle(active!)}</div>
-                    <div style={{ fontSize: 12, color: colors.muted, marginTop: 4 }}>
+                    {editingTitle ? (
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <input
+                          value={titleDraft}
+                          onChange={(e) => setTitleDraft(e.target.value)}
+                          placeholder={t.groupName}
+                          style={{ ...inputStyle, textAlign: "center" }}
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          style={btnPrimary}
+                          disabled={busy || !titleDraft.trim()}
+                          onClick={() => {
+                            void (async () => {
+                              setBusy(true);
+                              try {
+                                const updated = await client.updateChat(active.chat_id, {
+                                  title: titleDraft.trim(),
+                                });
+                                setActive(updated);
+                                setEditingTitle(false);
+                                await refreshChats();
+                              } catch (e) {
+                                setError(e instanceof Error ? e.message : t.sendFailed);
+                              } finally {
+                                setBusy(false);
+                              }
+                            })();
+                          }}
+                        >
+                          {t.save}
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 16, fontWeight: 600 }}>{chatTitle(active)}</div>
+                        <button
+                          type="button"
+                          style={{
+                            ...btnGhost,
+                            marginTop: 8,
+                            fontSize: 11,
+                          }}
+                          onClick={() => {
+                            setTitleDraft(chatTitle(active));
+                            setEditingTitle(true);
+                          }}
+                        >
+                          {t.renameGroup}
+                        </button>
+                      </>
+                    )}
+                    <div style={{ fontSize: 12, color: colors.muted, marginTop: 8 }}>
                       {t.agentsCount(Object.keys(agentNames).length)}
                     </div>
                   </div>
-                  <div style={{ padding: "10px 14px 6px", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: colors.muted }}>
-                    {t.members}
-                  </div>
-                  <div style={{ flex: 1, overflow: "auto", padding: "0 8px 16px" }}>
-                    {Object.entries(agentNames).map(([id, name]) => (
+
+                  {!showAddMember ? (
+                    <>
                       <div
-                        key={id}
                         style={{
+                          padding: "10px 14px 6px",
                           display: "flex",
                           alignItems: "center",
-                          gap: 10,
-                          padding: "10px 8px",
-                          borderRadius: 10,
+                          justifyContent: "space-between",
                         }}
                       >
                         <span
                           style={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: 999,
-                            background: "linear-gradient(135deg,#0f766e,#1e293b)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
+                            fontSize: 11,
                             fontWeight: 700,
-                            fontSize: 14,
-                            flexShrink: 0,
+                            letterSpacing: "0.06em",
+                            color: colors.muted,
                           }}
                         >
-                          {name.slice(0, 1).toUpperCase()}
-                        </span>
-                        <span style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{ display: "block", fontWeight: 600, fontSize: 13 }}>
-                            {name}
-                          </span>
-                          <span
-                            style={{
-                              display: "block",
-                              fontSize: 11,
-                              color: colors.muted,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                              fontFamily:
-                                'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                            }}
-                          >
-                            {shortAgentId(id)}
-                          </span>
+                          {t.members}
                         </span>
                         <button
                           type="button"
-                          style={btnGhost}
+                          style={{ ...btnGhost, fontSize: 11 }}
                           disabled={busy}
                           onClick={() => {
-                            setShowMembersPanel(false);
-                            void startDirect(id);
+                            setAddMemberId("");
+                            setShowAddMember(true);
                           }}
                         >
-                          {t.openDirectChat}
+                          + {t.addMember}
                         </button>
                       </div>
-                    ))}
-                  </div>
+                      <div style={{ flex: 1, overflow: "auto", padding: "0 8px 8px" }}>
+                        {Object.entries(agentNames).map(([id, name]) => (
+                          <div
+                            key={id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              padding: "10px 8px",
+                              borderRadius: 10,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: 999,
+                                background: "linear-gradient(135deg,#0f766e,#1e293b)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontWeight: 700,
+                                fontSize: 14,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {name.slice(0, 1).toUpperCase()}
+                            </span>
+                            <span style={{ flex: 1, minWidth: 0 }}>
+                              <span style={{ display: "block", fontWeight: 600, fontSize: 13 }}>
+                                {name}
+                              </span>
+                              <span
+                                style={{
+                                  display: "block",
+                                  fontSize: 11,
+                                  color: colors.muted,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                  fontFamily:
+                                    'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                                }}
+                              >
+                                {shortAgentId(id)}
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              style={btnGhost}
+                              disabled={busy}
+                              onClick={() => {
+                                setShowMembersPanel(false);
+                                void startDirect(id);
+                              }}
+                            >
+                              {t.openDirectChat}
+                            </button>
+                            <button
+                              type="button"
+                              style={{ ...btnGhost, color: colors.danger }}
+                              disabled={busy || Object.keys(agentNames).length <= 1}
+                              onClick={() => {
+                                if (!window.confirm(t.removeMemberConfirm(name))) return;
+                                void (async () => {
+                                  setBusy(true);
+                                  try {
+                                    await client.removeParticipant(active.chat_id, id);
+                                    await reloadParticipants(active.chat_id);
+                                  } catch (e) {
+                                    setError(e instanceof Error ? e.message : t.sendFailed);
+                                  } finally {
+                                    setBusy(false);
+                                  }
+                                })();
+                              }}
+                            >
+                              {t.removeMember}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ padding: 12, borderTop: `1px solid ${colors.border}` }}>
+                        <button
+                          type="button"
+                          style={{
+                            ...btnGhost,
+                            width: "100%",
+                            color: colors.danger,
+                            borderColor: "rgba(248,113,113,0.35)",
+                          }}
+                          disabled={busy}
+                          onClick={() => {
+                            if (!window.confirm(t.deleteGroupConfirm)) return;
+                            void (async () => {
+                              setBusy(true);
+                              try {
+                                await client.deleteChat(active.chat_id);
+                                setShowMembersPanel(false);
+                                setActive(null);
+                                setView("list");
+                                setMessages([]);
+                                await refreshChats();
+                              } catch (e) {
+                                setError(e instanceof Error ? e.message : t.sendFailed);
+                              } finally {
+                                setBusy(false);
+                              }
+                            })();
+                          }}
+                        >
+                          {t.deleteGroup}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        style={{
+                          padding: "10px 14px",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          borderBottom: `1px solid ${colors.border}`,
+                        }}
+                      >
+                        {t.addMemberTitle}
+                      </div>
+                      <div style={{ flex: 1, overflow: "auto", padding: 8 }}>
+                        {directoryAgents.filter((a) => !agentNames[a.agent_id]).length === 0 ? (
+                          <p style={{ color: colors.muted, fontSize: 12, padding: 8, margin: 0 }}>
+                            {t.noAgentsToAdd}
+                          </p>
+                        ) : (
+                          directoryAgents
+                            .filter((a) => !agentNames[a.agent_id])
+                            .map((a) => (
+                              <button
+                                key={a.agent_id}
+                                type="button"
+                                disabled={busy}
+                                onClick={() => {
+                                  void (async () => {
+                                    setBusy(true);
+                                    try {
+                                      await client.addParticipant(active.chat_id, a.agent_id);
+                                      await reloadParticipants(active.chat_id);
+                                      setShowAddMember(false);
+                                    } catch (e) {
+                                      setError(e instanceof Error ? e.message : t.sendFailed);
+                                    } finally {
+                                      setBusy(false);
+                                    }
+                                  })();
+                                }}
+                                style={{
+                                  ...listItem,
+                                  background: "transparent",
+                                  textAlign: "left",
+                                }}
+                              >
+                                <span style={{ fontWeight: 600, fontSize: 13 }}>
+                                  {a.name?.trim() || a.agent_id}
+                                </span>
+                                <span style={{ fontSize: 11, color: colors.muted }}>
+                                  {shortAgentId(a.agent_id)}
+                                </span>
+                              </button>
+                            ))
+                        )}
+                        <div style={{ padding: 8 }}>
+                          <div style={{ fontSize: 11, color: colors.muted, marginBottom: 6 }}>
+                            {t.orPasteAgentId}
+                          </div>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <input
+                              value={addMemberId}
+                              onChange={(e) => setAddMemberId(e.target.value)}
+                              placeholder={t.agentIdPlaceholder}
+                              style={inputStyle}
+                            />
+                            <button
+                              type="button"
+                              style={btnPrimary}
+                              disabled={busy || !addMemberId.trim()}
+                              onClick={() => {
+                                const id = addMemberId.trim();
+                                if (!id) return;
+                                void (async () => {
+                                  setBusy(true);
+                                  try {
+                                    await client.addParticipant(active.chat_id, id);
+                                    await reloadParticipants(active.chat_id);
+                                    setShowAddMember(false);
+                                    setAddMemberId("");
+                                  } catch (e) {
+                                    setError(e instanceof Error ? e.message : t.sendFailed);
+                                  } finally {
+                                    setBusy(false);
+                                  }
+                                })();
+                              }}
+                            >
+                              {t.addMember}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ padding: 12, borderTop: `1px solid ${colors.border}` }}>
+                        <button
+                          type="button"
+                          style={{ ...btnGhost, width: "100%" }}
+                          onClick={() => setShowAddMember(false)}
+                        >
+                          {t.cancel}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : null}
             </>

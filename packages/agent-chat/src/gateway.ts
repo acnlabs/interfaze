@@ -57,6 +57,11 @@ export type GatewayClient = {
   sendMessage: (chatId: string, content: string, mentions?: string[]) => Promise<ChatMessage>;
   /** D9-filtered discoverable agents (excludes caller's own). */
   searchAgents: (q?: string, limit?: number) => Promise<ChatAgentSearchHit[]>;
+  addParticipant: (chatId: string, agentId: string) => Promise<ChatParticipant>;
+  removeParticipant: (chatId: string, participantId: string) => Promise<void>;
+  updateChat: (chatId: string, patch: { title?: string; description?: string }) => Promise<ChatSummary>;
+  deleteChat: (chatId: string) => Promise<void>;
+  markChatAsRead: (chatId: string) => Promise<void>;
 };
 
 export function createGatewayClient(
@@ -123,5 +128,24 @@ export function createGatewayClient(
         method: "POST",
         body: JSON.stringify({ content, mentions: mentions ?? null }),
       }),
+    addParticipant: (chatId, agentId) =>
+      request<ChatParticipant>(`/api/chats/${encodeURIComponent(chatId)}/participants`, {
+        method: "POST",
+        body: JSON.stringify({ participant_type: "agent", participant_id: agentId }),
+      }),
+    removeParticipant: (chatId, participantId) =>
+      request<void>(
+        `/api/chats/${encodeURIComponent(chatId)}/participants/${encodeURIComponent(participantId)}`,
+        { method: "DELETE" },
+      ),
+    updateChat: (chatId, patch) =>
+      request<ChatSummary>(`/api/chats/${encodeURIComponent(chatId)}`, {
+        method: "PUT",
+        body: JSON.stringify(patch),
+      }),
+    deleteChat: (chatId) =>
+      request<void>(`/api/chats/${encodeURIComponent(chatId)}`, { method: "DELETE" }),
+    markChatAsRead: (chatId) =>
+      request<void>(`/api/chats/${encodeURIComponent(chatId)}/read`, { method: "PUT" }),
   };
 }
