@@ -8,8 +8,14 @@ import {
   AUTH0_SCOPE,
   clearAuth0ClientCache,
   isAuth0Configured,
+  isSessionDeadAuthError,
 } from "@/lib/auth0";
 import { getGatewayBaseUrl } from "@/lib/gateway";
+
+type ReauthOpts = {
+  /** User clicked "Sign in again" — clear cache and force credentials UI. */
+  forceLogin?: boolean;
+};
 
 /**
  * Interfaze host — ranch-ported shell chrome + Chat Gateway.
@@ -21,6 +27,10 @@ export default function InterfazeChatHost() {
   const [directoryAgents, setDirectoryAgents] = useState<AgentDirectoryItem[]>([]);
   const reauthStarted = useRef(false);
 
+  useEffect(() => {
+    if (!isAuthenticated) reauthStarted.current = false;
+  }, [isAuthenticated]);
+
   const handleLogout = useCallback(() => {
     clearAuth0ClientCache();
     logout({
@@ -30,21 +40,25 @@ export default function InterfazeChatHost() {
     });
   }, [logout]);
 
-  const handleReauth = useCallback(() => {
-    if (reauthStarted.current) return;
-    reauthStarted.current = true;
-    clearAuth0ClientCache();
-    void loginWithRedirect({
-      authorizationParams: {
-        audience: AUTH0_AUDIENCE,
-        scope: AUTH0_SCOPE,
-        prompt: "login",
-      },
-      appState: {
-        returnTo: typeof window !== "undefined" ? window.location.pathname : "/",
-      },
-    });
-  }, [loginWithRedirect]);
+  const handleReauth = useCallback(
+    (opts?: ReauthOpts) => {
+      if (reauthStarted.current) return;
+      reauthStarted.current = true;
+      const forceLogin = !!opts?.forceLogin;
+      if (forceLogin) clearAuth0ClientCache();
+      void loginWithRedirect({
+        authorizationParams: {
+          audience: AUTH0_AUDIENCE,
+          scope: AUTH0_SCOPE,
+          ...(forceLogin ? { prompt: "login" as const } : {}),
+        },
+        appState: {
+          returnTo: typeof window !== "undefined" ? window.location.pathname : "/",
+        },
+      });
+    },
+    [loginWithRedirect],
+  );
 
   const tokenGetter = useCallback(async () => {
     if (!isAuth0Configured() || !isAuthenticated) return null;
@@ -58,20 +72,38 @@ export default function InterfazeChatHost() {
     }
   }, [getAccessTokenSilently, isAuthenticated]);
 
-  // If Auth0 still has a user profile but no API access token (common after
-  // refresh-token expiry without offline_access), force a clean re-login.
+  // Ensure we have an API access token for the Gateway audience.
+  // Prefer cache; only interactive reauth on unrecoverable Auth0 session errors.
+  // Do NOT treat network / Chrome 3P-cookie iframe failures as logout.
   useEffect(() => {
     if (!isAuthenticated || !isAuth0Configured()) return;
     let cancelled = false;
     (async () => {
       try {
-        const token = await getAccessTokenSilently({
+        const cached = await getAccessTokenSilently({
+          authorizationParams: { audience: AUTH0_AUDIENCE, scope: AUTH0_SCOPE },
+          cacheMode: "on",
+        });
+        if (cancelled || cached) return;
+      } catch (err) {
+        if (cancelled) return;
+        if (!isSessionDeadAuthError(err)) return;
+        // Fall through — try a refresh once before soft reauth.
+      }
+
+      try {
+        const refreshed = await getAccessTokenSilently({
           authorizationParams: { audience: AUTH0_AUDIENCE, scope: AUTH0_SCOPE },
           cacheMode: "off",
         });
-        if (!cancelled && !token) handleReauth();
-      } catch {
-        if (!cancelled) handleReauth();
+        if (cancelled || refreshed) return;
+        // Empty token with no throw: session is half-broken (user but no API token).
+        handleReauth({ forceLogin: false });
+      } catch (err) {
+        if (cancelled) return;
+        if (isSessionDeadAuthError(err)) {
+          handleReauth({ forceLogin: false });
+        }
       }
     })();
     return () => {
@@ -146,7 +178,13 @@ export default function InterfazeChatHost() {
           : null
       }
       onLogout={isAuthenticated ? handleLogout : undefined}
-      onReauth={isAuthenticated ? handleReauth : undefined}
+      onReauth={
+        isAuthenticated
+          ? () => {
+              handleReauth({ forceLogin: true });
+            }
+          : undefined
+      }
     />
   );
 }

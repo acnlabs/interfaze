@@ -25,3 +25,30 @@ export function clearAuth0ClientCache() {
     /* ignore */
   }
 }
+
+/**
+ * True when Auth0 says the session cannot be recovered silently
+ * (must interactive login). Network / iframe / timeout failures are NOT this —
+ * those must not clear the SPA cache or force a login loop (esp. Chrome 3P cookies).
+ */
+export function isSessionDeadAuthError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as {
+    error?: string;
+    code?: string;
+    message?: string;
+    error_description?: string;
+  };
+  const code = String(e.error || e.code || "").toLowerCase();
+  const blob = `${e.message || ""} ${e.error_description || ""}`.toLowerCase();
+  const dead = [
+    "login_required",
+    "consent_required",
+    "interaction_required",
+    "invalid_grant",
+    "missing_refresh_token",
+    "invalid_token",
+  ];
+  if (dead.includes(code)) return true;
+  return dead.some((d) => blob.includes(d));
+}
