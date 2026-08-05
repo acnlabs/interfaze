@@ -251,9 +251,8 @@ const rowStyle: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   gap: 12,
-  padding: "6px 0",
+  padding: "4px 0",
   fontSize: 13,
-  borderBottom: `1px solid ${colors.border}`,
 };
 
 export function DetailRows({
@@ -262,7 +261,7 @@ export function DetailRows({
   rows: Array<{ label: string; value: string; hint?: string; valueHint?: string }>;
 }) {
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       {rows.map((r) => {
         // One tip per row (prefer value-specific copy) to avoid icon clutter.
         const tip = r.valueHint || r.hint;
@@ -387,35 +386,6 @@ export function AgentOwnerSettings({
     !savingProfile &&
     !busy;
 
-  const saveProfile = () => {
-    if (!canSaveProfile) return;
-    setSavingProfile(true);
-    setProfileError(null);
-    setProfileMsg(null);
-    const patch: { name?: string; description?: string } = {};
-    if (nameChanged) patch.name = nameTrim;
-    if (descChanged && descTrim.length >= 10) patch.description = descTrim;
-    if (!patch.name && !patch.description) {
-      setSavingProfile(false);
-      return;
-    }
-    void client
-      .updateMyAgentProfile(detail.agent_id, patch)
-      .then((row) => {
-        setProfileMsg(t.myAgentsProfileSaved);
-        onUpdated?.(row);
-        window.setTimeout(() => setProfileMsg(null), 2000);
-      })
-      .catch((err: unknown) => {
-        const msg =
-          err instanceof ChatGatewayError && err.message.trim()
-            ? err.message.trim()
-            : t.myAgentsProfileFailed;
-        setProfileError(msg);
-      })
-      .finally(() => setSavingProfile(false));
-  };
-
   const policyMode = (detail.policy_mode || "").toLowerCase();
   const deliveryEditable = !policyMode || policyMode === "open" || policyMode === "allowlist";
   const currentDelivery = deliveryFromDetail(detail.delivery);
@@ -433,10 +403,43 @@ export function AgentOwnerSettings({
     !savingDelivery &&
     !busy;
 
-  const runSaveDelivery = () => {
-    if (!canSaveDelivery) return;
+  const saving = savingProfile || savingDelivery;
+  const canSaveAny = (canSaveProfile || canSaveDelivery) && !saving && !busy;
+
+  const runSaveProfile = (): Promise<MyAgentSummary | null> => {
+    if (!canSaveProfile) return Promise.resolve(null);
+    setSavingProfile(true);
+    setProfileError(null);
+    setProfileMsg(null);
+    const patch: { name?: string; description?: string } = {};
+    if (nameChanged) patch.name = nameTrim;
+    if (descChanged && descTrim.length >= 10) patch.description = descTrim;
+    if (!patch.name && !patch.description) {
+      setSavingProfile(false);
+      return Promise.resolve(null);
+    }
+    return client
+      .updateMyAgentProfile(detail.agent_id, patch)
+      .then((row) => {
+        setProfileMsg(t.myAgentsProfileSaved);
+        window.setTimeout(() => setProfileMsg(null), 2000);
+        return row;
+      })
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof ChatGatewayError && err.message.trim()
+            ? err.message.trim()
+            : t.myAgentsProfileFailed;
+        setProfileError(msg);
+        return null;
+      })
+      .finally(() => setSavingProfile(false));
+  };
+
+  const runSaveDelivery = (): Promise<MyAgentSummary | null> => {
+    if (!canSaveDelivery) return Promise.resolve(null);
     const mode = deliveryDraft;
-    if (mode !== "direct" && mode !== "relay") return;
+    if (mode !== "direct" && mode !== "relay") return Promise.resolve(null);
     setConfirmRelay(false);
     setSavingDelivery(true);
     setDeliveryError(null);
@@ -446,14 +449,14 @@ export function AgentOwnerSettings({
       mode === "relay"
         ? ({ delivery: "relay" as const })
         : ({ delivery: "direct" as const, endpoint: endpointTrim });
-    void client
+    return client
       .updateMyAgentDelivery(detail.agent_id, patch)
       .then((row) => {
         setDeliveryMsg(t.myAgentsDeliverySaved);
         setEndpointDraft("");
         if (row.next_step_hint?.trim()) setDeliveryHint(row.next_step_hint.trim());
-        onUpdated?.(row);
         window.setTimeout(() => setDeliveryMsg(null), 2500);
+        return row;
       })
       .catch((err: unknown) => {
         const msg =
@@ -461,18 +464,30 @@ export function AgentOwnerSettings({
             ? err.message.trim()
             : t.myAgentsDeliveryFailed;
         setDeliveryError(msg);
+        return null;
       })
       .finally(() => setSavingDelivery(false));
   };
 
-  const saveDelivery = () => {
-    if (!canSaveDelivery) return;
+  const runSaveAll = () => {
+    const doProfile = canSaveProfile;
+    const doDelivery = canSaveDelivery;
+    void (async () => {
+      let latest: MyAgentSummary | null = null;
+      if (doProfile) latest = (await runSaveProfile()) ?? latest;
+      if (doDelivery) latest = (await runSaveDelivery()) ?? latest;
+      if (latest) onUpdated?.(latest);
+    })();
+  };
+
+  const saveAll = () => {
+    if (!canSaveAny) return;
     // Clearing a public URL is destructive — confirm first.
-    if (currentDelivery === "direct" && deliveryDraft === "relay") {
+    if (canSaveDelivery && currentDelivery === "direct" && deliveryDraft === "relay") {
       setConfirmRelay(true);
       return;
     }
-    runSaveDelivery();
+    runSaveAll();
   };
 
   const runRotate = () => {
@@ -516,7 +531,7 @@ export function AgentOwnerSettings({
             onChange={(e) => setNameDraft(e.target.value)}
             style={inputStyle}
             maxLength={100}
-            disabled={busy || savingProfile}
+            disabled={busy || saving}
           />
           <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
             {t.myAgentsNameHint}
@@ -531,7 +546,7 @@ export function AgentOwnerSettings({
             onChange={(e) => setDescDraft(e.target.value)}
             style={{ ...inputStyle, minHeight: 72, resize: "vertical" }}
             maxLength={500}
-            disabled={busy || savingProfile}
+            disabled={busy || saving}
           />
           <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
             {clearingDesc ? t.myAgentsDescClearHint : t.myAgentsDescHint}
@@ -543,14 +558,6 @@ export function AgentOwnerSettings({
         {profileMsg ? (
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>{profileMsg}</p>
         ) : null}
-        <button
-          type="button"
-          style={{ ...btnPrimary, width: "100%" }}
-          disabled={!canSaveProfile}
-          onClick={saveProfile}
-        >
-          {savingProfile ? t.loading : t.myAgentsSaveProfile}
-        </button>
       </section>
 
       {showConnectSection ? (
@@ -566,26 +573,16 @@ export function AgentOwnerSettings({
             </p>
           ) : null}
           {currentDelivery === "none" ? (
-            <p
-              style={{
-                margin: "0 0 10px",
-                fontSize: 12,
-                color: colors.muted,
-                lineHeight: 1.45,
-                padding: "8px 10px",
-                border: `1px solid ${colors.border}`,
-                borderRadius: 8,
-              }}
-            >
-              <strong style={{ color: colors.text }}>{t.myAgentsDeliveryUnset}</strong>
-              <span style={{ display: "block", marginTop: 4 }}>{t.myAgentsDeliveryUnsetHelp}</span>
+            <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+              <strong style={{ color: colors.text }}>{t.myAgentsDeliveryUnset}. </strong>
+              {t.myAgentsDeliveryUnsetHelp}
             </p>
           ) : null}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <button
               type="button"
               style={optionBtn(deliveryDraft === "relay")}
-              disabled={!deliveryEditable || savingDelivery || busy}
+              disabled={!deliveryEditable || saving || busy}
               onClick={() => setDeliveryDraft("relay")}
             >
               <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsDeliveryOptionPull}</div>
@@ -596,7 +593,7 @@ export function AgentOwnerSettings({
             <button
               type="button"
               style={optionBtn(deliveryDraft === "direct")}
-              disabled={!deliveryEditable || savingDelivery || busy}
+              disabled={!deliveryEditable || saving || busy}
               onClick={() => setDeliveryDraft("direct")}
             >
               <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsDeliveryOptionPush}</div>
@@ -606,7 +603,7 @@ export function AgentOwnerSettings({
             </button>
           </div>
           {deliveryDraft === "direct" ? (
-            <label style={{ display: "block", marginBottom: 10 }}>
+            <label style={{ display: "block", marginTop: 10 }}>
               <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
                 {t.myAgentsEndpointInput}
                 <FieldHint text={t.myAgentsEndpointHint} />
@@ -616,7 +613,7 @@ export function AgentOwnerSettings({
                 onChange={(e) => setEndpointDraft(e.target.value)}
                 placeholder={t.myAgentsEndpointPlaceholder}
                 style={inputStyle}
-                disabled={!deliveryEditable || savingDelivery || busy}
+                disabled={!deliveryEditable || saving || busy}
                 autoComplete="off"
                 spellCheck={false}
               />
@@ -631,15 +628,17 @@ export function AgentOwnerSettings({
             </label>
           ) : null}
           {detail.delivery === "direct" ? (
-            <DetailRows
-              rows={[
-                {
-                  label: t.myAgentsInbound,
-                  hint: t.myAgentsInboundHint,
-                  value: inboundLabel(detail, t),
-                },
-              ]}
-            />
+            <div style={{ marginTop: 10 }}>
+              <DetailRows
+                rows={[
+                  {
+                    label: t.myAgentsInbound,
+                    hint: t.myAgentsInboundHint,
+                    value: inboundLabel(detail, t),
+                  },
+                ]}
+              />
+            </div>
           ) : null}
           {deliveryError ? (
             <p style={{ margin: "8px 0 0", fontSize: 12, color: colors.danger }}>{deliveryError}</p>
@@ -654,14 +653,6 @@ export function AgentOwnerSettings({
               {deliveryHint}
             </p>
           ) : null}
-          <button
-            type="button"
-            style={{ ...btnPrimary, width: "100%", marginTop: 10 }}
-            disabled={!canSaveDelivery}
-            onClick={saveDelivery}
-          >
-            {savingDelivery ? t.loading : t.myAgentsSaveDelivery}
-          </button>
           {detail.status !== "online" ? (
             <p style={{ margin: "10px 0 0", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
               {t.myAgentsOfflineHint}
@@ -684,6 +675,15 @@ export function AgentOwnerSettings({
           ) : null}
         </section>
       ) : null}
+
+      <button
+        type="button"
+        style={{ ...btnPrimary, width: "100%" }}
+        disabled={!canSaveAny}
+        onClick={saveAll}
+      >
+        {saving ? t.loading : t.save}
+      </button>
 
       <section>
         <h3 style={sectionTitle}>{t.myAgentsSectionAccess}</h3>
@@ -709,7 +709,7 @@ export function AgentOwnerSettings({
             display: "flex",
             flexDirection: "column",
             gap: 8,
-            marginTop: 12,
+            marginTop: 14,
           }}
         >
           <button
@@ -720,7 +720,7 @@ export function AgentOwnerSettings({
               borderColor: "rgba(248,113,113,0.45)",
               color: colors.danger,
             }}
-            disabled={busy || rotating}
+            disabled={busy || rotating || saving}
             onClick={() => {
               setRotateError(null);
               setConfirmRotate(true);
@@ -792,10 +792,10 @@ export function AgentOwnerSettings({
               <button
                 type="button"
                 style={{ ...btnPrimary, fontWeight: 600 }}
-                disabled={savingDelivery}
-                onClick={runSaveDelivery}
+                disabled={saving}
+                onClick={runSaveAll}
               >
-                {savingDelivery ? t.loading : t.myAgentsDeliveryRelayConfirmLabel}
+                {saving ? t.loading : t.myAgentsDeliveryRelayConfirmLabel}
               </button>
             </div>
           </div>
