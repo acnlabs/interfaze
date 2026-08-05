@@ -287,92 +287,83 @@ export function AgentOwnerWallet({
     <div style={{ display: "flex", flexDirection: "column", gap: 20, position: "relative" }}>
       <section>
         <h3 style={sectionTitle}>{t.walletTab}</h3>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 10,
-            alignItems: "start",
-          }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-            <div style={assetCard}>
-              <div
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={assetCard}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 11,
+                color: colors.muted,
+                marginBottom: 4,
+              }}
+            >
+              {t.walletBalance}
+              <FieldHint text={t.walletCreditsHint} />
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: colors.text }}>
+              {fmtCredits(wallet.balance)}
+            </div>
+            <div
+              style={{
+                marginTop: 10,
+                paddingTop: 10,
+                borderTop: `1px solid ${colors.border}`,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
+              <span
                 style={{
-                  display: "flex",
+                  display: "inline-flex",
                   alignItems: "center",
                   gap: 4,
                   fontSize: 11,
                   color: colors.muted,
-                  marginBottom: 4,
                 }}
               >
-                {t.walletBalance}
-                <FieldHint text={t.walletCreditsHint} />
-              </div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: colors.text }}>
-                {fmtCredits(wallet.balance)}
-              </div>
-              <div
+                {t.spendPolicyTitle}
+                <FieldHint text={t.spendPolicyHint} />
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, flex: 1, minWidth: 0 }}>
+                {policy
+                  ? autonomyLabel(String(policy.stored_autonomy), t)
+                  : t.spendPolicyLoadFailed}
+              </span>
+              <button
+                type="button"
                 style={{
-                  marginTop: 10,
-                  paddingTop: 10,
-                  borderTop: `1px solid ${colors.border}`,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  flexWrap: "wrap",
+                  ...btnGhost,
+                  fontSize: 11,
+                  padding: "4px 8px",
+                  flexShrink: 0,
                 }}
+                disabled={busy || acting}
+                onClick={() => void openPolicy()}
               >
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                    fontSize: 11,
-                    color: colors.muted,
-                  }}
-                >
-                  {t.spendPolicyTitle}
-                  <FieldHint text={t.spendPolicyHint} />
-                </span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, flex: 1, minWidth: 0 }}>
-                  {policy
-                    ? autonomyLabel(String(policy.stored_autonomy), t)
-                    : t.spendPolicyLoadFailed}
-                </span>
-                <button
-                  type="button"
-                  style={{
-                    ...btnGhost,
-                    fontSize: 11,
-                    padding: "4px 8px",
-                    flexShrink: 0,
-                  }}
-                  disabled={busy || acting}
-                  onClick={() => void openPolicy()}
-                >
-                  {t.spendPolicyEdit}
-                </button>
-              </div>
-              {policy && policy.stored_autonomy === "limited" && policy.window_remaining != null ? (
-                <p style={{ margin: "8px 0 0", fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
-                  {t.spendWindowUsage(
-                    fmtCredits(policy.window_spent),
-                    fmtCredits(policy.window_remaining),
-                    String(policy.window_hours),
-                  )}
-                </p>
-              ) : policy && policy.stored_autonomy === "limited" ? (
-                <p style={{ margin: "8px 0 0", fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
-                  {t.spendWindowSpent(String(policy.window_hours))}:{" "}
-                  <span style={{ color: colors.text, fontWeight: 600 }}>
-                    {fmtCredits(policy.window_spent)}
-                  </span>
-                </p>
-              ) : null}
+                {t.spendPolicyEdit}
+              </button>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
+            {policy && policy.stored_autonomy === "limited" && policy.window_remaining != null ? (
+              <p style={{ margin: "8px 0 0", fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
+                {t.spendWindowUsage(
+                  fmtCredits(policy.window_spent),
+                  fmtCredits(policy.window_remaining),
+                  String(policy.window_hours),
+                )}
+              </p>
+            ) : policy && policy.stored_autonomy === "limited" ? (
+              <p style={{ margin: "8px 0 0", fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
+                {t.spendWindowSpent(String(policy.window_hours))}:{" "}
+                <span style={{ color: colors.text, fontWeight: 600 }}>
+                  {fmtCredits(policy.window_spent)}
+                </span>
+              </p>
+            ) : null}
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
               <button
                 type="button"
                 style={{ ...btnPrimary, flex: 1, fontWeight: 600 }}
