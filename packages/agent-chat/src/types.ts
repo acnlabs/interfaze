@@ -125,13 +125,10 @@ export type RanchChatShellProps = {
     description?: string | null;
   }) => void;
   /**
-   * Owner released or permanently deleted an ACN agent in Settings.
+   * Owner permanently deleted an ACN identity in Settings.
    * Host should drop it from the «mine» directory.
    */
-  onOwnedAgentRemoved?: (
-    agentId: string,
-    kind: "released" | "deleted",
-  ) => void;
+  onOwnedAgentRemoved?: (agentId: string) => void;
 };
 
 /** Outbound delivery on user messages (Chat Gateway → ACN). */

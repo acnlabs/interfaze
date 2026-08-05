@@ -307,13 +307,14 @@ type Props = {
   showConnectSection?: boolean;
   /** Called after a successful profile save with refreshed detail. */
   onUpdated?: (detail: MyAgentSummary) => void;
-  /** Called after release or permanent delete succeeds. */
-  onRemoved?: (agentId: string, kind: "released" | "deleted") => void;
+  /** Called after permanent delete succeeds. */
+  onRemoved?: (agentId: string) => void;
 };
 
 /**
- * Owner Settings: profile edit + connect details + rotate-key + gift + release/delete.
+ * Owner Settings: profile edit + connect details + rotate-key + gift + delete.
  * Shared by MyAgentsPanel detail and conversation Settings tab.
+ * (ACN release/unclaim stays on AgentPlanet — not an Interfaze job.)
  */
 export function AgentOwnerSettings({
   client,
@@ -328,11 +329,9 @@ export function AgentOwnerSettings({
 }: Props) {
   const [confirmRotate, setConfirmRotate] = useState(false);
   const [confirmRelay, setConfirmRelay] = useState(false);
-  const [confirmRelease, setConfirmRelease] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteTyped, setDeleteTyped] = useState("");
   const [rotating, setRotating] = useState(false);
-  const [releasing, setReleasing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [keyCopied, setKeyCopied] = useState(false);
@@ -517,7 +516,7 @@ export function AgentOwnerSettings({
       .finally(() => setRotating(false));
   };
 
-  const dangerBusy = releasing || deleting || rotating || saving || !!busy;
+  const dangerBusy = deleting || rotating || saving || !!busy;
 
   const deleteConfirmOk = (() => {
     const typed = deleteTyped.trim();
@@ -540,23 +539,6 @@ export function AgentOwnerSettings({
     setDeleteTyped("");
   };
 
-  const runRelease = () => {
-    if (dangerBusy) return;
-    setReleasing(true);
-    setDangerError(null);
-    client
-      .releaseMyAgent(detail.agent_id)
-      .then(() => {
-        setConfirmRelease(false);
-        onRemoved?.(detail.agent_id, "released");
-      })
-      .catch(() => {
-        setDangerError(t.myAgentsReleaseFailed);
-        setConfirmRelease(false);
-      })
-      .finally(() => setReleasing(false));
-  };
-
   const runDelete = () => {
     if (dangerBusy || !deleteConfirmOk) return;
     setDeleting(true);
@@ -566,7 +548,7 @@ export function AgentOwnerSettings({
       .then(() => {
         setConfirmDelete(false);
         setDeleteTyped("");
-        onRemoved?.(detail.agent_id, "deleted");
+        onRemoved?.(detail.agent_id);
       })
       .catch((err: unknown) => {
         const code = err instanceof ChatGatewayError ? err.code : null;
@@ -834,22 +816,6 @@ export function AgentOwnerSettings({
           style={{
             ...btnGhost,
             width: "100%",
-            borderColor: "rgba(248,113,113,0.35)",
-            color: colors.danger,
-          }}
-          disabled={dangerBusy}
-          onClick={() => {
-            setDangerError(null);
-            setConfirmRelease(true);
-          }}
-        >
-          {t.myAgentsRelease}
-        </button>
-        <button
-          type="button"
-          style={{
-            ...btnGhost,
-            width: "100%",
             background: "rgba(248,113,113,0.1)",
             borderColor: "rgba(248,113,113,0.55)",
             color: colors.danger,
@@ -968,65 +934,6 @@ export function AgentOwnerSettings({
                 onClick={runRotate}
               >
                 {rotating ? t.loading : t.myAgentsRotateConfirmLabel}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {confirmRelease ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 50,
-            background: "rgba(0,0,0,0.55)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 24,
-          }}
-          onClick={() => {
-            if (!releasing) setConfirmRelease(false);
-          }}
-        >
-          <div
-            style={{
-              width: "min(340px, 100%)",
-              background: colors.panel,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 12,
-              padding: 20,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.5 }}>
-              {t.myAgentsReleaseConfirm}
-            </p>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                style={btnGhost}
-                disabled={releasing}
-                onClick={() => setConfirmRelease(false)}
-              >
-                {t.cancel}
-              </button>
-              <button
-                type="button"
-                style={{
-                  ...btnGhost,
-                  background: "rgba(248,113,113,0.15)",
-                  borderColor: "rgba(248,113,113,0.45)",
-                  color: colors.danger,
-                  fontWeight: 600,
-                }}
-                disabled={releasing}
-                onClick={runRelease}
-              >
-                {releasing ? t.loading : t.myAgentsReleaseConfirmLabel}
               </button>
             </div>
           </div>

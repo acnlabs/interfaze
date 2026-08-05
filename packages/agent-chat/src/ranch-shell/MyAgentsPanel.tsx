@@ -23,8 +23,8 @@ type Props = {
   onOpenChat: (agentId: string) => void;
   /** Notify shell/host after a successful profile save (for chat title / directory). */
   onAgentUpdated?: (agent: MyAgentSummary, previousName?: string | null) => void;
-  /** After release or permanent delete — leave detail and refresh list. */
-  onAgentRemoved?: (agentId: string, kind: "released" | "deleted") => void;
+  /** After permanent delete — leave detail and refresh list. */
+  onAgentRemoved?: (agentId: string) => void;
 };
 
 function shortId(id: string): string {
@@ -207,7 +207,7 @@ export function MyAgentsPanel({
                   );
                   onAgentUpdated?.(row, previousName);
                 }}
-                onRemoved={(agentId, kind) => {
+                onRemoved={(agentId) => {
                   setAgents((prev) =>
                     prev.filter(
                       (a) =>
@@ -217,7 +217,7 @@ export function MyAgentsPanel({
                   );
                   setSelectedId(null);
                   setDetail(null);
-                  onAgentRemoved?.(agentId, kind);
+                  onAgentRemoved?.(agentId);
                 }}
               />
               <button

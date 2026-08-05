@@ -110,14 +110,7 @@ export type GatewayClient = {
     api_key: string;
     message?: string;
   }>;
-  /** Release ownership (agent becomes unclaimed). */
-  releaseMyAgent: (agentId: string) => Promise<{
-    success: boolean;
-    agent_id: string;
-    previous_owner?: string;
-    message?: string;
-  }>;
-  /** Permanently delete an owned agent. */
+  /** Permanently delete an owned ACN identity (registry unregister). */
   deleteMyAgent: (agentId: string) => Promise<{
     success: boolean;
     agent_id: string;
@@ -217,16 +210,6 @@ export function createGatewayClient(
       }>(`/api/chat/my-agents/${encodeURIComponent(agentId)}/rotate-key`, {
         method: "POST",
       }),
-    releaseMyAgent: (agentId) =>
-      request<{
-        success: boolean;
-        agent_id: string;
-        previous_owner?: string;
-        message?: string;
-      }>(
-        `/api/chat/my-agents/${encodeURIComponent(agentId)}/release?confirm=true`,
-        { method: "POST" },
-      ),
     deleteMyAgent: (agentId) =>
       request<{
         success: boolean;

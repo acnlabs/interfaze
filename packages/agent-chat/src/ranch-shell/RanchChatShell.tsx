@@ -2196,16 +2196,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
     });
   };
 
-  const applyOwnedAgentRemoved = (
-    agentId: string,
-    kind: "released" | "deleted",
-  ) => {
+  const applyOwnedAgentRemoved = (agentId: string) => {
     const key = agentIdKey(agentId);
     setOwnedAgentDetail((prev) =>
       prev && agentIdKey(prev.agent_id) === key ? null : prev,
     );
     if (infoTab === "settings") setInfoTab("info");
-    onOwnedAgentRemoved?.(agentId, kind);
+    onOwnedAgentRemoved?.(agentId);
   };
 
   const activeOffline = active && !isGroupChat(active) && isAgentOffline(active.agent_status);

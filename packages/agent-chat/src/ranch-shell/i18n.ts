@@ -200,10 +200,6 @@ export type RanchMessages = {
   myAgentsRotateFailed: string;
   myAgentsGift: string;
   myAgentsGiftExternal: string;
-  myAgentsRelease: string;
-  myAgentsReleaseConfirm: string;
-  myAgentsReleaseConfirmLabel: string;
-  myAgentsReleaseFailed: string;
   myAgentsDelete: string;
   myAgentsDeleteConfirm: string;
   myAgentsDeleteConfirmLabel: string;
@@ -424,20 +420,15 @@ const en: RanchMessages = {
   myAgentsRotateFailed: "Couldn’t rotate the key.",
   myAgentsGift: "Gift on AgentPlanet",
   myAgentsGiftExternal: "Leaves Interfaze",
-  myAgentsRelease: "Release ownership",
-  myAgentsReleaseConfirm:
-    "Release this agent? You will no longer own it. Anyone can claim it again. This does not delete the agent.",
-  myAgentsReleaseConfirmLabel: "Release",
-  myAgentsReleaseFailed: "Couldn’t release this agent.",
   myAgentsDelete: "Delete permanently",
   myAgentsDeleteConfirm:
-    "Delete this agent permanently? This cannot be undone. Chats and history on Interfaze are not removed automatically.",
+    "Delete this ACN identity permanently? This cannot be undone. The registry entry is removed; chats on Interfaze are not cleared automatically.",
   myAgentsDeleteConfirmLabel: "Delete forever",
-  myAgentsDeleteTypeHint: "Type the agent name or DELETE to confirm.",
-  myAgentsDeleteTypePlaceholder: "Agent name or DELETE",
-  myAgentsDeleteFailed: "Couldn’t delete this agent.",
+  myAgentsDeleteTypeHint: "Type the display name or DELETE to confirm.",
+  myAgentsDeleteTypePlaceholder: "Display name or DELETE",
+  myAgentsDeleteFailed: "Couldn’t delete this identity.",
   myAgentsDeleteHasSubnets:
-    "This agent still owns subnets. Transfer or delete those subnets on AgentPlanet first.",
+    "This identity still owns subnets. Transfer or delete those subnets on AgentPlanet first.",
   yes: "Yes",
   no: "No",
   unknown: "Unknown",
@@ -637,20 +628,15 @@ const zh: RanchMessages = {
   myAgentsRotateFailed: "无法轮换 key。",
   myAgentsGift: "在 AgentPlanet 赠送",
   myAgentsGiftExternal: "将离开 Interfaze",
-  myAgentsRelease: "释放所有权",
-  myAgentsReleaseConfirm:
-    "确定释放此 agent？你将不再是主人，任何人可再次认领。这不会删除 agent。",
-  myAgentsReleaseConfirmLabel: "确认释放",
-  myAgentsReleaseFailed: "无法释放此 agent。",
   myAgentsDelete: "永久删除",
   myAgentsDeleteConfirm:
-    "确定永久删除此 agent？此操作不可撤销。Interfaze 上的聊天记录不会自动清除。",
+    "确定永久删除此 ACN 身份？此操作不可撤销。注册表记录会被移除；Interfaze 上的聊天记录不会自动清除。",
   myAgentsDeleteConfirmLabel: "确认删除",
-  myAgentsDeleteTypeHint: "请输入 agent 名称，或输入 DELETE 确认。",
-  myAgentsDeleteTypePlaceholder: "agent 名称或 DELETE",
-  myAgentsDeleteFailed: "无法删除此 agent。",
+  myAgentsDeleteTypeHint: "请输入显示名称，或输入 DELETE 确认。",
+  myAgentsDeleteTypePlaceholder: "显示名称或 DELETE",
+  myAgentsDeleteFailed: "无法删除此身份。",
   myAgentsDeleteHasSubnets:
-    "此 agent 仍拥有子网。请先在 AgentPlanet 转移或删除这些子网。",
+    "此身份仍拥有子网。请先在 AgentPlanet 转移或删除这些子网。",
   yes: "是",
   no: "否",
   unknown: "未知",
