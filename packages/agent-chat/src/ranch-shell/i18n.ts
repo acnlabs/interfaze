@@ -241,6 +241,29 @@ export type RanchMessages = {
   walletTxTitle: string;
   walletTxEmpty: string;
   walletLoadFailed: string;
+  spendPolicyTitle: string;
+  spendPolicyHint: string;
+  spendPolicyEdit: string;
+  spendPolicySave: string;
+  spendPolicySaved: string;
+  spendPolicyFailed: string;
+  spendPolicyLoadFailed: string;
+  spendAutonomyDisabled: string;
+  spendAutonomyDisabledHelp: string;
+  spendAutonomyLimited: string;
+  spendAutonomyLimitedHelp: string;
+  spendAutonomyUnlimited: string;
+  spendAutonomyUnlimitedHelp: string;
+  spendAutonomyUnlimitedWarn: string;
+  spendPerTxLimit: string;
+  spendWindowLimit: string;
+  spendWindowHours: string;
+  spendReserveFloor: string;
+  spendReserveFloorHint: string;
+  spendNoCap: string;
+  spendWindowSpent: (hours: string) => string;
+  spendWindowRemaining: string;
+  spendCurrent: string;
   yes: string;
   no: string;
   unknown: string;
@@ -500,6 +523,31 @@ const en: RanchMessages = {
   walletTxTitle: "Recent activity",
   walletTxEmpty: "No transactions yet.",
   walletLoadFailed: "Couldn’t load this agent’s wallet.",
+  spendPolicyTitle: "Spend policy",
+  spendPolicyHint:
+    "How much this agent may spend from its Credits without asking you. Applies to all autonomous Credits outflows.",
+  spendPolicyEdit: "Edit spend policy",
+  spendPolicySave: "Save policy",
+  spendPolicySaved: "Spend policy updated",
+  spendPolicyFailed: "Couldn’t update spend policy.",
+  spendPolicyLoadFailed: "Couldn’t load spend policy.",
+  spendAutonomyDisabled: "Owner only",
+  spendAutonomyDisabledHelp: "Agent cannot spend on its own.",
+  spendAutonomyLimited: "Limited",
+  spendAutonomyLimitedHelp: "Within budget envelope.",
+  spendAutonomyUnlimited: "Unlimited",
+  spendAutonomyUnlimitedHelp: "No autonomous spend cap.",
+  spendAutonomyUnlimitedWarn:
+    "Unlimited lets the agent spend its full Credits balance without asking. Prefer Limited unless you trust the runtime.",
+  spendPerTxLimit: "Per-transaction limit",
+  spendWindowLimit: "Window limit",
+  spendWindowHours: "Window (hours)",
+  spendReserveFloor: "Reserve floor",
+  spendReserveFloorHint: "Autonomous spend cannot leave Credits below this amount.",
+  spendNoCap: "No cap",
+  spendWindowSpent: (hours) => `Spent in last ${hours}h`,
+  spendWindowRemaining: "remaining",
+  spendCurrent: "Current",
   yes: "Yes",
   no: "No",
   unknown: "Unknown",
@@ -747,6 +795,31 @@ const zh: RanchMessages = {
   walletTxTitle: "最近流水",
   walletTxEmpty: "暂无交易记录。",
   walletLoadFailed: "无法加载此 agent 的钱包。",
+  spendPolicyTitle: "消费授权",
+  spendPolicyHint:
+    "此 agent 可在不询问你的情况下，自主花掉多少 Credits。适用于所有自主 Credits 流出。",
+  spendPolicyEdit: "编辑消费授权",
+  spendPolicySave: "保存授权",
+  spendPolicySaved: "消费授权已更新",
+  spendPolicyFailed: "无法更新消费授权。",
+  spendPolicyLoadFailed: "无法加载消费授权。",
+  spendAutonomyDisabled: "仅主人",
+  spendAutonomyDisabledHelp: "agent 不能自主消费。",
+  spendAutonomyLimited: "有限额",
+  spendAutonomyLimitedHelp: "在额度信封内自主。",
+  spendAutonomyUnlimited: "不限额",
+  spendAutonomyUnlimitedHelp: "自主消费无上限。",
+  spendAutonomyUnlimitedWarn:
+    "不限额意味着 agent 可不经询问花光其 Credits。除非你信任运行环境，建议用「有限额」。",
+  spendPerTxLimit: "单笔上限",
+  spendWindowLimit: "窗口累计上限",
+  spendWindowHours: "窗口（小时）",
+  spendReserveFloor: "保留余额",
+  spendReserveFloorHint: "自主消费不得使 Credits 低于此值。",
+  spendNoCap: "不限",
+  spendWindowSpent: (hours) => `近 ${hours} 小时已花`,
+  spendWindowRemaining: "剩余",
+  spendCurrent: "当前",
   yes: "是",
   no: "否",
   unknown: "未知",

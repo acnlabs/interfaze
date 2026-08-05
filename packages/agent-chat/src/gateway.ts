@@ -86,6 +86,30 @@ export type MyAgentWalletTxList = {
   page_size: number;
 };
 
+export type SpendAutonomy = "disabled" | "limited" | "unlimited";
+
+export type MyAgentSpendPolicy = {
+  agent_id: string;
+  owner_id?: string | null;
+  autonomy: SpendAutonomy | string;
+  stored_autonomy: SpendAutonomy | string;
+  per_tx_limit: number | null;
+  window_limit: number | null;
+  window_hours: number;
+  reserve_floor: number;
+  window_spent: number;
+  window_remaining: number | null;
+  balance: number;
+};
+
+export type MyAgentSpendPolicyUpdate = {
+  autonomy?: SpendAutonomy;
+  per_tx_limit?: number | null;
+  window_limit?: number | null;
+  window_hours?: number;
+  reserve_floor?: number;
+};
+
 /** Owned ACN agent row from GET /api/chat/my-agents (management + directory mine). */
 export type MyAgentSummary = {
   agent_id: string;
@@ -179,6 +203,11 @@ export type GatewayClient = {
     amount: number,
     description?: string,
   ) => Promise<MyAgentWallet>;
+  getMyAgentSpendPolicy: (agentId: string) => Promise<MyAgentSpendPolicy>;
+  updateMyAgentSpendPolicy: (
+    agentId: string,
+    patch: MyAgentSpendPolicyUpdate,
+  ) => Promise<MyAgentSpendPolicy>;
   addParticipant: (chatId: string, agentId: string) => Promise<ChatParticipant>;
   removeParticipant: (chatId: string, participantId: string) => Promise<void>;
   updateChat: (chatId: string, patch: { title?: string; description?: string }) => Promise<ChatSummary>;
@@ -328,6 +357,18 @@ export function createGatewayClient(
             amount,
             ...(description ? { description } : {}),
           }),
+        },
+      ),
+    getMyAgentSpendPolicy: (agentId) =>
+      request<MyAgentSpendPolicy>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/wallet/spend-policy`,
+      ),
+    updateMyAgentSpendPolicy: (agentId, patch) =>
+      request<MyAgentSpendPolicy>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/wallet/spend-policy`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(patch),
         },
       ),
     listMessages: (chatId) =>
