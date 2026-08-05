@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { ChatGatewayError, type GatewayClient, type MyAgentSummary } from "../gateway";
 import { copyText } from "./connectPrompt";
 import type { RanchMessages } from "./i18n";
@@ -50,31 +51,137 @@ function boolLabel(v: boolean | null | undefined, t: RanchMessages): string {
   return t.unknown;
 }
 
-/** Compact help affordance — full text in native tooltip. */
-export function FieldHint({ text }: { text: string }) {
+/**
+ * Tiny help control. Click toggles a fixed popover (native title is too
+ * unreliable / delayed, and overflow panels clip absolute bubbles).
+ */
+export function FieldHint({
+  text,
+  align = "left",
+}: {
+  text: string;
+  align?: "left" | "right";
+}) {
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
+  const tipId = useId();
+  const tipWidth = 228;
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) {
+      setCoords(null);
+      return;
+    }
+    const place = () => {
+      const r = btnRef.current!.getBoundingClientRect();
+      let left = align === "right" ? r.right - tipWidth : r.left;
+      left = Math.max(8, Math.min(left, window.innerWidth - tipWidth - 8));
+      let top = r.bottom + 6;
+      const approxH = 96;
+      if (top + approxH > window.innerHeight - 8) {
+        top = Math.max(8, r.top - approxH - 6);
+      }
+      setCoords({ top, left });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, align, text]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || tipRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [open]);
+
+  const tip =
+    open && coords && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={tipRef}
+            id={tipId}
+            role="tooltip"
+            style={{
+              position: "fixed",
+              top: coords.top,
+              left: coords.left,
+              zIndex: 10050,
+              width: tipWidth,
+              padding: "8px 10px",
+              background: "#0b1220",
+              border: `1px solid ${colors.border}`,
+              borderRadius: 6,
+              fontSize: 11,
+              lineHeight: 1.45,
+              color: colors.text,
+              boxShadow: "0 10px 28px rgba(0,0,0,0.45)",
+              whiteSpace: "normal",
+              textAlign: "left",
+              fontWeight: 400,
+              letterSpacing: "normal",
+              textTransform: "none",
+              pointerEvents: "auto",
+            }}
+          >
+            {text}
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
-    <span
-      title={text}
-      aria-label={text}
-      role="img"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 14,
-        height: 14,
-        marginLeft: 4,
-        borderRadius: "50%",
-        border: `1px solid ${colors.muted}`,
-        fontSize: 10,
-        lineHeight: "14px",
-        color: colors.muted,
-        cursor: "help",
-        flexShrink: 0,
-        userSelect: "none",
-      }}
-    >
-      ?
+    <span style={{ position: "relative", display: "inline-flex", flexShrink: 0, marginLeft: 3 }}>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-label={text}
+        aria-expanded={open}
+        aria-controls={open ? tipId : undefined}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 12,
+          height: 12,
+          padding: 0,
+          margin: 0,
+          border: "none",
+          borderRadius: "50%",
+          background: "transparent",
+          color: "rgba(148,163,184,0.85)",
+          fontSize: 11,
+          fontStyle: "normal",
+          fontWeight: 500,
+          lineHeight: 1,
+          cursor: "pointer",
+          opacity: open ? 1 : 0.75,
+        }}
+      >
+        ⓘ
+      </button>
+      {tip}
     </span>
   );
 }
@@ -131,7 +238,7 @@ export function DetailRows({
             }}
           >
             <span style={{ minWidth: 0 }}>{r.value}</span>
-            {r.valueHint ? <FieldHint text={r.valueHint} /> : null}
+            {r.valueHint ? <FieldHint text={r.valueHint} align="right" /> : null}
           </span>
         </div>
       ))}

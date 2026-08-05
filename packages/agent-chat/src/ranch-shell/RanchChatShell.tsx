@@ -4062,6 +4062,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               {deliveryValueHint(ownedAgentDetail.delivery, t) ? (
                                 <FieldHint
                                   text={deliveryValueHint(ownedAgentDetail.delivery, t)!}
+                                  align="right"
                                 />
                               ) : null}
                             </div>
