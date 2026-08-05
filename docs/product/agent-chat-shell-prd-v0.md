@@ -255,6 +255,7 @@ Host 业务工具代理（如 Concierge `create_task`）**不属于** Shell 核�
 - **Gateway 边界 SoT：** [chat-gateway-boundary-v0](../architecture/chat-gateway-boundary-v0.md)（投递闭环、群聊 @ 策略、ACL 挂载点、与 UnifiedAgentGateway 关系）。
 - **Topics 心智（Interfaze / RanchChatShell）：** 见 §4.3 Thread / Topics 产品句——时间线分段为主，Topics 目录次之，过滤页再次之；`@` 管投递，话题管归属，二者正交。
 - **主人接 Interfaze（人话）：** [interfaze-connect-agent.md](./interfaze-connect-agent.md)。  
+- **ACN Agent 管理（非 runtime）：** [interfaze-acn-agent-management-v0.md](./interfaze-acn-agent-management-v0.md)——「我的 Agents」管身份/连接/权限，不管模型·通道·Skill 安装。  
 - 计费钩子 v0 只要求**可接**（日限额/余额 → `rate_limited`），具体 Credits/星币价表由 Host 定。  
 - D8：subnet/org 链接触发器二期加粗；v0 验收不依赖其完成。  
 - [Labs Concierge](./labs-concierge-prd-v0.md) 仅描述 **AgentPlanet 官方客户 agent + 业务工具**，对话壳验收以本文为准。  
