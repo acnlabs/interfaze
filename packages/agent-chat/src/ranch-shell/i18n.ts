@@ -166,6 +166,17 @@ export type RanchMessages = {
   myAgentsPolicyClosed: string;
   myAgentsPolicyManifest: string;
   myAgentsInboundNa: string;
+  myAgentsDeliveryChoose: string;
+  myAgentsDeliveryOptionPush: string;
+  myAgentsDeliveryOptionPull: string;
+  myAgentsDeliveryPushHelp: string;
+  myAgentsDeliveryPullHelp: string;
+  myAgentsEndpointInput: string;
+  myAgentsEndpointPlaceholder: string;
+  myAgentsSaveDelivery: string;
+  myAgentsDeliverySaved: string;
+  myAgentsDeliveryFailed: string;
+  myAgentsDeliveryLocked: string;
   myAgentsChatOpen: string;
   myAgentsChatOpenHint: string;
   myAgentsOpenChat: string;
@@ -349,6 +360,20 @@ const en: RanchMessages = {
   myAgentsInboundHint:
     "Whether the platform can reach your public receive URL. Only applies when messages are pushed to your URL — not when the agent pulls.",
   myAgentsInboundNa: "Doesn’t apply",
+  myAgentsDeliveryChoose: "Choose how this agent receives Interfaze chats",
+  myAgentsDeliveryOptionPush: "Push to a public URL",
+  myAgentsDeliveryOptionPull: "Agent pulls messages",
+  myAgentsDeliveryPushHelp:
+    "Needs a stable public HTTPS address (A2A). Best when your agent is on a server with inbound HTTPS.",
+  myAgentsDeliveryPullHelp:
+    "No public URL needed. Keep `acn listen` (or equivalent) running so the agent can fetch inbox messages.",
+  myAgentsEndpointInput: "Public receive URL",
+  myAgentsEndpointPlaceholder: "https://your-agent.example.com/a2a",
+  myAgentsSaveDelivery: "Save receive mode",
+  myAgentsDeliverySaved: "Receive mode updated",
+  myAgentsDeliveryFailed: "Couldn’t update receive mode.",
+  myAgentsDeliveryLocked:
+    "Receive mode can only be changed when who-can-message is Anyone or Allowlist. Closed / inbox modes block push delivery.",
   myAgentsPolicy: "Who can message",
   myAgentsPolicyHint: "Reception policy on the ACN network — who is allowed to start a chat.",
   myAgentsPolicyOpen: "Anyone",
@@ -527,6 +552,20 @@ const zh: RanchMessages = {
   myAgentsInboundHint:
     "平台能否打到你的公网收信地址。仅「推送到你的网址」时有意义；Agent 主动取信时不适用。",
   myAgentsInboundNa: "不适用",
+  myAgentsDeliveryChoose: "选择这只 agent 如何接收 Interfaze 消息",
+  myAgentsDeliveryOptionPush: "推送到公网网址",
+  myAgentsDeliveryOptionPull: "Agent 主动取信",
+  myAgentsDeliveryPushHelp:
+    "需要稳定的公网 HTTPS 地址（A2A）。适合跑在有入站 HTTPS 的服务器上。",
+  myAgentsDeliveryPullHelp:
+    "不需要公网网址。保持 `acn listen`（或同类程序）在线，由 agent 来取收件箱。",
+  myAgentsEndpointInput: "公网收信地址",
+  myAgentsEndpointPlaceholder: "https://your-agent.example.com/a2a",
+  myAgentsSaveDelivery: "保存收信方式",
+  myAgentsDeliverySaved: "收信方式已更新",
+  myAgentsDeliveryFailed: "无法更新收信方式。",
+  myAgentsDeliveryLocked:
+    "仅当「谁能找你」为所有人/白名单时才能切换收信方式。已关闭或收件箱模式不支持推送。",
   myAgentsPolicy: "谁能找你",
   myAgentsPolicyHint: "ACN 上的接待策略——谁被允许发起聊天。",
   myAgentsPolicyOpen: "所有人",

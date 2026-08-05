@@ -113,6 +113,11 @@ export type GatewayClient = {
     agentId: string,
     patch: { name?: string; description?: string; tags?: string[] },
   ) => Promise<MyAgentSummary>;
+  /** Switch receive mode: push-to-URL (direct) or agent-pull (relay). */
+  updateMyAgentDelivery: (
+    agentId: string,
+    patch: { delivery: "direct" | "relay"; endpoint?: string },
+  ) => Promise<MyAgentSummary>;
   addParticipant: (chatId: string, agentId: string) => Promise<ChatParticipant>;
   removeParticipant: (chatId: string, participantId: string) => Promise<void>;
   updateChat: (chatId: string, patch: { title?: string; description?: string }) => Promise<ChatSummary>;
@@ -200,6 +205,14 @@ export function createGatewayClient(
     updateMyAgentProfile: (agentId, patch) =>
       request<MyAgentSummary>(
         `/api/chat/my-agents/${encodeURIComponent(agentId)}/profile`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        },
+      ),
+    updateMyAgentDelivery: (agentId, patch) =>
+      request<MyAgentSummary>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/delivery`,
         {
           method: "PATCH",
           body: JSON.stringify(patch),

@@ -334,6 +334,13 @@ export function AgentOwnerSettings({
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const initialDelivery: "direct" | "relay" =
+    detail.delivery === "direct" ? "direct" : "relay";
+  const [deliveryDraft, setDeliveryDraft] = useState<"direct" | "relay">(initialDelivery);
+  const [endpointDraft, setEndpointDraft] = useState("");
+  const [savingDelivery, setSavingDelivery] = useState(false);
+  const [deliveryMsg, setDeliveryMsg] = useState<string | null>(null);
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
 
   useEffect(() => {
     setNameDraft(detail.name || "");
@@ -341,6 +348,13 @@ export function AgentOwnerSettings({
     setProfileMsg(null);
     setProfileError(null);
   }, [detail.agent_id, detail.name, detail.description]);
+
+  useEffect(() => {
+    setDeliveryDraft(detail.delivery === "direct" ? "direct" : "relay");
+    setEndpointDraft("");
+    setDeliveryMsg(null);
+    setDeliveryError(null);
+  }, [detail.agent_id, detail.delivery]);
 
   const giftUrl = `${agentPlanetBaseUrl.replace(/\/+$/, "")}/agents/${encodeURIComponent(detail.agent_id)}`;
 
@@ -392,6 +406,51 @@ export function AgentOwnerSettings({
       .finally(() => setSavingProfile(false));
   };
 
+  const policyMode = (detail.policy_mode || "").toLowerCase();
+  const deliveryEditable = !policyMode || policyMode === "open" || policyMode === "allowlist";
+  const deliveryDirty =
+    deliveryDraft !== (detail.delivery === "direct" ? "direct" : "relay") ||
+    (deliveryDraft === "direct" && endpointDraft.trim().length > 0);
+  const endpointTrim = endpointDraft.trim();
+  const endpointLooksOk =
+    deliveryDraft === "relay" ||
+    (endpointTrim.startsWith("https://") && endpointTrim.length > "https://".length);
+  // Switching to push always needs a URL (masked host alone can't be reused).
+  const canSaveDelivery =
+    deliveryEditable &&
+    deliveryDirty &&
+    (deliveryDraft === "relay" || endpointLooksOk) &&
+    !(deliveryDraft === "direct" && !endpointTrim) &&
+    !savingDelivery &&
+    !busy;
+
+  const saveDelivery = () => {
+    if (!canSaveDelivery) return;
+    setSavingDelivery(true);
+    setDeliveryError(null);
+    setDeliveryMsg(null);
+    const patch =
+      deliveryDraft === "relay"
+        ? ({ delivery: "relay" as const })
+        : ({ delivery: "direct" as const, endpoint: endpointTrim });
+    void client
+      .updateMyAgentDelivery(detail.agent_id, patch)
+      .then((row) => {
+        setDeliveryMsg(t.myAgentsDeliverySaved);
+        setEndpointDraft("");
+        onUpdated?.(row);
+        window.setTimeout(() => setDeliveryMsg(null), 2000);
+      })
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof ChatGatewayError && err.message.trim()
+            ? err.message.trim()
+            : t.myAgentsDeliveryFailed;
+        setDeliveryError(msg);
+      })
+      .finally(() => setSavingDelivery(false));
+  };
+
   const runRotate = () => {
     setRotating(true);
     setRotateError(null);
@@ -408,6 +467,17 @@ export function AgentOwnerSettings({
       })
       .finally(() => setRotating(false));
   };
+
+  const optionBtn = (active: boolean): CSSProperties => ({
+    ...btnGhost,
+    width: "100%",
+    textAlign: "left",
+    padding: "10px 12px",
+    borderColor: active ? "rgba(96,165,250,0.65)" : colors.border,
+    background: active ? "rgba(59,130,246,0.12)" : "transparent",
+    color: colors.text,
+    display: "block",
+  });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, position: "relative" }}>
@@ -462,26 +532,95 @@ export function AgentOwnerSettings({
       {showConnectSection ? (
         <section>
           <h3 style={sectionTitle}>{t.myAgentsSectionConnect}</h3>
+          <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+            {t.myAgentsDeliveryChoose}
+            <FieldHint text={t.myAgentsDeliveryHint} />
+          </p>
+          {!deliveryEditable ? (
+            <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+              {t.myAgentsDeliveryLocked}
+            </p>
+          ) : null}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+            <button
+              type="button"
+              style={optionBtn(deliveryDraft === "relay")}
+              disabled={!deliveryEditable || savingDelivery || busy}
+              onClick={() => setDeliveryDraft("relay")}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsDeliveryOptionPull}</div>
+              <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
+                {t.myAgentsDeliveryPullHelp}
+              </div>
+            </button>
+            <button
+              type="button"
+              style={optionBtn(deliveryDraft === "direct")}
+              disabled={!deliveryEditable || savingDelivery || busy}
+              onClick={() => setDeliveryDraft("direct")}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsDeliveryOptionPush}</div>
+              <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
+                {t.myAgentsDeliveryPushHelp}
+              </div>
+            </button>
+          </div>
+          {deliveryDraft === "direct" ? (
+            <label style={{ display: "block", marginBottom: 10 }}>
+              <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+                {t.myAgentsEndpointInput}
+                <FieldHint text={t.myAgentsEndpointHint} />
+              </div>
+              <input
+                value={endpointDraft}
+                onChange={(e) => setEndpointDraft(e.target.value)}
+                placeholder={t.myAgentsEndpointPlaceholder}
+                style={inputStyle}
+                disabled={!deliveryEditable || savingDelivery || busy}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              {detail.endpoint_masked ? (
+                <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+                  {t.myAgentsEndpoint}: {detail.endpoint_masked}
+                </div>
+              ) : null}
+            </label>
+          ) : null}
           <DetailRows
             rows={[
               {
                 label: t.myAgentsDelivery,
-                hint: t.myAgentsDeliveryHint,
+                hint: deliveryValueHint(detail.delivery, t) || t.myAgentsDeliveryHint,
                 value: deliveryLabel(detail.delivery, t),
-                valueHint: deliveryValueHint(detail.delivery, t),
               },
-              {
-                label: t.myAgentsEndpoint,
-                hint: t.myAgentsEndpointHint,
-                value: detail.endpoint_masked || "—",
-              },
-              {
-                label: t.myAgentsInbound,
-                hint: t.myAgentsInboundHint,
-                value: inboundLabel(detail, t),
-              },
+              ...(deliveryDraft === "direct" || detail.delivery === "direct"
+                ? [
+                    {
+                      label: t.myAgentsInbound,
+                      hint: t.myAgentsInboundHint,
+                      value: inboundLabel(detail, t),
+                    },
+                  ]
+                : []),
             ]}
           />
+          {deliveryError ? (
+            <p style={{ margin: "8px 0 0", fontSize: 12, color: colors.danger }}>{deliveryError}</p>
+          ) : null}
+          {deliveryMsg ? (
+            <p style={{ margin: "8px 0 0", fontSize: 12, color: colors.recommended }}>
+              {deliveryMsg}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            style={{ ...btnPrimary, width: "100%", marginTop: 10 }}
+            disabled={!canSaveDelivery}
+            onClick={saveDelivery}
+          >
+            {savingDelivery ? t.loading : t.myAgentsSaveDelivery}
+          </button>
           {detail.status !== "online" ? (
             <p style={{ margin: "10px 0 0", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
               {t.myAgentsOfflineHint}
