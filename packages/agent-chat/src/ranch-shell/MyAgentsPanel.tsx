@@ -21,6 +21,8 @@ type Props = {
   busy?: boolean;
   onClose: () => void;
   onOpenChat: (agentId: string) => void;
+  /** Notify shell/host after a successful profile save (for chat title / directory). */
+  onAgentUpdated?: (agent: MyAgentSummary, previousName?: string | null) => void;
 };
 
 function shortId(id: string): string {
@@ -46,6 +48,7 @@ export function MyAgentsPanel({
   busy,
   onClose,
   onOpenChat,
+  onAgentUpdated,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -159,7 +162,7 @@ export function MyAgentsPanel({
           ) : detail ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <section>
-                <h3 style={sectionTitle}>{t.myAgentsSectionIdentity}</h3>
+                <h3 style={sectionTitle}>{t.myAgentsSectionOverview}</h3>
                 <DetailRows
                   rows={[
                     {
@@ -188,10 +191,12 @@ export function MyAgentsPanel({
                 connectGuideUrl={connectGuideUrl}
                 busy={busy}
                 onUpdated={(row) => {
+                  const previousName = detail.name;
                   setDetail(row);
                   setAgents((prev) =>
                     prev.map((a) => (a.agent_id === row.agent_id ? { ...a, ...row } : a)),
                   );
+                  onAgentUpdated?.(row, previousName);
                 }}
               />
               <button

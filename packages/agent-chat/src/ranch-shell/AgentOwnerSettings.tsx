@@ -1,10 +1,18 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
-import type { GatewayClient, MyAgentSummary } from "../gateway";
+import { ChatGatewayError, type GatewayClient, type MyAgentSummary } from "../gateway";
 import { copyText } from "./connectPrompt";
 import type { RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
+
+/** Align with ACN / Gateway display-name rules (letter required). */
+function nameLooksValid(name: string): boolean {
+  const v = name.trim();
+  if (v.length < 2 || v.length > 100) return false;
+  if (/[-_]\d{8,}$/.test(v)) return false;
+  return /[a-zA-Z\u4e00-\u9fff]/.test(v);
+}
 
 export function deliveryLabel(
   delivery: string | null | undefined,
@@ -114,12 +122,15 @@ export function AgentOwnerSettings({
 
   const nameTrim = nameDraft.trim();
   const descTrim = descDraft.trim();
-  const nameChanged = nameTrim !== (detail.name || "").trim();
-  const descChanged = descTrim !== (detail.description || "").trim();
-  const nameOk = nameTrim.length >= 2 && nameTrim.length <= 100;
+  const oldName = (detail.name || "").trim();
+  const oldDesc = (detail.description || "").trim();
+  const nameChanged = nameTrim !== oldName;
+  const descChanged = descTrim !== oldDesc;
+  const nameOk = nameLooksValid(nameTrim);
   // ACN rejects description shorter than 10; empty means "leave unchanged", not clear.
   const descOk = descTrim.length === 0 || (descTrim.length >= 10 && descTrim.length <= 500);
-  const profileDirty = nameChanged || descChanged;
+  const clearingDesc = descChanged && descTrim.length === 0 && oldDesc.length > 0;
+  const profileDirty = nameChanged || (descChanged && !clearingDesc);
   const canSaveProfile =
     profileDirty &&
     nameOk &&
@@ -134,11 +145,8 @@ export function AgentOwnerSettings({
     setProfileError(null);
     setProfileMsg(null);
     const patch: { name?: string; description?: string } = {};
-    if (nameTrim !== (detail.name || "").trim()) patch.name = nameTrim;
-    // ACN requires description min 10 when provided; empty means leave unchanged.
-    if (descTrim !== (detail.description || "").trim()) {
-      if (descTrim.length >= 10) patch.description = descTrim;
-    }
+    if (nameChanged) patch.name = nameTrim;
+    if (descChanged && descTrim.length >= 10) patch.description = descTrim;
     if (!patch.name && !patch.description) {
       setSavingProfile(false);
       return;
@@ -150,7 +158,13 @@ export function AgentOwnerSettings({
         onUpdated?.(row);
         window.setTimeout(() => setProfileMsg(null), 2000);
       })
-      .catch(() => setProfileError(t.myAgentsProfileFailed))
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof ChatGatewayError && err.message.trim()
+            ? err.message.trim()
+            : t.myAgentsProfileFailed;
+        setProfileError(msg);
+      })
       .finally(() => setSavingProfile(false));
   };
 
@@ -202,7 +216,7 @@ export function AgentOwnerSettings({
             disabled={busy || savingProfile}
           />
           <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
-            {t.myAgentsDescHint}
+            {clearingDesc ? t.myAgentsDescClearHint : t.myAgentsDescHint}
           </div>
         </label>
         {profileError ? (

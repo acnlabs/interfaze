@@ -23,11 +23,23 @@ async function parseError(res: Response): Promise<ChatGatewayError> {
   try {
     const body = await res.json();
     const detail = body?.detail;
-    if (detail && typeof detail === "object") {
+    if (detail && typeof detail === "object" && !Array.isArray(detail)) {
       code = typeof detail.code === "string" ? detail.code : null;
       message = typeof detail.message === "string" ? detail.message : message;
     } else if (typeof detail === "string") {
       message = detail;
+    } else if (Array.isArray(detail) && detail.length > 0) {
+      // FastAPI / Pydantic validation errors
+      const first = detail[0];
+      if (first && typeof first === "object") {
+        const msg = (first as { msg?: unknown }).msg;
+        if (typeof msg === "string" && msg.trim()) message = msg.trim();
+      } else if (typeof first === "string" && first.trim()) {
+        message = first.trim();
+      }
+      code = "invalid_request";
+    } else if (typeof body?.message === "string" && body.message.trim()) {
+      message = body.message.trim();
     }
   } catch {
     /* ignore */

@@ -188,6 +188,20 @@ export default function InterfazeChatHost() {
             }
           : undefined
       }
+      onOwnedAgentUpdated={(agent) => {
+        setDirectoryAgents((prev) =>
+          prev.map((a) =>
+            a.agent_id === agent.agent_id ||
+            a.agent_id.replace(/^acn:/i, "") === agent.agent_id.replace(/^acn:/i, "")
+              ? {
+                  ...a,
+                  name: agent.name ?? a.name,
+                  description: agent.description ?? a.description,
+                }
+              : a,
+          ),
+        );
+      }}
     />
   );
 }

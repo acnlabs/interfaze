@@ -115,6 +115,15 @@ export type RanchChatShellProps = {
   locale?: string;
   /** Called when the user switches language in the shell. */
   onLocaleChange?: (locale: "en" | "zh") => void;
+  /**
+   * Owner edited an ACN agent profile (name/description) in Settings.
+   * Host can refresh directory labels (e.g. Interfaze «mine» list).
+   */
+  onOwnedAgentUpdated?: (agent: {
+    agent_id: string;
+    name?: string | null;
+    description?: string | null;
+  }) => void;
 };
 
 /** Outbound delivery on user messages (Chat Gateway → ACN). */

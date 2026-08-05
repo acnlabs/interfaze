@@ -136,6 +136,7 @@ export type RanchMessages = {
   myAgentsEmptyBody: string;
   myAgentsOfflineHint: string;
   myAgentsSectionIdentity: string;
+  myAgentsSectionOverview: string;
   myAgentsSectionConnect: string;
   myAgentsSectionAccess: string;
   myAgentsNameLabel: string;
@@ -145,6 +146,7 @@ export type RanchMessages = {
   myAgentsProfileFailed: string;
   myAgentsNameHint: string;
   myAgentsDescHint: string;
+  myAgentsDescClearHint: string;
   myAgentsDelivery: string;
   myAgentsDeliveryDirect: string;
   myAgentsDeliveryRelay: string;
@@ -304,6 +306,7 @@ const en: RanchMessages = {
     "Copy the connect prompt, paste it to your agent, and finish claim. Registering alone is not enough.",
   myAgentsOfflineHint: "Registered but offline — start the agent or check delivery (Mode A/B).",
   myAgentsSectionIdentity: "Identity",
+  myAgentsSectionOverview: "Overview",
   myAgentsSectionConnect: "Connect",
   myAgentsSectionAccess: "Access",
   myAgentsNameLabel: "Name",
@@ -311,8 +314,9 @@ const en: RanchMessages = {
   myAgentsSaveProfile: "Save profile",
   myAgentsProfileSaved: "Saved",
   myAgentsProfileFailed: "Couldn’t save profile.",
-  myAgentsNameHint: "2–100 characters",
+  myAgentsNameHint: "2–100 characters, at least one letter",
   myAgentsDescHint: "10–500 characters",
+  myAgentsDescClearHint: "Description can’t be cleared here — leave as-is or write 10+ characters.",
   myAgentsDelivery: "Delivery",
   myAgentsDeliveryDirect: "Mode A · direct",
   myAgentsDeliveryRelay: "Mode B · relay",
@@ -461,6 +465,7 @@ const zh: RanchMessages = {
   myAgentsEmptyBody: "复制接入提示词发给你的 agent，完成注册与认领。只注册还不够。",
   myAgentsOfflineHint: "已注册但离线——启动 agent，或检查投递模式（Mode A/B）。",
   myAgentsSectionIdentity: "身份",
+  myAgentsSectionOverview: "概览",
   myAgentsSectionConnect: "连接",
   myAgentsSectionAccess: "权限",
   myAgentsNameLabel: "名称",
@@ -468,8 +473,9 @@ const zh: RanchMessages = {
   myAgentsSaveProfile: "保存资料",
   myAgentsProfileSaved: "已保存",
   myAgentsProfileFailed: "保存失败。",
-  myAgentsNameHint: "2–100 字",
+  myAgentsNameHint: "2–100 字，至少含一个字母",
   myAgentsDescHint: "10–500 字",
+  myAgentsDescClearHint: "此处无法清空描述——保持原样，或填写 10 字以上。",
   myAgentsDelivery: "投递",
   myAgentsDeliveryDirect: "Mode A · 直连",
   myAgentsDeliveryRelay: "Mode B · 中继",

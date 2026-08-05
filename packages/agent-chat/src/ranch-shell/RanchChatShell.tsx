@@ -1147,6 +1147,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     agentPlanetBaseUrl,
     locale: localeProp,
     onLocaleChange,
+    onOwnedAgentUpdated,
   } = props;
 
   const [uiLocale, setUiLocale] = useState<RanchLocale>(() => resolveRanchLocale(localeProp));
@@ -2130,6 +2131,65 @@ export function RanchChatShell(props: RanchChatShellProps) {
     };
   }, [showMembersPanel, activeIsOwned, active?.agent_id, infoTab, client]);
 
+  /** After owner renames an agent: refresh detail, chat titles, @ labels, host directory. */
+  const applyOwnedAgentProfileUpdate = (
+    row: MyAgentSummary,
+    previousName?: string | null,
+  ) => {
+    const oldName = (previousName ?? ownedAgentDetail?.name ?? "").trim();
+    const newName = (row.name || "").trim();
+    const key = agentIdKey(row.agent_id);
+    setOwnedAgentDetail((prev) =>
+      prev && agentIdKey(prev.agent_id) === key ? row : prev,
+    );
+
+    if (newName && key) {
+      setAgentNames((prev) => {
+        const next = { ...prev };
+        for (const id of Object.keys(next)) {
+          if (agentIdKey(id) === key) next[id] = newName;
+        }
+        // Also set bare id key if present as participant id form.
+        if (row.agent_id in next) next[row.agent_id] = newName;
+        return next;
+      });
+
+      const titleMatchesOld = (title: string | null | undefined, agentId: string | null | undefined) => {
+        const t = (title || "").trim();
+        if (!t) return true;
+        if (oldName && t === oldName) return true;
+        if (agentId && (t === agentId || agentIdKey(t) === agentIdKey(agentId))) return true;
+        return false;
+      };
+
+      setChats((prev) =>
+        prev.map((c) => {
+          if (agentIdKey(c.agent_id) !== key) return c;
+          if (!titleMatchesOld(c.title, c.agent_id)) return c;
+          return { ...c, title: newName };
+        }),
+      );
+
+      // Persist title for the open 1:1 when it still tracked the old display name.
+      if (
+        active &&
+        !isGroupChat(active) &&
+        agentIdKey(active.agent_id) === key &&
+        titleMatchesOld(active.title, active.agent_id)
+      ) {
+        void client.updateChat(active.chat_id, { title: newName }).catch(() => {
+          /* best-effort */
+        });
+      }
+    }
+
+    onOwnedAgentUpdated?.({
+      agent_id: row.agent_id,
+      name: row.name,
+      description: row.description,
+    });
+  };
+
   const activeOffline = active && !isGroupChat(active) && isAgentOffline(active.agent_status);
   const groupActive = !!(active && isGroupChat(active));
   const slashParsed = parseSlashDraft(draft);
@@ -2601,6 +2661,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
             onOpenChat={(id) => {
               setShowMyAgents(false);
               void startDirect(id);
+            }}
+            onAgentUpdated={(row, previousName) => {
+              applyOwnedAgentProfileUpdate(row, previousName);
             }}
           />
         ) : null}
@@ -3870,7 +3933,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           agentPlanetBaseUrl={agentPlanetBaseUrl}
                           connectGuideUrl={connectGuideUrl}
                           busy={busy}
-                          onUpdated={setOwnedAgentDetail}
+                          onUpdated={applyOwnedAgentProfileUpdate}
                         />
                       ) : (
                         <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>
