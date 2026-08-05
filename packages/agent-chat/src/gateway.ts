@@ -94,6 +94,11 @@ export type GatewayClient = {
     api_key: string;
     message?: string;
   }>;
+  /** Owner-side profile patch; returns refreshed detail. */
+  updateMyAgentProfile: (
+    agentId: string,
+    patch: { name?: string; description?: string; tags?: string[] },
+  ) => Promise<MyAgentSummary>;
   addParticipant: (chatId: string, agentId: string) => Promise<ChatParticipant>;
   removeParticipant: (chatId: string, participantId: string) => Promise<void>;
   updateChat: (chatId: string, patch: { title?: string; description?: string }) => Promise<ChatSummary>;
@@ -178,6 +183,14 @@ export function createGatewayClient(
       }>(`/api/chat/my-agents/${encodeURIComponent(agentId)}/rotate-key`, {
         method: "POST",
       }),
+    updateMyAgentProfile: (agentId, patch) =>
+      request<MyAgentSummary>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/profile`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        },
+      ),
     listMessages: (chatId) =>
       request<ChatMessage[]>(`/api/chats/${encodeURIComponent(chatId)}/messages?limit=50`),
     listParticipants: (chatId) =>

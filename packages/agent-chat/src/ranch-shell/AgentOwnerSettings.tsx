@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import type { GatewayClient, MyAgentSummary } from "../gateway";
 import { copyText } from "./connectPrompt";
 import type { RanchMessages } from "./i18n";
-import { btnGhost, btnPrimary, colors } from "./styles";
+import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 
 export function deliveryLabel(
   delivery: string | null | undefined,
@@ -74,10 +74,12 @@ type Props = {
   busy?: boolean;
   /** When false, hide Connect section (Info already shows Mode summary). */
   showConnectSection?: boolean;
+  /** Called after a successful profile save with refreshed detail. */
+  onUpdated?: (detail: MyAgentSummary) => void;
 };
 
 /**
- * Owner Settings: connect details + rotate-key + gift deep-link.
+ * Owner Settings: profile edit + connect details + rotate-key + gift.
  * Shared by MyAgentsPanel detail and conversation Settings tab.
  */
 export function AgentOwnerSettings({
@@ -88,14 +90,69 @@ export function AgentOwnerSettings({
   connectGuideUrl,
   busy,
   showConnectSection = true,
+  onUpdated,
 }: Props) {
   const [confirmRotate, setConfirmRotate] = useState(false);
   const [rotating, setRotating] = useState(false);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [keyCopied, setKeyCopied] = useState(false);
   const [rotateError, setRotateError] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState(detail.name || "");
+  const [descDraft, setDescDraft] = useState(detail.description || "");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMsg, setProfileMsg] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNameDraft(detail.name || "");
+    setDescDraft(detail.description || "");
+    setProfileMsg(null);
+    setProfileError(null);
+  }, [detail.agent_id, detail.name, detail.description]);
 
   const giftUrl = `${agentPlanetBaseUrl.replace(/\/+$/, "")}/agents/${encodeURIComponent(detail.agent_id)}`;
+
+  const nameTrim = nameDraft.trim();
+  const descTrim = descDraft.trim();
+  const nameChanged = nameTrim !== (detail.name || "").trim();
+  const descChanged = descTrim !== (detail.description || "").trim();
+  const nameOk = nameTrim.length >= 2 && nameTrim.length <= 100;
+  // ACN rejects description shorter than 10; empty means "leave unchanged", not clear.
+  const descOk = descTrim.length === 0 || (descTrim.length >= 10 && descTrim.length <= 500);
+  const profileDirty = nameChanged || descChanged;
+  const canSaveProfile =
+    profileDirty &&
+    nameOk &&
+    descOk &&
+    (nameChanged || descTrim.length >= 10) &&
+    !savingProfile &&
+    !busy;
+
+  const saveProfile = () => {
+    if (!canSaveProfile) return;
+    setSavingProfile(true);
+    setProfileError(null);
+    setProfileMsg(null);
+    const patch: { name?: string; description?: string } = {};
+    if (nameTrim !== (detail.name || "").trim()) patch.name = nameTrim;
+    // ACN requires description min 10 when provided; empty means leave unchanged.
+    if (descTrim !== (detail.description || "").trim()) {
+      if (descTrim.length >= 10) patch.description = descTrim;
+    }
+    if (!patch.name && !patch.description) {
+      setSavingProfile(false);
+      return;
+    }
+    void client
+      .updateMyAgentProfile(detail.agent_id, patch)
+      .then((row) => {
+        setProfileMsg(t.myAgentsProfileSaved);
+        onUpdated?.(row);
+        window.setTimeout(() => setProfileMsg(null), 2000);
+      })
+      .catch(() => setProfileError(t.myAgentsProfileFailed))
+      .finally(() => setSavingProfile(false));
+  };
 
   const runRotate = () => {
     setRotating(true);
@@ -116,6 +173,54 @@ export function AgentOwnerSettings({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, position: "relative" }}>
+      <section>
+        <h3 style={sectionTitle}>{t.myAgentsSectionIdentity}</h3>
+        <label style={{ display: "block", marginBottom: 10 }}>
+          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+            {t.myAgentsNameLabel}
+          </div>
+          <input
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            style={inputStyle}
+            maxLength={100}
+            disabled={busy || savingProfile}
+          />
+          <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+            {t.myAgentsNameHint}
+          </div>
+        </label>
+        <label style={{ display: "block", marginBottom: 10 }}>
+          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+            {t.myAgentsDescLabel}
+          </div>
+          <textarea
+            value={descDraft}
+            onChange={(e) => setDescDraft(e.target.value)}
+            style={{ ...inputStyle, minHeight: 72, resize: "vertical" }}
+            maxLength={500}
+            disabled={busy || savingProfile}
+          />
+          <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+            {t.myAgentsDescHint}
+          </div>
+        </label>
+        {profileError ? (
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>{profileError}</p>
+        ) : null}
+        {profileMsg ? (
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>{profileMsg}</p>
+        ) : null}
+        <button
+          type="button"
+          style={{ ...btnPrimary, width: "100%" }}
+          disabled={!canSaveProfile}
+          onClick={saveProfile}
+        >
+          {savingProfile ? t.loading : t.myAgentsSaveProfile}
+        </button>
+      </section>
+
       {showConnectSection ? (
         <section>
           <h3 style={sectionTitle}>{t.myAgentsSectionConnect}</h3>

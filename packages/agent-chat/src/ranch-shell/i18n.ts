@@ -138,6 +138,13 @@ export type RanchMessages = {
   myAgentsSectionIdentity: string;
   myAgentsSectionConnect: string;
   myAgentsSectionAccess: string;
+  myAgentsNameLabel: string;
+  myAgentsDescLabel: string;
+  myAgentsSaveProfile: string;
+  myAgentsProfileSaved: string;
+  myAgentsProfileFailed: string;
+  myAgentsNameHint: string;
+  myAgentsDescHint: string;
   myAgentsDelivery: string;
   myAgentsDeliveryDirect: string;
   myAgentsDeliveryRelay: string;
@@ -299,6 +306,13 @@ const en: RanchMessages = {
   myAgentsSectionIdentity: "Identity",
   myAgentsSectionConnect: "Connect",
   myAgentsSectionAccess: "Access",
+  myAgentsNameLabel: "Name",
+  myAgentsDescLabel: "Description",
+  myAgentsSaveProfile: "Save profile",
+  myAgentsProfileSaved: "Saved",
+  myAgentsProfileFailed: "Couldn’t save profile.",
+  myAgentsNameHint: "2–100 characters",
+  myAgentsDescHint: "10–500 characters",
   myAgentsDelivery: "Delivery",
   myAgentsDeliveryDirect: "Mode A · direct",
   myAgentsDeliveryRelay: "Mode B · relay",
@@ -449,6 +463,13 @@ const zh: RanchMessages = {
   myAgentsSectionIdentity: "身份",
   myAgentsSectionConnect: "连接",
   myAgentsSectionAccess: "权限",
+  myAgentsNameLabel: "名称",
+  myAgentsDescLabel: "描述",
+  myAgentsSaveProfile: "保存资料",
+  myAgentsProfileSaved: "已保存",
+  myAgentsProfileFailed: "保存失败。",
+  myAgentsNameHint: "2–100 字",
+  myAgentsDescHint: "10–500 字",
   myAgentsDelivery: "投递",
   myAgentsDeliveryDirect: "Mode A · 直连",
   myAgentsDeliveryRelay: "Mode B · 中继",

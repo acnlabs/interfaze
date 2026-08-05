@@ -174,9 +174,6 @@ export function MyAgentsPanel({
                     ...(detail.last_heartbeat
                       ? [{ label: t.myAgentsLastHeartbeat, value: detail.last_heartbeat }]
                       : []),
-                    ...(detail.description
-                      ? [{ label: "Desc", value: detail.description }]
-                      : []),
                     ...(detail.tags && detail.tags.length > 0
                       ? [{ label: "Tags", value: detail.tags.join(", ") }]
                       : []),
@@ -190,6 +187,12 @@ export function MyAgentsPanel({
                 agentPlanetBaseUrl={agentPlanetBaseUrl}
                 connectGuideUrl={connectGuideUrl}
                 busy={busy}
+                onUpdated={(row) => {
+                  setDetail(row);
+                  setAgents((prev) =>
+                    prev.map((a) => (a.agent_id === row.agent_id ? { ...a, ...row } : a)),
+                  );
+                }}
               />
               <button
                 type="button"

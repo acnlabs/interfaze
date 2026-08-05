@@ -3870,6 +3870,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           agentPlanetBaseUrl={agentPlanetBaseUrl}
                           connectGuideUrl={connectGuideUrl}
                           busy={busy}
+                          onUpdated={setOwnedAgentDetail}
                         />
                       ) : (
                         <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>
