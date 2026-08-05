@@ -404,6 +404,7 @@ export function AgentOwnerSettings({
     !busy;
 
   const saving = savingProfile || savingDelivery;
+  const hasEdits = profileDirty || deliveryDirty;
   const canSaveAny = (canSaveProfile || canSaveDelivery) && !saving && !busy;
 
   const runSaveProfile = (): Promise<MyAgentSummary | null> => {
@@ -698,14 +699,26 @@ export function AgentOwnerSettings({
         {rotateError ? (
           <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>{rotateError}</p>
         ) : null}
-        <button
-          type="button"
-          style={{ ...btnPrimary, width: "100%" }}
-          disabled={!canSaveAny}
-          onClick={saveAll}
-        >
-          {saving ? t.loading : t.save}
-        </button>
+        {profileError || deliveryError ? (
+          <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>
+            {profileError || deliveryError}
+          </p>
+        ) : null}
+        {profileMsg || deliveryMsg ? (
+          <p style={{ margin: 0, fontSize: 12, color: colors.recommended }}>
+            {profileMsg || deliveryMsg}
+          </p>
+        ) : null}
+        {hasEdits || saving ? (
+          <button
+            type="button"
+            style={{ ...btnPrimary, width: "100%" }}
+            disabled={!canSaveAny}
+            onClick={saveAll}
+          >
+            {saving ? t.loading : t.save}
+          </button>
+        ) : null}
         <button
           type="button"
           style={{
