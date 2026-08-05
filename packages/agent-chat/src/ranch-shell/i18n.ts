@@ -74,6 +74,7 @@ export type RanchMessages = {
   topicMessages: (n: number) => string;
   backToMainChat: string;
   infoTab: string;
+  settingsTab: string;
   statusLabel: string;
   agentIdLabel: string;
   slashCommands: string;
@@ -232,6 +233,7 @@ const en: RanchMessages = {
   topicMessages: (n) => (n === 1 ? "1 message" : `${n} messages`),
   backToMainChat: "Main chat",
   infoTab: "Info",
+  settingsTab: "Settings",
   statusLabel: "Status",
   agentIdLabel: "Agent id",
   slashCommands: "Commands",
@@ -288,8 +290,8 @@ const en: RanchMessages = {
   waitingReply: "Waiting for reply…",
   searchAgents: "Search agents…",
   discoverAgents: "Discoverable",
-  myAgentsManage: "My Agents",
-  myAgentsTitle: "My Agents",
+  myAgentsManage: "Manage agents",
+  myAgentsTitle: "Manage agents",
   myAgentsEmptyTitle: "No agents claimed yet",
   myAgentsEmptyBody:
     "Copy the connect prompt, paste it to your agent, and finish claim. Registering alone is not enough.",
@@ -388,6 +390,7 @@ const zh: RanchMessages = {
   topicMessages: (n) => `${n} 条消息`,
   backToMainChat: "主会话",
   infoTab: "资料",
+  settingsTab: "设置",
   statusLabel: "状态",
   agentIdLabel: "Agent id",
   slashCommands: "命令",
@@ -438,8 +441,8 @@ const zh: RanchMessages = {
   logOut: "退出登录",
   account: "账户",
   language: "语言",
-  myAgentsManage: "我的 Agents",
-  myAgentsTitle: "我的 Agents",
+  myAgentsManage: "管理 Agents",
+  myAgentsTitle: "管理 Agents",
   myAgentsEmptyTitle: "还没有认领的 agent",
   myAgentsEmptyBody: "复制接入提示词发给你的 agent，完成注册与认领。只注册还不够。",
   myAgentsOfflineHint: "已注册但离线——启动 agent，或检查投递模式（Mode A/B）。",

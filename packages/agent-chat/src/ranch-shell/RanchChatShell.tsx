@@ -9,7 +9,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { ChatGatewayError, createGatewayClient } from "../gateway";
+import { ChatGatewayError, createGatewayClient, type MyAgentSummary } from "../gateway";
 import type {
   AgentDirectoryItem,
   ChatMessage,
@@ -19,6 +19,7 @@ import type {
   ThreadSummary,
 } from "../types";
 import { connectChatSocket, type ChatSocket } from "../ws";
+import { AgentOwnerSettings, deliveryLabel } from "./AgentOwnerSettings";
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
 import { CONNECT_PROMPTS, copyText } from "./connectPrompt";
@@ -916,112 +917,214 @@ function AccountFooter({
 }) {
   const label = (account.name || account.email || t.account).trim();
   const initial = label.slice(0, 1).toUpperCase() || "?";
+  const [menuOpen, setMenuOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
+  const menuItemStyle: CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    width: "100%",
+    border: "none",
+    background: "transparent",
+    color: colors.text,
+    padding: "10px 12px",
+    fontSize: 13,
+    cursor: "pointer",
+    textAlign: "left",
+  };
+
   return (
     <div
+      ref={rootRef}
       style={{
+        position: "relative",
         borderTop: `1px solid ${colors.border}`,
-        padding: "10px 12px",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
         flexShrink: 0,
         background: colors.panel,
+        zIndex: 20,
       }}
     >
-      {account.picture ? (
-        <img
-          src={account.picture}
-          alt=""
-          width={32}
-          height={32}
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 999,
-            objectFit: "cover",
-            flexShrink: 0,
-            background: colors.border,
-          }}
-        />
-      ) : (
-        <span
-          aria-hidden
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 999,
-            background: "linear-gradient(135deg,#475569,#1e293b)",
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 13,
-            fontWeight: 700,
-            flexShrink: 0,
-          }}
-        >
-          {initial}
-        </span>
-      )}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      {menuOpen ? (
         <div
+          role="menu"
           style={{
-            fontSize: 13,
-            fontWeight: 600,
+            position: "absolute",
+            left: 8,
+            right: 8,
+            bottom: "100%",
+            marginBottom: 6,
+            background: "#1c2330",
+            border: `1px solid ${colors.border}`,
+            borderRadius: 10,
+            boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
             overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            zIndex: 30,
           }}
         >
-          {label}
+          {onManageAgents ? (
+            <button
+              type="button"
+              role="menuitem"
+              style={menuItemStyle}
+              onClick={() => {
+                setMenuOpen(false);
+                onManageAgents();
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = colors.hover;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
+            >
+              <span aria-hidden style={{ width: 16, textAlign: "center", color: colors.muted }}>
+                ◇
+              </span>
+              {t.myAgentsManage}
+            </button>
+          ) : null}
+          {onManageAgents && onLogout ? (
+            <div style={{ height: 1, background: colors.border, margin: "2px 0" }} />
+          ) : null}
+          {onLogout ? (
+            <button
+              type="button"
+              role="menuitem"
+              style={menuItemStyle}
+              onClick={() => {
+                setMenuOpen(false);
+                onLogout();
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = colors.hover;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
+            >
+              <span aria-hidden style={{ width: 16, textAlign: "center", color: colors.muted }}>
+                ↗
+              </span>
+              {t.logOut}
+            </button>
+          ) : null}
         </div>
-        {account.name && account.email ? (
+      ) : null}
+
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onClick={() => setMenuOpen((v) => !v)}
+        style={{
+          width: "100%",
+          border: "none",
+          background: menuOpen ? colors.hover : "transparent",
+          color: colors.text,
+          padding: "10px 12px",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          cursor: "pointer",
+          textAlign: "left",
+        }}
+      >
+        {account.picture ? (
+          <img
+            src={account.picture}
+            alt=""
+            width={32}
+            height={32}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 999,
+              objectFit: "cover",
+              flexShrink: 0,
+              background: colors.border,
+            }}
+          />
+        ) : (
+          <span
+            aria-hidden
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 999,
+              background: "linear-gradient(135deg,#475569,#1e293b)",
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 13,
+              fontWeight: 700,
+              flexShrink: 0,
+            }}
+          >
+            {initial}
+          </span>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
-              fontSize: 11,
-              color: colors.muted,
+              fontSize: 13,
+              fontWeight: 600,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
             }}
           >
-            {account.email}
+            {label}
           </div>
-        ) : null}
-        {onManageAgents ? (
-          <button
-            type="button"
-            onClick={onManageAgents}
-            style={{
-              marginTop: 4,
-              border: "none",
-              background: "transparent",
-              color: colors.accent,
-              fontSize: 11,
-              padding: 0,
-              cursor: "pointer",
-              textAlign: "left",
-            }}
-          >
-            {t.myAgentsManage}
-          </button>
-        ) : null}
-      </div>
-      {onLogout ? (
-        <button
-          type="button"
-          onClick={onLogout}
+          {account.name && account.email ? (
+            <div
+              style={{
+                fontSize: 11,
+                color: colors.muted,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {account.email}
+            </div>
+          ) : null}
+        </div>
+        <span
+          aria-hidden
+          title={t.account}
           style={{
-            ...btnGhost,
-            fontSize: 12,
-            padding: "4px 8px",
+            width: 28,
+            height: 28,
+            borderRadius: 6,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: colors.muted,
+            fontSize: 14,
             flexShrink: 0,
           }}
-          aria-label={t.logOut}
         >
-          {t.logOut}
-        </button>
-      ) : null}
+          ⚙
+        </span>
+      </button>
     </div>
   );
 }
@@ -1146,8 +1249,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
     confirmLabel: string;
     onConfirm: () => void;
   } | null>(null);
-  /** Detail panel tab. Group: members | topics. Direct: info | topics. */
-  const [infoTab, setInfoTab] = useState<"info" | "members" | "topics">("info");
+  /** Detail panel tab. Group: members | topics. Direct: info | settings? | topics. */
+  const [infoTab, setInfoTab] = useState<"info" | "settings" | "members" | "topics">("info");
+  /** Owned-agent ACN detail for Info (read-only) + Settings (manage). */
+  const [ownedAgentDetail, setOwnedAgentDetail] = useState<MyAgentSummary | null>(null);
+  const [ownedAgentLoading, setOwnedAgentLoading] = useState(false);
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [activeTopic, setActiveTopic] = useState<ThreadSummary | null>(null);
   /**
@@ -1400,6 +1506,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setShowAddMember(false);
       setEditingTitle(false);
       setInfoTab(isGroupChat(chat) ? "members" : "info");
+      setOwnedAgentDetail(null);
       setShowCreateTopic(false);
       setTopicTitleDraft("");
       setTopicDescDraft("");
@@ -1987,6 +2094,42 @@ export function RanchChatShell(props: RanchChatShellProps) {
   });
   const mineAgents = directoryAgents.filter((a) => a.group === "mine" && a.agent_id.trim());
   const hasMineAgents = mineAgents.length > 0;
+
+  const isOwnedDirectAgent = (agentId?: string | null): boolean => {
+    if (!agentId?.trim()) return false;
+    const bare = agentId.replace(/^acn:/, "");
+    return mineAgents.some(
+      (a) => a.agent_id === agentId || a.agent_id === bare || `acn:${a.agent_id}` === agentId,
+    );
+  };
+
+  const activeIsOwned =
+    !!active && !isGroupChat(active) && isOwnedDirectAgent(active.agent_id);
+
+  useEffect(() => {
+    if (!showMembersPanel || !activeIsOwned || !active?.agent_id) {
+      return;
+    }
+    if (infoTab !== "info" && infoTab !== "settings") return;
+    let cancelled = false;
+    const bare = active.agent_id.replace(/^acn:/, "");
+    setOwnedAgentLoading(true);
+    void client
+      .getMyAgent(bare)
+      .then((row) => {
+        if (!cancelled) setOwnedAgentDetail(row);
+      })
+      .catch(() => {
+        if (!cancelled) setOwnedAgentDetail(null);
+      })
+      .finally(() => {
+        if (!cancelled) setOwnedAgentLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showMembersPanel, activeIsOwned, active?.agent_id, infoTab, client]);
+
   const activeOffline = active && !isGroupChat(active) && isAgentOffline(active.agent_status);
   const groupActive = !!(active && isGroupChat(active));
   const slashParsed = parseSlashDraft(draft);
@@ -3531,10 +3674,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           ["members", t.members],
                           ["topics", t.topics],
                         ] as const)
-                      : ([
-                          ["info", t.infoTab],
-                          ["topics", t.topics],
-                        ] as const)
+                      : activeIsOwned
+                        ? ([
+                            ["info", t.infoTab],
+                            ["settings", t.settingsTab],
+                            ["topics", t.topics],
+                          ] as const)
+                        : ([
+                            ["info", t.infoTab],
+                            ["topics", t.topics],
+                          ] as const)
                     ).map(([key, label]) => (
                       <button
                         key={key}
@@ -3703,6 +3852,29 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </div>
                       ) : null}
                     </>
+                  ) : infoTab === "settings" && !groupActive && activeIsOwned ? (
+                    <div
+                      style={{
+                        flex: 1,
+                        overflow: "auto",
+                        padding: 16,
+                      }}
+                    >
+                      {ownedAgentLoading && !ownedAgentDetail ? (
+                        <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
+                      ) : ownedAgentDetail ? (
+                        <AgentOwnerSettings
+                          client={client}
+                          detail={ownedAgentDetail}
+                          messages={t}
+                          agentPlanetBaseUrl={agentPlanetBaseUrl}
+                          connectGuideUrl={connectGuideUrl}
+                          busy={busy}
+                        />
+                      ) : (
+                        <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>
+                      )}
+                    </div>
                   ) : infoTab === "info" && !groupActive ? (
                     <>
                       <div
@@ -3728,9 +3900,43 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             {t.statusLabel}
                           </div>
                           <div style={{ fontSize: 13, color: colors.text }}>
-                            {agentStatusTitle(active.agent_status, t) || t.offline}
+                            {ownedAgentDetail?.status === "online"
+                              ? t.online
+                              : ownedAgentDetail?.status === "offline"
+                                ? t.offline
+                                : agentStatusTitle(active.agent_status, t) || t.offline}
                           </div>
                         </div>
+                        {ownedAgentDetail?.name ? (
+                          <div>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                letterSpacing: "0.06em",
+                                color: colors.muted,
+                                marginBottom: 6,
+                              }}
+                            >
+                              {t.agentInfo}
+                            </div>
+                            <div style={{ fontSize: 13, color: colors.text }}>
+                              {ownedAgentDetail.name}
+                            </div>
+                            {ownedAgentDetail.description ? (
+                              <div
+                                style={{
+                                  marginTop: 6,
+                                  fontSize: 12,
+                                  color: colors.muted,
+                                  lineHeight: 1.45,
+                                }}
+                              >
+                                {ownedAgentDetail.description}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
                         {shortAgentId(active.agent_id) ? (
                           <div>
                             <div
@@ -3755,6 +3961,24 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               title={active.agent_id || undefined}
                             >
                               {active.agent_id}
+                            </div>
+                          </div>
+                        ) : null}
+                        {ownedAgentDetail?.delivery ? (
+                          <div>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                letterSpacing: "0.06em",
+                                color: colors.muted,
+                                marginBottom: 6,
+                              }}
+                            >
+                              {t.myAgentsDelivery}
+                            </div>
+                            <div style={{ fontSize: 13, color: colors.text }}>
+                              {deliveryLabel(ownedAgentDetail.delivery, t)}
                             </div>
                           </div>
                         ) : null}
