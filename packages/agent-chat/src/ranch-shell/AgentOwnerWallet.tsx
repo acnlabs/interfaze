@@ -169,18 +169,38 @@ export function AgentOwnerWallet({
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
             gap: 10,
-            marginBottom: 12,
+            alignItems: "start",
           }}
         >
-          <div style={assetCard}>
-            <div style={{ fontSize: 11, color: colors.muted, marginBottom: 4 }}>
-              {t.walletBalance}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+            <div style={assetCard}>
+              <div style={{ fontSize: 11, color: colors.muted, marginBottom: 4 }}>
+                {t.walletBalance}
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: colors.text }}>
+                {fmtCredits(wallet.balance)}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
+                {t.walletCreditsHint}
+              </div>
             </div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: colors.text }}>
-              {fmtCredits(wallet.balance)}
-            </div>
-            <div style={{ marginTop: 6, fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
-              {t.walletCreditsHint}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                style={{ ...btnPrimary, flex: 1, fontWeight: 600 }}
+                disabled={busy || acting}
+                onClick={() => openDialog("topup")}
+              >
+                {t.walletTopup}
+              </button>
+              <button
+                type="button"
+                style={{ ...btnGhost, flex: 1, fontWeight: 600 }}
+                disabled={busy || acting || wallet.balance <= 0}
+                onClick={() => openDialog("withdraw")}
+              >
+                {t.walletWithdraw}
+              </button>
             </div>
           </div>
           <div style={assetCard}>
@@ -194,24 +214,6 @@ export function AgentOwnerWallet({
               {t.walletApPointsHint}
             </div>
           </div>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            type="button"
-            style={{ ...btnPrimary, flex: 1, fontWeight: 600 }}
-            disabled={busy || acting}
-            onClick={() => openDialog("topup")}
-          >
-            {t.walletTopup}
-          </button>
-          <button
-            type="button"
-            style={{ ...btnGhost, flex: 1, fontWeight: 600 }}
-            disabled={busy || acting || wallet.balance <= 0}
-            onClick={() => openDialog("withdraw")}
-          >
-            {t.walletWithdraw}
-          </button>
         </div>
         {flash ? (
           <p style={{ margin: "10px 0 0", fontSize: 12, color: colors.accent }}>{flash}</p>
