@@ -1116,8 +1116,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [activeTopic, setActiveTopic] = useState<ThreadSummary | null>(null);
   /**
-   * Topic to tag new sends with while staying on the main timeline
-   * (slash /topic creates this; does not switch into filtered topic view).
+   * Product model: topic = segment label on the main timeline; Topics list =
+   * directory; filtered view (activeTopic) is secondary (list only).
+   * composerTopic tags outbound sends without leaving the full timeline.
    */
   const [composerTopic, setComposerTopic] = useState<ThreadSummary | null>(null);
   /** Brief flash when tapping a timeline topic divider (does not open filter view). */
