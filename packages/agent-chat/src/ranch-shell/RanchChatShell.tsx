@@ -2881,18 +2881,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     </button>
                   </div>
                 ) : null}
-                {groupActive || composerTopic ? (
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 11,
-                      lineHeight: 1.4,
-                      color: colors.muted,
-                    }}
-                  >
-                    {t.topicVsMentionHint}
-                  </p>
-                ) : null}
                 <div style={{ display: "flex", gap: 8, position: "relative" }}>
                 {slashMenuOpen && slashCandidates.length > 0 ? (
                   <div

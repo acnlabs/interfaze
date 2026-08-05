@@ -86,8 +86,6 @@ export type RanchMessages = {
   postingInTopic: (title: string) => string;
   /** Light marker when a topic is created on the main timeline. */
   topicStarted: (title: string) => string;
-  /** Short UX: topics vs @ mentions are orthogonal. */
-  topicVsMentionHint: string;
   openDirectChat: string;
   mentionAll: string;
   mentionAllHint: string;
@@ -206,7 +204,6 @@ const en: RanchMessages = {
   defaultTopicTitle: "New topic",
   postingInTopic: (title) => `Posting in # ${title}`,
   topicStarted: (title) => `Started # ${title}`,
-  topicVsMentionHint: "Topics tag where a message belongs; @ chooses who receives it.",
   openDirectChat: "Message privately",
   mentionAll: "@all",
   mentionAllHint: "Mention all agents",
@@ -324,7 +321,6 @@ const zh: RanchMessages = {
   defaultTopicTitle: "新话题",
   postingInTopic: (title) => `正在 # ${title} 中发送`,
   topicStarted: (title) => `已开始 # ${title}`,
-  topicVsMentionHint: "话题标记消息归属；@ 决定投递给谁。",
   openDirectChat: "私聊",
   mentionAll: "@all",
   mentionAllHint: "提及所有 agent",
