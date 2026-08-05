@@ -1852,11 +1852,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
         }
         setRecipientPickerOpen(false);
         beginAwaitingReply(chatId);
+        // Same thread rule as normal send — do not fall back to lastUser.thread_id
+        // or Retry after closing the topic chip would re-enter the old topic.
         await client.sendMessage(
           chatId,
           text,
           mentions,
-          activeTopic?.id ?? composerTopic?.id ?? lastUser?.thread_id ?? null,
+          activeTopic?.id ?? composerTopic?.id ?? null,
         );
         if (group && mentions) {
           if (mentions.length === 1) {
@@ -2871,6 +2873,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       ×
                     </button>
                   </div>
+                ) : null}
+                {groupActive || composerTopic ? (
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 11,
+                      lineHeight: 1.4,
+                      color: colors.muted,
+                    }}
+                  >
+                    {t.topicVsMentionHint}
+                  </p>
                 ) : null}
                 <div style={{ display: "flex", gap: 8, position: "relative" }}>
                 {slashMenuOpen && slashCandidates.length > 0 ? (

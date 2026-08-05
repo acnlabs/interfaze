@@ -86,6 +86,8 @@ export type RanchMessages = {
   postingInTopic: (title: string) => string;
   /** Light marker when a topic is created on the main timeline. */
   topicStarted: (title: string) => string;
+  /** Short UX: topics vs @ mentions are orthogonal. */
+  topicVsMentionHint: string;
   openDirectChat: string;
   mentionAll: string;
   mentionAllHint: string;
@@ -190,7 +192,7 @@ const en: RanchMessages = {
   topicTitle: "Topic title",
   topicDescription: "Description (optional)",
   noTopicsYet: "No topics yet",
-  noTopicsHint: "Create a topic to organize a discussion thread.",
+  noTopicsHint: "Topics are a directory of timeline segments — open one to filter, or /topic to start posting in a segment.",
   topicMessages: (n) => (n === 1 ? "1 message" : `${n} messages`),
   backToMainChat: "Main chat",
   infoTab: "Info",
@@ -204,6 +206,7 @@ const en: RanchMessages = {
   defaultTopicTitle: "New topic",
   postingInTopic: (title) => `Posting in # ${title}`,
   topicStarted: (title) => `Started # ${title}`,
+  topicVsMentionHint: "Topics tag where a message belongs; @ chooses who receives it.",
   openDirectChat: "Message privately",
   mentionAll: "@all",
   mentionAllHint: "Mention all agents",
@@ -307,7 +310,7 @@ const zh: RanchMessages = {
   topicTitle: "话题标题",
   topicDescription: "说明（可选）",
   noTopicsYet: "还没有话题",
-  noTopicsHint: "新建话题，把一段讨论收进独立线程。",
+  noTopicsHint: "Topics 是时间线分段目录——点开可只看该话题，或用 /topic 在主时间线开始打标。",
   topicMessages: (n) => `${n} 条消息`,
   backToMainChat: "主会话",
   infoTab: "资料",
@@ -321,6 +324,7 @@ const zh: RanchMessages = {
   defaultTopicTitle: "新话题",
   postingInTopic: (title) => `正在 # ${title} 中发送`,
   topicStarted: (title) => `已开始 # ${title}`,
+  topicVsMentionHint: "话题标记消息归属；@ 决定投递给谁。",
   openDirectChat: "私聊",
   mentionAll: "@all",
   mentionAllHint: "提及所有 agent",
