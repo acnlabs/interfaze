@@ -11,7 +11,12 @@ export {
   type RanchLocale,
   type RanchMessages,
 } from "./ranch-shell/i18n";
-export { createGatewayClient, ChatGatewayError, type ChatAgentSearchHit } from "./gateway";
+export {
+  createGatewayClient,
+  ChatGatewayError,
+  type ChatAgentSearchHit,
+  type MyAgentSummary,
+} from "./gateway";
 export { connectChatSocket, type ChatSocket, type ChatWsEvent } from "./ws";
 export {
   CHAT_OPEN_EVENT,

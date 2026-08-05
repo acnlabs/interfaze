@@ -19,6 +19,7 @@ import type {
   ThreadSummary,
 } from "../types";
 import { connectChatSocket, type ChatSocket } from "../ws";
+import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
 import { CONNECT_PROMPTS, copyText } from "./connectPrompt";
 import {
@@ -905,10 +906,12 @@ function LanguageSwitcher({
 function AccountFooter({
   account,
   onLogout,
+  onManageAgents,
   t,
 }: {
   account: RanchChatAccount;
   onLogout?: () => void;
+  onManageAgents?: () => void;
   t: RanchMessages;
 }) {
   const label = (account.name || account.email || t.account).trim();
@@ -984,6 +987,24 @@ function AccountFooter({
           >
             {account.email}
           </div>
+        ) : null}
+        {onManageAgents ? (
+          <button
+            type="button"
+            onClick={onManageAgents}
+            style={{
+              marginTop: 4,
+              border: "none",
+              background: "transparent",
+              color: colors.accent,
+              fontSize: 11,
+              padding: 0,
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            {t.myAgentsManage}
+          </button>
         ) : null}
       </div>
       {onLogout ? (
@@ -1101,6 +1122,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [agentStatuses, setAgentStatuses] = useState<Record<string, string>>({});
   /** Ranch-style: tap header → members panel. */
   const [showMembersPanel, setShowMembersPanel] = useState(false);
+  const [showMyAgents, setShowMyAgents] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -2396,7 +2418,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
           </div>
         ) : null}
 
-        {account ? <AccountFooter account={account} onLogout={onLogout} t={t} /> : null}
+        {account ? (
+          <AccountFooter
+            account={account}
+            onLogout={onLogout}
+            onManageAgents={() => {
+              setShowPicker(false);
+              setShowMyAgents(true);
+            }}
+            t={t}
+          />
+        ) : null}
 
         {showPicker && (
           <NewChatPicker
@@ -2412,6 +2444,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
             onCreateGroup={(titleText, ids) => void startGroup(titleText, ids)}
           />
         )}
+
+        {showMyAgents ? (
+          <MyAgentsPanel
+            client={client}
+            connectGuideUrl={connectGuideUrl}
+            locale={uiLocale}
+            messages={t}
+            busy={busy}
+            onClose={() => setShowMyAgents(false)}
+            onOpenChat={(id) => {
+              setShowMyAgents(false);
+              void startDirect(id);
+            }}
+          />
+        ) : null}
       </div>
 
       {(view === "conversation" || mode === "full") && (

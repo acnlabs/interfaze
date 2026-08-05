@@ -124,30 +124,32 @@ export default function InterfazeChatHost() {
       };
 
       const mine: AgentDirectoryItem[] = [];
-      const owner = user?.sub;
-      if (owner) {
-        try {
-          const url = new URL(`${gatewayBaseUrl}/api/labs/analytics/agents`);
-          url.searchParams.set("status", "all");
-          url.searchParams.set("owner", owner);
-          url.searchParams.set("limit", "50");
-          const res = await fetch(url.toString(), { headers });
-          if (res.ok) {
-            const data = (await res.json()) as { agents?: Array<Record<string, unknown>> };
-            for (const a of data.agents ?? []) {
-              const id = String(a.agent_id ?? a.id ?? "").trim();
-              if (!id || id.startsWith("sys:")) continue;
-              mine.push({
-                agent_id: id,
-                name: typeof a.name === "string" ? a.name : null,
-                description: typeof a.description === "string" ? a.description : null,
-                group: "mine",
-              });
-            }
+      try {
+        // Same Chat Gateway surface as My Agents panel (JWT sub owner filter).
+        const res = await fetch(`${gatewayBaseUrl}/api/chat/my-agents?limit=50`, {
+          headers,
+        });
+        if (res.ok) {
+          const data = (await res.json()) as {
+            agents?: Array<{
+              agent_id?: string;
+              name?: string | null;
+              description?: string | null;
+            }>;
+          };
+          for (const a of data.agents ?? []) {
+            const id = String(a.agent_id ?? "").trim();
+            if (!id || id.startsWith("sys:")) continue;
+            mine.push({
+              agent_id: id,
+              name: typeof a.name === "string" ? a.name : null,
+              description: typeof a.description === "string" ? a.description : null,
+              group: "mine",
+            });
           }
-        } catch {
-          /* best-effort */
         }
+      } catch {
+        /* best-effort */
       }
 
       if (!cancelled) setDirectoryAgents(mine);
@@ -156,7 +158,7 @@ export default function InterfazeChatHost() {
     return () => {
       cancelled = true;
     };
-  }, [gatewayBaseUrl, isAuthenticated, tokenGetter, user?.sub]);
+  }, [gatewayBaseUrl, isAuthenticated, tokenGetter]);
 
   return (
     <RanchChatShell

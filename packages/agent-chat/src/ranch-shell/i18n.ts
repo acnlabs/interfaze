@@ -128,6 +128,31 @@ export type RanchMessages = {
   language: string;
   sessionExpired: string;
   reLogin: string;
+  /** Manage owned ACN agents (not runtime). */
+  myAgentsManage: string;
+  myAgentsTitle: string;
+  myAgentsEmptyTitle: string;
+  myAgentsEmptyBody: string;
+  myAgentsOfflineHint: string;
+  myAgentsSectionIdentity: string;
+  myAgentsSectionConnect: string;
+  myAgentsSectionAccess: string;
+  myAgentsDelivery: string;
+  myAgentsDeliveryDirect: string;
+  myAgentsDeliveryRelay: string;
+  myAgentsDeliveryNone: string;
+  myAgentsEndpoint: string;
+  myAgentsInbound: string;
+  myAgentsPolicy: string;
+  myAgentsChatOpen: string;
+  myAgentsOpenChat: string;
+  myAgentsBack: string;
+  myAgentsShortId: string;
+  myAgentsLastHeartbeat: string;
+  myAgentsLoadFailed: string;
+  yes: string;
+  no: string;
+  unknown: string;
 };
 
 const en: RanchMessages = {
@@ -253,6 +278,31 @@ const en: RanchMessages = {
   waitingReply: "Waiting for reply…",
   searchAgents: "Search agents…",
   discoverAgents: "Discoverable",
+  myAgentsManage: "My Agents",
+  myAgentsTitle: "My Agents",
+  myAgentsEmptyTitle: "No agents claimed yet",
+  myAgentsEmptyBody:
+    "Copy the connect prompt, paste it to your agent, and finish claim. Registering alone is not enough.",
+  myAgentsOfflineHint: "Registered but offline — start the agent or check delivery (Mode A/B).",
+  myAgentsSectionIdentity: "Identity",
+  myAgentsSectionConnect: "Connect",
+  myAgentsSectionAccess: "Access",
+  myAgentsDelivery: "Delivery",
+  myAgentsDeliveryDirect: "Mode A · direct",
+  myAgentsDeliveryRelay: "Mode B · relay",
+  myAgentsDeliveryNone: "No real-time push",
+  myAgentsEndpoint: "Endpoint",
+  myAgentsInbound: "Inbound reachable",
+  myAgentsPolicy: "Policy mode",
+  myAgentsChatOpen: "Open to chat",
+  myAgentsOpenChat: "Open chat",
+  myAgentsBack: "Back",
+  myAgentsShortId: "Id",
+  myAgentsLastHeartbeat: "Last heartbeat",
+  myAgentsLoadFailed: "Couldn’t load your agents.",
+  yes: "Yes",
+  no: "No",
+  unknown: "Unknown",
 };
 
 const zh: RanchMessages = {
@@ -367,6 +417,31 @@ const zh: RanchMessages = {
   logOut: "退出登录",
   account: "账户",
   language: "语言",
+  myAgentsManage: "我的 Agents",
+  myAgentsTitle: "我的 Agents",
+  myAgentsEmptyTitle: "还没有认领的 agent",
+  myAgentsEmptyBody: "复制接入提示词发给你的 agent，完成注册与认领。只注册还不够。",
+  myAgentsOfflineHint: "已注册但离线——启动 agent，或检查投递模式（Mode A/B）。",
+  myAgentsSectionIdentity: "身份",
+  myAgentsSectionConnect: "连接",
+  myAgentsSectionAccess: "权限",
+  myAgentsDelivery: "投递",
+  myAgentsDeliveryDirect: "Mode A · 直连",
+  myAgentsDeliveryRelay: "Mode B · 中继",
+  myAgentsDeliveryNone: "无实时推送",
+  myAgentsEndpoint: "Endpoint",
+  myAgentsInbound: "入站可达",
+  myAgentsPolicy: "策略模式",
+  myAgentsChatOpen: "可被发现聊天",
+  myAgentsOpenChat: "开聊",
+  myAgentsBack: "返回",
+  myAgentsShortId: "Id",
+  myAgentsLastHeartbeat: "最近心跳",
+  myAgentsLoadFailed: "无法加载你的 Agents。",
+  yes: "是",
+  no: "否",
+  unknown: "未知",
+
   sessionExpired: "登录已失效，请重新登录后再聊。",
   reLogin: "重新登录",
   waitingReply: "等待回复…",

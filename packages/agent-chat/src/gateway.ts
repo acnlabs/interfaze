@@ -43,6 +43,23 @@ export type ChatAgentSearchHit = {
   acl_reason?: string | null;
 };
 
+/** Owned ACN agent row from GET /api/chat/my-agents (management + directory mine). */
+export type MyAgentSummary = {
+  agent_id: string;
+  name?: string | null;
+  description?: string | null;
+  tags?: string[];
+  status?: string | null;
+  claim_status?: string | null;
+  delivery?: "direct" | "relay" | "none" | string | null;
+  last_heartbeat?: string | null;
+  endpoint_masked?: string | null;
+  inbound_reachable?: boolean | null;
+  policy_mode?: string | null;
+  chat_open?: boolean | null;
+  owner?: string | null;
+};
+
 export type GatewayClient = {
   health: () => Promise<{ status: string; gateway?: string; ok: boolean; error?: string }>;
   listChats: () => Promise<ChatSummary[]>;
@@ -67,6 +84,9 @@ export type GatewayClient = {
   ) => Promise<ThreadSummary>;
   /** D9-filtered discoverable agents (excludes caller's own). */
   searchAgents: (q?: string, limit?: number) => Promise<ChatAgentSearchHit[]>;
+  /** Owner's ACN agents (same region / alive as directory mine). */
+  listMyAgents: (limit?: number) => Promise<MyAgentSummary[]>;
+  getMyAgent: (agentId: string) => Promise<MyAgentSummary>;
   addParticipant: (chatId: string, agentId: string) => Promise<ChatParticipant>;
   removeParticipant: (chatId: string, participantId: string) => Promise<void>;
   updateChat: (chatId: string, patch: { title?: string; description?: string }) => Promise<ChatSummary>;
@@ -132,6 +152,16 @@ export function createGatewayClient(
       );
       return data.agents ?? [];
     },
+    listMyAgents: async (limit = 50) => {
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      const data = await request<{ agents?: MyAgentSummary[] }>(
+        `/api/chat/my-agents?${params.toString()}`,
+      );
+      return data.agents ?? [];
+    },
+    getMyAgent: (agentId) =>
+      request<MyAgentSummary>(`/api/chat/my-agents/${encodeURIComponent(agentId)}`),
     listMessages: (chatId) =>
       request<ChatMessage[]>(`/api/chats/${encodeURIComponent(chatId)}/messages?limit=50`),
     listParticipants: (chatId) =>
