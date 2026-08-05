@@ -42,6 +42,8 @@ export function policyLabel(
   const m = (mode || "").toLowerCase();
   if (m === "open") return t.myAgentsPolicyOpen;
   if (m === "allowlist") return t.myAgentsPolicyAllowlist;
+  if (m === "closed") return t.myAgentsPolicyClosed;
+  if (m === "manifest") return t.myAgentsPolicyManifest;
   return mode?.trim() || t.unknown;
 }
 
@@ -49,6 +51,14 @@ function boolLabel(v: boolean | null | undefined, t: RanchMessages): string {
   if (v === true) return t.yes;
   if (v === false) return t.no;
   return t.unknown;
+}
+
+function inboundLabel(detail: MyAgentSummary, t: RanchMessages): string {
+  const applicable =
+    detail.inbound_applicable ??
+    (detail.delivery === "direct" ? true : detail.delivery ? false : null);
+  if (applicable === false) return t.myAgentsInboundNa;
+  return boolLabel(detail.inbound_reachable, t);
 }
 
 /** Lucide-style info glyph — sized via CSS, not emoji/unicode. */
@@ -468,7 +478,7 @@ export function AgentOwnerSettings({
               {
                 label: t.myAgentsInbound,
                 hint: t.myAgentsInboundHint,
-                value: boolLabel(detail.inbound_reachable, t),
+                value: inboundLabel(detail, t),
               },
             ]}
           />

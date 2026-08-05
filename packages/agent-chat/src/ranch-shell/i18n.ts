@@ -163,6 +163,9 @@ export type RanchMessages = {
   myAgentsPolicyHint: string;
   myAgentsPolicyOpen: string;
   myAgentsPolicyAllowlist: string;
+  myAgentsPolicyClosed: string;
+  myAgentsPolicyManifest: string;
+  myAgentsInboundNa: string;
   myAgentsChatOpen: string;
   myAgentsChatOpenHint: string;
   myAgentsOpenChat: string;
@@ -343,13 +346,18 @@ const en: RanchMessages = {
   myAgentsEndpoint: "Your receive URL",
   myAgentsEndpointHint: "Host only (path/secrets hidden). Used when messages are pushed to your URL.",
   myAgentsInbound: "URL reachable",
-  myAgentsInboundHint: "Whether the platform can currently reach your receive URL.",
+  myAgentsInboundHint:
+    "Whether the platform can reach your public receive URL. Only applies when messages are pushed to your URL — not when the agent pulls.",
+  myAgentsInboundNa: "Doesn’t apply",
   myAgentsPolicy: "Who can message",
   myAgentsPolicyHint: "Reception policy on the ACN network — who is allowed to start a chat.",
   myAgentsPolicyOpen: "Anyone",
   myAgentsPolicyAllowlist: "Allowlist only",
+  myAgentsPolicyClosed: "Closed",
+  myAgentsPolicyManifest: "Inbox / queue",
   myAgentsChatOpen: "Discoverable",
-  myAgentsChatOpenHint: "Whether others can find this agent and open a chat from the network.",
+  myAgentsChatOpenHint:
+    "Whether others on the network can find this agent and start a chat (from policy + visibility).",
   myAgentsOpenChat: "Open chat",
   myAgentsBack: "Back",
   myAgentsShortId: "Id",
@@ -516,13 +524,17 @@ const zh: RanchMessages = {
   myAgentsEndpoint: "收信地址",
   myAgentsEndpointHint: "只显示主机名（路径与密钥已隐藏）。用于「推送到你的网址」。",
   myAgentsInbound: "地址可访问",
-  myAgentsInboundHint: "平台现在能不能打到你的收信地址。",
+  myAgentsInboundHint:
+    "平台能否打到你的公网收信地址。仅「推送到你的网址」时有意义；Agent 主动取信时不适用。",
+  myAgentsInboundNa: "不适用",
   myAgentsPolicy: "谁能找你",
   myAgentsPolicyHint: "ACN 上的接待策略——谁被允许发起聊天。",
   myAgentsPolicyOpen: "所有人",
   myAgentsPolicyAllowlist: "仅白名单",
+  myAgentsPolicyClosed: "已关闭",
+  myAgentsPolicyManifest: "收件箱 / 排队",
   myAgentsChatOpen: "可被发现",
-  myAgentsChatOpenHint: "其他人是否能在网络里找到这只 agent 并开聊。",
+  myAgentsChatOpenHint: "其他人是否能在网络里找到这只 agent 并开聊（综合策略与可见性）。",
   myAgentsOpenChat: "开聊",
   myAgentsBack: "返回",
   myAgentsShortId: "Id",

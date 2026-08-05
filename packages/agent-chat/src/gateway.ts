@@ -66,6 +66,8 @@ export type MyAgentSummary = {
   delivery?: "direct" | "relay" | "none" | string | null;
   last_heartbeat?: string | null;
   endpoint_masked?: string | null;
+  /** False when receive mode is pull / not set — URL reachability does not apply. */
+  inbound_applicable?: boolean | null;
   inbound_reachable?: boolean | null;
   policy_mode?: string | null;
   chat_open?: boolean | null;
