@@ -177,6 +177,11 @@ export type RanchMessages = {
   myAgentsDeliverySaved: string;
   myAgentsDeliveryFailed: string;
   myAgentsDeliveryLocked: string;
+  myAgentsDeliveryUnset: string;
+  myAgentsDeliveryUnsetHelp: string;
+  myAgentsEndpointReenterHint: string;
+  myAgentsDeliveryRelayConfirm: string;
+  myAgentsDeliveryRelayConfirmLabel: string;
   myAgentsChatOpen: string;
   myAgentsChatOpenHint: string;
   myAgentsOpenChat: string;
@@ -374,6 +379,14 @@ const en: RanchMessages = {
   myAgentsDeliveryFailed: "Couldn’t update receive mode.",
   myAgentsDeliveryLocked:
     "Receive mode can only be changed when who-can-message is Anyone or Allowlist. Closed / inbox modes block push delivery.",
+  myAgentsDeliveryUnset: "Not set up yet",
+  myAgentsDeliveryUnsetHelp:
+    "Choose how this agent should receive chats, then save. Pull needs no public URL; push needs an https:// address.",
+  myAgentsEndpointReenterHint:
+    "Current host is shown masked below. To change or keep push mode, paste the full https:// URL again.",
+  myAgentsDeliveryRelayConfirm:
+    "Switch to pull mode? The public receive URL will be cleared. Keep acn listen (or equivalent) running afterward.",
+  myAgentsDeliveryRelayConfirmLabel: "Switch to pull",
   myAgentsPolicy: "Who can message",
   myAgentsPolicyHint: "Reception policy on the ACN network — who is allowed to start a chat.",
   myAgentsPolicyOpen: "Anyone",
@@ -566,6 +579,14 @@ const zh: RanchMessages = {
   myAgentsDeliveryFailed: "无法更新收信方式。",
   myAgentsDeliveryLocked:
     "仅当「谁能找你」为所有人/白名单时才能切换收信方式。已关闭或收件箱模式不支持推送。",
+  myAgentsDeliveryUnset: "尚未配置",
+  myAgentsDeliveryUnsetHelp:
+    "先选一种收信方式再保存。取信不需要公网网址；推送需要填写 https:// 地址。",
+  myAgentsEndpointReenterHint:
+    "当前主机名已脱敏显示在下方。要改地址或保持推送，请重新粘贴完整的 https:// URL。",
+  myAgentsDeliveryRelayConfirm:
+    "切换到主动取信？公网收信地址将被清除。之后请保持 acn listen（或同类程序）在线。",
+  myAgentsDeliveryRelayConfirmLabel: "切换为取信",
   myAgentsPolicy: "谁能找你",
   myAgentsPolicyHint: "ACN 上的接待策略——谁被允许发起聊天。",
   myAgentsPolicyOpen: "所有人",

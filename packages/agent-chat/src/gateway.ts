@@ -72,6 +72,8 @@ export type MyAgentSummary = {
   policy_mode?: string | null;
   chat_open?: boolean | null;
   owner?: string | null;
+  /** Present after a successful delivery PATCH when ACN returns follow-up copy. */
+  next_step_hint?: string | null;
 };
 
 export type GatewayClient = {

@@ -325,6 +325,7 @@ export function AgentOwnerSettings({
   onUpdated,
 }: Props) {
   const [confirmRotate, setConfirmRotate] = useState(false);
+  const [confirmRelay, setConfirmRelay] = useState(false);
   const [rotating, setRotating] = useState(false);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [keyCopied, setKeyCopied] = useState(false);
@@ -334,12 +335,19 @@ export function AgentOwnerSettings({
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
-  const initialDelivery: "direct" | "relay" =
-    detail.delivery === "direct" ? "direct" : "relay";
-  const [deliveryDraft, setDeliveryDraft] = useState<"direct" | "relay">(initialDelivery);
+  type DeliveryChoice = "direct" | "relay" | "none";
+  const deliveryFromDetail = (d: string | null | undefined): DeliveryChoice => {
+    if (d === "direct") return "direct";
+    if (d === "relay") return "relay";
+    return "none";
+  };
+  const [deliveryDraft, setDeliveryDraft] = useState<DeliveryChoice>(
+    deliveryFromDetail(detail.delivery),
+  );
   const [endpointDraft, setEndpointDraft] = useState("");
   const [savingDelivery, setSavingDelivery] = useState(false);
   const [deliveryMsg, setDeliveryMsg] = useState<string | null>(null);
+  const [deliveryHint, setDeliveryHint] = useState<string | null>(null);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -350,10 +358,12 @@ export function AgentOwnerSettings({
   }, [detail.agent_id, detail.name, detail.description]);
 
   useEffect(() => {
-    setDeliveryDraft(detail.delivery === "direct" ? "direct" : "relay");
+    setDeliveryDraft(deliveryFromDetail(detail.delivery));
     setEndpointDraft("");
     setDeliveryMsg(null);
+    setDeliveryHint(null);
     setDeliveryError(null);
+    setConfirmRelay(false);
   }, [detail.agent_id, detail.delivery]);
 
   const giftUrl = `${agentPlanetBaseUrl.replace(/\/+$/, "")}/agents/${encodeURIComponent(detail.agent_id)}`;
@@ -408,29 +418,32 @@ export function AgentOwnerSettings({
 
   const policyMode = (detail.policy_mode || "").toLowerCase();
   const deliveryEditable = !policyMode || policyMode === "open" || policyMode === "allowlist";
+  const currentDelivery = deliveryFromDetail(detail.delivery);
   const deliveryDirty =
-    deliveryDraft !== (detail.delivery === "direct" ? "direct" : "relay") ||
+    deliveryDraft !== currentDelivery ||
     (deliveryDraft === "direct" && endpointDraft.trim().length > 0);
   const endpointTrim = endpointDraft.trim();
   const endpointLooksOk =
-    deliveryDraft === "relay" ||
-    (endpointTrim.startsWith("https://") && endpointTrim.length > "https://".length);
-  // Switching to push always needs a URL (masked host alone can't be reused).
+    endpointTrim.startsWith("https://") && endpointTrim.length > "https://".length;
   const canSaveDelivery =
     deliveryEditable &&
     deliveryDirty &&
+    deliveryDraft !== "none" &&
     (deliveryDraft === "relay" || endpointLooksOk) &&
-    !(deliveryDraft === "direct" && !endpointTrim) &&
     !savingDelivery &&
     !busy;
 
-  const saveDelivery = () => {
+  const runSaveDelivery = () => {
     if (!canSaveDelivery) return;
+    const mode = deliveryDraft;
+    if (mode !== "direct" && mode !== "relay") return;
+    setConfirmRelay(false);
     setSavingDelivery(true);
     setDeliveryError(null);
     setDeliveryMsg(null);
+    setDeliveryHint(null);
     const patch =
-      deliveryDraft === "relay"
+      mode === "relay"
         ? ({ delivery: "relay" as const })
         : ({ delivery: "direct" as const, endpoint: endpointTrim });
     void client
@@ -438,8 +451,9 @@ export function AgentOwnerSettings({
       .then((row) => {
         setDeliveryMsg(t.myAgentsDeliverySaved);
         setEndpointDraft("");
+        if (row.next_step_hint?.trim()) setDeliveryHint(row.next_step_hint.trim());
         onUpdated?.(row);
-        window.setTimeout(() => setDeliveryMsg(null), 2000);
+        window.setTimeout(() => setDeliveryMsg(null), 2500);
       })
       .catch((err: unknown) => {
         const msg =
@@ -449,6 +463,16 @@ export function AgentOwnerSettings({
         setDeliveryError(msg);
       })
       .finally(() => setSavingDelivery(false));
+  };
+
+  const saveDelivery = () => {
+    if (!canSaveDelivery) return;
+    // Clearing a public URL is destructive — confirm first.
+    if (currentDelivery === "direct" && deliveryDraft === "relay") {
+      setConfirmRelay(true);
+      return;
+    }
+    runSaveDelivery();
   };
 
   const runRotate = () => {
@@ -541,6 +565,22 @@ export function AgentOwnerSettings({
               {t.myAgentsDeliveryLocked}
             </p>
           ) : null}
+          {currentDelivery === "none" ? (
+            <p
+              style={{
+                margin: "0 0 10px",
+                fontSize: 12,
+                color: colors.muted,
+                lineHeight: 1.45,
+                padding: "8px 10px",
+                border: `1px solid ${colors.border}`,
+                borderRadius: 8,
+              }}
+            >
+              <strong style={{ color: colors.text }}>{t.myAgentsDeliveryUnset}</strong>
+              <span style={{ display: "block", marginTop: 4 }}>{t.myAgentsDeliveryUnsetHelp}</span>
+            </p>
+          ) : null}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
             <button
               type="button"
@@ -580,37 +620,38 @@ export function AgentOwnerSettings({
                 autoComplete="off"
                 spellCheck={false}
               />
-              {detail.endpoint_masked ? (
-                <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
-                  {t.myAgentsEndpoint}: {detail.endpoint_masked}
+              {detail.endpoint_masked || currentDelivery === "direct" ? (
+                <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
+                  {detail.endpoint_masked
+                    ? `${t.myAgentsEndpoint}: ${detail.endpoint_masked}. `
+                    : null}
+                  {t.myAgentsEndpointReenterHint}
                 </div>
               ) : null}
             </label>
           ) : null}
-          <DetailRows
-            rows={[
-              {
-                label: t.myAgentsDelivery,
-                hint: deliveryValueHint(detail.delivery, t) || t.myAgentsDeliveryHint,
-                value: deliveryLabel(detail.delivery, t),
-              },
-              ...(deliveryDraft === "direct" || detail.delivery === "direct"
-                ? [
-                    {
-                      label: t.myAgentsInbound,
-                      hint: t.myAgentsInboundHint,
-                      value: inboundLabel(detail, t),
-                    },
-                  ]
-                : []),
-            ]}
-          />
+          {detail.delivery === "direct" ? (
+            <DetailRows
+              rows={[
+                {
+                  label: t.myAgentsInbound,
+                  hint: t.myAgentsInboundHint,
+                  value: inboundLabel(detail, t),
+                },
+              ]}
+            />
+          ) : null}
           {deliveryError ? (
             <p style={{ margin: "8px 0 0", fontSize: 12, color: colors.danger }}>{deliveryError}</p>
           ) : null}
           {deliveryMsg ? (
             <p style={{ margin: "8px 0 0", fontSize: 12, color: colors.recommended }}>
               {deliveryMsg}
+            </p>
+          ) : null}
+          {deliveryHint ? (
+            <p style={{ margin: "8px 0 0", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+              {deliveryHint}
             </p>
           ) : null}
           <button
@@ -707,6 +748,59 @@ export function AgentOwnerSettings({
           </a>
         </div>
       </section>
+
+      {confirmRelay ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+          onClick={() => {
+            if (!savingDelivery) setConfirmRelay(false);
+          }}
+        >
+          <div
+            style={{
+              width: "min(340px, 100%)",
+              background: colors.panel,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 12,
+              padding: 20,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.5 }}>
+              {t.myAgentsDeliveryRelayConfirm}
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                style={btnGhost}
+                disabled={savingDelivery}
+                onClick={() => setConfirmRelay(false)}
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                style={{ ...btnPrimary, fontWeight: 600 }}
+                disabled={savingDelivery}
+                onClick={runSaveDelivery}
+              >
+                {savingDelivery ? t.loading : t.myAgentsDeliveryRelayConfirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {confirmRotate ? (
         <div
