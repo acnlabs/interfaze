@@ -676,15 +676,6 @@ export function AgentOwnerSettings({
         </section>
       ) : null}
 
-      <button
-        type="button"
-        style={{ ...btnPrimary, width: "100%" }}
-        disabled={!canSaveAny}
-        onClick={saveAll}
-      >
-        {saving ? t.loading : t.save}
-      </button>
-
       <section>
         <h3 style={sectionTitle}>{t.myAgentsSectionAccess}</h3>
         <DetailRows
@@ -701,53 +692,55 @@ export function AgentOwnerSettings({
             },
           ]}
         />
+      </section>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {rotateError ? (
-          <p style={{ margin: "10px 0 0", fontSize: 12, color: colors.danger }}>{rotateError}</p>
+          <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>{rotateError}</p>
         ) : null}
-        <div
+        <button
+          type="button"
+          style={{ ...btnPrimary, width: "100%" }}
+          disabled={!canSaveAny}
+          onClick={saveAll}
+        >
+          {saving ? t.loading : t.save}
+        </button>
+        <button
+          type="button"
           style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            marginTop: 14,
+            ...btnGhost,
+            width: "100%",
+            borderColor: "rgba(248,113,113,0.45)",
+            color: colors.danger,
+          }}
+          disabled={busy || rotating || saving}
+          onClick={() => {
+            setRotateError(null);
+            setConfirmRotate(true);
           }}
         >
-          <button
-            type="button"
-            style={{
-              ...btnGhost,
-              width: "100%",
-              borderColor: "rgba(248,113,113,0.45)",
-              color: colors.danger,
-            }}
-            disabled={busy || rotating || saving}
-            onClick={() => {
-              setRotateError(null);
-              setConfirmRotate(true);
-            }}
-          >
-            {t.myAgentsRotateKey}
-          </button>
-          <a
-            href={giftUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              ...btnGhost,
-              display: "block",
-              width: "100%",
-              textAlign: "center",
-              textDecoration: "none",
-              boxSizing: "border-box",
-            }}
-          >
-            {t.myAgentsGift}
-            <span style={{ color: colors.muted, marginLeft: 6, fontSize: 11 }}>
-              ({t.myAgentsGiftExternal})
-            </span>
-          </a>
-        </div>
-      </section>
+          {t.myAgentsRotateKey}
+        </button>
+        <a
+          href={giftUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            ...btnGhost,
+            display: "block",
+            width: "100%",
+            textAlign: "center",
+            textDecoration: "none",
+            boxSizing: "border-box",
+          }}
+        >
+          {t.myAgentsGift}
+          <span style={{ color: colors.muted, marginLeft: 6, fontSize: 11 }}>
+            ({t.myAgentsGiftExternal})
+          </span>
+        </a>
+      </div>
 
       {confirmRelay ? (
         <div
