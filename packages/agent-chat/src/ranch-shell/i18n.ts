@@ -141,6 +141,8 @@ export type RanchMessages = {
   myAgentsSectionAccess: string;
   myAgentsNameLabel: string;
   myAgentsDescLabel: string;
+  myAgentsTagsLabel: string;
+  myAgentsTagsHint: string;
   myAgentsSaveProfile: string;
   myAgentsProfileSaved: string;
   myAgentsProfileFailed: string;
@@ -349,6 +351,8 @@ const en: RanchMessages = {
   myAgentsSectionAccess: "Who can chat",
   myAgentsNameLabel: "Display name",
   myAgentsDescLabel: "Description",
+  myAgentsTagsLabel: "Tags",
+  myAgentsTagsHint: "Comma-separated, up to 20. Helps others discover this identity (e.g. coding, research).",
   myAgentsSaveProfile: "Save profile",
   myAgentsProfileSaved: "Saved",
   myAgentsProfileFailed: "Couldn’t save profile.",
@@ -560,6 +564,8 @@ const zh: RanchMessages = {
   myAgentsSectionAccess: "谁可以聊",
   myAgentsNameLabel: "显示名称",
   myAgentsDescLabel: "描述",
+  myAgentsTagsLabel: "标签",
+  myAgentsTagsHint: "逗号分隔，最多 20 个。用于发现（如 coding、research）。",
   myAgentsSaveProfile: "保存资料",
   myAgentsProfileSaved: "已保存",
   myAgentsProfileFailed: "保存失败。",

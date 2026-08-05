@@ -187,7 +187,7 @@ export function MyAgentsPanel({
                         ]
                       : []),
                     ...(detail.tags && detail.tags.length > 0
-                      ? [{ label: "Tags", value: detail.tags.join(", ") }]
+                      ? [{ label: t.myAgentsTagsLabel, value: detail.tags.join(", ") }]
                       : []),
                   ]}
                 />

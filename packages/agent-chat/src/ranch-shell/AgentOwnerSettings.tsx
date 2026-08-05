@@ -15,6 +15,31 @@ function nameLooksValid(name: string): boolean {
   return /[a-zA-Z\u4e00-\u9fff]/.test(v);
 }
 
+/** Parse comma-separated tags; dedupe, cap at 20 (ACN profile list max). */
+function parseTagsInput(raw: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of raw.split(/[,，]/)) {
+    const t = part.trim();
+    if (!t || t.length > 40) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+function tagsEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((t, i) => t === b[i]);
+}
+
+function formatTagsInput(tags: string[] | null | undefined): string {
+  return (tags ?? []).join(", ");
+}
+
 export function deliveryLabel(
   delivery: string | null | undefined,
   t: RanchMessages,
@@ -339,6 +364,7 @@ export function AgentOwnerSettings({
   const [dangerError, setDangerError] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState(detail.name || "");
   const [descDraft, setDescDraft] = useState(detail.description || "");
+  const [tagsDraft, setTagsDraft] = useState(formatTagsInput(detail.tags));
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -360,9 +386,10 @@ export function AgentOwnerSettings({
   useEffect(() => {
     setNameDraft(detail.name || "");
     setDescDraft(detail.description || "");
+    setTagsDraft(formatTagsInput(detail.tags));
     setProfileMsg(null);
     setProfileError(null);
-  }, [detail.agent_id, detail.name, detail.description]);
+  }, [detail.agent_id, detail.name, detail.description, detail.tags?.join("\u0001")]);
 
   useEffect(() => {
     setDeliveryDraft(deliveryFromDetail(detail.delivery));
@@ -379,18 +406,21 @@ export function AgentOwnerSettings({
   const descTrim = descDraft.trim();
   const oldName = (detail.name || "").trim();
   const oldDesc = (detail.description || "").trim();
+  const oldTags = detail.tags ?? [];
+  const tagsParsed = parseTagsInput(tagsDraft);
   const nameChanged = nameTrim !== oldName;
   const descChanged = descTrim !== oldDesc;
+  const tagsChanged = !tagsEqual(tagsParsed, oldTags);
   const nameOk = nameLooksValid(nameTrim);
   // ACN rejects description shorter than 10; empty means "leave unchanged", not clear.
   const descOk = descTrim.length === 0 || (descTrim.length >= 10 && descTrim.length <= 500);
   const clearingDesc = descChanged && descTrim.length === 0 && oldDesc.length > 0;
-  const profileDirty = nameChanged || (descChanged && !clearingDesc);
+  const profileDirty = nameChanged || (descChanged && !clearingDesc) || tagsChanged;
   const canSaveProfile =
     profileDirty &&
     nameOk &&
     descOk &&
-    (nameChanged || descTrim.length >= 10) &&
+    (nameChanged || (descChanged && descTrim.length >= 10) || tagsChanged) &&
     !savingProfile &&
     !busy;
 
@@ -420,10 +450,11 @@ export function AgentOwnerSettings({
     setSavingProfile(true);
     setProfileError(null);
     setProfileMsg(null);
-    const patch: { name?: string; description?: string } = {};
+    const patch: { name?: string; description?: string; tags?: string[] } = {};
     if (nameChanged) patch.name = nameTrim;
     if (descChanged && descTrim.length >= 10) patch.description = descTrim;
-    if (!patch.name && !patch.description) {
+    if (tagsChanged) patch.tags = tagsParsed;
+    if (!patch.name && !patch.description && patch.tags === undefined) {
       setSavingProfile(false);
       return Promise.resolve(null);
     }
@@ -431,6 +462,7 @@ export function AgentOwnerSettings({
       .updateMyAgentProfile(detail.agent_id, patch)
       .then((row) => {
         setProfileMsg(t.myAgentsProfileSaved);
+        setTagsDraft(formatTagsInput(row.tags));
         window.setTimeout(() => setProfileMsg(null), 2000);
         return row;
       })
@@ -606,6 +638,25 @@ export function AgentOwnerSettings({
           />
           <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
             {clearingDesc ? t.myAgentsDescClearHint : t.myAgentsDescHint}
+          </div>
+        </label>
+        <label style={{ display: "block", marginBottom: 10 }}>
+          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+            {t.myAgentsTagsLabel}
+          </div>
+          <input
+            value={tagsDraft}
+            onChange={(e) => setTagsDraft(e.target.value)}
+            style={inputStyle}
+            maxLength={400}
+            disabled={busy || saving}
+            placeholder="coding, research"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+            {t.myAgentsTagsHint}
+            {tagsParsed.length > 0 ? ` · ${tagsParsed.length}/20` : ""}
           </div>
         </label>
         {profileError ? (
