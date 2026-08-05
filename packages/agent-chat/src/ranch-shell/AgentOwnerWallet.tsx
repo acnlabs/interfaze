@@ -139,41 +139,18 @@ export function AgentOwnerWallet({
         <h3 style={sectionTitle}>{t.walletTab}</h3>
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 10,
+            padding: "12px 14px",
+            borderRadius: 10,
+            border: `1px solid ${colors.border}`,
+            background: colors.panel,
             marginBottom: 10,
           }}
         >
-          <div
-            style={{
-              padding: "12px 14px",
-              borderRadius: 10,
-              border: `1px solid ${colors.border}`,
-              background: colors.panel,
-            }}
-          >
-            <div style={{ fontSize: 11, color: colors.muted, marginBottom: 4 }}>
-              {t.walletBalance}
-            </div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: colors.text }}>
-              {fmtCredits(wallet.balance)}
-            </div>
+          <div style={{ fontSize: 11, color: colors.muted, marginBottom: 4 }}>
+            {t.walletBalance}
           </div>
-          <div
-            style={{
-              padding: "12px 14px",
-              borderRadius: 10,
-              border: `1px solid ${colors.border}`,
-              background: colors.panel,
-            }}
-          >
-            <div style={{ fontSize: 11, color: colors.muted, marginBottom: 4 }}>
-              {t.walletOwnerBalance}
-            </div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: colors.text }}>
-              {fmtCredits(wallet.owner_balance)}
-            </div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: colors.text }}>
+            {fmtCredits(wallet.balance)}
           </div>
         </div>
         <div style={{ fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
@@ -200,6 +177,14 @@ export function AgentOwnerWallet({
         <p style={{ margin: "0 0 10px", fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
           {t.walletAmountHint}
         </p>
+        {amountDraft.trim() ? (
+          <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+            {t.walletOwnerBalance}:{" "}
+            <span style={{ color: colors.text, fontWeight: 600 }}>
+              {fmtCredits(wallet.owner_balance)}
+            </span>
+          </p>
+        ) : null}
         <div style={{ display: "flex", gap: 8 }}>
           <button
             type="button"
@@ -317,6 +302,14 @@ export function AgentOwnerWallet({
                 ? t.walletTopupConfirm(fmtCredits(confirm.amount))
                 : t.walletWithdrawConfirm(fmtCredits(confirm.amount))}
             </p>
+            {confirm.action === "topup" ? (
+              <p style={{ margin: "-8px 0 16px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+                {t.walletOwnerBalance}:{" "}
+                <span style={{ color: colors.text, fontWeight: 600 }}>
+                  {fmtCredits(wallet.owner_balance)}
+                </span>
+              </p>
+            ) : null}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button
                 type="button"
