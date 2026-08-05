@@ -220,6 +220,7 @@ export type RanchMessages = {
   myAgentsDeleteHasSubnets: string;
   walletTab: string;
   walletBalance: string;
+  walletCreditsHint: string;
   walletApPoints: string;
   walletApPointsHint: string;
   walletOwnerBalance: string;
@@ -227,8 +228,8 @@ export type RanchMessages = {
   walletWithdraw: string;
   walletAmount: string;
   walletAmountHint: string;
-  walletTopupConfirm: (amount: string) => string;
-  walletWithdrawConfirm: (amount: string) => string;
+  walletTopupDialogTitle: string;
+  walletWithdrawDialogTitle: string;
   walletTopupConfirmLabel: string;
   walletWithdrawConfirmLabel: string;
   walletTopupOk: string;
@@ -477,18 +478,17 @@ const en: RanchMessages = {
   myAgentsDeleteHasSubnets:
     "This agent still owns subnets. Transfer or delete those subnets on AgentPlanet first.",
   walletTab: "Wallet",
-  walletBalance: "Agent balance",
+  walletBalance: "Credits",
+  walletCreditsHint: "Transferable. Top up / withdraw move Credits only.",
   walletApPoints: "AP points",
   walletApPointsHint: "Platform rewards — not transferable.",
-  walletOwnerBalance: "Your balance",
+  walletOwnerBalance: "Your Credits",
   walletTopup: "Top up",
   walletWithdraw: "Withdraw",
   walletAmount: "Amount (Credits)",
   walletAmountHint: "Integer Credits. 100 Credits = 1 USD.",
-  walletTopupConfirm: (amount) =>
-    `Transfer ${amount} Credits from your wallet to this agent?`,
-  walletWithdrawConfirm: (amount) =>
-    `Transfer ${amount} Credits from this agent back to your wallet?`,
+  walletTopupDialogTitle: "Top up Credits",
+  walletWithdrawDialogTitle: "Withdraw Credits",
   walletTopupConfirmLabel: "Top up",
   walletWithdrawConfirmLabel: "Withdraw",
   walletTopupOk: "Topped up",
@@ -725,16 +725,17 @@ const zh: RanchMessages = {
   myAgentsDeleteHasSubnets:
     "此 agent 仍拥有子网。请先在 AgentPlanet 转移或删除这些子网。",
   walletTab: "钱包",
-  walletBalance: "Agent 余额",
+  walletBalance: "Credits",
+  walletCreditsHint: "可转账。充值 / 提取只针对 Credits。",
   walletApPoints: "AP 积分",
   walletApPointsHint: "平台行为奖励，不可转出。",
-  walletOwnerBalance: "你的余额",
+  walletOwnerBalance: "你的 Credits",
   walletTopup: "充值",
   walletWithdraw: "提取",
   walletAmount: "金额（Credits）",
   walletAmountHint: "整数 Credits。100 Credits = 1 本区法币单位。",
-  walletTopupConfirm: (amount) => `从你的钱包向此 agent 转入 ${amount} Credits？`,
-  walletWithdrawConfirm: (amount) => `将此 agent 的 ${amount} Credits 转回你的钱包？`,
+  walletTopupDialogTitle: "充值 Credits",
+  walletWithdrawDialogTitle: "提取 Credits",
   walletTopupConfirmLabel: "确认充值",
   walletWithdrawConfirmLabel: "确认提取",
   walletTopupOk: "已充值",

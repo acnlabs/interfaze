@@ -21,10 +21,7 @@ type Props = {
   busy?: boolean;
 };
 
-type ConfirmState = {
-  action: "topup" | "withdraw";
-  amount: number;
-};
+type DialogAction = "topup" | "withdraw";
 
 function fmtCredits(n: number): string {
   return Math.trunc(n).toLocaleString();
@@ -33,7 +30,6 @@ function fmtCredits(n: number): string {
 function parseAmount(raw: string): number | null {
   const s = raw.trim().replace(/,/g, "");
   if (!/^\d+$/.test(s)) return null;
-  // Stay in safe integer range and Gateway max.
   if (s.length > 9) return null;
   const n = Number(s);
   if (!Number.isSafeInteger(n) || n <= 0 || n > MAX_CREDITS) return null;
@@ -56,6 +52,14 @@ const sectionTitle: CSSProperties = {
   color: colors.muted,
 };
 
+const assetCard: CSSProperties = {
+  padding: "12px 14px",
+  borderRadius: 10,
+  border: `1px solid ${colors.border}`,
+  background: colors.panel,
+  minWidth: 0,
+};
+
 export function AgentOwnerWallet({
   client,
   agentId,
@@ -67,10 +71,11 @@ export function AgentOwnerWallet({
   const [txs, setTxs] = useState<MyAgentWalletTx[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<DialogAction | null>(null);
   const [amountDraft, setAmountDraft] = useState("");
-  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [acting, setActing] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  const [dialogError, setDialogError] = useState<string | null>(null);
 
   const rechargeUrl = `${agentPlanetBaseUrl.replace(/\/+$/, "")}/wallet`;
 
@@ -97,29 +102,48 @@ export function AgentOwnerWallet({
     void reload();
   }, [reload]);
 
+  const openDialog = (action: DialogAction) => {
+    setDialog(action);
+    setAmountDraft("");
+    setDialogError(null);
+    setFlash(null);
+  };
+
+  const closeDialog = () => {
+    if (acting) return;
+    setDialog(null);
+    setAmountDraft("");
+    setDialogError(null);
+  };
+
   const amount = parseAmount(amountDraft);
 
   const runTransfer = async () => {
-    if (!confirm || acting) return;
-    const { action, amount: fixedAmount } = confirm;
+    if (!dialog || amount == null || acting || !wallet) return;
+    if (dialog === "topup" && amount > wallet.owner_balance) {
+      setDialogError(t.walletInsufficient);
+      return;
+    }
+    if (dialog === "withdraw" && amount > wallet.balance) {
+      setDialogError(t.walletInsufficient);
+      return;
+    }
     setActing(true);
-    setFlash(null);
-    setError(null);
+    setDialogError(null);
     try {
       const next =
-        action === "topup"
-          ? await client.topupMyAgentWallet(agentId, fixedAmount)
-          : await client.withdrawMyAgentWallet(agentId, fixedAmount);
+        dialog === "topup"
+          ? await client.topupMyAgentWallet(agentId, amount)
+          : await client.withdrawMyAgentWallet(agentId, amount);
       setWallet(next);
+      setDialog(null);
       setAmountDraft("");
-      setConfirm(null);
-      setFlash(action === "topup" ? t.walletTopupOk : t.walletWithdrawOk);
+      setFlash(dialog === "topup" ? t.walletTopupOk : t.walletWithdrawOk);
       const list = await client.listMyAgentWalletTransactions(agentId, 1, 15);
       setTxs(list.transactions ?? []);
     } catch (e) {
       const code = e instanceof ChatGatewayError ? e.code : "";
-      setError(code === "insufficient_credits" ? t.walletInsufficient : t.walletFailed);
-      setConfirm(null);
+      setDialogError(code === "insufficient_credits" ? t.walletInsufficient : t.walletFailed);
     } finally {
       setActing(false);
     }
@@ -133,98 +157,62 @@ export function AgentOwnerWallet({
   }
   if (!wallet) return null;
 
+  const topupBlocked = amount == null || amount > wallet.owner_balance;
+  const withdrawBlocked = amount == null || amount > wallet.balance;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, position: "relative" }}>
       <section>
         <h3 style={sectionTitle}>{t.walletTab}</h3>
         <div
           style={{
-            padding: "12px 14px",
-            borderRadius: 10,
-            border: `1px solid ${colors.border}`,
-            background: colors.panel,
-            marginBottom: 10,
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 10,
+            marginBottom: 12,
           }}
         >
-          <div style={{ fontSize: 11, color: colors.muted, marginBottom: 4 }}>
-            {t.walletBalance}
+          <div style={assetCard}>
+            <div style={{ fontSize: 11, color: colors.muted, marginBottom: 4 }}>
+              {t.walletBalance}
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: colors.text }}>
+              {fmtCredits(wallet.balance)}
+            </div>
+            <div style={{ marginTop: 6, fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
+              {t.walletCreditsHint}
+            </div>
           </div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: colors.text }}>
-            {fmtCredits(wallet.balance)}
+          <div style={assetCard}>
+            <div style={{ fontSize: 11, color: colors.muted, marginBottom: 4 }}>
+              {t.walletApPoints}
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: colors.text }}>
+              {fmtCredits(wallet.ap_points)}
+            </div>
+            <div style={{ marginTop: 6, fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
+              {t.walletApPointsHint}
+            </div>
           </div>
         </div>
-        <div style={{ fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-          {t.walletApPoints}:{" "}
-          <span style={{ color: colors.text, fontWeight: 600 }}>
-            {fmtCredits(wallet.ap_points)}
-          </span>
-          <span style={{ marginLeft: 6 }}>— {t.walletApPointsHint}</span>
-        </div>
-      </section>
-
-      <section>
-        <label style={{ display: "block", fontSize: 12, color: colors.muted, marginBottom: 6 }}>
-          {t.walletAmount}
-        </label>
-        <input
-          value={amountDraft}
-          onChange={(e) => setAmountDraft(e.target.value)}
-          inputMode="numeric"
-          placeholder="100"
-          disabled={busy || acting}
-          style={{ ...inputStyle, width: "100%", marginBottom: 6 }}
-        />
-        <p style={{ margin: "0 0 10px", fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
-          {t.walletAmountHint}
-        </p>
-        {amountDraft.trim() ? (
-          <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-            {t.walletOwnerBalance}:{" "}
-            <span style={{ color: colors.text, fontWeight: 600 }}>
-              {fmtCredits(wallet.owner_balance)}
-            </span>
-          </p>
-        ) : null}
         <div style={{ display: "flex", gap: 8 }}>
           <button
             type="button"
             style={{ ...btnPrimary, flex: 1, fontWeight: 600 }}
-            disabled={busy || acting || amount == null || amount > wallet.owner_balance}
-            onClick={() => {
-              if (amount == null) return;
-              setConfirm({ action: "topup", amount });
-            }}
+            disabled={busy || acting}
+            onClick={() => openDialog("topup")}
           >
             {t.walletTopup}
           </button>
           <button
             type="button"
             style={{ ...btnGhost, flex: 1, fontWeight: 600 }}
-            disabled={busy || acting || amount == null || amount > wallet.balance}
-            onClick={() => {
-              if (amount == null) return;
-              setConfirm({ action: "withdraw", amount });
-            }}
+            disabled={busy || acting || wallet.balance <= 0}
+            onClick={() => openDialog("withdraw")}
           >
             {t.walletWithdraw}
           </button>
         </div>
-        {amount != null && amount > wallet.owner_balance ? (
-          <p style={{ margin: "10px 0 0", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-            {t.walletRechargeExternalHint}{" "}
-            <a
-              href={rechargeUrl}
-              target="_blank"
-              rel="noreferrer"
-              style={{ color: colors.accent }}
-            >
-              {t.walletRechargeExternal}
-            </a>
-          </p>
-        ) : null}
-        {error ? (
-          <p style={{ margin: "10px 0 0", fontSize: 12, color: colors.danger }}>{error}</p>
-        ) : null}
         {flash ? (
           <p style={{ margin: "10px 0 0", fontSize: 12, color: colors.accent }}>{flash}</p>
         ) : null}
@@ -269,7 +257,7 @@ export function AgentOwnerWallet({
         )}
       </section>
 
-      {confirm ? (
+      {dialog ? (
         <div
           role="dialog"
           aria-modal="true"
@@ -283,13 +271,11 @@ export function AgentOwnerWallet({
             justifyContent: "center",
             padding: 24,
           }}
-          onClick={() => {
-            if (!acting) setConfirm(null);
-          }}
+          onClick={closeDialog}
         >
           <div
             style={{
-              width: "min(340px, 100%)",
+              width: "min(360px, 100%)",
               background: colors.panel,
               border: `1px solid ${colors.border}`,
               borderRadius: 12,
@@ -297,37 +283,85 @@ export function AgentOwnerWallet({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.5 }}>
-              {confirm.action === "topup"
-                ? t.walletTopupConfirm(fmtCredits(confirm.amount))
-                : t.walletWithdrawConfirm(fmtCredits(confirm.amount))}
-            </p>
-            {confirm.action === "topup" ? (
-              <p style={{ margin: "-8px 0 16px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+            <h3
+              style={{
+                margin: "0 0 14px",
+                fontSize: 15,
+                fontWeight: 650,
+                color: colors.text,
+              }}
+            >
+              {dialog === "topup" ? t.walletTopupDialogTitle : t.walletWithdrawDialogTitle}
+            </h3>
+
+            {dialog === "topup" ? (
+              <p style={{ margin: "0 0 12px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
                 {t.walletOwnerBalance}:{" "}
                 <span style={{ color: colors.text, fontWeight: 600 }}>
                   {fmtCredits(wallet.owner_balance)}
                 </span>
               </p>
+            ) : (
+              <p style={{ margin: "0 0 12px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+                {t.walletBalance}:{" "}
+                <span style={{ color: colors.text, fontWeight: 600 }}>
+                  {fmtCredits(wallet.balance)}
+                </span>
+              </p>
+            )}
+
+            <label style={{ display: "block", fontSize: 12, color: colors.muted, marginBottom: 6 }}>
+              {t.walletAmount}
+            </label>
+            <input
+              value={amountDraft}
+              onChange={(e) => {
+                setAmountDraft(e.target.value);
+                setDialogError(null);
+              }}
+              inputMode="numeric"
+              placeholder="100"
+              disabled={acting}
+              autoFocus
+              style={{ ...inputStyle, width: "100%", marginBottom: 6 }}
+            />
+            <p style={{ margin: "0 0 12px", fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
+              {t.walletAmountHint}
+            </p>
+
+            {dialog === "topup" && amount != null && amount > wallet.owner_balance ? (
+              <p style={{ margin: "0 0 12px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+                {t.walletRechargeExternalHint}{" "}
+                <a
+                  href={rechargeUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: colors.accent }}
+                >
+                  {t.walletRechargeExternal}
+                </a>
+              </p>
             ) : null}
+
+            {dialogError ? (
+              <p style={{ margin: "0 0 12px", fontSize: 12, color: colors.danger }}>{dialogError}</p>
+            ) : null}
+
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                style={btnGhost}
-                disabled={acting}
-                onClick={() => setConfirm(null)}
-              >
+              <button type="button" style={btnGhost} disabled={acting} onClick={closeDialog}>
                 {t.cancel}
               </button>
               <button
                 type="button"
                 style={{ ...btnPrimary, fontWeight: 600 }}
-                disabled={acting}
+                disabled={
+                  acting || (dialog === "topup" ? topupBlocked : withdrawBlocked)
+                }
                 onClick={() => void runTransfer()}
               >
                 {acting
                   ? t.loading
-                  : confirm.action === "topup"
+                  : dialog === "topup"
                     ? t.walletTopupConfirmLabel
                     : t.walletWithdrawConfirmLabel}
               </button>
