@@ -570,34 +570,101 @@ function isSlashMenuDraft(text: string): boolean {
   return !/\s/.test(trimmed.slice(1));
 }
 
-/** Horizontal rule marking a topic boundary on the main timeline. */
+const LOCAL_TOPIC_START_PREFIX = "local-topic-start:";
+
+function isLocalTopicStartMessage(m: ChatMessage): boolean {
+  if (String(m.message_id).startsWith(LOCAL_TOPIC_START_PREFIX)) return true;
+  return m.sender_type === "system" && m.metadata?.kind === "topic_started";
+}
+
+/** Keep client-only "Started #…" markers across listMessages refreshes. */
+function mergeServerMessagesWithLocalTopicMarkers(
+  server: ChatMessage[],
+  prev: ChatMessage[],
+): ChatMessage[] {
+  const locals = prev.filter(isLocalTopicStartMessage);
+  if (locals.length === 0) return server;
+  const keep = locals.filter(
+    (l) =>
+      !!l.thread_id &&
+      !server.some(
+        (m) =>
+          m.thread_id === l.thread_id &&
+          !isLocalTopicStartMessage(m) &&
+          m.sender_type !== "system",
+      ),
+  );
+  if (keep.length === 0) return server;
+  const out = [...server];
+  for (const marker of keep) {
+    if (out.some((m) => m.message_id === marker.message_id)) continue;
+    const idx = out.findIndex((m) => m.thread_id === marker.thread_id);
+    if (idx === -1) out.push(marker);
+    else out.splice(idx, 0, marker);
+  }
+  return out;
+}
+
+/**
+ * Horizontal rule marking a topic boundary on the main timeline.
+ * Click highlights the segment only — filtered topic view opens from Topics list.
+ */
 function TopicDivider({
   title,
-  onOpen,
+  caption,
+  highlighted,
+  onHighlight,
   borderColor,
   accentSoft,
 }: {
   title: string;
-  onOpen?: () => void;
+  caption?: string;
+  highlighted?: boolean;
+  onHighlight?: () => void;
   borderColor: string;
   accentSoft: string;
 }) {
   const label = (
     <span
       style={{
-        fontSize: 11,
-        color: "#93c5fd",
-        whiteSpace: "nowrap",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        maxWidth: 180,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 2,
+        maxWidth: 220,
       }}
     >
-      # {title}
+      <span
+        style={{
+          fontSize: 11,
+          color: "#93c5fd",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          maxWidth: "100%",
+        }}
+      >
+        # {title}
+      </span>
+      {caption ? (
+        <span style={{ fontSize: 10, color: "rgba(148,163,184,0.95)" }}>{caption}</span>
+      ) : null}
     </span>
   );
+  const pillStyle: CSSProperties = {
+    border: `1px solid ${highlighted ? "rgba(147,197,253,0.65)" : borderColor}`,
+    background: highlighted ? "rgba(147,197,253,0.22)" : accentSoft,
+    borderRadius: 999,
+    padding: caption ? "4px 12px" : "2px 10px",
+    cursor: onHighlight ? "pointer" : "default",
+    display: "inline-flex",
+    maxWidth: "75%",
+    boxShadow: highlighted ? "0 0 0 2px rgba(147,197,253,0.25)" : undefined,
+    transition: "background 160ms ease, box-shadow 160ms ease, border-color 160ms ease",
+  };
   return (
     <div
+      data-topic-divider={title}
       style={{
         display: "flex",
         alignItems: "center",
@@ -608,25 +675,12 @@ function TopicDivider({
       }}
     >
       <div style={{ flex: 1, height: 1, background: borderColor }} />
-      {onOpen ? (
-        <button
-          type="button"
-          onClick={onOpen}
-          title={title}
-          style={{
-            border: `1px solid ${borderColor}`,
-            background: accentSoft,
-            borderRadius: 999,
-            padding: "2px 10px",
-            cursor: "pointer",
-            display: "inline-flex",
-            maxWidth: "70%",
-          }}
-        >
+      {onHighlight ? (
+        <button type="button" onClick={onHighlight} title={title} style={pillStyle}>
           {label}
         </button>
       ) : (
-        label
+        <span style={pillStyle}>{label}</span>
       )}
       <div style={{ flex: 1, height: 1, background: borderColor }} />
     </div>
@@ -1066,6 +1120,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
    * (slash /topic creates this; does not switch into filtered topic view).
    */
   const [composerTopic, setComposerTopic] = useState<ThreadSummary | null>(null);
+  /** Brief flash when tapping a timeline topic divider (does not open filter view). */
+  const [highlightTopicId, setHighlightTopicId] = useState<string | null>(null);
+  const highlightTimerRef = useRef<number | null>(null);
   const [showCreateTopic, setShowCreateTopic] = useState(false);
   const [topicTitleDraft, setTopicTitleDraft] = useState("");
   const [topicDescDraft, setTopicDescDraft] = useState("");
@@ -1207,12 +1264,28 @@ export function RanchChatShell(props: RanchChatShellProps) {
     return () => window.clearInterval(tick);
   }, [open, active?.chat_id, client]);
 
+  const flashTopicHighlight = useCallback((topicId: string) => {
+    setHighlightTopicId(topicId);
+    if (highlightTimerRef.current != null) {
+      window.clearTimeout(highlightTimerRef.current);
+    }
+    highlightTimerRef.current = window.setTimeout(() => {
+      setHighlightTopicId((cur) => (cur === topicId ? null : cur));
+      highlightTimerRef.current = null;
+    }, 1200);
+    const safe = topicId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const el = listRef.current?.querySelector(`[data-topic-id="${safe}"]`);
+    if (el && "scrollIntoView" in el) {
+      (el as HTMLElement).scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, []);
+
   const reloadMessages = useCallback(
     async (chatId: string, seq?: number) => {
       const msgs = await client.listMessages(chatId);
       if (seq != null && seq !== loadSeqRef.current) return;
       if (activeChatIdRef.current !== chatId) return;
-      setMessages(msgs);
+      setMessages((prev) => mergeServerMessagesWithLocalTopicMarkers(msgs, prev));
     },
     [client],
   );
@@ -1287,6 +1360,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setTopicDescDraft("");
       setActiveTopic(null);
       setComposerTopic(null);
+      setHighlightTopicId(null);
       setTopics([]);
       setTitleDraft(chat.title?.trim() || "");
       setMentionIndex(0);
@@ -1376,17 +1450,37 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, []);
 
   /** Create topic, list it, keep main timeline — next sends tag this thread. */
-  const startTopicInTimeline = useCallback((created: ThreadSummary) => {
-    setTopics((prev) => [created, ...prev.filter((tp) => tp.id !== created.id)]);
-    setComposerTopic(created);
-    setActiveTopic(null);
-    setShowMembersPanel(false);
-    setShowAddMember(false);
-    setShowCreateTopic(false);
-    setTopicTitleDraft("");
-    setTopicDescDraft("");
-    setDraft("");
-  }, []);
+  const startTopicInTimeline = useCallback(
+    (created: ThreadSummary) => {
+      const title = created.title?.trim() || t.defaultTopicTitle;
+      setTopics((prev) => [created, ...prev.filter((tp) => tp.id !== created.id)]);
+      setComposerTopic(created);
+      setActiveTopic(null);
+      setShowMembersPanel(false);
+      setShowAddMember(false);
+      setShowCreateTopic(false);
+      setTopicTitleDraft("");
+      setTopicDescDraft("");
+      setDraft("");
+      const marker: ChatMessage = {
+        message_id: `${LOCAL_TOPIC_START_PREFIX}${created.id}`,
+        chat_id: created.chat_id,
+        sender_id: "system",
+        sender_type: "system",
+        content: t.topicStarted(title),
+        created_at: new Date().toISOString(),
+        thread_id: created.id,
+        thread_title: title,
+        metadata: { kind: "topic_started" },
+      };
+      setMessages((prev) => {
+        if (prev.some((m) => m.message_id === marker.message_id)) return prev;
+        return [...prev, marker];
+      });
+      flashTopicHighlight(created.id);
+    },
+    [flashTopicHighlight, t.defaultTopicTitle, t.topicStarted],
+  );
 
   const exitTopicFilter = useCallback(() => {
     // Leaving the filtered topic view also leaves the posting context —
@@ -1535,7 +1629,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             void (async () => {
               const msgs = await client.listMessages(chatId);
               if (activeChatIdRef.current !== chatId) return;
-              setMessages(msgs);
+              setMessages((prev) => mergeServerMessagesWithLocalTopicMarkers(msgs, prev));
               noteAgentActivity(chatId, msgs);
               void refreshChats();
             })();
@@ -1681,7 +1775,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             const msgs = await client.listMessages(chatId);
             if (replyPollGenRef.current !== pollGen) return;
             if (activeChatIdRef.current !== chatId) return;
-            setMessages(msgs);
+            setMessages((prev) => mergeServerMessagesWithLocalTopicMarkers(msgs, prev));
             const hasNewAgent = msgs.some(
               (m) =>
                 m.sender_type === "agent" &&
@@ -1785,7 +1879,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               const msgs = await client.listMessages(chatId);
               if (replyPollGenRef.current !== pollGen) return;
               if (activeChatIdRef.current !== chatId) return;
-              setMessages(msgs);
+              setMessages((prev) => mergeServerMessagesWithLocalTopicMarkers(msgs, prev));
               const hasNewAgent = msgs.some(
                 (m) =>
                   m.sender_type === "agent" &&
@@ -2534,6 +2628,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 )}
                 {displayMessages.map((m, idx) => {
                   const isUser = m.sender_type === "user";
+                  const topicStart = isLocalTopicStartMessage(m);
                   const delivery =
                     isUser && typeof m.metadata?.delivery === "string" ? m.metadata.delivery : null;
                   const deliveryByAgent =
@@ -2544,7 +2639,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       : null;
                   const group = active ? isGroupChat(active) : false;
                   const senderLabel =
-                    !isUser && group
+                    !isUser && !topicStart && group
                       ? agentNames[m.sender_id]?.trim() ||
                         shortAgentId(m.sender_id) ||
                         m.sender_id
@@ -2560,31 +2655,42 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     !activeTopic &&
                     !!m.thread_id &&
                     (prev?.thread_id || null) !== m.thread_id;
-                  const openThreadFromMsg = () => {
-                    if (!m.thread_id) return;
-                    const existing = topics.find((tp) => tp.id === m.thread_id);
-                    openTopic(
-                      existing || {
-                        id: m.thread_id,
-                        chat_id: m.chat_id,
-                        title: topicLabel || t.topics,
-                        objective: null,
-                        status: "active",
-                        message_count: 0,
-                        created_at: m.created_at,
-                        updated_at: m.created_at,
-                      },
-                    );
-                  };
-                  return (
-                    <Fragment key={m.message_id}>
-                      {enteringTopic && topicLabel ? (
+                  const dividerTitle = topicLabel || t.topics;
+                  const highlight = !!m.thread_id && highlightTopicId === m.thread_id;
+                  if (topicStart) {
+                    // Filter view: skip marker (list already scoped to this topic).
+                    if (activeTopic) return null;
+                    return (
+                      <div key={m.message_id} data-topic-id={m.thread_id || undefined}>
                         <TopicDivider
-                          title={topicLabel}
-                          onOpen={openThreadFromMsg}
+                          title={dividerTitle}
+                          caption={m.content || t.topicStarted(dividerTitle)}
+                          highlighted={highlight}
+                          onHighlight={
+                            m.thread_id ? () => flashTopicHighlight(m.thread_id!) : undefined
+                          }
                           borderColor={colors.border}
                           accentSoft={colors.accentSoft}
                         />
+                      </div>
+                    );
+                  }
+                  return (
+                    <Fragment key={m.message_id}>
+                      {enteringTopic &&
+                      topicLabel &&
+                      !(prev && isLocalTopicStartMessage(prev)) ? (
+                        <div data-topic-id={m.thread_id || undefined}>
+                          <TopicDivider
+                            title={topicLabel}
+                            highlighted={highlight}
+                            onHighlight={
+                              m.thread_id ? () => flashTopicHighlight(m.thread_id!) : undefined
+                            }
+                            borderColor={colors.border}
+                            accentSoft={colors.accentSoft}
+                          />
+                        </div>
                       ) : null}
                     <div
                       style={{
@@ -2641,12 +2747,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 (displayMessages.length === 0 ||
                   displayMessages[displayMessages.length - 1]?.thread_id !==
                     composerTopic.id) ? (
-                  <TopicDivider
-                    title={composerTopic.title?.trim() || t.topics}
-                    onOpen={() => openTopic(composerTopic)}
-                    borderColor={colors.border}
-                    accentSoft={colors.accentSoft}
-                  />
+                  <div data-topic-id={composerTopic.id}>
+                    <TopicDivider
+                      title={composerTopic.title?.trim() || t.topics}
+                      caption={t.topicStarted(composerTopic.title?.trim() || t.topics)}
+                      highlighted={highlightTopicId === composerTopic.id}
+                      onHighlight={() => flashTopicHighlight(composerTopic.id)}
+                      borderColor={colors.border}
+                      accentSoft={colors.accentSoft}
+                    />
+                  </div>
                 ) : null}
                 {showAgentReplyPending ? <AgentReplyPendingBubble t={t} /> : null}
                 {showAgentReplyTimeout ? (

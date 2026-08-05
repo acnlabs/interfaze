@@ -84,6 +84,8 @@ export type RanchMessages = {
   defaultTopicTitle: string;
   /** Chip above composer while posting into a topic on the main timeline. */
   postingInTopic: (title: string) => string;
+  /** Light marker when a topic is created on the main timeline. */
+  topicStarted: (title: string) => string;
   openDirectChat: string;
   mentionAll: string;
   mentionAllHint: string;
@@ -201,6 +203,7 @@ const en: RanchMessages = {
   slashUnknown: (cmd) => `Unknown command: /${cmd}`,
   defaultTopicTitle: "New topic",
   postingInTopic: (title) => `Posting in # ${title}`,
+  topicStarted: (title) => `Started # ${title}`,
   openDirectChat: "Message privately",
   mentionAll: "@all",
   mentionAllHint: "Mention all agents",
@@ -317,6 +320,7 @@ const zh: RanchMessages = {
   slashUnknown: (cmd) => `未知命令：/${cmd}`,
   defaultTopicTitle: "新话题",
   postingInTopic: (title) => `正在 # ${title} 中发送`,
+  topicStarted: (title) => `已开始 # ${title}`,
   openDirectChat: "私聊",
   mentionAll: "@all",
   mentionAllHint: "提及所有 agent",
