@@ -55,6 +55,37 @@ export type ChatAgentSearchHit = {
   acl_reason?: string | null;
 };
 
+/** Owned agent wallet from GET /api/chat/my-agents/{id}/wallet. */
+export type MyAgentWallet = {
+  agent_id: string;
+  wallet_id: string;
+  balance: number;
+  ap_points: number;
+  owner_id?: string | null;
+  status?: string | null;
+  /** Human (owner) Credits available for top-up. */
+  owner_balance: number;
+};
+
+export type MyAgentWalletTx = {
+  transaction_id: string;
+  wallet_id: string;
+  user_id: string;
+  type: string;
+  amount: number;
+  balance_after: number;
+  status: string;
+  description?: string | null;
+  created_at?: string | null;
+};
+
+export type MyAgentWalletTxList = {
+  transactions: MyAgentWalletTx[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
 /** Owned ACN agent row from GET /api/chat/my-agents (management + directory mine). */
 export type MyAgentSummary = {
   agent_id: string;
@@ -131,6 +162,23 @@ export type GatewayClient = {
     agentId: string,
     patch: { mode: "open" | "allowlist" | "closed" },
   ) => Promise<MyAgentSummary>;
+  /** Owned agent wallet + owner human balance (Credits). */
+  getMyAgentWallet: (agentId: string) => Promise<MyAgentWallet>;
+  listMyAgentWalletTransactions: (
+    agentId: string,
+    page?: number,
+    pageSize?: number,
+  ) => Promise<MyAgentWalletTxList>;
+  topupMyAgentWallet: (
+    agentId: string,
+    amount: number,
+    description?: string,
+  ) => Promise<MyAgentWallet>;
+  withdrawMyAgentWallet: (
+    agentId: string,
+    amount: number,
+    description?: string,
+  ) => Promise<MyAgentWallet>;
   addParticipant: (chatId: string, agentId: string) => Promise<ChatParticipant>;
   removeParticipant: (chatId: string, participantId: string) => Promise<void>;
   updateChat: (chatId: string, patch: { title?: string; description?: string }) => Promise<ChatSummary>;
@@ -246,6 +294,40 @@ export function createGatewayClient(
         {
           method: "PATCH",
           body: JSON.stringify(patch),
+        },
+      ),
+    getMyAgentWallet: (agentId) =>
+      request<MyAgentWallet>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/wallet`,
+      ),
+    listMyAgentWalletTransactions: (agentId, page = 1, pageSize = 20) => {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("page_size", String(pageSize));
+      return request<MyAgentWalletTxList>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/wallet/transactions?${params}`,
+      );
+    },
+    topupMyAgentWallet: (agentId, amount, description) =>
+      request<MyAgentWallet>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/wallet/topup`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            amount,
+            ...(description ? { description } : {}),
+          }),
+        },
+      ),
+    withdrawMyAgentWallet: (agentId, amount, description) =>
+      request<MyAgentWallet>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/wallet/withdraw`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            amount,
+            ...(description ? { description } : {}),
+          }),
         },
       ),
     listMessages: (chatId) =>

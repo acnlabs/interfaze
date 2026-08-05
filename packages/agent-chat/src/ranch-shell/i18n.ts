@@ -218,6 +218,28 @@ export type RanchMessages = {
   myAgentsDeleteTypePlaceholder: string;
   myAgentsDeleteFailed: string;
   myAgentsDeleteHasSubnets: string;
+  walletTab: string;
+  walletBalance: string;
+  walletApPoints: string;
+  walletApPointsHint: string;
+  walletOwnerBalance: string;
+  walletTopup: string;
+  walletWithdraw: string;
+  walletAmount: string;
+  walletAmountHint: string;
+  walletTopupConfirm: (amount: string) => string;
+  walletWithdrawConfirm: (amount: string) => string;
+  walletTopupConfirmLabel: string;
+  walletWithdrawConfirmLabel: string;
+  walletTopupOk: string;
+  walletWithdrawOk: string;
+  walletFailed: string;
+  walletInsufficient: string;
+  walletRechargeExternal: string;
+  walletRechargeExternalHint: string;
+  walletTxTitle: string;
+  walletTxEmpty: string;
+  walletLoadFailed: string;
   yes: string;
   no: string;
   unknown: string;
@@ -454,6 +476,30 @@ const en: RanchMessages = {
   myAgentsDeleteFailed: "Couldn’t delete this agent.",
   myAgentsDeleteHasSubnets:
     "This agent still owns subnets. Transfer or delete those subnets on AgentPlanet first.",
+  walletTab: "Wallet",
+  walletBalance: "Agent balance",
+  walletApPoints: "AP points",
+  walletApPointsHint: "Platform rewards — not transferable.",
+  walletOwnerBalance: "Your balance",
+  walletTopup: "Top up",
+  walletWithdraw: "Withdraw",
+  walletAmount: "Amount (Credits)",
+  walletAmountHint: "Integer Credits. 100 Credits = 1 USD.",
+  walletTopupConfirm: (amount) =>
+    `Transfer ${amount} Credits from your wallet to this agent?`,
+  walletWithdrawConfirm: (amount) =>
+    `Transfer ${amount} Credits from this agent back to your wallet?`,
+  walletTopupConfirmLabel: "Top up",
+  walletWithdrawConfirmLabel: "Withdraw",
+  walletTopupOk: "Topped up",
+  walletWithdrawOk: "Withdrawn",
+  walletFailed: "Wallet action failed.",
+  walletInsufficient: "Not enough Credits for this transfer.",
+  walletRechargeExternal: "Add Credits on AgentPlanet",
+  walletRechargeExternalHint: "Leaves Interfaze — recharge your human wallet, then come back to top up the agent.",
+  walletTxTitle: "Recent activity",
+  walletTxEmpty: "No transactions yet.",
+  walletLoadFailed: "Couldn’t load this agent’s wallet.",
   yes: "Yes",
   no: "No",
   unknown: "Unknown",
@@ -678,6 +724,28 @@ const zh: RanchMessages = {
   myAgentsDeleteFailed: "无法删除此 agent。",
   myAgentsDeleteHasSubnets:
     "此 agent 仍拥有子网。请先在 AgentPlanet 转移或删除这些子网。",
+  walletTab: "钱包",
+  walletBalance: "Agent 余额",
+  walletApPoints: "AP 积分",
+  walletApPointsHint: "平台行为奖励，不可转出。",
+  walletOwnerBalance: "你的余额",
+  walletTopup: "充值",
+  walletWithdraw: "提取",
+  walletAmount: "金额（Credits）",
+  walletAmountHint: "整数 Credits。100 Credits = 1 本区法币单位。",
+  walletTopupConfirm: (amount) => `从你的钱包向此 agent 转入 ${amount} Credits？`,
+  walletWithdrawConfirm: (amount) => `将此 agent 的 ${amount} Credits 转回你的钱包？`,
+  walletTopupConfirmLabel: "确认充值",
+  walletWithdrawConfirmLabel: "确认提取",
+  walletTopupOk: "已充值",
+  walletWithdrawOk: "已提取",
+  walletFailed: "钱包操作失败。",
+  walletInsufficient: "Credits 不足，无法完成本次转账。",
+  walletRechargeExternal: "去 AgentPlanet 充值",
+  walletRechargeExternalHint: "将离开 Interfaze——先给自己的钱包充值，再回来给 agent 转账。",
+  walletTxTitle: "最近流水",
+  walletTxEmpty: "暂无交易记录。",
+  walletLoadFailed: "无法加载此 agent 的钱包。",
   yes: "是",
   no: "否",
   unknown: "未知",

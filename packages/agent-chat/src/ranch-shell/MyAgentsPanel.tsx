@@ -7,6 +7,7 @@ import {
   DetailRows,
   deliveryLabel,
 } from "./AgentOwnerSettings";
+import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import { CONNECT_PROMPTS, copyText } from "./connectPrompt";
 import type { RanchLocale, RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors } from "./styles";
@@ -219,6 +220,13 @@ export function MyAgentsPanel({
                   setDetail(null);
                   onAgentRemoved?.(agentId);
                 }}
+              />
+              <AgentOwnerWallet
+                client={client}
+                agentId={detail.agent_id.replace(/^acn:/i, "")}
+                messages={t}
+                agentPlanetBaseUrl={agentPlanetBaseUrl}
+                busy={busy}
               />
               <button
                 type="button"

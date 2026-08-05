@@ -25,6 +25,7 @@ import {
   deliveryValueHint,
   FieldHint,
 } from "./AgentOwnerSettings";
+import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
 import { CONNECT_PROMPTS, copyText } from "./connectPrompt";
@@ -1256,8 +1257,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     confirmLabel: string;
     onConfirm: () => void;
   } | null>(null);
-  /** Detail panel tab. Group: members | topics. Direct: info | settings? | topics. */
-  const [infoTab, setInfoTab] = useState<"info" | "settings" | "members" | "topics">("info");
+  /** Detail panel tab. Group: members | topics. Direct: info | settings? | wallet? | topics. */
+  const [infoTab, setInfoTab] = useState<"info" | "settings" | "wallet" | "members" | "topics">("info");
   /** Owned-agent ACN detail for Info (read-only) + Settings (manage). */
   const [ownedAgentDetail, setOwnedAgentDetail] = useState<MyAgentSummary | null>(null);
   const [ownedAgentLoading, setOwnedAgentLoading] = useState(false);
@@ -2201,7 +2202,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setOwnedAgentDetail((prev) =>
       prev && agentIdKey(prev.agent_id) === key ? null : prev,
     );
-    if (infoTab === "settings") setInfoTab("info");
+    if (infoTab === "settings" || infoTab === "wallet") setInfoTab("info");
     onOwnedAgentRemoved?.(agentId);
   };
 
@@ -3757,6 +3758,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         ? ([
                             ["info", t.infoTab],
                             ["settings", t.settingsTab],
+                            ["wallet", t.walletTab],
                             ["topics", t.topics],
                           ] as const)
                         : ([
@@ -3955,6 +3957,22 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       ) : (
                         <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>
                       )}
+                    </div>
+                  ) : infoTab === "wallet" && !groupActive && activeIsOwned && active?.agent_id ? (
+                    <div
+                      style={{
+                        flex: 1,
+                        overflow: "auto",
+                        padding: 16,
+                      }}
+                    >
+                      <AgentOwnerWallet
+                        client={client}
+                        agentId={active.agent_id.replace(/^acn:/i, "")}
+                        messages={t}
+                        agentPlanetBaseUrl={agentPlanetBaseUrl}
+                        busy={busy}
+                      />
                     </div>
                   ) : infoTab === "info" && !groupActive ? (
                     <>
