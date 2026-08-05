@@ -248,6 +248,7 @@ export type RanchMessages = {
   spendPolicySaved: string;
   spendPolicyFailed: string;
   spendPolicyLoadFailed: string;
+  spendPolicyInvalidLimits: string;
   spendAutonomyDisabled: string;
   spendAutonomyDisabledHelp: string;
   spendAutonomyLimited: string;
@@ -263,6 +264,7 @@ export type RanchMessages = {
   spendNoCap: string;
   spendWindowSpent: (hours: string) => string;
   spendWindowRemaining: string;
+  spendWindowUsage: (spent: string, remaining: string, hours: string) => string;
   spendCurrent: string;
   yes: string;
   no: string;
@@ -531,6 +533,7 @@ const en: RanchMessages = {
   spendPolicySaved: "Spend policy updated",
   spendPolicyFailed: "Couldn’t update spend policy.",
   spendPolicyLoadFailed: "Couldn’t load spend policy.",
+  spendPolicyInvalidLimits: "Enter whole-number Credits limits, or leave a field empty for no cap.",
   spendAutonomyDisabled: "Owner only",
   spendAutonomyDisabledHelp: "Agent cannot spend on its own.",
   spendAutonomyLimited: "Limited",
@@ -546,7 +549,9 @@ const en: RanchMessages = {
   spendReserveFloorHint: "Autonomous spend cannot leave Credits below this amount.",
   spendNoCap: "No cap",
   spendWindowSpent: (hours) => `Spent in last ${hours}h`,
-  spendWindowRemaining: "remaining",
+  spendWindowRemaining: "Remaining",
+  spendWindowUsage: (spent, remaining, hours) =>
+    `Last ${hours}h — spent ${spent} · remaining ${remaining}`,
   spendCurrent: "Current",
   yes: "Yes",
   no: "No",
@@ -803,6 +808,7 @@ const zh: RanchMessages = {
   spendPolicySaved: "消费授权已更新",
   spendPolicyFailed: "无法更新消费授权。",
   spendPolicyLoadFailed: "无法加载消费授权。",
+  spendPolicyInvalidLimits: "请填写非负整数 Credits，某项留空表示不限。",
   spendAutonomyDisabled: "仅主人",
   spendAutonomyDisabledHelp: "agent 不能自主消费。",
   spendAutonomyLimited: "有限额",
@@ -819,6 +825,8 @@ const zh: RanchMessages = {
   spendNoCap: "不限",
   spendWindowSpent: (hours) => `近 ${hours} 小时已花`,
   spendWindowRemaining: "剩余",
+  spendWindowUsage: (spent, remaining, hours) =>
+    `近 ${hours} 小时 — 已花 ${spent} · 剩余 ${remaining}`,
   spendCurrent: "当前",
   yes: "是",
   no: "否",

@@ -130,20 +130,26 @@ export function AgentOwnerWallet({
     setLoading(true);
     setError(null);
     try {
-      const [w, list, sp] = await Promise.all([
+      const [w, list] = await Promise.all([
         client.getMyAgentWallet(agentId),
         client.listMyAgentWalletTransactions(agentId, 1, 15),
-        client.getMyAgentSpendPolicy(agentId),
       ]);
       setWallet(w);
       setTxs(list.transactions ?? []);
-      setPolicy(sp);
-      setPolicyForm(formFromPolicy(sp));
     } catch {
       setWallet(null);
       setTxs([]);
       setPolicy(null);
       setError(t.walletLoadFailed);
+      setLoading(false);
+      return;
+    }
+    try {
+      const sp = await client.getMyAgentSpendPolicy(agentId);
+      setPolicy(sp);
+      setPolicyForm(formFromPolicy(sp));
+    } catch {
+      setPolicy(null);
     } finally {
       setLoading(false);
     }
@@ -201,12 +207,12 @@ export function AgentOwnerWallet({
         const hours = hoursRaw === "" ? 24 : Number(hoursRaw);
         const floor = parseOptionalNonNeg(policyForm.reserveFloor);
         if (perTx === undefined || windowLimit === undefined || floor === undefined) {
-          setPolicyError(t.spendPolicyFailed);
+          setPolicyError(t.spendPolicyInvalidLimits);
           setPolicyLoading(false);
           return;
         }
         if (!Number.isSafeInteger(hours) || hours < 1) {
-          setPolicyError(t.spendPolicyFailed);
+          setPolicyError(t.spendPolicyInvalidLimits);
           setPolicyLoading(false);
           return;
         }
@@ -214,6 +220,11 @@ export function AgentOwnerWallet({
         patch.window_limit = windowLimit;
         patch.window_hours = hours;
         patch.reserve_floor = floor ?? 0;
+      } else {
+        // Clear envelope when leaving limited (server also clears).
+        patch.per_tx_limit = null;
+        patch.window_limit = null;
+        patch.reserve_floor = 0;
       }
       const next = await client.updateMyAgentSpendPolicy(agentId, patch);
       setPolicy(next);
@@ -343,15 +354,20 @@ export function AgentOwnerWallet({
               <p style={{ margin: 0, fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
                 {t.spendPolicyHint}
               </p>
-              {policy && policy.stored_autonomy === "limited" ? (
+              {policy && policy.stored_autonomy === "limited" && policy.window_remaining != null ? (
+                <p style={{ margin: 0, fontSize: 11, color: colors.muted }}>
+                  {t.spendWindowUsage(
+                    fmtCredits(policy.window_spent),
+                    fmtCredits(policy.window_remaining),
+                    String(policy.window_hours),
+                  )}
+                </p>
+              ) : policy && policy.stored_autonomy === "limited" ? (
                 <p style={{ margin: 0, fontSize: 11, color: colors.muted }}>
                   {t.spendWindowSpent(String(policy.window_hours))}:{" "}
                   <span style={{ color: colors.text, fontWeight: 600 }}>
                     {fmtCredits(policy.window_spent)}
                   </span>
-                  {policy.window_remaining != null
-                    ? ` / ${fmtCredits(policy.window_remaining)} ${t.spendWindowRemaining}`
-                    : ""}
                 </p>
               ) : null}
             </div>
@@ -417,9 +433,9 @@ export function AgentOwnerWallet({
           role="dialog"
           aria-modal="true"
           style={{
-            position: "absolute",
+            position: "fixed",
             inset: 0,
-            zIndex: 50,
+            zIndex: 80,
             background: "rgba(0,0,0,0.55)",
             display: "flex",
             alignItems: "center",
@@ -521,9 +537,9 @@ export function AgentOwnerWallet({
           role="dialog"
           aria-modal="true"
           style={{
-            position: "absolute",
+            position: "fixed",
             inset: 0,
-            zIndex: 50,
+            zIndex: 80,
             background: "rgba(0,0,0,0.55)",
             display: "flex",
             alignItems: "center",
