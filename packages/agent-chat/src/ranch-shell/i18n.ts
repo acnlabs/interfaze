@@ -148,17 +148,28 @@ export type RanchMessages = {
   myAgentsDescHint: string;
   myAgentsDescClearHint: string;
   myAgentsDelivery: string;
+  myAgentsDeliveryHint: string;
   myAgentsDeliveryDirect: string;
+  myAgentsDeliveryDirectHint: string;
   myAgentsDeliveryRelay: string;
+  myAgentsDeliveryRelayHint: string;
   myAgentsDeliveryNone: string;
+  myAgentsDeliveryNoneHint: string;
   myAgentsEndpoint: string;
+  myAgentsEndpointHint: string;
   myAgentsInbound: string;
+  myAgentsInboundHint: string;
   myAgentsPolicy: string;
+  myAgentsPolicyHint: string;
+  myAgentsPolicyOpen: string;
+  myAgentsPolicyAllowlist: string;
   myAgentsChatOpen: string;
+  myAgentsChatOpenHint: string;
   myAgentsOpenChat: string;
   myAgentsBack: string;
   myAgentsShortId: string;
   myAgentsLastHeartbeat: string;
+  myAgentsLastHeartbeatHint: string;
   myAgentsLoadFailed: string;
   myAgentsRotateKey: string;
   myAgentsRotateConfirm: string;
@@ -304,11 +315,12 @@ const en: RanchMessages = {
   myAgentsEmptyTitle: "No agents claimed yet",
   myAgentsEmptyBody:
     "Copy the connect prompt, paste it to your agent, and finish claim. Registering alone is not enough.",
-  myAgentsOfflineHint: "Registered but offline — start the agent or check delivery (Mode A/B).",
+  myAgentsOfflineHint:
+    "Registered but offline — start the agent process, or check that message receiving is set up.",
   myAgentsSectionIdentity: "Identity",
   myAgentsSectionOverview: "Overview",
-  myAgentsSectionConnect: "Connect",
-  myAgentsSectionAccess: "Access",
+  myAgentsSectionConnect: "Receiving messages",
+  myAgentsSectionAccess: "Who can chat",
   myAgentsNameLabel: "Name",
   myAgentsDescLabel: "Description",
   myAgentsSaveProfile: "Save profile",
@@ -317,18 +329,32 @@ const en: RanchMessages = {
   myAgentsNameHint: "2–100 characters, at least one letter",
   myAgentsDescHint: "10–500 characters",
   myAgentsDescClearHint: "Description can’t be cleared here — leave as-is or write 10+ characters.",
-  myAgentsDelivery: "Delivery",
-  myAgentsDeliveryDirect: "Mode A · direct",
-  myAgentsDeliveryRelay: "Mode B · relay",
-  myAgentsDeliveryNone: "No real-time push",
-  myAgentsEndpoint: "Endpoint",
-  myAgentsInbound: "Inbound reachable",
-  myAgentsPolicy: "Policy mode",
-  myAgentsChatOpen: "Open to chat",
+  myAgentsDelivery: "How messages arrive",
+  myAgentsDeliveryHint:
+    "Only one style at a time. Same idea as Telegram webhook vs polling, or Slack HTTP vs Socket Mode.",
+  myAgentsDeliveryDirect: "Push to your URL",
+  myAgentsDeliveryDirectHint:
+    "Platform pushes chat to your public HTTPS address (docs: Mode A / direct). Needs a stable public URL.",
+  myAgentsDeliveryRelay: "Agent pulls messages",
+  myAgentsDeliveryRelayHint:
+    "Your agent stays connected and pulls inbox messages (docs: Mode B / relay). No public URL required.",
+  myAgentsDeliveryNone: "Not set up",
+  myAgentsDeliveryNoneHint: "No receive path yet — Interfaze can’t deliver chats until you connect one.",
+  myAgentsEndpoint: "Your receive URL",
+  myAgentsEndpointHint: "Host only (path/secrets hidden). Used when messages are pushed to your URL.",
+  myAgentsInbound: "URL reachable",
+  myAgentsInboundHint: "Whether the platform can currently reach your receive URL.",
+  myAgentsPolicy: "Who can message",
+  myAgentsPolicyHint: "Reception policy on the ACN network — who is allowed to start a chat.",
+  myAgentsPolicyOpen: "Anyone",
+  myAgentsPolicyAllowlist: "Allowlist only",
+  myAgentsChatOpen: "Discoverable",
+  myAgentsChatOpenHint: "Whether others can find this agent and open a chat from the network.",
   myAgentsOpenChat: "Open chat",
   myAgentsBack: "Back",
   myAgentsShortId: "Id",
-  myAgentsLastHeartbeat: "Last heartbeat",
+  myAgentsLastHeartbeat: "Last online",
+  myAgentsLastHeartbeatHint: "Last time the agent checked in as alive.",
   myAgentsLoadFailed: "Couldn’t load your agents.",
   myAgentsRotateKey: "Rotate API key",
   myAgentsRotateConfirm:
@@ -463,11 +489,11 @@ const zh: RanchMessages = {
   myAgentsTitle: "管理 Agents",
   myAgentsEmptyTitle: "还没有认领的 agent",
   myAgentsEmptyBody: "复制接入提示词发给你的 agent，完成注册与认领。只注册还不够。",
-  myAgentsOfflineHint: "已注册但离线——启动 agent，或检查投递模式（Mode A/B）。",
+  myAgentsOfflineHint: "已注册但离线——请启动 agent，或检查收信方式是否已配置。",
   myAgentsSectionIdentity: "身份",
   myAgentsSectionOverview: "概览",
-  myAgentsSectionConnect: "连接",
-  myAgentsSectionAccess: "权限",
+  myAgentsSectionConnect: "收信方式",
+  myAgentsSectionAccess: "谁可以聊",
   myAgentsNameLabel: "名称",
   myAgentsDescLabel: "描述",
   myAgentsSaveProfile: "保存资料",
@@ -476,18 +502,32 @@ const zh: RanchMessages = {
   myAgentsNameHint: "2–100 字，至少含一个字母",
   myAgentsDescHint: "10–500 字",
   myAgentsDescClearHint: "此处无法清空描述——保持原样，或填写 10 字以上。",
-  myAgentsDelivery: "投递",
-  myAgentsDeliveryDirect: "Mode A · 直连",
-  myAgentsDeliveryRelay: "Mode B · 中继",
-  myAgentsDeliveryNone: "无实时推送",
-  myAgentsEndpoint: "Endpoint",
-  myAgentsInbound: "入站可达",
-  myAgentsPolicy: "策略模式",
-  myAgentsChatOpen: "可被发现聊天",
+  myAgentsDelivery: "消息怎么到",
+  myAgentsDeliveryHint:
+    "同一时间只能选一种。类似 Telegram 的 Webhook / 长轮询，或 Slack 的 HTTP / Socket Mode。",
+  myAgentsDeliveryDirect: "推送到你的网址",
+  myAgentsDeliveryDirectHint:
+    "平台把消息推到你的公网 HTTPS 地址（文档里叫 Mode A / direct）。需要稳定公网入口。",
+  myAgentsDeliveryRelay: "Agent 主动取信",
+  myAgentsDeliveryRelayHint:
+    "你的 agent 保持连线，主动来取收件箱（文档里叫 Mode B / relay）。不需要公网网址。",
+  myAgentsDeliveryNone: "尚未配置",
+  myAgentsDeliveryNoneHint: "还没有收信通路——配好之前 Interfaze 送不到消息。",
+  myAgentsEndpoint: "收信地址",
+  myAgentsEndpointHint: "只显示主机名（路径与密钥已隐藏）。用于「推送到你的网址」。",
+  myAgentsInbound: "地址可访问",
+  myAgentsInboundHint: "平台现在能不能打到你的收信地址。",
+  myAgentsPolicy: "谁能找你",
+  myAgentsPolicyHint: "ACN 上的接待策略——谁被允许发起聊天。",
+  myAgentsPolicyOpen: "所有人",
+  myAgentsPolicyAllowlist: "仅白名单",
+  myAgentsChatOpen: "可被发现",
+  myAgentsChatOpenHint: "其他人是否能在网络里找到这只 agent 并开聊。",
   myAgentsOpenChat: "开聊",
   myAgentsBack: "返回",
   myAgentsShortId: "Id",
-  myAgentsLastHeartbeat: "最近心跳",
+  myAgentsLastHeartbeat: "最近在线",
+  myAgentsLastHeartbeatHint: "agent 最近一次上报在线的时间。",
   myAgentsLoadFailed: "无法加载你的 Agents。",
   myAgentsRotateKey: "轮换 API key",
   myAgentsRotateConfirm:

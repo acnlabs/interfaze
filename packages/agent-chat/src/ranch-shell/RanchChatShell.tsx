@@ -19,7 +19,12 @@ import type {
   ThreadSummary,
 } from "../types";
 import { connectChatSocket, type ChatSocket } from "../ws";
-import { AgentOwnerSettings, deliveryLabel } from "./AgentOwnerSettings";
+import {
+  AgentOwnerSettings,
+  deliveryLabel,
+  deliveryValueHint,
+  FieldHint,
+} from "./AgentOwnerSettings";
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
 import { CONNECT_PROMPTS, copyText } from "./connectPrompt";
@@ -4037,12 +4042,28 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 letterSpacing: "0.06em",
                                 color: colors.muted,
                                 marginBottom: 6,
+                                display: "flex",
+                                alignItems: "center",
                               }}
                             >
                               {t.myAgentsDelivery}
+                              <FieldHint text={t.myAgentsDeliveryHint} />
                             </div>
-                            <div style={{ fontSize: 13, color: colors.text }}>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                color: colors.text,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                            >
                               {deliveryLabel(ownedAgentDetail.delivery, t)}
+                              {deliveryValueHint(ownedAgentDetail.delivery, t) ? (
+                                <FieldHint
+                                  text={deliveryValueHint(ownedAgentDetail.delivery, t)!}
+                                />
+                              ) : null}
                             </div>
                           </div>
                         ) : null}

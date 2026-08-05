@@ -175,7 +175,13 @@ export function MyAgentsPanel({
                       value: detail.claim_status || t.unknown,
                     },
                     ...(detail.last_heartbeat
-                      ? [{ label: t.myAgentsLastHeartbeat, value: detail.last_heartbeat }]
+                      ? [
+                          {
+                            label: t.myAgentsLastHeartbeat,
+                            hint: t.myAgentsLastHeartbeatHint,
+                            value: detail.last_heartbeat,
+                          },
+                        ]
                       : []),
                     ...(detail.tags && detail.tags.length > 0
                       ? [{ label: "Tags", value: detail.tags.join(", ") }]

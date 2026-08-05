@@ -24,10 +24,59 @@ export function deliveryLabel(
   return t.unknown;
 }
 
+export function deliveryValueHint(
+  delivery: string | null | undefined,
+  t: RanchMessages,
+): string | undefined {
+  if (delivery === "direct") return t.myAgentsDeliveryDirectHint;
+  if (delivery === "relay") return t.myAgentsDeliveryRelayHint;
+  if (delivery === "none") return t.myAgentsDeliveryNoneHint;
+  return undefined;
+}
+
+export function policyLabel(
+  mode: string | null | undefined,
+  t: RanchMessages,
+): string {
+  const m = (mode || "").toLowerCase();
+  if (m === "open") return t.myAgentsPolicyOpen;
+  if (m === "allowlist") return t.myAgentsPolicyAllowlist;
+  return mode?.trim() || t.unknown;
+}
+
 function boolLabel(v: boolean | null | undefined, t: RanchMessages): string {
   if (v === true) return t.yes;
   if (v === false) return t.no;
   return t.unknown;
+}
+
+/** Compact help affordance — full text in native tooltip. */
+export function FieldHint({ text }: { text: string }) {
+  return (
+    <span
+      title={text}
+      aria-label={text}
+      role="img"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 14,
+        height: 14,
+        marginLeft: 4,
+        borderRadius: "50%",
+        border: `1px solid ${colors.muted}`,
+        fontSize: 10,
+        lineHeight: "14px",
+        color: colors.muted,
+        cursor: "help",
+        flexShrink: 0,
+        userSelect: "none",
+      }}
+    >
+      ?
+    </span>
+  );
 }
 
 const sectionTitle: CSSProperties = {
@@ -51,21 +100,38 @@ const rowStyle: CSSProperties = {
 export function DetailRows({
   rows,
 }: {
-  rows: Array<{ label: string; value: string }>;
+  rows: Array<{ label: string; value: string; hint?: string; valueHint?: string }>;
 }) {
   return (
     <div>
       {rows.map((r) => (
         <div key={r.label} style={rowStyle}>
-          <span style={{ color: colors.muted, flexShrink: 0 }}>{r.label}</span>
+          <span
+            style={{
+              color: colors.muted,
+              flexShrink: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              maxWidth: "46%",
+            }}
+          >
+            {r.label}
+            {r.hint ? <FieldHint text={r.hint} /> : null}
+          </span>
           <span
             style={{
               textAlign: "right",
               wordBreak: "break-all",
               color: colors.text,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: 4,
+              minWidth: 0,
             }}
           >
-            {r.value}
+            <span style={{ minWidth: 0 }}>{r.value}</span>
+            {r.valueHint ? <FieldHint text={r.valueHint} /> : null}
           </span>
         </div>
       ))}
@@ -80,7 +146,7 @@ type Props = {
   agentPlanetBaseUrl?: string;
   connectGuideUrl?: string;
   busy?: boolean;
-  /** When false, hide Connect section (Info already shows Mode summary). */
+  /** When false, hide receiving-messages section (Info already shows a summary). */
   showConnectSection?: boolean;
   /** Called after a successful profile save with refreshed detail. */
   onUpdated?: (detail: MyAgentSummary) => void;
@@ -242,14 +308,18 @@ export function AgentOwnerSettings({
             rows={[
               {
                 label: t.myAgentsDelivery,
+                hint: t.myAgentsDeliveryHint,
                 value: deliveryLabel(detail.delivery, t),
+                valueHint: deliveryValueHint(detail.delivery, t),
               },
               {
                 label: t.myAgentsEndpoint,
+                hint: t.myAgentsEndpointHint,
                 value: detail.endpoint_masked || "—",
               },
               {
                 label: t.myAgentsInbound,
+                hint: t.myAgentsInboundHint,
                 value: boolLabel(detail.inbound_reachable, t),
               },
             ]}
@@ -283,10 +353,12 @@ export function AgentOwnerSettings({
           rows={[
             {
               label: t.myAgentsPolicy,
-              value: detail.policy_mode || t.unknown,
+              hint: t.myAgentsPolicyHint,
+              value: policyLabel(detail.policy_mode, t),
             },
             {
               label: t.myAgentsChatOpen,
+              hint: t.myAgentsChatOpenHint,
               value: boolLabel(detail.chat_open, t),
             },
           ]}
