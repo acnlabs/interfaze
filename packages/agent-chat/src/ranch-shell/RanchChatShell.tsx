@@ -2858,6 +2858,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
+                  if (agentRefOpen) {
+                    const pick =
+                      agentRefCandidates[agentRefIndex] || agentRefCandidates[0];
+                    if (pick) insertAgentRef(pick.name);
+                    return;
+                  }
                   if (tryRunSlashFromDraft()) return;
                   void send();
                 }}
@@ -3058,7 +3064,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             background: agentRefIndex === i ? colors.hover : "transparent",
                           }}
                         >
-                          <span style={{ fontWeight: 600 }}>{formatAgentRef(a.name)}</span>
+                          <span style={{ fontWeight: 600 }}>{a.name}</span>
                           <span
                             style={{
                               fontSize: 11,
