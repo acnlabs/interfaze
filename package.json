@@ -5,9 +5,11 @@
   "description": "Interfaze — standalone ACN chat host (interfaze.io)",
   "scripts": {
     "dev": "next dev --port 3010",
-    "build": "next build",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && next build",
     "start": "next start --port 3010",
-    "lint": "echo 'no lint config yet'"
+    "lint": "echo 'no lint config yet'",
+    "deploy:prod": "npm run typecheck && npx vercel --prod --yes"
   },
   "dependencies": {
     "@acnlabs/agent-chat": "file:./packages/agent-chat",

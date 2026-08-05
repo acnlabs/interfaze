@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install
+        run: npm install --legacy-peer-deps
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        env:
+          # Public placeholders — build must not depend on real secrets.
+          NEXT_PUBLIC_GATEWAY_URL: https://api.agentplanet.org
+          NEXT_PUBLIC_APP_ORIGIN: https://interfaze.io
+          NEXT_PUBLIC_AUTH0_DOMAIN: example.auth0.com
+          NEXT_PUBLIC_AUTH0_AUDIENCE: https://api.example.com
+          NEXT_PUBLIC_AUTH0_CLIENT_ID: ci-placeholder
+        run: npm run build

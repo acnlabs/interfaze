@@ -29,6 +29,14 @@ npm run dev   # http://localhost:3010
 
 ## Deploy (Vercel)
 
+Prefer the local script so type errors fail **before** upload (a failed Vercel build leaves the previous production alias unchanged — easy to miss):
+
+```bash
+npm run deploy:prod   # typecheck → vercel --prod
+```
+
+GitHub Actions (`CI`) also runs `typecheck` + `build` on every push/PR to `main`.
+
 1. Import [acnlabs/interfaze](https://github.com/acnlabs/interfaze) (public).
 2. Framework: Next.js. Install: `npm install --legacy-peer-deps`.
 3. Env:
