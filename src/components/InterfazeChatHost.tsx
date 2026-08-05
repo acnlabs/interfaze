@@ -202,6 +202,15 @@ export default function InterfazeChatHost() {
           ),
         );
       }}
+      onOwnedAgentRemoved={(agentId) => {
+        const bare = agentId.replace(/^acn:/i, "");
+        setDirectoryAgents((prev) =>
+          prev.filter((a) => {
+            const id = a.agent_id.replace(/^acn:/i, "");
+            return id !== bare && a.agent_id !== agentId;
+          }),
+        );
+      }}
     />
   );
 }

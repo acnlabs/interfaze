@@ -110,6 +110,19 @@ export type GatewayClient = {
     api_key: string;
     message?: string;
   }>;
+  /** Release ownership (agent becomes unclaimed). */
+  releaseMyAgent: (agentId: string) => Promise<{
+    success: boolean;
+    agent_id: string;
+    previous_owner?: string;
+    message?: string;
+  }>;
+  /** Permanently delete an owned agent. */
+  deleteMyAgent: (agentId: string) => Promise<{
+    success: boolean;
+    agent_id: string;
+    status: string;
+  }>;
   /** Owner-side profile patch; returns refreshed detail. */
   updateMyAgentProfile: (
     agentId: string,
@@ -203,6 +216,23 @@ export function createGatewayClient(
         message?: string;
       }>(`/api/chat/my-agents/${encodeURIComponent(agentId)}/rotate-key`, {
         method: "POST",
+      }),
+    releaseMyAgent: (agentId) =>
+      request<{
+        success: boolean;
+        agent_id: string;
+        previous_owner?: string;
+        message?: string;
+      }>(`/api/chat/my-agents/${encodeURIComponent(agentId)}/release`, {
+        method: "POST",
+      }),
+    deleteMyAgent: (agentId) =>
+      request<{
+        success: boolean;
+        agent_id: string;
+        status: string;
+      }>(`/api/chat/my-agents/${encodeURIComponent(agentId)}`, {
+        method: "DELETE",
       }),
     updateMyAgentProfile: (agentId, patch) =>
       request<MyAgentSummary>(

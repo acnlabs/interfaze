@@ -1153,6 +1153,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     locale: localeProp,
     onLocaleChange,
     onOwnedAgentUpdated,
+    onOwnedAgentRemoved,
   } = props;
 
   const [uiLocale, setUiLocale] = useState<RanchLocale>(() => resolveRanchLocale(localeProp));
@@ -2195,6 +2196,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
     });
   };
 
+  const applyOwnedAgentRemoved = (
+    agentId: string,
+    kind: "released" | "deleted",
+  ) => {
+    const key = agentIdKey(agentId);
+    setOwnedAgentDetail((prev) =>
+      prev && agentIdKey(prev.agent_id) === key ? null : prev,
+    );
+    if (infoTab === "settings") setInfoTab("info");
+    onOwnedAgentRemoved?.(agentId, kind);
+  };
+
   const activeOffline = active && !isGroupChat(active) && isAgentOffline(active.agent_status);
   const groupActive = !!(active && isGroupChat(active));
   const slashParsed = parseSlashDraft(draft);
@@ -2670,6 +2683,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             onAgentUpdated={(row, previousName) => {
               applyOwnedAgentProfileUpdate(row, previousName);
             }}
+            onAgentRemoved={applyOwnedAgentRemoved}
           />
         ) : null}
       </div>
@@ -3939,6 +3953,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           connectGuideUrl={connectGuideUrl}
                           busy={busy}
                           onUpdated={applyOwnedAgentProfileUpdate}
+                          onRemoved={applyOwnedAgentRemoved}
                         />
                       ) : (
                         <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>

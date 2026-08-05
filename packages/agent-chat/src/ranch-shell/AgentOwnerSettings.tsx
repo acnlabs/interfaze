@@ -307,10 +307,12 @@ type Props = {
   showConnectSection?: boolean;
   /** Called after a successful profile save with refreshed detail. */
   onUpdated?: (detail: MyAgentSummary) => void;
+  /** Called after release or permanent delete succeeds. */
+  onRemoved?: (agentId: string, kind: "released" | "deleted") => void;
 };
 
 /**
- * Owner Settings: profile edit + connect details + rotate-key + gift.
+ * Owner Settings: profile edit + connect details + rotate-key + gift + release/delete.
  * Shared by MyAgentsPanel detail and conversation Settings tab.
  */
 export function AgentOwnerSettings({
@@ -322,13 +324,19 @@ export function AgentOwnerSettings({
   busy,
   showConnectSection = true,
   onUpdated,
+  onRemoved,
 }: Props) {
   const [confirmRotate, setConfirmRotate] = useState(false);
   const [confirmRelay, setConfirmRelay] = useState(false);
+  const [confirmRelease, setConfirmRelease] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [rotating, setRotating] = useState(false);
+  const [releasing, setReleasing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [keyCopied, setKeyCopied] = useState(false);
   const [rotateError, setRotateError] = useState<string | null>(null);
+  const [dangerError, setDangerError] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState(detail.name || "");
   const [descDraft, setDescDraft] = useState(detail.description || "");
   const [savingProfile, setSavingProfile] = useState(false);
@@ -506,6 +514,47 @@ export function AgentOwnerSettings({
         setConfirmRotate(false);
       })
       .finally(() => setRotating(false));
+  };
+
+  const dangerBusy = releasing || deleting || rotating || saving || !!busy;
+
+  const runRelease = () => {
+    if (dangerBusy) return;
+    setReleasing(true);
+    setDangerError(null);
+    client
+      .releaseMyAgent(detail.agent_id)
+      .then(() => {
+        setConfirmRelease(false);
+        onRemoved?.(detail.agent_id, "released");
+      })
+      .catch(() => {
+        setDangerError(t.myAgentsReleaseFailed);
+        setConfirmRelease(false);
+      })
+      .finally(() => setReleasing(false));
+  };
+
+  const runDelete = () => {
+    if (dangerBusy) return;
+    setDeleting(true);
+    setDangerError(null);
+    client
+      .deleteMyAgent(detail.agent_id)
+      .then(() => {
+        setConfirmDelete(false);
+        onRemoved?.(detail.agent_id, "deleted");
+      })
+      .catch((err: unknown) => {
+        const code = err instanceof ChatGatewayError ? err.code : null;
+        setDangerError(
+          code === "agent_has_owned_subnets"
+            ? t.myAgentsDeleteHasSubnets
+            : t.myAgentsDeleteFailed,
+        );
+        setConfirmDelete(false);
+      })
+      .finally(() => setDeleting(false));
   };
 
   const optionBtn = (active: boolean): CSSProperties => ({
@@ -696,8 +745,10 @@ export function AgentOwnerSettings({
       </section>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {rotateError ? (
-          <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>{rotateError}</p>
+        {rotateError || dangerError ? (
+          <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>
+            {rotateError || dangerError}
+          </p>
         ) : null}
         {profileError || deliveryError ? (
           <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>
@@ -727,9 +778,10 @@ export function AgentOwnerSettings({
             borderColor: "rgba(248,113,113,0.45)",
             color: colors.danger,
           }}
-          disabled={busy || rotating || saving}
+          disabled={dangerBusy}
           onClick={() => {
             setRotateError(null);
+            setDangerError(null);
             setConfirmRotate(true);
           }}
         >
@@ -753,6 +805,40 @@ export function AgentOwnerSettings({
             ({t.myAgentsGiftExternal})
           </span>
         </a>
+        <button
+          type="button"
+          style={{
+            ...btnGhost,
+            width: "100%",
+            borderColor: "rgba(248,113,113,0.35)",
+            color: colors.danger,
+          }}
+          disabled={dangerBusy}
+          onClick={() => {
+            setDangerError(null);
+            setConfirmRelease(true);
+          }}
+        >
+          {t.myAgentsRelease}
+        </button>
+        <button
+          type="button"
+          style={{
+            ...btnGhost,
+            width: "100%",
+            background: "rgba(248,113,113,0.1)",
+            borderColor: "rgba(248,113,113,0.55)",
+            color: colors.danger,
+            fontWeight: 600,
+          }}
+          disabled={dangerBusy}
+          onClick={() => {
+            setDangerError(null);
+            setConfirmDelete(true);
+          }}
+        >
+          {t.myAgentsDelete}
+        </button>
       </div>
 
       {confirmRelay ? (
@@ -861,6 +947,124 @@ export function AgentOwnerSettings({
                 onClick={runRotate}
               >
                 {rotating ? t.loading : t.myAgentsRotateConfirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmRelease ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+          onClick={() => {
+            if (!releasing) setConfirmRelease(false);
+          }}
+        >
+          <div
+            style={{
+              width: "min(340px, 100%)",
+              background: colors.panel,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 12,
+              padding: 20,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.5 }}>
+              {t.myAgentsReleaseConfirm}
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                style={btnGhost}
+                disabled={releasing}
+                onClick={() => setConfirmRelease(false)}
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...btnGhost,
+                  background: "rgba(248,113,113,0.15)",
+                  borderColor: "rgba(248,113,113,0.45)",
+                  color: colors.danger,
+                  fontWeight: 600,
+                }}
+                disabled={releasing}
+                onClick={runRelease}
+              >
+                {releasing ? t.loading : t.myAgentsReleaseConfirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmDelete ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+          onClick={() => {
+            if (!deleting) setConfirmDelete(false);
+          }}
+        >
+          <div
+            style={{
+              width: "min(340px, 100%)",
+              background: colors.panel,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 12,
+              padding: 20,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.5 }}>
+              {t.myAgentsDeleteConfirm}
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                style={btnGhost}
+                disabled={deleting}
+                onClick={() => setConfirmDelete(false)}
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...btnGhost,
+                  background: "rgba(248,113,113,0.2)",
+                  borderColor: "rgba(248,113,113,0.55)",
+                  color: colors.danger,
+                  fontWeight: 600,
+                }}
+                disabled={deleting}
+                onClick={runDelete}
+              >
+                {deleting ? t.loading : t.myAgentsDeleteConfirmLabel}
               </button>
             </div>
           </div>
