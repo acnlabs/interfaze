@@ -10,12 +10,20 @@ import {
 import type { RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 
+/** Match Gateway ``MyAgentWalletAmount.amount`` upper bound. */
+const MAX_CREDITS = 100_000_000;
+
 type Props = {
   client: GatewayClient;
   agentId: string;
   messages: RanchMessages;
   agentPlanetBaseUrl?: string;
   busy?: boolean;
+};
+
+type ConfirmState = {
+  action: "topup" | "withdraw";
+  amount: number;
 };
 
 function fmtCredits(n: number): string {
@@ -25,9 +33,18 @@ function fmtCredits(n: number): string {
 function parseAmount(raw: string): number | null {
   const s = raw.trim().replace(/,/g, "");
   if (!/^\d+$/.test(s)) return null;
+  // Stay in safe integer range and Gateway max.
+  if (s.length > 9) return null;
   const n = Number(s);
-  if (!Number.isFinite(n) || n <= 0) return null;
+  if (!Number.isSafeInteger(n) || n <= 0 || n > MAX_CREDITS) return null;
   return n;
+}
+
+function fmtTxTime(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString();
 }
 
 const sectionTitle: CSSProperties = {
@@ -51,7 +68,7 @@ export function AgentOwnerWallet({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [amountDraft, setAmountDraft] = useState("");
-  const [confirmAction, setConfirmAction] = useState<"topup" | "withdraw" | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [acting, setActing] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -83,25 +100,26 @@ export function AgentOwnerWallet({
   const amount = parseAmount(amountDraft);
 
   const runTransfer = async () => {
-    if (!confirmAction || amount == null || acting) return;
+    if (!confirm || acting) return;
+    const { action, amount: fixedAmount } = confirm;
     setActing(true);
     setFlash(null);
     setError(null);
     try {
       const next =
-        confirmAction === "topup"
-          ? await client.topupMyAgentWallet(agentId, amount)
-          : await client.withdrawMyAgentWallet(agentId, amount);
+        action === "topup"
+          ? await client.topupMyAgentWallet(agentId, fixedAmount)
+          : await client.withdrawMyAgentWallet(agentId, fixedAmount);
       setWallet(next);
       setAmountDraft("");
-      setConfirmAction(null);
-      setFlash(confirmAction === "topup" ? t.walletTopupOk : t.walletWithdrawOk);
+      setConfirm(null);
+      setFlash(action === "topup" ? t.walletTopupOk : t.walletWithdrawOk);
       const list = await client.listMyAgentWalletTransactions(agentId, 1, 15);
       setTxs(list.transactions ?? []);
     } catch (e) {
       const code = e instanceof ChatGatewayError ? e.code : "";
       setError(code === "insufficient_credits" ? t.walletInsufficient : t.walletFailed);
-      setConfirmAction(null);
+      setConfirm(null);
     } finally {
       setActing(false);
     }
@@ -187,7 +205,10 @@ export function AgentOwnerWallet({
             type="button"
             style={{ ...btnPrimary, flex: 1, fontWeight: 600 }}
             disabled={busy || acting || amount == null || amount > wallet.owner_balance}
-            onClick={() => setConfirmAction("topup")}
+            onClick={() => {
+              if (amount == null) return;
+              setConfirm({ action: "topup", amount });
+            }}
           >
             {t.walletTopup}
           </button>
@@ -195,7 +216,10 @@ export function AgentOwnerWallet({
             type="button"
             style={{ ...btnGhost, flex: 1, fontWeight: 600 }}
             disabled={busy || acting || amount == null || amount > wallet.balance}
-            onClick={() => setConfirmAction("withdraw")}
+            onClick={() => {
+              if (amount == null) return;
+              setConfirm({ action: "withdraw", amount });
+            }}
           >
             {t.walletWithdraw}
           </button>
@@ -226,7 +250,16 @@ export function AgentOwnerWallet({
         {txs.length === 0 ? (
           <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>{t.walletTxEmpty}</p>
         ) : (
-          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+          <ul
+            style={{
+              listStyle: "none",
+              margin: 0,
+              padding: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
             {txs.map((tx) => (
               <li
                 key={tx.transaction_id}
@@ -243,7 +276,7 @@ export function AgentOwnerWallet({
                 </div>
                 <div style={{ marginTop: 4, color: colors.muted }}>
                   {tx.description || "—"}
-                  {tx.created_at ? ` · ${tx.created_at}` : ""}
+                  {tx.created_at ? ` · ${fmtTxTime(tx.created_at)}` : ""}
                 </div>
               </li>
             ))}
@@ -251,7 +284,7 @@ export function AgentOwnerWallet({
         )}
       </section>
 
-      {confirmAction && amount != null ? (
+      {confirm ? (
         <div
           role="dialog"
           aria-modal="true"
@@ -266,7 +299,7 @@ export function AgentOwnerWallet({
             padding: 24,
           }}
           onClick={() => {
-            if (!acting) setConfirmAction(null);
+            if (!acting) setConfirm(null);
           }}
         >
           <div
@@ -280,16 +313,16 @@ export function AgentOwnerWallet({
             onClick={(e) => e.stopPropagation()}
           >
             <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.5 }}>
-              {confirmAction === "topup"
-                ? t.walletTopupConfirm(fmtCredits(amount))
-                : t.walletWithdrawConfirm(fmtCredits(amount))}
+              {confirm.action === "topup"
+                ? t.walletTopupConfirm(fmtCredits(confirm.amount))
+                : t.walletWithdrawConfirm(fmtCredits(confirm.amount))}
             </p>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button
                 type="button"
                 style={btnGhost}
                 disabled={acting}
-                onClick={() => setConfirmAction(null)}
+                onClick={() => setConfirm(null)}
               >
                 {t.cancel}
               </button>
@@ -301,7 +334,7 @@ export function AgentOwnerWallet({
               >
                 {acting
                   ? t.loading
-                  : confirmAction === "topup"
+                  : confirm.action === "topup"
                     ? t.walletTopupConfirmLabel
                     : t.walletWithdrawConfirmLabel}
               </button>
