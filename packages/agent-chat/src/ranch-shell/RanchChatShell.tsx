@@ -1389,10 +1389,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, []);
 
   const exitTopicFilter = useCallback(() => {
-    setActiveTopic((cur) => {
-      if (cur) setComposerTopic(cur);
-      return null;
-    });
+    // Leaving the filtered topic view also leaves the posting context —
+    // otherwise × / ← feel like "closed" but sends still tag the topic.
+    setActiveTopic(null);
+    setComposerTopic(null);
   }, []);
 
   const runSlashCommand = useCallback(
@@ -3631,6 +3631,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     setConfirmDialog(null);
                                     setShowMembersPanel(false);
                                     setActiveTopic(null);
+                                    setComposerTopic(null);
                                     setTopics([]);
                                     setActive(null);
                                     setView("list");
