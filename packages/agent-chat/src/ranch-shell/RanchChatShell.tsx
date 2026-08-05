@@ -4047,24 +4047,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               }}
                             >
                               {t.myAgentsDelivery}
-                              <FieldHint text={t.myAgentsDeliveryHint} />
+                              <FieldHint
+                                text={
+                                  deliveryValueHint(ownedAgentDetail.delivery, t) ||
+                                  t.myAgentsDeliveryHint
+                                }
+                              />
                             </div>
-                            <div
-                              style={{
-                                fontSize: 13,
-                                color: colors.text,
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 4,
-                              }}
-                            >
+                            <div style={{ fontSize: 13, color: colors.text }}>
                               {deliveryLabel(ownedAgentDetail.delivery, t)}
-                              {deliveryValueHint(ownedAgentDetail.delivery, t) ? (
-                                <FieldHint
-                                  text={deliveryValueHint(ownedAgentDetail.delivery, t)!}
-                                  align="right"
-                                />
-                              ) : null}
                             </div>
                           </div>
                         ) : null}

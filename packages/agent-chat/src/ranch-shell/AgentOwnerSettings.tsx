@@ -51,9 +51,32 @@ function boolLabel(v: boolean | null | undefined, t: RanchMessages): string {
   return t.unknown;
 }
 
+/** Lucide-style info glyph — sized via CSS, not emoji/unicode. */
+function InfoIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+      style={{ display: "block" }}
+    >
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.75" />
+      <path
+        d="M12 10.5v5.25"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="7.5" r="0.9" fill="currentColor" />
+    </svg>
+  );
+}
+
 /**
- * Tiny help control. Click toggles a fixed popover (native title is too
- * unreliable / delayed, and overflow panels clip absolute bubbles).
+ * Standard info affordance: hover (or focus) shows a tip *above* the icon.
+ * Touch devices can tap; tip is portaled so overflow panels don't clip it.
  */
 export function FieldHint({
   text,
@@ -63,82 +86,93 @@ export function FieldHint({
   align?: "left" | "right";
 }) {
   const [open, setOpen] = useState(false);
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
+  const [coords, setCoords] = useState<{
+    top: number;
+    left: number;
+    tipH: number;
+  } | null>(null);
+  const wrapRef = useRef<HTMLSpanElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   const tipId = useId();
-  const tipWidth = 228;
+  const tipWidth = 240;
+  const hideTimer = useRef<number | null>(null);
+
+  const clearHide = () => {
+    if (hideTimer.current != null) {
+      window.clearTimeout(hideTimer.current);
+      hideTimer.current = null;
+    }
+  };
+
+  const show = () => {
+    clearHide();
+    setOpen(true);
+  };
+
+  const scheduleHide = () => {
+    clearHide();
+    hideTimer.current = window.setTimeout(() => setOpen(false), 80);
+  };
 
   useLayoutEffect(() => {
-    if (!open || !btnRef.current) {
+    if (!open || !wrapRef.current) {
       setCoords(null);
       return;
     }
     const place = () => {
-      const r = btnRef.current!.getBoundingClientRect();
-      let left = align === "right" ? r.right - tipWidth : r.left;
+      const r = wrapRef.current!.getBoundingClientRect();
+      const tipH = tipRef.current?.offsetHeight || 72;
+      let left = align === "right" ? r.right - tipWidth : r.left + r.width / 2 - tipWidth / 2;
       left = Math.max(8, Math.min(left, window.innerWidth - tipWidth - 8));
-      let top = r.bottom + 6;
-      const approxH = 96;
-      if (top + approxH > window.innerHeight - 8) {
-        top = Math.max(8, r.top - approxH - 6);
-      }
-      setCoords({ top, left });
+      // Prefer above the icon.
+      let top = r.top - tipH - 8;
+      if (top < 8) top = r.bottom + 8;
+      setCoords({ top, left, tipH });
     };
     place();
+    // Re-measure after tip mounts with real height.
+    const id = window.requestAnimationFrame(place);
     window.addEventListener("scroll", place, true);
     window.addEventListener("resize", place);
     return () => {
+      window.cancelAnimationFrame(id);
       window.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
   }, [open, align, text]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (btnRef.current?.contains(t) || tipRef.current?.contains(t)) return;
-      setOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("mousedown", onDown);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("mousedown", onDown);
-    };
-  }, [open]);
+  useEffect(() => () => clearHide(), []);
 
   const tip =
-    open && coords && typeof document !== "undefined"
+    open && typeof document !== "undefined"
       ? createPortal(
           <div
             ref={tipRef}
             id={tipId}
             role="tooltip"
+            onMouseEnter={show}
+            onMouseLeave={scheduleHide}
             style={{
               position: "fixed",
-              top: coords.top,
-              left: coords.left,
+              top: coords?.top ?? -9999,
+              left: coords?.left ?? 0,
               zIndex: 10050,
               width: tipWidth,
-              padding: "8px 10px",
-              background: "#0b1220",
+              padding: "7px 9px",
+              background: "#111827",
               border: `1px solid ${colors.border}`,
               borderRadius: 6,
               fontSize: 11,
-              lineHeight: 1.45,
-              color: colors.text,
-              boxShadow: "0 10px 28px rgba(0,0,0,0.45)",
+              lineHeight: 1.4,
+              color: "rgba(226,232,240,0.95)",
+              boxShadow: "0 8px 20px rgba(0,0,0,0.4)",
               whiteSpace: "normal",
               textAlign: "left",
               fontWeight: 400,
               letterSpacing: "normal",
               textTransform: "none",
               pointerEvents: "auto",
+              visibility: coords ? "visible" : "hidden",
             }}
           >
             {text}
@@ -148,14 +182,27 @@ export function FieldHint({
       : null;
 
   return (
-    <span style={{ position: "relative", display: "inline-flex", flexShrink: 0, marginLeft: 3 }}>
+    <span
+      ref={wrapRef}
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        flexShrink: 0,
+        marginLeft: 4,
+        verticalAlign: "middle",
+      }}
+      onMouseEnter={show}
+      onMouseLeave={scheduleHide}
+    >
       <button
-        ref={btnRef}
         type="button"
-        aria-label={text}
-        aria-expanded={open}
-        aria-controls={open ? tipId : undefined}
+        aria-label="More info"
+        aria-describedby={open ? tipId : undefined}
+        onFocus={show}
+        onBlur={scheduleHide}
         onClick={(e) => {
+          // Touch / keyboard fallback — desktop primarily uses hover.
+          e.preventDefault();
           e.stopPropagation();
           setOpen((v) => !v);
         }}
@@ -163,23 +210,18 @@ export function FieldHint({
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
-          width: 12,
-          height: 12,
+          width: 14,
+          height: 14,
           padding: 0,
           margin: 0,
           border: "none",
-          borderRadius: "50%",
           background: "transparent",
-          color: "rgba(148,163,184,0.85)",
-          fontSize: 11,
-          fontStyle: "normal",
-          fontWeight: 500,
-          lineHeight: 1,
-          cursor: "pointer",
-          opacity: open ? 1 : 0.75,
+          color: "rgba(148,163,184,0.7)",
+          cursor: "help",
+          lineHeight: 0,
         }}
       >
-        ⓘ
+        <InfoIcon size={12} />
       </button>
       {tip}
     </span>
@@ -211,37 +253,36 @@ export function DetailRows({
 }) {
   return (
     <div>
-      {rows.map((r) => (
-        <div key={r.label} style={rowStyle}>
-          <span
-            style={{
-              color: colors.muted,
-              flexShrink: 0,
-              display: "inline-flex",
-              alignItems: "center",
-              maxWidth: "46%",
-            }}
-          >
-            {r.label}
-            {r.hint ? <FieldHint text={r.hint} /> : null}
-          </span>
-          <span
-            style={{
-              textAlign: "right",
-              wordBreak: "break-all",
-              color: colors.text,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "flex-end",
-              gap: 4,
-              minWidth: 0,
-            }}
-          >
-            <span style={{ minWidth: 0 }}>{r.value}</span>
-            {r.valueHint ? <FieldHint text={r.valueHint} align="right" /> : null}
-          </span>
-        </div>
-      ))}
+      {rows.map((r) => {
+        // One tip per row (prefer value-specific copy) to avoid icon clutter.
+        const tip = r.valueHint || r.hint;
+        return (
+          <div key={r.label} style={rowStyle}>
+            <span
+              style={{
+                color: colors.muted,
+                flexShrink: 0,
+                display: "inline-flex",
+                alignItems: "center",
+                maxWidth: "48%",
+              }}
+            >
+              {r.label}
+              {tip ? <FieldHint text={tip} /> : null}
+            </span>
+            <span
+              style={{
+                textAlign: "right",
+                wordBreak: "break-all",
+                color: colors.text,
+                minWidth: 0,
+              }}
+            >
+              {r.value}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
