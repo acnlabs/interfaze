@@ -330,6 +330,7 @@ export function AgentOwnerSettings({
   const [confirmRelay, setConfirmRelay] = useState(false);
   const [confirmRelease, setConfirmRelease] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteTyped, setDeleteTyped] = useState("");
   const [rotating, setRotating] = useState(false);
   const [releasing, setReleasing] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -518,6 +519,27 @@ export function AgentOwnerSettings({
 
   const dangerBusy = releasing || deleting || rotating || saving || !!busy;
 
+  const deleteConfirmOk = (() => {
+    const typed = deleteTyped.trim();
+    if (!typed) return false;
+    const name = (detail.name || "").trim();
+    if (name && typed === name) return true;
+    // Accept English DELETE keyword (locale-independent) to avoid accidental matches.
+    return typed.toUpperCase() === "DELETE";
+  })();
+
+  const openDeleteConfirm = () => {
+    setDangerError(null);
+    setDeleteTyped("");
+    setConfirmDelete(true);
+  };
+
+  const closeDeleteConfirm = () => {
+    if (deleting) return;
+    setConfirmDelete(false);
+    setDeleteTyped("");
+  };
+
   const runRelease = () => {
     if (dangerBusy) return;
     setReleasing(true);
@@ -536,13 +558,14 @@ export function AgentOwnerSettings({
   };
 
   const runDelete = () => {
-    if (dangerBusy) return;
+    if (dangerBusy || !deleteConfirmOk) return;
     setDeleting(true);
     setDangerError(null);
     client
       .deleteMyAgent(detail.agent_id)
       .then(() => {
         setConfirmDelete(false);
+        setDeleteTyped("");
         onRemoved?.(detail.agent_id, "deleted");
       })
       .catch((err: unknown) => {
@@ -553,6 +576,7 @@ export function AgentOwnerSettings({
             : t.myAgentsDeleteFailed,
         );
         setConfirmDelete(false);
+        setDeleteTyped("");
       })
       .finally(() => setDeleting(false));
   };
@@ -832,10 +856,7 @@ export function AgentOwnerSettings({
             fontWeight: 600,
           }}
           disabled={dangerBusy}
-          onClick={() => {
-            setDangerError(null);
-            setConfirmDelete(true);
-          }}
+          onClick={openDeleteConfirm}
         >
           {t.myAgentsDelete}
         </button>
@@ -1026,9 +1047,7 @@ export function AgentOwnerSettings({
             justifyContent: "center",
             padding: 24,
           }}
-          onClick={() => {
-            if (!deleting) setConfirmDelete(false);
-          }}
+          onClick={closeDeleteConfirm}
         >
           <div
             style={{
@@ -1040,15 +1059,30 @@ export function AgentOwnerSettings({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.5 }}>
+            <p style={{ margin: "0 0 12px", fontSize: 14, lineHeight: 1.5 }}>
               {t.myAgentsDeleteConfirm}
             </p>
+            <label style={{ display: "block", marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: colors.muted, marginBottom: 6 }}>
+                {t.myAgentsDeleteTypeHint}
+              </div>
+              <input
+                value={deleteTyped}
+                onChange={(e) => setDeleteTyped(e.target.value)}
+                placeholder={t.myAgentsDeleteTypePlaceholder}
+                autoFocus
+                disabled={deleting}
+                style={inputStyle}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button
                 type="button"
                 style={btnGhost}
                 disabled={deleting}
-                onClick={() => setConfirmDelete(false)}
+                onClick={closeDeleteConfirm}
               >
                 {t.cancel}
               </button>
@@ -1061,7 +1095,7 @@ export function AgentOwnerSettings({
                   color: colors.danger,
                   fontWeight: 600,
                 }}
-                disabled={deleting}
+                disabled={deleting || !deleteConfirmOk}
                 onClick={runDelete}
               >
                 {deleting ? t.loading : t.myAgentsDeleteConfirmLabel}

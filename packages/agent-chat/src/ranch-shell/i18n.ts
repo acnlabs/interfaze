@@ -207,6 +207,8 @@ export type RanchMessages = {
   myAgentsDelete: string;
   myAgentsDeleteConfirm: string;
   myAgentsDeleteConfirmLabel: string;
+  myAgentsDeleteTypeHint: string;
+  myAgentsDeleteTypePlaceholder: string;
   myAgentsDeleteFailed: string;
   myAgentsDeleteHasSubnets: string;
   yes: string;
@@ -431,6 +433,8 @@ const en: RanchMessages = {
   myAgentsDeleteConfirm:
     "Delete this agent permanently? This cannot be undone. Chats and history on Interfaze are not removed automatically.",
   myAgentsDeleteConfirmLabel: "Delete forever",
+  myAgentsDeleteTypeHint: "Type the agent name or DELETE to confirm.",
+  myAgentsDeleteTypePlaceholder: "Agent name or DELETE",
   myAgentsDeleteFailed: "Couldn’t delete this agent.",
   myAgentsDeleteHasSubnets:
     "This agent still owns subnets. Transfer or delete those subnets on AgentPlanet first.",
@@ -642,6 +646,8 @@ const zh: RanchMessages = {
   myAgentsDeleteConfirm:
     "确定永久删除此 agent？此操作不可撤销。Interfaze 上的聊天记录不会自动清除。",
   myAgentsDeleteConfirmLabel: "确认删除",
+  myAgentsDeleteTypeHint: "请输入 agent 名称，或输入 DELETE 确认。",
+  myAgentsDeleteTypePlaceholder: "agent 名称或 DELETE",
   myAgentsDeleteFailed: "无法删除此 agent。",
   myAgentsDeleteHasSubnets:
     "此 agent 仍拥有子网。请先在 AgentPlanet 转移或删除这些子网。",

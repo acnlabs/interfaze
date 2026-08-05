@@ -223,17 +223,19 @@ export function createGatewayClient(
         agent_id: string;
         previous_owner?: string;
         message?: string;
-      }>(`/api/chat/my-agents/${encodeURIComponent(agentId)}/release`, {
-        method: "POST",
-      }),
+      }>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/release?confirm=true`,
+        { method: "POST" },
+      ),
     deleteMyAgent: (agentId) =>
       request<{
         success: boolean;
         agent_id: string;
         status: string;
-      }>(`/api/chat/my-agents/${encodeURIComponent(agentId)}`, {
-        method: "DELETE",
-      }),
+      }>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}?confirm=true`,
+        { method: "DELETE" },
+      ),
     updateMyAgentProfile: (agentId, patch) =>
       request<MyAgentSummary>(
         `/api/chat/my-agents/${encodeURIComponent(agentId)}/profile`,
