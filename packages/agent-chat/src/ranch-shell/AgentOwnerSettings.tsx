@@ -793,6 +793,22 @@ export function AgentOwnerSettings({
         >
           {t.myAgentsRotateKey}
         </button>
+        <button
+          type="button"
+          style={{
+            ...btnGhost,
+            width: "100%",
+            background: "rgba(248,113,113,0.1)",
+            borderColor: "rgba(248,113,113,0.55)",
+            color: colors.danger,
+            fontWeight: 600,
+          }}
+          disabled={dangerBusy}
+          onClick={openDeleteConfirm}
+        >
+          {t.myAgentsDelete}
+        </button>
+        {/* External gift/transfer — last, away from in-shell danger ops */}
         <a
           href={giftUrl}
           target="_blank"
@@ -811,21 +827,6 @@ export function AgentOwnerSettings({
             ({t.myAgentsGiftExternal})
           </span>
         </a>
-        <button
-          type="button"
-          style={{
-            ...btnGhost,
-            width: "100%",
-            background: "rgba(248,113,113,0.1)",
-            borderColor: "rgba(248,113,113,0.55)",
-            color: colors.danger,
-            fontWeight: 600,
-          }}
-          disabled={dangerBusy}
-          onClick={openDeleteConfirm}
-        >
-          {t.myAgentsDelete}
-        </button>
       </div>
 
       {confirmRelay ? (
