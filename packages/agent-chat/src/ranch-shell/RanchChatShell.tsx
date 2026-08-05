@@ -1041,6 +1041,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     onLogout,
     onReauth,
     connectGuideUrl,
+    agentPlanetBaseUrl,
     locale: localeProp,
     onLocaleChange,
   } = props;
@@ -2449,6 +2450,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           <MyAgentsPanel
             client={client}
             connectGuideUrl={connectGuideUrl}
+            agentPlanetBaseUrl={agentPlanetBaseUrl}
             locale={uiLocale}
             messages={t}
             busy={busy}

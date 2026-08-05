@@ -87,6 +87,13 @@ export type GatewayClient = {
   /** Owner's ACN agents (same region / alive as directory mine). */
   listMyAgents: (limit?: number) => Promise<MyAgentSummary[]>;
   getMyAgent: (agentId: string) => Promise<MyAgentSummary>;
+  /** Rotate ACN API key; plaintext returned once — do not log. */
+  rotateMyAgentKey: (agentId: string) => Promise<{
+    success: boolean;
+    agent_id: string;
+    api_key: string;
+    message?: string;
+  }>;
   addParticipant: (chatId: string, agentId: string) => Promise<ChatParticipant>;
   removeParticipant: (chatId: string, participantId: string) => Promise<void>;
   updateChat: (chatId: string, patch: { title?: string; description?: string }) => Promise<ChatSummary>;
@@ -162,6 +169,15 @@ export function createGatewayClient(
     },
     getMyAgent: (agentId) =>
       request<MyAgentSummary>(`/api/chat/my-agents/${encodeURIComponent(agentId)}`),
+    rotateMyAgentKey: (agentId) =>
+      request<{
+        success: boolean;
+        agent_id: string;
+        api_key: string;
+        message?: string;
+      }>(`/api/chat/my-agents/${encodeURIComponent(agentId)}/rotate-key`, {
+        method: "POST",
+      }),
     listMessages: (chatId) =>
       request<ChatMessage[]>(`/api/chats/${encodeURIComponent(chatId)}/messages?limit=50`),
     listParticipants: (chatId) =>

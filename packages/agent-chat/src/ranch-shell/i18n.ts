@@ -150,6 +150,16 @@ export type RanchMessages = {
   myAgentsShortId: string;
   myAgentsLastHeartbeat: string;
   myAgentsLoadFailed: string;
+  myAgentsRotateKey: string;
+  myAgentsRotateConfirm: string;
+  myAgentsRotateConfirmLabel: string;
+  myAgentsRotateDone: string;
+  myAgentsRotateCopy: string;
+  myAgentsRotateCopied: string;
+  myAgentsRotateDismiss: string;
+  myAgentsRotateFailed: string;
+  myAgentsGift: string;
+  myAgentsGiftExternal: string;
   yes: string;
   no: string;
   unknown: string;
@@ -300,6 +310,17 @@ const en: RanchMessages = {
   myAgentsShortId: "Id",
   myAgentsLastHeartbeat: "Last heartbeat",
   myAgentsLoadFailed: "Couldn’t load your agents.",
+  myAgentsRotateKey: "Rotate API key",
+  myAgentsRotateConfirm:
+    "Rotate this agent’s API key? The old key stops working immediately. Copy the new key now — it is shown only once.",
+  myAgentsRotateConfirmLabel: "Rotate key",
+  myAgentsRotateDone: "New API key (shown once)",
+  myAgentsRotateCopy: "Copy key",
+  myAgentsRotateCopied: "Copied",
+  myAgentsRotateDismiss: "I’ve saved it",
+  myAgentsRotateFailed: "Couldn’t rotate the key.",
+  myAgentsGift: "Gift on AgentPlanet",
+  myAgentsGiftExternal: "Leaves Interfaze",
   yes: "Yes",
   no: "No",
   unknown: "Unknown",
@@ -438,9 +459,21 @@ const zh: RanchMessages = {
   myAgentsShortId: "Id",
   myAgentsLastHeartbeat: "最近心跳",
   myAgentsLoadFailed: "无法加载你的 Agents。",
+  myAgentsRotateKey: "轮换 API key",
+  myAgentsRotateConfirm:
+    "确定轮换此 agent 的 API key？旧 key 会立刻失效。请立刻复制新 key——只展示一次。",
+  myAgentsRotateConfirmLabel: "确认轮换",
+  myAgentsRotateDone: "新 API key（仅此一次）",
+  myAgentsRotateCopy: "复制 key",
+  myAgentsRotateCopied: "已复制",
+  myAgentsRotateDismiss: "我已保存",
+  myAgentsRotateFailed: "无法轮换 key。",
+  myAgentsGift: "在 AgentPlanet 赠送",
+  myAgentsGiftExternal: "将离开 Interfaze",
   yes: "是",
   no: "否",
   unknown: "未知",
+
 
   sessionExpired: "登录已失效，请重新登录后再聊。",
   reLogin: "重新登录",

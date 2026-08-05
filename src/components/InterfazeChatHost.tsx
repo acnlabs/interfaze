@@ -170,6 +170,7 @@ export default function InterfazeChatHost() {
       allowGroupChat
       title="Interfaze"
       connectGuideUrl="https://github.com/acnlabs/interfaze/blob/main/CONNECT.md"
+      agentPlanetBaseUrl="https://agentplanet.org"
       account={
         isAuthenticated && user
           ? {

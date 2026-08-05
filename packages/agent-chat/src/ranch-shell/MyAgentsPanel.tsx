@@ -9,6 +9,8 @@ import { btnGhost, btnPrimary, colors } from "./styles";
 type Props = {
   client: GatewayClient;
   connectGuideUrl?: string;
+  /** AgentPlanet origin for gift deep-link. Default https://agentplanet.org */
+  agentPlanetBaseUrl?: string;
   locale: RanchLocale;
   messages: RanchMessages;
   busy?: boolean;
@@ -80,6 +82,7 @@ function DetailRows({
 export function MyAgentsPanel({
   client,
   connectGuideUrl,
+  agentPlanetBaseUrl = "https://agentplanet.org",
   locale,
   messages: t,
   busy,
@@ -94,6 +97,11 @@ export function MyAgentsPanel({
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [confirmRotate, setConfirmRotate] = useState(false);
+  const [rotating, setRotating] = useState(false);
+  const [newApiKey, setNewApiKey] = useState<string | null>(null);
+  const [keyCopied, setKeyCopied] = useState(false);
+  const [rotateError, setRotateError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,6 +127,9 @@ export function MyAgentsPanel({
     if (!selectedId) {
       setDetail(null);
       setDetailError(null);
+      setNewApiKey(null);
+      setConfirmRotate(false);
+      setRotateError(null);
       return;
     }
     let cancelled = false;
@@ -149,6 +160,28 @@ export function MyAgentsPanel({
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     });
+  };
+
+  const giftUrl = detail
+    ? `${agentPlanetBaseUrl.replace(/\/+$/, "")}/agents/${encodeURIComponent(detail.agent_id)}`
+    : null;
+
+  const runRotate = () => {
+    if (!detail) return;
+    setRotating(true);
+    setRotateError(null);
+    void client
+      .rotateMyAgentKey(detail.agent_id)
+      .then((res) => {
+        setConfirmRotate(false);
+        setNewApiKey(res.api_key);
+        setKeyCopied(false);
+      })
+      .catch(() => {
+        setRotateError(t.myAgentsRotateFailed);
+        setConfirmRotate(false);
+      })
+      .finally(() => setRotating(false));
   };
 
   return (
@@ -273,6 +306,56 @@ export function MyAgentsPanel({
                     },
                   ]}
                 />
+                {rotateError ? (
+                  <p style={{ margin: "10px 0 0", fontSize: 12, color: colors.danger }}>
+                    {rotateError}
+                  </p>
+                ) : null}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    marginTop: 12,
+                  }}
+                >
+                  <button
+                    type="button"
+                    style={{
+                      ...btnGhost,
+                      width: "100%",
+                      borderColor: "rgba(248,113,113,0.45)",
+                      color: colors.danger,
+                    }}
+                    disabled={busy || rotating}
+                    onClick={() => {
+                      setRotateError(null);
+                      setConfirmRotate(true);
+                    }}
+                  >
+                    {t.myAgentsRotateKey}
+                  </button>
+                  {giftUrl ? (
+                    <a
+                      href={giftUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        ...btnGhost,
+                        display: "block",
+                        width: "100%",
+                        textAlign: "center",
+                        textDecoration: "none",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      {t.myAgentsGift}
+                      <span style={{ color: colors.muted, marginLeft: 6, fontSize: 11 }}>
+                        ({t.myAgentsGiftExternal})
+                      </span>
+                    </a>
+                  ) : null}
+                </div>
               </section>
               <button
                 type="button"
@@ -373,6 +456,132 @@ export function MyAgentsPanel({
           </ul>
         )}
       </div>
+
+      {confirmRotate ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+          onClick={() => {
+            if (!rotating) setConfirmRotate(false);
+          }}
+        >
+          <div
+            style={{
+              width: "min(340px, 100%)",
+              background: colors.panel,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 12,
+              padding: 20,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.5 }}>
+              {t.myAgentsRotateConfirm}
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                style={btnGhost}
+                disabled={rotating}
+                onClick={() => setConfirmRotate(false)}
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...btnGhost,
+                  background: "rgba(248,113,113,0.15)",
+                  borderColor: "rgba(248,113,113,0.45)",
+                  color: colors.danger,
+                  fontWeight: 600,
+                }}
+                disabled={rotating}
+                onClick={runRotate}
+              >
+                {rotating ? t.loading : t.myAgentsRotateConfirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {newApiKey ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <div
+            style={{
+              width: "min(360px, 100%)",
+              background: colors.panel,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 12,
+              padding: 20,
+            }}
+          >
+            <p style={{ margin: "0 0 10px", fontSize: 14, fontWeight: 600 }}>
+              {t.myAgentsRotateDone}
+            </p>
+            <code
+              style={{
+                display: "block",
+                padding: 10,
+                borderRadius: 8,
+                background: colors.bg,
+                border: `1px solid ${colors.border}`,
+                fontSize: 12,
+                wordBreak: "break-all",
+                marginBottom: 12,
+              }}
+            >
+              {newApiKey}
+            </code>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                style={btnPrimary}
+                onClick={() => {
+                  void copyText(newApiKey).then((ok) => {
+                    if (!ok) return;
+                    setKeyCopied(true);
+                    window.setTimeout(() => setKeyCopied(false), 2000);
+                  });
+                }}
+              >
+                {keyCopied ? t.myAgentsRotateCopied : t.myAgentsRotateCopy}
+              </button>
+              <button
+                type="button"
+                style={btnGhost}
+                onClick={() => setNewApiKey(null)}
+              >
+                {t.myAgentsRotateDismiss}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

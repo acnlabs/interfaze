@@ -103,6 +103,11 @@ export type RanchChatShellProps = {
    */
   connectGuideUrl?: string;
   /**
+   * AgentPlanet origin for gift/manage deep-links (v0 leaves Interfaze).
+   * Default: https://agentplanet.org
+   */
+  agentPlanetBaseUrl?: string;
+  /**
    * UI locale (BCP-47). Supported: `en` (default), `zh`.
    * Other values fall back to English.
    * When omitted, shell uses stored preference → browser language → `en`.
