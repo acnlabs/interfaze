@@ -82,6 +82,8 @@ export type RanchMessages = {
   slashInfoDesc: string;
   slashUnknown: (cmd: string) => string;
   defaultTopicTitle: string;
+  /** Chip above composer while posting into a topic on the main timeline. */
+  postingInTopic: (title: string) => string;
   openDirectChat: string;
   mentionAll: string;
   mentionAllHint: string;
@@ -193,11 +195,12 @@ const en: RanchMessages = {
   statusLabel: "Status",
   agentIdLabel: "Agent id",
   slashCommands: "Commands",
-  slashTopicDesc: "Create a topic and open it",
+  slashTopicDesc: "Start a topic here (divider in timeline)",
   slashMembersDesc: "Open group members",
   slashInfoDesc: "Open chat info",
   slashUnknown: (cmd) => `Unknown command: /${cmd}`,
   defaultTopicTitle: "New topic",
+  postingInTopic: (title) => `Posting in # ${title}`,
   openDirectChat: "Message privately",
   mentionAll: "@all",
   mentionAllHint: "Mention all agents",
@@ -308,11 +311,12 @@ const zh: RanchMessages = {
   statusLabel: "状态",
   agentIdLabel: "Agent id",
   slashCommands: "命令",
-  slashTopicDesc: "新建话题并进入",
+  slashTopicDesc: "在当前对话开始话题（时间线分隔）",
   slashMembersDesc: "打开群成员",
   slashInfoDesc: "打开会话资料",
   slashUnknown: (cmd) => `未知命令：/${cmd}`,
   defaultTopicTitle: "新话题",
+  postingInTopic: (title) => `正在 # ${title} 中发送`,
   openDirectChat: "私聊",
   mentionAll: "@all",
   mentionAllHint: "提及所有 agent",

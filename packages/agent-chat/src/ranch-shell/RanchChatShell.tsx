@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -569,6 +570,69 @@ function isSlashMenuDraft(text: string): boolean {
   return !/\s/.test(trimmed.slice(1));
 }
 
+/** Horizontal rule marking a topic boundary on the main timeline. */
+function TopicDivider({
+  title,
+  onOpen,
+  borderColor,
+  accentSoft,
+}: {
+  title: string;
+  onOpen?: () => void;
+  borderColor: string;
+  accentSoft: string;
+}) {
+  const label = (
+    <span
+      style={{
+        fontSize: 11,
+        color: "#93c5fd",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        maxWidth: 180,
+      }}
+    >
+      # {title}
+    </span>
+  );
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        alignSelf: "stretch",
+        width: "100%",
+        margin: "8px 0 4px",
+      }}
+    >
+      <div style={{ flex: 1, height: 1, background: borderColor }} />
+      {onOpen ? (
+        <button
+          type="button"
+          onClick={onOpen}
+          title={title}
+          style={{
+            border: `1px solid ${borderColor}`,
+            background: accentSoft,
+            borderRadius: 999,
+            padding: "2px 10px",
+            cursor: "pointer",
+            display: "inline-flex",
+            maxWidth: "70%",
+          }}
+        >
+          {label}
+        </button>
+      ) : (
+        label
+      )}
+      <div style={{ flex: 1, height: 1, background: borderColor }} />
+    </div>
+  );
+}
+
 function isAuthFailure(err: unknown): boolean {
   if (err instanceof ChatGatewayError) {
     return err.status === 401 || err.code === "not_authenticated";
@@ -997,6 +1061,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [infoTab, setInfoTab] = useState<"info" | "members" | "topics">("info");
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [activeTopic, setActiveTopic] = useState<ThreadSummary | null>(null);
+  /**
+   * Topic to tag new sends with while staying on the main timeline
+   * (slash /topic creates this; does not switch into filtered topic view).
+   */
+  const [composerTopic, setComposerTopic] = useState<ThreadSummary | null>(null);
   const [showCreateTopic, setShowCreateTopic] = useState(false);
   const [topicTitleDraft, setTopicTitleDraft] = useState("");
   const [topicDescDraft, setTopicDescDraft] = useState("");
@@ -1217,6 +1286,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setTopicTitleDraft("");
       setTopicDescDraft("");
       setActiveTopic(null);
+      setComposerTopic(null);
       setTopics([]);
       setTitleDraft(chat.title?.trim() || "");
       setMentionIndex(0);
@@ -1299,9 +1369,30 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   const openTopic = useCallback((topic: ThreadSummary) => {
     setActiveTopic(topic);
+    setComposerTopic(topic);
     setShowMembersPanel(false);
     setShowAddMember(false);
     setShowCreateTopic(false);
+  }, []);
+
+  /** Create topic, list it, keep main timeline — next sends tag this thread. */
+  const startTopicInTimeline = useCallback((created: ThreadSummary) => {
+    setTopics((prev) => [created, ...prev.filter((tp) => tp.id !== created.id)]);
+    setComposerTopic(created);
+    setActiveTopic(null);
+    setShowMembersPanel(false);
+    setShowAddMember(false);
+    setShowCreateTopic(false);
+    setTopicTitleDraft("");
+    setTopicDescDraft("");
+    setDraft("");
+  }, []);
+
+  const exitTopicFilter = useCallback(() => {
+    setActiveTopic((cur) => {
+      if (cur) setComposerTopic(cur);
+      return null;
+    });
   }, []);
 
   const runSlashCommand = useCallback(
@@ -1314,9 +1405,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         setError(null);
         try {
           const created = await client.createThread(active.chat_id, { title });
-          setTopics((prev) => [created, ...prev.filter((tp) => tp.id !== created.id)]);
-          setDraft("");
-          openTopic(created);
+          startTopicInTimeline(created);
         } catch (e) {
           setError(e instanceof Error ? e.message : t.sendFailed);
         } finally {
@@ -1341,7 +1430,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         setShowMembersPanel(true);
       }
     },
-    [active, client, openTopic, t.defaultTopicTitle, t.sendFailed],
+    [active, client, startTopicInTimeline, t.defaultTopicTitle, t.sendFailed],
   );
 
   const reloadParticipants = useCallback(
@@ -1567,7 +1656,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
       }
       beginAwaitingReply(chatId);
       const sentWhileOffline = !group && isAgentOffline(active?.agent_status);
-      await client.sendMessage(chatId, text, mentions, activeTopic?.id ?? null);
+      const sendThreadId = activeTopic?.id ?? composerTopic?.id ?? null;
+      await client.sendMessage(chatId, text, mentions, sendThreadId);
       if (group && mentions) {
         if (mentions.length === 1) {
           const id = mentions[0]!;
@@ -1671,7 +1761,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           chatId,
           text,
           mentions,
-          lastUser?.thread_id || activeTopic?.id || null,
+          activeTopic?.id ?? composerTopic?.id ?? lastUser?.thread_id ?? null,
         );
         if (group && mentions) {
           if (mentions.length === 1) {
@@ -1754,24 +1844,24 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const groupActive = !!(active && isGroupChat(active));
   const slashParsed = parseSlashDraft(draft);
   const slashMenuOpen = isSlashMenuDraft(draft);
-  // Annotate before .filter — otherwise TS widens id to string and fails assignability.
-  const allSlashCommands: SlashCmdDef[] = [
-    { id: "topic", label: "/topic", description: t.slashTopicDesc },
-    {
-      id: "members",
-      label: "/members",
-      description: t.slashMembersDesc,
-      groupOnly: true,
-    },
-    // Direct only — group detail has Members, not a separate Info tab.
-    {
-      id: "info",
-      label: "/info",
-      description: t.slashInfoDesc,
-      groupOnly: false,
-    },
-  ];
-  const slashCommands = allSlashCommands.filter((c) => {
+  const slashCommands: SlashCmdDef[] = (
+    [
+      { id: "topic" as const, label: "/topic", description: t.slashTopicDesc },
+      {
+        id: "members" as const,
+        label: "/members",
+        description: t.slashMembersDesc,
+        groupOnly: true,
+      },
+      // Direct only — group detail has Members, not a separate Info tab.
+      {
+        id: "info" as const,
+        label: "/info",
+        description: t.slashInfoDesc,
+        groupOnly: false,
+      },
+    ] satisfies SlashCmdDef[]
+  ).filter((c) => {
     if (c.id === "info" && groupActive) return false;
     if (c.groupOnly && !groupActive) return false;
     return true;
@@ -2224,7 +2314,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       style={btnGhost}
                       onClick={() => {
                         if (activeTopic) {
-                          setActiveTopic(null);
+                          exitTopicFilter();
                           return;
                         }
                         setView("list");
@@ -2384,7 +2474,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     style={btnGhost}
                     onClick={() => {
                       if (activeTopic) {
-                        setActiveTopic(null);
+                        exitTopicFilter();
                         return;
                       }
                       setView("list");
@@ -2442,7 +2532,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     {activeTopic ? t.noMessagesYet : t.sayHello}
                   </p>
                 )}
-                {displayMessages.map((m) => {
+                {displayMessages.map((m, idx) => {
                   const isUser = m.sender_type === "user";
                   const delivery =
                     isUser && typeof m.metadata?.delivery === "string" ? m.metadata.delivery : null;
@@ -2465,9 +2555,38 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         topics.find((tp) => tp.id === m.thread_id)?.title?.trim() ||
                         t.topics
                       : null;
+                  const prev = idx > 0 ? displayMessages[idx - 1] : null;
+                  const enteringTopic =
+                    !activeTopic &&
+                    !!m.thread_id &&
+                    (prev?.thread_id || null) !== m.thread_id;
+                  const openThreadFromMsg = () => {
+                    if (!m.thread_id) return;
+                    const existing = topics.find((tp) => tp.id === m.thread_id);
+                    openTopic(
+                      existing || {
+                        id: m.thread_id,
+                        chat_id: m.chat_id,
+                        title: topicLabel || t.topics,
+                        objective: null,
+                        status: "active",
+                        message_count: 0,
+                        created_at: m.created_at,
+                        updated_at: m.created_at,
+                      },
+                    );
+                  };
                   return (
+                    <Fragment key={m.message_id}>
+                      {enteringTopic && topicLabel ? (
+                        <TopicDivider
+                          title={topicLabel}
+                          onOpen={openThreadFromMsg}
+                          borderColor={colors.border}
+                          accentSoft={colors.accentSoft}
+                        />
+                      ) : null}
                     <div
-                      key={m.message_id}
                       style={{
                         alignSelf: isUser ? "flex-end" : "flex-start",
                         maxWidth: "85%",
@@ -2493,42 +2612,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           {senderLabel}
                         </span>
                       ) : null}
-                      {topicLabel && m.thread_id ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const existing = topics.find((tp) => tp.id === m.thread_id);
-                            openTopic(
-                              existing || {
-                                id: m.thread_id!,
-                                chat_id: m.chat_id,
-                                title: topicLabel,
-                                objective: null,
-                                status: "active",
-                                message_count: 0,
-                                created_at: m.created_at,
-                                updated_at: m.created_at,
-                              },
-                            );
-                          }}
-                          style={{
-                            border: `1px solid ${colors.border}`,
-                            background: colors.accentSoft,
-                            color: "#93c5fd",
-                            borderRadius: 999,
-                            padding: "2px 8px",
-                            fontSize: 11,
-                            cursor: "pointer",
-                            maxWidth: "100%",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                          title={topicLabel}
-                        >
-                          # {topicLabel}
-                        </button>
-                      ) : null}
                       <div
                         style={{
                           background: isUser ? colors.userBubble : colors.agentBubble,
@@ -2550,8 +2633,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         />
                       ) : null}
                     </div>
+                    </Fragment>
                   );
                 })}
+                {!activeTopic &&
+                composerTopic &&
+                (displayMessages.length === 0 ||
+                  displayMessages[displayMessages.length - 1]?.thread_id !==
+                    composerTopic.id) ? (
+                  <TopicDivider
+                    title={composerTopic.title?.trim() || t.topics}
+                    onOpen={() => openTopic(composerTopic)}
+                    borderColor={colors.border}
+                    accentSoft={colors.accentSoft}
+                  />
+                ) : null}
                 {showAgentReplyPending ? <AgentReplyPendingBubble t={t} /> : null}
                 {showAgentReplyTimeout ? (
                   <AgentReplyTimeoutBubble
@@ -2581,6 +2677,48 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   position: "relative",
                 }}
               >
+                {!activeTopic && composerTopic ? (
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      alignSelf: "flex-start",
+                      gap: 6,
+                      padding: "4px 8px 4px 10px",
+                      borderRadius: 999,
+                      background: "rgba(147,197,253,0.12)",
+                      border: "1px solid rgba(147,197,253,0.28)",
+                      fontSize: 12,
+                      color: colors.text,
+                      maxWidth: "100%",
+                    }}
+                  >
+                    <span
+                      style={{
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {t.postingInTopic(composerTopic.title?.trim() || t.topics)}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={t.close}
+                      onClick={() => setComposerTopic(null)}
+                      style={{
+                        ...btnIcon,
+                        width: 20,
+                        height: 20,
+                        fontSize: 14,
+                        lineHeight: 1,
+                        color: colors.muted,
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : null}
                 {stickyChipActive && stickyMention ? (
                   <div
                     style={{
@@ -3123,14 +3261,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                         title: topicTitleDraft.trim(),
                                         objective: topicDescDraft.trim() || undefined,
                                       });
-                                      setTopics((prev) => [
-                                        created,
-                                        ...prev.filter((tp) => tp.id !== created.id),
-                                      ]);
-                                      setShowCreateTopic(false);
-                                      setTopicTitleDraft("");
-                                      setTopicDescDraft("");
-                                      openTopic(created);
+                                      startTopicInTimeline(created);
                                     } catch (e) {
                                       setError(e instanceof Error ? e.message : t.sendFailed);
                                     } finally {
@@ -3316,6 +3447,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     setConfirmDialog(null);
                                     setShowMembersPanel(false);
                                     setActiveTopic(null);
+                                    setComposerTopic(null);
                                     setTopics([]);
                                     setActive(null);
                                     setView("list");
