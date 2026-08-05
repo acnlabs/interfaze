@@ -1140,6 +1140,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const awaitingSinceRef = useRef(0);
   const listRef = useRef<HTMLDivElement | null>(null);
   const socketRef = useRef<ChatSocket | null>(null);
+  /** Latest send() for slash /topic (defined later in the component body). */
+  const sendRef = useRef<
+    | ((opts?: {
+        forceMentions?: string[];
+        text?: string;
+        threadId?: string | null;
+      }) => Promise<void>)
+    | null
+  >(null);
   /** Bumps on each conversation open / chat switch to ignore stale listMessages. */
   const loadSeqRef = useRef(0);
   /** Cancels in-flight post-send poll when chat switches or a newer send starts. */
@@ -1453,7 +1462,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
   /** Create topic, list it, keep main timeline — next sends tag this thread. */
   const startTopicInTimeline = useCallback(
     (created: ThreadSummary) => {
-      const title = created.title?.trim() || t.defaultTopicTitle;
       setTopics((prev) => [created, ...prev.filter((tp) => tp.id !== created.id)]);
       setComposerTopic(created);
       setActiveTopic(null);
@@ -1463,24 +1471,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setTopicTitleDraft("");
       setTopicDescDraft("");
       setDraft("");
-      const marker: ChatMessage = {
-        message_id: `${LOCAL_TOPIC_START_PREFIX}${created.id}`,
-        chat_id: created.chat_id,
-        sender_id: "system",
-        sender_type: "system",
-        content: t.topicStarted(title),
-        created_at: new Date().toISOString(),
-        thread_id: created.id,
-        thread_title: title,
-        metadata: { kind: "topic_started" },
-      };
-      setMessages((prev) => {
-        if (prev.some((m) => m.message_id === marker.message_id)) return prev;
-        return [...prev, marker];
-      });
       flashTopicHighlight(created.id);
     },
-    [flashTopicHighlight, t.defaultTopicTitle, t.topicStarted],
+    [flashTopicHighlight],
   );
 
   const exitTopicFilter = useCallback(() => {
@@ -1501,9 +1494,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
         try {
           const created = await client.createThread(active.chat_id, { title });
           startTopicInTimeline(created);
+          // Title is also a real outbound message in that topic (not only a divider).
+          await sendRef.current?.({ text: title, threadId: created.id });
         } catch (e) {
           setError(e instanceof Error ? e.message : t.sendFailed);
-        } finally {
           setBusy(false);
         }
         return;
@@ -1702,8 +1696,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
     }
   };
 
-  const send = async (opts?: { forceMentions?: string[] }) => {
-    const text = draft.trim();
+  type SendOpts = {
+    forceMentions?: string[];
+    /** Override composer draft (e.g. /topic title as first message). */
+    text?: string;
+    /** Override topic tagging (e.g. newly created thread id). */
+    threadId?: string | null;
+  };
+
+  const send = async (opts?: SendOpts) => {
+    const text = (opts?.text ?? draft).trim();
     if (!text || !active) return;
     const chatId = active.chat_id;
     const group = isGroupChat(active);
@@ -1741,6 +1743,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             stickyMention,
           );
           if (resolved.mentions.length === 0) {
+            setDraft(text);
             setRecipientPickerOpen(true);
             setMentionIndex(0);
             setBusy(false);
@@ -1751,7 +1754,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
       }
       beginAwaitingReply(chatId);
       const sentWhileOffline = !group && isAgentOffline(active?.agent_status);
-      const sendThreadId = activeTopic?.id ?? composerTopic?.id ?? null;
+      const sendThreadId =
+        opts?.threadId !== undefined
+          ? opts.threadId
+          : (activeTopic?.id ?? composerTopic?.id ?? null);
       await client.sendMessage(chatId, text, mentions, sendThreadId);
       if (group && mentions) {
         if (mentions.length === 1) {
@@ -1818,6 +1824,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setBusy(false);
     }
   };
+  sendRef.current = send;
 
   const retryLastUserMessage = () => {
     if (!active) return;
@@ -3380,16 +3387,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 disabled={busy || !topicTitleDraft.trim()}
                                 onClick={() => {
                                   void (async () => {
+                                    const title = topicTitleDraft.trim();
                                     setBusy(true);
                                     try {
                                       const created = await client.createThread(active.chat_id, {
-                                        title: topicTitleDraft.trim(),
+                                        title,
                                         objective: topicDescDraft.trim() || undefined,
                                       });
                                       startTopicInTimeline(created);
+                                      await sendRef.current?.({ text: title, threadId: created.id });
                                     } catch (e) {
                                       setError(e instanceof Error ? e.message : t.sendFailed);
-                                    } finally {
                                       setBusy(false);
                                     }
                                   })();
