@@ -382,6 +382,24 @@ export function AgentOwnerSettings({
   const [deliveryMsg, setDeliveryMsg] = useState<string | null>(null);
   const [deliveryHint, setDeliveryHint] = useState<string | null>(null);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
+  type PolicyChoice = "open" | "allowlist" | "closed";
+  const policyFromDetail = (m: string | null | undefined): PolicyChoice | "manifest" | "other" => {
+    const v = (m || "").toLowerCase();
+    if (v === "open" || v === "allowlist" || v === "closed" || v === "manifest") return v;
+    return v ? "other" : "open";
+  };
+  const editablePolicy = (m: string | null | undefined): PolicyChoice | null => {
+    const cur = policyFromDetail(m);
+    return cur === "open" || cur === "allowlist" || cur === "closed" ? cur : null;
+  };
+  // null = no pending change (used when current mode is manifest/other).
+  const [policyDraft, setPolicyDraft] = useState<PolicyChoice | null>(() =>
+    editablePolicy(detail.policy_mode),
+  );
+  const [savingPolicy, setSavingPolicy] = useState(false);
+  const [policyMsg, setPolicyMsg] = useState<string | null>(null);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+  const [confirmClosedPolicy, setConfirmClosedPolicy] = useState(false);
 
   useEffect(() => {
     setNameDraft(detail.name || "");
@@ -399,6 +417,13 @@ export function AgentOwnerSettings({
     setDeliveryError(null);
     setConfirmRelay(false);
   }, [detail.agent_id, detail.delivery]);
+
+  useEffect(() => {
+    setPolicyDraft(editablePolicy(detail.policy_mode));
+    setPolicyMsg(null);
+    setPolicyError(null);
+    setConfirmClosedPolicy(false);
+  }, [detail.agent_id, detail.policy_mode]);
 
   const giftUrl = `${agentPlanetBaseUrl.replace(/\/+$/, "")}/agents/${encodeURIComponent(detail.agent_id)}`;
 
@@ -425,6 +450,8 @@ export function AgentOwnerSettings({
     !busy;
 
   const policyMode = (detail.policy_mode || "").toLowerCase();
+  const currentPolicy = policyFromDetail(detail.policy_mode);
+  // Delivery edits use the *saved* policy (not draft) — ACN rejects push when closed.
   const deliveryEditable = !policyMode || policyMode === "open" || policyMode === "allowlist";
   const currentDelivery = deliveryFromDetail(detail.delivery);
   const deliveryDirty =
@@ -441,9 +468,15 @@ export function AgentOwnerSettings({
     !savingDelivery &&
     !busy;
 
-  const saving = savingProfile || savingDelivery;
-  const hasEdits = profileDirty || deliveryDirty;
-  const canSaveAny = (canSaveProfile || canSaveDelivery) && !saving && !busy;
+  const savedPolicy = editablePolicy(detail.policy_mode);
+  const selectedPolicy = policyDraft ?? savedPolicy;
+  const policyDirty = policyDraft !== null && policyDraft !== savedPolicy;
+  const canSavePolicy = policyDirty && !savingPolicy && !busy;
+
+  const saving = savingProfile || savingDelivery || savingPolicy;
+  const hasEdits = profileDirty || deliveryDirty || policyDirty;
+  const canSaveAny =
+    (canSaveProfile || canSaveDelivery || canSavePolicy) && !saving && !busy;
 
   const runSaveProfile = (): Promise<MyAgentSummary | null> => {
     if (!canSaveProfile) return Promise.resolve(null);
@@ -510,13 +543,44 @@ export function AgentOwnerSettings({
       .finally(() => setSavingDelivery(false));
   };
 
+  const runSavePolicy = (): Promise<MyAgentSummary | null> => {
+    if (!canSavePolicy || !policyDraft) return Promise.resolve(null);
+    setConfirmClosedPolicy(false);
+    setSavingPolicy(true);
+    setPolicyError(null);
+    setPolicyMsg(null);
+    const mode = policyDraft;
+    return client
+      .updateMyAgentPolicy(detail.agent_id, { mode })
+      .then((row) => {
+        setPolicyMsg(t.myAgentsPolicySaved);
+        window.setTimeout(() => setPolicyMsg(null), 2500);
+        return row;
+      })
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof ChatGatewayError && err.message.trim()
+            ? err.message.trim()
+            : t.myAgentsPolicyFailed;
+        setPolicyError(msg);
+        return null;
+      })
+      .finally(() => setSavingPolicy(false));
+  };
+
   const runSaveAll = () => {
     const doProfile = canSaveProfile;
     const doDelivery = canSaveDelivery;
+    const doPolicy = canSavePolicy;
+    // Opening policy before delivery so push/pull can succeed; closing after.
+    const openingPolicy = doPolicy && policyDraft === "open";
+    const otherPolicy = doPolicy && policyDraft !== "open";
     void (async () => {
       let latest: MyAgentSummary | null = null;
       if (doProfile) latest = (await runSaveProfile()) ?? latest;
+      if (openingPolicy) latest = (await runSavePolicy()) ?? latest;
       if (doDelivery) latest = (await runSaveDelivery()) ?? latest;
+      if (otherPolicy) latest = (await runSavePolicy()) ?? latest;
       if (latest) onUpdated?.(latest);
     })();
   };
@@ -526,6 +590,10 @@ export function AgentOwnerSettings({
     // Clearing a public URL is destructive — confirm first.
     if (canSaveDelivery && currentDelivery === "direct" && deliveryDraft === "relay") {
       setConfirmRelay(true);
+      return;
+    }
+    if (canSavePolicy && policyDraft === "closed" && savedPolicy !== "closed") {
+      setConfirmClosedPolicy(true);
       return;
     }
     runSaveAll();
@@ -785,20 +853,67 @@ export function AgentOwnerSettings({
 
       <section>
         <h3 style={sectionTitle}>{t.myAgentsSectionAccess}</h3>
-        <DetailRows
-          rows={[
-            {
-              label: t.myAgentsPolicy,
-              hint: t.myAgentsPolicyHint,
-              value: policyLabel(detail.policy_mode, t),
-            },
-            {
-              label: t.myAgentsChatOpen,
-              hint: t.myAgentsChatOpenHint,
-              value: boolLabel(detail.chat_open, t),
-            },
-          ]}
-        />
+        <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+          {t.myAgentsPolicyChoose}
+          <FieldHint text={t.myAgentsPolicyHint} />
+        </p>
+        {currentPolicy === "manifest" ? (
+          <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+            {t.myAgentsPolicyManifestNote}
+          </p>
+        ) : null}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button
+            type="button"
+            style={optionBtn(selectedPolicy === "open")}
+            disabled={saving || busy}
+            onClick={() => setPolicyDraft("open")}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyOpen}</div>
+            <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
+              {t.myAgentsPolicyOpenHelp}
+            </div>
+          </button>
+          <button
+            type="button"
+            style={optionBtn(selectedPolicy === "allowlist")}
+            disabled={saving || busy}
+            onClick={() => setPolicyDraft("allowlist")}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyAllowlist}</div>
+            <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
+              {t.myAgentsPolicyAllowlistHelp}
+            </div>
+          </button>
+          <button
+            type="button"
+            style={optionBtn(selectedPolicy === "closed")}
+            disabled={saving || busy}
+            onClick={() => setPolicyDraft("closed")}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyClosed}</div>
+            <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
+              {t.myAgentsPolicyClosedHelp}
+            </div>
+          </button>
+        </div>
+        {policyError ? (
+          <p style={{ margin: "8px 0 0", fontSize: 12, color: colors.danger }}>{policyError}</p>
+        ) : null}
+        {policyMsg ? (
+          <p style={{ margin: "8px 0 0", fontSize: 12, color: colors.recommended }}>{policyMsg}</p>
+        ) : null}
+        <div style={{ marginTop: 12 }}>
+          <DetailRows
+            rows={[
+              {
+                label: t.myAgentsChatOpen,
+                hint: t.myAgentsChatOpenHint,
+                value: boolLabel(detail.chat_open, t),
+              },
+            ]}
+          />
+        </div>
       </section>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -807,14 +922,14 @@ export function AgentOwnerSettings({
             {rotateError || dangerError}
           </p>
         ) : null}
-        {profileError || deliveryError ? (
+        {profileError || deliveryError || policyError ? (
           <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>
-            {profileError || deliveryError}
+            {profileError || deliveryError || policyError}
           </p>
         ) : null}
-        {profileMsg || deliveryMsg ? (
+        {profileMsg || deliveryMsg || policyMsg ? (
           <p style={{ margin: 0, fontSize: 12, color: colors.recommended }}>
-            {profileMsg || deliveryMsg}
+            {profileMsg || deliveryMsg || policyMsg}
           </p>
         ) : null}
         {hasEdits || saving ? (
@@ -927,6 +1042,65 @@ export function AgentOwnerSettings({
                 onClick={runSaveAll}
               >
                 {saving ? t.loading : t.myAgentsDeliveryRelayConfirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmClosedPolicy ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+          onClick={() => {
+            if (!savingPolicy) setConfirmClosedPolicy(false);
+          }}
+        >
+          <div
+            style={{
+              width: "min(340px, 100%)",
+              background: colors.panel,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 12,
+              padding: 20,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.5 }}>
+              {t.myAgentsPolicyClosedConfirm}
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                style={btnGhost}
+                disabled={savingPolicy}
+                onClick={() => setConfirmClosedPolicy(false)}
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...btnGhost,
+                  background: "rgba(248,113,113,0.15)",
+                  borderColor: "rgba(248,113,113,0.45)",
+                  color: colors.danger,
+                  fontWeight: 600,
+                }}
+                disabled={saving}
+                onClick={runSaveAll}
+              >
+                {saving ? t.loading : t.myAgentsPolicyClosedConfirmLabel}
               </button>
             </div>
           </div>

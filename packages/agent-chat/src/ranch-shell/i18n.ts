@@ -163,10 +163,19 @@ export type RanchMessages = {
   myAgentsInboundHint: string;
   myAgentsPolicy: string;
   myAgentsPolicyHint: string;
+  myAgentsPolicyChoose: string;
   myAgentsPolicyOpen: string;
+  myAgentsPolicyOpenHelp: string;
   myAgentsPolicyAllowlist: string;
+  myAgentsPolicyAllowlistHelp: string;
   myAgentsPolicyClosed: string;
+  myAgentsPolicyClosedHelp: string;
   myAgentsPolicyManifest: string;
+  myAgentsPolicyManifestNote: string;
+  myAgentsPolicySaved: string;
+  myAgentsPolicyFailed: string;
+  myAgentsPolicyClosedConfirm: string;
+  myAgentsPolicyClosedConfirmLabel: string;
   myAgentsInboundNa: string;
   myAgentsDeliveryChoose: string;
   myAgentsDeliveryOptionPush: string;
@@ -400,10 +409,22 @@ const en: RanchMessages = {
   myAgentsDeliveryRelayConfirmLabel: "Switch to pull",
   myAgentsPolicy: "Who can message",
   myAgentsPolicyHint: "Reception policy on the ACN network — who is allowed to start a chat with this identity.",
+  myAgentsPolicyChoose: "Choose who may message this identity",
   myAgentsPolicyOpen: "Anyone",
+  myAgentsPolicyOpenHelp: "Anyone on the network who can discover you may start a chat.",
   myAgentsPolicyAllowlist: "Allowlist only",
+  myAgentsPolicyAllowlistHelp:
+    "Only senders on your allowlist go to the inbox. Edit the list on AgentPlanet / CLI — Interfaze only switches the mode. An empty list does not hard-block; others go to the inbox queue.",
   myAgentsPolicyClosed: "Closed",
+  myAgentsPolicyClosedHelp: "Inbound chats are rejected. You can still open chats as the owner from Interfaze in many cases, but the network cannot message this identity freely.",
   myAgentsPolicyManifest: "Inbox / queue",
+  myAgentsPolicyManifestNote:
+    "Currently on inbox/queue mode. Pick Anyone, Allowlist, or Closed below to change it. Managing the queue stays on AgentPlanet / CLI.",
+  myAgentsPolicySaved: "Who-can-message updated",
+  myAgentsPolicyFailed: "Couldn’t update who can message.",
+  myAgentsPolicyClosedConfirm:
+    "Close this identity to inbound network messages? Others will be rejected until you open it again.",
+  myAgentsPolicyClosedConfirmLabel: "Close inbound",
   myAgentsChatOpen: "Discoverable",
   myAgentsChatOpenHint:
     "Whether others on the network can find this identity and start a chat (from policy + visibility).",
@@ -613,10 +634,22 @@ const zh: RanchMessages = {
   myAgentsDeliveryRelayConfirmLabel: "切换为取信",
   myAgentsPolicy: "谁能找你",
   myAgentsPolicyHint: "ACN 上的接待策略——谁被允许向这个身份发起聊天。",
+  myAgentsPolicyChoose: "选择谁可以向这个身份发消息",
   myAgentsPolicyOpen: "所有人",
+  myAgentsPolicyOpenHelp: "网络上能发现你的人都可以开聊。",
   myAgentsPolicyAllowlist: "仅白名单",
+  myAgentsPolicyAllowlistHelp:
+    "仅白名单内的发送者进收件箱。名单请在 AgentPlanet / CLI 编辑——Interfaze 只切换模式。名单为空时不会硬拒绝，其他人会进排队收件箱。",
   myAgentsPolicyClosed: "已关闭",
+  myAgentsPolicyClosedHelp: "拒绝入站网络消息。你作为主人仍可在 Interfaze 开聊，但别人不能随意找这个身份。",
   myAgentsPolicyManifest: "收件箱 / 排队",
+  myAgentsPolicyManifestNote:
+    "当前是收件箱/排队模式。请在下方选「所有人」「仅白名单」或「已关闭」来切换。排队本身仍在 AgentPlanet / CLI 管理。",
+  myAgentsPolicySaved: "「谁能找你」已更新",
+  myAgentsPolicyFailed: "无法更新「谁能找你」。",
+  myAgentsPolicyClosedConfirm:
+    "关闭此身份的入站网络消息？在重新打开之前，其他人会被拒绝。",
+  myAgentsPolicyClosedConfirmLabel: "关闭入站",
   myAgentsChatOpen: "可被发现",
   myAgentsChatOpenHint: "其他人是否能在网络里找到这个身份并开聊（综合策略与可见性）。",
   myAgentsOpenChat: "开聊",

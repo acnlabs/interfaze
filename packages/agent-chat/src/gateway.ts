@@ -126,6 +126,11 @@ export type GatewayClient = {
     agentId: string,
     patch: { delivery: "direct" | "relay"; endpoint?: string },
   ) => Promise<MyAgentSummary>;
+  /** Set reception policy mode (allowlist members edited elsewhere). */
+  updateMyAgentPolicy: (
+    agentId: string,
+    patch: { mode: "open" | "allowlist" | "closed" },
+  ) => Promise<MyAgentSummary>;
   addParticipant: (chatId: string, agentId: string) => Promise<ChatParticipant>;
   removeParticipant: (chatId: string, participantId: string) => Promise<void>;
   updateChat: (chatId: string, patch: { title?: string; description?: string }) => Promise<ChatSummary>;
@@ -230,6 +235,14 @@ export function createGatewayClient(
     updateMyAgentDelivery: (agentId, patch) =>
       request<MyAgentSummary>(
         `/api/chat/my-agents/${encodeURIComponent(agentId)}/delivery`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        },
+      ),
+    updateMyAgentPolicy: (agentId, patch) =>
+      request<MyAgentSummary>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/policy`,
         {
           method: "PATCH",
           body: JSON.stringify(patch),
