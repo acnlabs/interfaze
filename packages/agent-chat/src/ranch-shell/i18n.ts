@@ -78,9 +78,12 @@ export type RanchMessages = {
   agentIdLabel: string;
   slashCommands: string;
   slashTopicDesc: string;
+  slashAgentDesc: string;
   slashMembersDesc: string;
   slashInfoDesc: string;
   slashUnknown: (cmd: string) => string;
+  agentRefPickerTitle: string;
+  noAgentsToRef: string;
   defaultTopicTitle: string;
   /** Chip above composer while posting into a topic on the main timeline. */
   postingInTopic: (title: string) => string;
@@ -198,9 +201,12 @@ const en: RanchMessages = {
   agentIdLabel: "Agent id",
   slashCommands: "Commands",
   slashTopicDesc: "Start a topic and send the title as a message",
+  slashAgentDesc: "Insert an agent reference (does not notify)",
   slashMembersDesc: "Open group members",
   slashInfoDesc: "Open chat info",
   slashUnknown: (cmd) => `Unknown command: /${cmd}`,
+  agentRefPickerTitle: "Reference an agent",
+  noAgentsToRef: "No agents to reference yet",
   defaultTopicTitle: "New topic",
   postingInTopic: (title) => `Posting in # ${title}`,
   topicStarted: (title) => `Started # ${title}`,
@@ -315,9 +321,12 @@ const zh: RanchMessages = {
   agentIdLabel: "Agent id",
   slashCommands: "命令",
   slashTopicDesc: "开始话题，并把标题作为一条消息发出",
+  slashAgentDesc: "插入 agent 引用（不会通知对方）",
   slashMembersDesc: "打开群成员",
   slashInfoDesc: "打开会话资料",
   slashUnknown: (cmd) => `未知命令：/${cmd}`,
+  agentRefPickerTitle: "引用 agent",
+  noAgentsToRef: "还没有可引用的 agent",
   defaultTopicTitle: "新话题",
   postingInTopic: (title) => `正在 # ${title} 中发送`,
   topicStarted: (title) => `已开始 # ${title}`,

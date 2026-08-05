@@ -544,7 +544,18 @@ function trailingMentionQuery(text: string): string | null {
   return m ? m[1] : null;
 }
 
-type SlashCmdId = "topic" | "members" | "info";
+type SlashCmdId = "topic" | "agent" | "members" | "info";
+
+/** Insert 「显示名」 reference — not a delivery @mention. */
+function formatAgentRef(displayName: string): string {
+  const name = displayName.trim() || "agent";
+  return `「${name}」`;
+}
+
+/** Drop a trailing `/agent …` slash command from the draft. */
+function stripTrailingAgentSlash(text: string): string {
+  return text.replace(/\/agent\b[\s\S]*$/i, "").trimEnd();
+}
 
 type SlashCmdDef = {
   id: SlashCmdId;
@@ -1099,6 +1110,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [addMemberDiscoverRows, setAddMemberDiscoverRows] = useState<AgentDirectoryItem[]>([]);
   const [addMemberDiscoverLoading, setAddMemberDiscoverLoading] = useState(false);
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [agentRefIndex, setAgentRefIndex] = useState(0);
   const [slashIndex, setSlashIndex] = useState(0);
   const [draft, setDraft] = useState("");
   /** Group: continue with last @'d agent for 15m (chip above composer). */
@@ -1500,6 +1512,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
           setError(e instanceof Error ? e.message : t.sendFailed);
           setBusy(false);
         }
+        return;
+      }
+      if (cmdId === "agent") {
+        // Keep `/agent ` (optional filter) so the reference picker opens; insert is not delivery.
+        const q = arg.trim();
+        setDraft(q ? `/agent ${q}` : "/agent ");
+        setAgentRefIndex(0);
+        setError(null);
         return;
       }
       if (cmdId === "members") {
@@ -1951,6 +1971,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const slashCommands: SlashCmdDef[] = (
     [
       { id: "topic" as const, label: "/topic", description: t.slashTopicDesc },
+      { id: "agent" as const, label: "/agent", description: t.slashAgentDesc },
       {
         id: "members" as const,
         label: "/members",
@@ -1976,9 +1997,45 @@ export function RanchChatShell(props: RanchChatShellProps) {
     if (!q) return true;
     return c.id.startsWith(q) || c.label.slice(1).startsWith(q);
   });
+  /** `/agent ` or `/agent query` → reference picker (not delivery @). */
+  const agentRefOpen =
+    !!slashParsed &&
+    slashParsed.cmd === "agent" &&
+    !isSlashMenuDraft(draft) &&
+    !recipientPickerOpen;
+  const agentRefQuery = (agentRefOpen ? slashParsed?.arg || "" : "").toLowerCase();
+  const agentRefCandidates = (() => {
+    if (!agentRefOpen) return [] as Array<{ id: string; name: string }>;
+    const map = new Map<string, string>();
+    for (const [id, name] of Object.entries(agentNames)) {
+      const label = name.trim() || shortAgentId(id);
+      map.set(id, label);
+    }
+    for (const a of directoryAgents) {
+      const id = a.agent_id.trim();
+      if (!id || map.has(id)) continue;
+      map.set(id, a.name?.trim() || shortAgentId(id));
+    }
+    if (active && !isGroupChat(active) && active.agent_id) {
+      const id = active.agent_id;
+      if (!map.has(id)) {
+        map.set(id, active.title?.trim() || shortAgentId(id));
+      }
+    }
+    return [...map.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .filter(({ id, name }) => {
+        if (!agentRefQuery) return true;
+        return (
+          name.toLowerCase().includes(agentRefQuery) ||
+          id.toLowerCase().includes(agentRefQuery)
+        );
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  })();
   const mentionQuery = groupActive ? trailingMentionQuery(draft) : null;
   const mentionOpen =
-    !slashMenuOpen && (mentionQuery !== null || recipientPickerOpen);
+    !slashMenuOpen && !agentRefOpen && (mentionQuery !== null || recipientPickerOpen);
   const mentionCandidates = Object.entries(agentNames)
     .filter(([id, name]) => {
       if (!mentionOpen) return false;
@@ -1997,6 +2054,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
     if (!parsed) return false;
     // Bare "/" — keep menu open, don't send as chat text.
     if (!parsed.cmd) {
+      return true;
+    }
+    // `/agent …` with picker open: Enter inserts highlighted ref, not "run command".
+    if (parsed.cmd === "agent" && agentRefOpen) {
       return true;
     }
     const match =
@@ -2022,6 +2083,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
     );
     if (!entry) return;
     void send({ forceMentions: [entry[0]] });
+  };
+
+  /** Insert 「Name」 reference; strips trailing `/agent …`. Never adds delivery mentions. */
+  const insertAgentRef = (displayName: string) => {
+    const ref = formatAgentRef(displayName);
+    setDraft((prev) => {
+      const base = stripTrailingAgentSlash(prev);
+      if (!base) return `${ref} `;
+      return `${base} ${ref} `;
+    });
+    setAgentRefIndex(0);
+    setError(null);
   };
 
   const insertMention = (label: string) => {
@@ -2920,6 +2993,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             setSlashIndex(0);
                             return;
                           }
+                          if (cmd.id === "agent") {
+                            setDraft("/agent ");
+                            setAgentRefIndex(0);
+                            setSlashIndex(0);
+                            return;
+                          }
                           void runSlashCommand(cmd.id);
                         }}
                         style={{
@@ -2934,6 +3013,66 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </span>
                       </button>
                     ))}
+                  </div>
+                ) : null}
+                {agentRefOpen ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      right: 72,
+                      bottom: "100%",
+                      marginBottom: 8,
+                      background: colors.panel,
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: 12,
+                      overflow: "hidden",
+                      boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+                      zIndex: 6,
+                      maxHeight: 240,
+                      overflowY: "auto",
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: "8px 12px",
+                        fontSize: 11,
+                        color: colors.muted,
+                        borderBottom: `1px solid ${colors.border}`,
+                      }}
+                    >
+                      {t.agentRefPickerTitle}
+                    </div>
+                    {agentRefCandidates.length === 0 ? (
+                      <div style={{ padding: "12px 14px", fontSize: 13, color: colors.muted }}>
+                        {t.noAgentsToRef}
+                      </div>
+                    ) : (
+                      agentRefCandidates.map((a, i) => (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => insertAgentRef(a.name)}
+                          style={{
+                            ...mentionRow,
+                            background: agentRefIndex === i ? colors.hover : "transparent",
+                          }}
+                        >
+                          <span style={{ fontWeight: 600 }}>{formatAgentRef(a.name)}</span>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: colors.muted,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {shortAgentId(a.id)}
+                          </span>
+                        </button>
+                      ))
+                    )}
                   </div>
                 ) : null}
                 {mentionOpen ? (
@@ -3092,6 +3231,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           setSlashIndex(0);
                           return;
                         }
+                        if (pick.id === "agent") {
+                          setDraft("/agent ");
+                          setAgentRefIndex(0);
+                          setSlashIndex(0);
+                          return;
+                        }
                         void runSlashCommand(pick.id);
                         return;
                       }
@@ -3099,6 +3244,32 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         e.preventDefault();
                         const pick = slashCandidates[slashIndex] || slashCandidates[0];
                         if (pick) setDraft(`${pick.label} `);
+                        return;
+                      }
+                    }
+                    if (agentRefOpen) {
+                      const total = agentRefCandidates.length;
+                      if (e.key === "ArrowDown" && total > 0) {
+                        e.preventDefault();
+                        setAgentRefIndex((i) => (i + 1) % total);
+                        return;
+                      }
+                      if (e.key === "ArrowUp" && total > 0) {
+                        e.preventDefault();
+                        setAgentRefIndex((i) => (i - 1 + total) % total);
+                        return;
+                      }
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        setDraft((prev) => stripTrailingAgentSlash(prev));
+                        setAgentRefIndex(0);
+                        return;
+                      }
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        const pick =
+                          agentRefCandidates[agentRefIndex] || agentRefCandidates[0];
+                        if (pick) insertAgentRef(pick.name);
                         return;
                       }
                     }

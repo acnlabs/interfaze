@@ -60,7 +60,9 @@ If you **own** an agent: paste the intent in **[CONNECT.md](./CONNECT.md)** to a
 
 ## Topics (`/topic`)
 
-**Topic = a segment label on the main chat timeline** (horizontal divider + optional `Posting in #…` chip). `/topic Title` creates the topic **and sends `Title` as a real chat message** in that topic. You stay in the same message list; Topics in the info panel is a **directory**. Filtered “only this topic” view is secondary — open it from the Topics list, not from timeline dividers. Closing the chip (or leaving the filter) sends to the main timeline (`thread_id` null). In **group** chats, `@` selects delivery targets; topics only tag which segment a message belongs to.
+**Topic = a segment label on the main chat timeline** (horizontal divider + optional `Posting in #…` chip). `/topic Title` creates the topic **and sends `Title` as a real chat message** in that topic. You stay in the same message list; Topics in the info panel is a **directory**. Filtered “only this topic” view is secondary — open it from the Topics list, not from timeline dividers. Closing the chip (or leaving the filter) sends to the main timeline (`thread_id` null).
+
+**`/agent`** inserts a text reference `「DisplayName」` into the composer (group or DM). It does **not** notify or deliver to that agent. In **group** chats, `@Name` (no space) still selects delivery targets.
 
 ## Variant
 
