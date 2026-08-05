@@ -9,6 +9,7 @@ import {
   type MyAgentWalletTx,
   type SpendAutonomy,
 } from "../gateway";
+import { FieldHint } from "./AgentOwnerSettings";
 import type { RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 
@@ -281,7 +282,6 @@ export function AgentOwnerWallet({
 
   const topupBlocked = amount == null || amount > wallet.owner_balance;
   const withdrawBlocked = amount == null || amount > wallet.balance;
-  const currentAutonomy = policy?.stored_autonomy || "disabled";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, position: "relative" }}>
@@ -297,15 +297,80 @@ export function AgentOwnerWallet({
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
             <div style={assetCard}>
-              <div style={{ fontSize: 11, color: colors.muted, marginBottom: 4 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  fontSize: 11,
+                  color: colors.muted,
+                  marginBottom: 4,
+                }}
+              >
                 {t.walletBalance}
+                <FieldHint text={t.walletCreditsHint} />
               </div>
               <div style={{ fontSize: 20, fontWeight: 700, color: colors.text }}>
                 {fmtCredits(wallet.balance)}
               </div>
-              <div style={{ marginTop: 6, fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
-                {t.walletCreditsHint}
+              <div
+                style={{
+                  marginTop: 10,
+                  paddingTop: 10,
+                  borderTop: `1px solid ${colors.border}`,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    fontSize: 11,
+                    color: colors.muted,
+                  }}
+                >
+                  {t.spendPolicyTitle}
+                  <FieldHint text={t.spendPolicyHint} />
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, flex: 1, minWidth: 0 }}>
+                  {policy
+                    ? autonomyLabel(String(policy.stored_autonomy), t)
+                    : t.spendPolicyLoadFailed}
+                </span>
+                <button
+                  type="button"
+                  style={{
+                    ...btnGhost,
+                    fontSize: 11,
+                    padding: "4px 8px",
+                    flexShrink: 0,
+                  }}
+                  disabled={busy || acting}
+                  onClick={() => void openPolicy()}
+                >
+                  {t.spendPolicyEdit}
+                </button>
               </div>
+              {policy && policy.stored_autonomy === "limited" && policy.window_remaining != null ? (
+                <p style={{ margin: "8px 0 0", fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
+                  {t.spendWindowUsage(
+                    fmtCredits(policy.window_spent),
+                    fmtCredits(policy.window_remaining),
+                    String(policy.window_hours),
+                  )}
+                </p>
+              ) : policy && policy.stored_autonomy === "limited" ? (
+                <p style={{ margin: "8px 0 0", fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
+                  {t.spendWindowSpent(String(policy.window_hours))}:{" "}
+                  <span style={{ color: colors.text, fontWeight: 600 }}>
+                    {fmtCredits(policy.window_spent)}
+                  </span>
+                </p>
+              ) : null}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button
@@ -325,62 +390,23 @@ export function AgentOwnerWallet({
                 {t.walletWithdraw}
               </button>
             </div>
-            <div
-              style={{
-                ...assetCard,
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: colors.muted, marginBottom: 2 }}>
-                    {t.spendPolicyTitle}
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>
-                    {t.spendCurrent}: {autonomyLabel(String(currentAutonomy), t)}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  style={{ ...btnGhost, fontSize: 12, flexShrink: 0 }}
-                  disabled={busy || acting}
-                  onClick={() => void openPolicy()}
-                >
-                  {t.spendPolicyEdit}
-                </button>
-              </div>
-              <p style={{ margin: 0, fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
-                {t.spendPolicyHint}
-              </p>
-              {policy && policy.stored_autonomy === "limited" && policy.window_remaining != null ? (
-                <p style={{ margin: 0, fontSize: 11, color: colors.muted }}>
-                  {t.spendWindowUsage(
-                    fmtCredits(policy.window_spent),
-                    fmtCredits(policy.window_remaining),
-                    String(policy.window_hours),
-                  )}
-                </p>
-              ) : policy && policy.stored_autonomy === "limited" ? (
-                <p style={{ margin: 0, fontSize: 11, color: colors.muted }}>
-                  {t.spendWindowSpent(String(policy.window_hours))}:{" "}
-                  <span style={{ color: colors.text, fontWeight: 600 }}>
-                    {fmtCredits(policy.window_spent)}
-                  </span>
-                </p>
-              ) : null}
-            </div>
           </div>
           <div style={assetCard}>
-            <div style={{ fontSize: 11, color: colors.muted, marginBottom: 4 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 11,
+                color: colors.muted,
+                marginBottom: 4,
+              }}
+            >
               {t.walletApPoints}
+              <FieldHint text={t.walletApPointsHint} />
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, color: colors.text }}>
               {fmtCredits(wallet.ap_points)}
-            </div>
-            <div style={{ marginTop: 6, fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
-              {t.walletApPointsHint}
             </div>
           </div>
         </div>

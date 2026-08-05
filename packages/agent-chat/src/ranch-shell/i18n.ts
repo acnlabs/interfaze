@@ -528,7 +528,7 @@ const en: RanchMessages = {
   spendPolicyTitle: "Spend policy",
   spendPolicyHint:
     "How much this agent may spend from its Credits without asking you. Applies to all autonomous Credits outflows.",
-  spendPolicyEdit: "Edit spend policy",
+  spendPolicyEdit: "Edit",
   spendPolicySave: "Save policy",
   spendPolicySaved: "Spend policy updated",
   spendPolicyFailed: "Couldn’t update spend policy.",
@@ -803,7 +803,7 @@ const zh: RanchMessages = {
   spendPolicyTitle: "消费授权",
   spendPolicyHint:
     "此 agent 可在不询问你的情况下，自主花掉多少 Credits。适用于所有自主 Credits 流出。",
-  spendPolicyEdit: "编辑消费授权",
+  spendPolicyEdit: "编辑",
   spendPolicySave: "保存授权",
   spendPolicySaved: "消费授权已更新",
   spendPolicyFailed: "无法更新消费授权。",
