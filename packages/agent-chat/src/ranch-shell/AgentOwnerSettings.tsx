@@ -785,8 +785,12 @@ export function AgentOwnerSettings({
           : `/${res.share_url}`;
         setGiftUrl(`${origin}${path}`);
       })
-      .catch(() => {
-        setGiftError(t.myAgentsGiftFailed);
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof ChatGatewayError && err.message.trim()
+            ? err.message
+            : t.myAgentsGiftFailed;
+        setGiftError(msg);
       })
       .finally(() => setGiftBusy(false));
   };

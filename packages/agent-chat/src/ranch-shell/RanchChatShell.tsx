@@ -115,6 +115,23 @@ function agentStatusTitle(status: string | null | undefined, t: RanchMessages): 
   }
 }
 
+/** Latest user outbound transport is queued/failed → treat as offline for the green dot. */
+function latestUserDeliveryBroken(msgs: ChatMessage[]): boolean {
+  const recentUser = [...msgs].reverse().find((m) => m.sender_type === "user");
+  if (!recentUser) return false;
+  const d = recentUser.metadata?.delivery;
+  return d === "queued" || d === "failed";
+}
+
+/** Prefer delivery health over stale ACN "online" for presence dots. */
+function presenceForDot(
+  acnStatus: string | null | undefined,
+  deliveryBroken: boolean,
+): string | null | undefined {
+  if (deliveryBroken) return "offline";
+  return acnStatus;
+}
+
 function isGroupChat(c: ChatSummary): boolean {
   return c.type === "group" || c.type === "GROUP";
 }
@@ -1286,6 +1303,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
     phase: "pending" | "timeout";
     reason?: ReplyTimeoutReason;
   }>(null);
+  /**
+   * Per-chat: last outbound delivery was queued/failed (or unreachable).
+   * Forces the presence dot gray even when ACN still reports online.
+   */
+  const [deliveryBrokenByChat, setDeliveryBrokenByChat] = useState<Record<string, boolean>>(
+    {},
+  );
   const replySlotChatIdRef = useRef<string | null>(null);
   const awaitingSinceRef = useRef(0);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -1308,6 +1332,24 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const activeChatIdRef = useRef<string | null>(null);
   activeChatIdRef.current = active?.chat_id ?? null;
 
+  const setDeliveryBroken = useCallback((chatId: string, broken: boolean) => {
+    setDeliveryBrokenByChat((prev) => {
+      const cur = !!prev[chatId];
+      if (cur === broken) return prev;
+      if (broken) return { ...prev, [chatId]: true };
+      const next = { ...prev };
+      delete next[chatId];
+      return next;
+    });
+  }, []);
+
+  const syncDeliveryHealth = useCallback(
+    (chatId: string, msgs: ChatMessage[]) => {
+      setDeliveryBroken(chatId, latestUserDeliveryBroken(msgs));
+    },
+    [setDeliveryBroken],
+  );
+
   const clearReplySlot = useCallback((chatId?: string) => {
     setReplySlot((cur) => {
       if (chatId != null && cur && cur.chatId !== chatId) return cur;
@@ -1322,13 +1364,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setReplySlot({ chatId, phase: "pending" });
   }, []);
 
-  const markReplyTimeout = useCallback((chatId: string, reason: ReplyTimeoutReason = "timeout") => {
-    if (replySlotChatIdRef.current !== chatId) return;
-    setReplySlot({ chatId, phase: "timeout", reason });
-  }, []);
+  const markReplyTimeout = useCallback(
+    (chatId: string, reason: ReplyTimeoutReason = "timeout") => {
+      if (replySlotChatIdRef.current !== chatId) return;
+      if (reason === "offline") setDeliveryBroken(chatId, true);
+      setReplySlot({ chatId, phase: "timeout", reason });
+    },
+    [setDeliveryBroken],
+  );
 
   const noteAgentActivity = useCallback(
     (chatId: string, msgs: ChatMessage[]) => {
+      // Keep list/header dots in sync even when not awaiting a reply slot.
+      syncDeliveryHealth(chatId, msgs);
       if (replySlotChatIdRef.current !== chatId) return;
       const since = awaitingSinceRef.current;
       const hasReply = msgs.some(
@@ -1337,6 +1385,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           Date.parse(m.created_at) >= since - 2000,
       );
       if (hasReply) {
+        setDeliveryBroken(chatId, false);
         clearReplySlot(chatId);
         return;
       }
@@ -1345,6 +1394,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       if (!recentUser || Date.parse(recentUser.created_at) < since - 2000) return;
       const delivery = recentUser.metadata?.delivery;
       if (delivery === "failed") {
+        setDeliveryBroken(chatId, true);
         clearReplySlot(chatId);
         return;
       }
@@ -1352,7 +1402,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         markReplyTimeout(chatId, "offline");
       }
     },
-    [clearReplySlot, markReplyTimeout],
+    [clearReplySlot, markReplyTimeout, setDeliveryBroken, syncDeliveryHealth],
   );
 
   const refreshChats = useCallback(async () => {
@@ -1446,8 +1496,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
       if (seq != null && seq !== loadSeqRef.current) return;
       if (activeChatIdRef.current !== chatId) return;
       setMessages((prev) => mergeServerMessagesWithLocalTopicMarkers(msgs, prev));
+      syncDeliveryHealth(chatId, msgs);
     },
-    [client],
+    [client, syncDeliveryHealth],
   );
 
   useEffect(() => {
@@ -1540,6 +1591,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         ]);
         if (seq !== loadSeqRef.current) return;
         setMessages(msgs);
+        syncDeliveryHealth(chat.chat_id, msgs);
         setTopics(threadList);
         const agents = participants.filter(
           (p) => p.participant_type === "agent" && p.is_active !== false,
@@ -1584,7 +1636,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         setError(e instanceof Error ? e.message : "Failed to load messages");
       }
     },
-    [client, clearReplySlot, directoryAgents],
+    [client, clearReplySlot, directoryAgents, syncDeliveryHealth],
   );
 
   const loadTopics = useCallback(
@@ -1948,6 +2000,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 Date.parse(m.created_at) >= baseline - 2000,
             );
             if (hasNewAgent) {
+              setDeliveryBroken(chatId, false);
               clearReplySlot(chatId);
               void refreshChats();
               return;
@@ -1967,6 +2020,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
       })();
     } catch (e) {
       clearReplySlot(chatId);
+      if (e instanceof ChatGatewayError && e.code === "agent_unreachable") {
+        setDeliveryBroken(chatId, true);
+      }
       setError(
         e instanceof ChatGatewayError
           ? e.code === "agent_unreachable"
@@ -2055,6 +2111,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   Date.parse(m.created_at) >= baseline - 2000,
               );
               if (hasNewAgent) {
+                setDeliveryBroken(chatId, false);
                 clearReplySlot(chatId);
                 void refreshChats();
                 return;
@@ -2068,6 +2125,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
         })();
       } catch (e) {
         clearReplySlot(chatId);
+        if (e instanceof ChatGatewayError && e.code === "agent_unreachable") {
+          setDeliveryBroken(chatId, true);
+        }
         setError(
           e instanceof ChatGatewayError
             ? e.code === "agent_unreachable"
@@ -2207,7 +2267,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
     onOwnedAgentRemoved?.(agentId);
   };
 
-  const activeOffline = active && !isGroupChat(active) && isAgentOffline(active.agent_status);
+  const activeDeliveryBroken =
+    !!active &&
+    !isGroupChat(active) &&
+    (!!deliveryBrokenByChat[active.chat_id] ||
+      latestUserDeliveryBroken(messages) ||
+      (replySlot?.chatId === active.chat_id &&
+        replySlot.phase === "timeout" &&
+        replySlot.reason === "offline"));
+  const activePresence = presenceForDot(active?.agent_status, activeDeliveryBroken);
+  const activeOffline =
+    active && !isGroupChat(active) && isAgentOffline(activePresence);
   const groupActive = !!(active && isGroupChat(active));
   const slashParsed = parseSlashDraft(draft);
   const slashMenuOpen = isSlashMenuDraft(draft);
@@ -2492,7 +2562,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
               const title = chatTitle(c);
               const preview =
                 c.last_message_content || (isGroupChat(c) ? t.groupChat : t.noMessagesYet);
-              const dot = !isGroupChat(c) ? agentStatusDotColor(c.agent_status) : null;
+              const listPresence = presenceForDot(
+                c.agent_status,
+                !!deliveryBrokenByChat[c.chat_id],
+              );
+              const dot = !isGroupChat(c) ? agentStatusDotColor(listPresence) : null;
               return (
                 <button
                   key={c.chat_id}
@@ -2500,7 +2574,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   onClick={() => void openConversation(c)}
                   title={
                     !isGroupChat(c)
-                      ? [c.agent_id, agentStatusTitle(c.agent_status, t)].filter(Boolean).join(" · ") ||
+                      ? [c.agent_id, agentStatusTitle(listPresence, t)].filter(Boolean).join(" · ") ||
                         undefined
                       : undefined
                   }
@@ -2527,7 +2601,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     {dot ? (
                       <span
                         aria-hidden
-                        title={agentStatusTitle(c.agent_status, t)}
+                        title={agentStatusTitle(listPresence, t)}
                         style={{
                           position: "absolute",
                           right: -1,
@@ -2840,10 +2914,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       >
                         {chatTitle(active).slice(0, 1).toUpperCase()}
                       </span>
-                      {!isGroupChat(active) && agentStatusDotColor(active.agent_status) ? (
+                      {!isGroupChat(active) && agentStatusDotColor(activePresence) ? (
                         <span
                           aria-hidden
-                          title={agentStatusTitle(active.agent_status, t)}
+                          title={agentStatusTitle(activePresence, t)}
                           style={{
                             position: "absolute",
                             right: -1,
@@ -2851,7 +2925,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             width: 10,
                             height: 10,
                             borderRadius: 999,
-                            background: agentStatusDotColor(active.agent_status)!,
+                            background: agentStatusDotColor(activePresence)!,
                             border: `2px solid ${colors.bg}`,
                           }}
                         />
@@ -3661,10 +3735,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       >
                         {chatTitle(active).slice(0, 1).toUpperCase()}
                       </div>
-                      {!groupActive && agentStatusDotColor(active.agent_status) ? (
+                      {!groupActive && agentStatusDotColor(activePresence) ? (
                         <span
                           aria-hidden
-                          title={agentStatusTitle(active.agent_status, t)}
+                          title={agentStatusTitle(activePresence, t)}
                           style={{
                             position: "absolute",
                             right: 0,
@@ -3672,7 +3746,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             width: 14,
                             height: 14,
                             borderRadius: 999,
-                            background: agentStatusDotColor(active.agent_status)!,
+                            background: agentStatusDotColor(activePresence)!,
                             border: `2px solid ${colors.bg}`,
                           }}
                         />
@@ -4002,11 +4076,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             {t.statusLabel}
                           </div>
                           <div style={{ fontSize: 13, color: colors.text }}>
-                            {ownedAgentDetail?.status === "online"
-                              ? t.online
-                              : ownedAgentDetail?.status === "offline"
-                                ? t.offline
-                                : agentStatusTitle(active.agent_status, t) || t.offline}
+                            {activeDeliveryBroken
+                              ? t.offline
+                              : ownedAgentDetail?.status === "online"
+                                ? t.online
+                                : ownedAgentDetail?.status === "offline"
+                                  ? t.offline
+                                  : agentStatusTitle(activePresence, t) || t.offline}
                           </div>
                         </div>
                         {ownedAgentDetail?.name ? (
