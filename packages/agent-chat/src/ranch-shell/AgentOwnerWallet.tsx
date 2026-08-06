@@ -418,6 +418,48 @@ export function AgentOwnerWallet({
               >
                 {t.spendPolicyEdit}
               </button>
+              <button
+                type="button"
+                style={{
+                  ...btnGhost,
+                  fontSize: 11,
+                  padding: "4px 8px",
+                  flexShrink: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  ...(pendingCount > 0
+                    ? {
+                        borderColor: "rgba(59,130,246,0.45)",
+                        background: colors.accentSoft,
+                        color: colors.text,
+                        fontWeight: 650,
+                      }
+                    : {}),
+                }}
+                disabled={busy || acting}
+                onClick={openApprovals}
+              >
+                {t.spendApprovals}
+                {pendingCount > 0 ? (
+                  <span
+                    style={{
+                      minWidth: 16,
+                      height: 16,
+                      padding: "0 4px",
+                      borderRadius: 8,
+                      background: colors.accent,
+                      color: "#fff",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      lineHeight: "16px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {pendingCount > 99 ? "99+" : pendingCount}
+                  </span>
+                ) : null}
+              </button>
             </div>
             {policy && policy.stored_autonomy === "limited" && policy.window_remaining != null ? (
               <p style={{ margin: "8px 0 0", fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
@@ -435,43 +477,7 @@ export function AgentOwnerWallet({
                 </span>
               </p>
             ) : null}
-            <button
-              type="button"
-              style={{
-                ...btnGhost,
-                width: "100%",
-                marginTop: 12,
-                fontSize: 12,
-                fontWeight: 600,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-              }}
-              disabled={busy || acting}
-              onClick={openApprovals}
-            >
-              {t.spendApprovals}
-              {pendingCount > 0 ? (
-                <span
-                  style={{
-                    minWidth: 18,
-                    height: 18,
-                    padding: "0 5px",
-                    borderRadius: 9,
-                    background: colors.accent,
-                    color: "#fff",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    lineHeight: "18px",
-                    textAlign: "center",
-                  }}
-                >
-                  {pendingCount > 99 ? "99+" : pendingCount}
-                </span>
-              ) : null}
-            </button>
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
               <button
                 type="button"
                 style={{ ...btnPrimary, flex: 1, fontWeight: 600 }}
