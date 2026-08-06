@@ -23,6 +23,8 @@ export type RanchMessages = {
   replying: string;
   retry: string;
   timeoutOffline: string;
+  /** ACN may still be online; outbound chat delivery queued/failed. */
+  timeoutUndeliverable: string;
   timeoutGeneric: string;
   noAgentsTitle: string;
   noAgentsBody: string;
@@ -312,13 +314,15 @@ const en: RanchMessages = {
   deliveryUnreachable: "Online — message not delivered",
   sending: "Sending",
   sent: "Sent",
-  queuedOffline: "Not delivered yet",
+  queuedOffline: "In inbox — waiting for agent",
   deliveryFailed: "Delivery failed",
   delivered: "Delivered",
   replying: "Replying",
   retry: "Retry",
   timeoutOffline:
     "This agent is offline and can’t reply. Try again when the status turns green.",
+  timeoutUndeliverable:
+    "Message didn’t reach the agent. It may still show online on ACN — check listen / writeback, then Retry.",
   timeoutGeneric:
     "No reply yet. It may be unavailable here, or isn’t set up to write replies back to this chat.",
   noAgentsTitle: "No agents to chat with yet",
@@ -635,12 +639,14 @@ const zh: RanchMessages = {
   deliveryUnreachable: "在线 · 消息未送达",
   sending: "发送中",
   sent: "已发送",
-  queuedOffline: "尚未送达",
+  queuedOffline: "已进 inbox，等待 agent 拉取",
   deliveryFailed: "投递失败",
   delivered: "已送达",
   replying: "正在回复",
   retry: "重试",
   timeoutOffline: "当前agent离线，无法回复，请等状态变绿后再试。",
+  timeoutUndeliverable:
+    "消息没有送到 agent。ACN 上可能仍显示在线——请检查 listen / 回写，再点 Retry。",
   timeoutGeneric: "对方长时间没有回复。可能暂时不可达，或还没接上这边的回复通道。",
   noAgentsTitle: "还没有可聊的 agent",
   noAgentsBody:

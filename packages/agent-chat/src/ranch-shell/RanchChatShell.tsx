@@ -115,12 +115,15 @@ function agentStatusTitle(status: string | null | undefined, t: RanchMessages): 
   }
 }
 
-/** Latest user outbound transport is queued/failed (≠ ACN offline by itself). */
-function latestUserDeliveryBroken(msgs: ChatMessage[]): boolean {
+function latestUserDelivery(msgs: ChatMessage[]): string | null {
   const recentUser = [...msgs].reverse().find((m) => m.sender_type === "user");
-  if (!recentUser) return false;
-  const d = recentUser.metadata?.delivery;
-  return d === "queued" || d === "failed";
+  const d = recentUser?.metadata?.delivery;
+  return typeof d === "string" ? d : null;
+}
+
+/** Hard transport failure only — Mode B ``queued`` (inbox ACK) is not failure. */
+function latestUserDeliveryFailed(msgs: ChatMessage[]): boolean {
+  return latestUserDelivery(msgs) === "failed";
 }
 
 /**
@@ -381,7 +384,7 @@ function AgentReplyPendingBubble({ t }: { t: RanchMessages }) {
   );
 }
 
-type ReplyTimeoutReason = "offline" | "timeout";
+type ReplyTimeoutReason = "offline" | "undeliverable" | "timeout";
 
 /** Explicit error in agent slot + retry (not a silent blank / endless spinner). */
 function AgentReplyTimeoutBubble({
@@ -393,7 +396,12 @@ function AgentReplyTimeoutBubble({
   onRetry: () => void;
   t: RanchMessages;
 }) {
-  const message = reason === "offline" ? t.timeoutOffline : t.timeoutGeneric;
+  const message =
+    reason === "offline"
+      ? t.timeoutOffline
+      : reason === "undeliverable"
+        ? t.timeoutUndeliverable
+        : t.timeoutGeneric;
   return (
     <div
       style={{
@@ -1363,11 +1371,39 @@ export function RanchChatShell(props: RanchChatShellProps) {
     });
   }, []);
 
-  const syncDeliveryHealth = useCallback(
-    (chatId: string, msgs: ChatMessage[]) => {
-      setDeliveryBroken(chatId, latestUserDeliveryBroken(msgs));
+  /**
+   * Re-query ACN presence via chat list, then decide offline vs undeliverable.
+   * Do not invent "offline" from delivery metadata alone.
+   */
+  const resolveAfterDeliveryIssue = useCallback(
+    async (chatId: string): Promise<ReplyTimeoutReason> => {
+      try {
+        const list = await client.listChats();
+        setChats(list);
+        const row = list.find((c) => c.chat_id === chatId);
+        if (row) {
+          setActive((cur) =>
+            cur?.chat_id === chatId
+              ? { ...cur, agent_status: row.agent_status ?? cur.agent_status }
+              : cur,
+          );
+          if (isAgentOffline(row.agent_status)) {
+            setDeliveryBroken(chatId, false);
+            return "offline";
+          }
+          if ((row.agent_status || "").toLowerCase() === "active") {
+            setDeliveryBroken(chatId, true);
+            return "undeliverable";
+          }
+        }
+      } catch {
+        /* fall through */
+      }
+      // Presence unknown — don't claim offline.
+      setDeliveryBroken(chatId, true);
+      return "undeliverable";
     },
-    [setDeliveryBroken],
+    [client, setDeliveryBroken],
   );
 
   const clearReplySlot = useCallback((chatId?: string) => {
@@ -1387,7 +1423,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const markReplyTimeout = useCallback(
     (chatId: string, reason: ReplyTimeoutReason = "timeout") => {
       if (replySlotChatIdRef.current !== chatId) return;
-      if (reason === "offline") setDeliveryBroken(chatId, true);
+      if (reason === "undeliverable") setDeliveryBroken(chatId, true);
+      if (reason === "offline") setDeliveryBroken(chatId, false);
       setReplySlot({ chatId, phase: "timeout", reason });
     },
     [setDeliveryBroken],
@@ -1395,8 +1432,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   const noteAgentActivity = useCallback(
     (chatId: string, msgs: ChatMessage[]) => {
-      // Keep list/header dots in sync even when not awaiting a reply slot.
-      syncDeliveryHealth(chatId, msgs);
       if (replySlotChatIdRef.current !== chatId) return;
       const since = awaitingSinceRef.current;
       const hasReply = msgs.some(
@@ -1409,20 +1444,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
         clearReplySlot(chatId);
         return;
       }
-      // Transport delivery failed / queued offline → stop spinning with a clear reason.
       const recentUser = [...msgs].reverse().find((m) => m.sender_type === "user");
       if (!recentUser || Date.parse(recentUser.created_at) < since - 2000) return;
       const delivery = recentUser.metadata?.delivery;
+      // Hard failure → recheck ACN presence, then set fact-based status/copy.
       if (delivery === "failed") {
-        setDeliveryBroken(chatId, true);
-        clearReplySlot(chatId);
+        void resolveAfterDeliveryIssue(chatId).then((reason) => {
+          markReplyTimeout(chatId, reason);
+        });
         return;
       }
-      if (delivery === "queued") {
-        markReplyTimeout(chatId, "offline");
-      }
+      // Mode B ``queued`` = inbox ACK — keep waiting for writeback; do not gray/amber yet.
     },
-    [clearReplySlot, markReplyTimeout, setDeliveryBroken, syncDeliveryHealth],
+    [clearReplySlot, markReplyTimeout, resolveAfterDeliveryIssue, setDeliveryBroken],
   );
 
   const refreshChats = useCallback(async () => {
@@ -1516,9 +1550,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
       if (seq != null && seq !== loadSeqRef.current) return;
       if (activeChatIdRef.current !== chatId) return;
       setMessages((prev) => mergeServerMessagesWithLocalTopicMarkers(msgs, prev));
-      syncDeliveryHealth(chatId, msgs);
+      // Hard transport failure: re-verify ACN presence before changing the dot.
+      if (latestUserDeliveryFailed(msgs)) {
+        void resolveAfterDeliveryIssue(chatId);
+      }
     },
-    [client, syncDeliveryHealth],
+    [client, resolveAfterDeliveryIssue],
   );
 
   useEffect(() => {
@@ -1611,7 +1648,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
         ]);
         if (seq !== loadSeqRef.current) return;
         setMessages(msgs);
-        syncDeliveryHealth(chat.chat_id, msgs);
+        if (latestUserDeliveryFailed(msgs)) {
+          void resolveAfterDeliveryIssue(chat.chat_id);
+        }
         setTopics(threadList);
         const agents = participants.filter(
           (p) => p.participant_type === "agent" && p.is_active !== false,
@@ -1656,7 +1695,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         setError(e instanceof Error ? e.message : "Failed to load messages");
       }
     },
-    [client, clearReplySlot, directoryAgents, syncDeliveryHealth],
+    [client, clearReplySlot, directoryAgents, resolveAfterDeliveryIssue],
   );
 
   const loadTopics = useCallback(
@@ -2028,20 +2067,27 @@ export function RanchChatShell(props: RanchChatShellProps) {
             noteAgentActivity(chatId, msgs);
             // Already offline at send: don't spin the full window before explaining.
             if (sentWhileOffline && i >= 2) {
-              markReplyTimeout(chatId, "offline");
+              const reason = await resolveAfterDeliveryIssue(chatId);
+              markReplyTimeout(chatId, reason === "offline" ? "offline" : "undeliverable");
               return;
             }
           } catch {
             /* ignore transient poll errors */
           }
         }
-        // Past the wait window → timeout + retry (not a silent blank).
-        markReplyTimeout(chatId, sentWhileOffline ? "offline" : "timeout");
+        // Past the wait window → recheck ACN presence, then fact-based copy/dot.
+        const reason = await resolveAfterDeliveryIssue(chatId);
+        if (reason === "offline") markReplyTimeout(chatId, "offline");
+        else if (sentWhileOffline) markReplyTimeout(chatId, "undeliverable");
+        else markReplyTimeout(chatId, reason === "undeliverable" ? "undeliverable" : "timeout");
       })();
     } catch (e) {
       clearReplySlot(chatId);
       if (e instanceof ChatGatewayError && e.code === "agent_unreachable") {
-        setDeliveryBroken(chatId, true);
+        void resolveAfterDeliveryIssue(chatId).then((reason) => {
+          if (reason === "offline") markReplyTimeout(chatId, "offline");
+          else setDeliveryBroken(chatId, true);
+        });
       }
       setError(
         e instanceof ChatGatewayError
@@ -2141,12 +2187,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
               /* ignore */
             }
           }
-          markReplyTimeout(chatId);
+          const reason = await resolveAfterDeliveryIssue(chatId);
+          markReplyTimeout(
+            chatId,
+            reason === "offline"
+              ? "offline"
+              : reason === "undeliverable"
+                ? "undeliverable"
+                : "timeout",
+          );
         })();
       } catch (e) {
         clearReplySlot(chatId);
         if (e instanceof ChatGatewayError && e.code === "agent_unreachable") {
-          setDeliveryBroken(chatId, true);
+          void resolveAfterDeliveryIssue(chatId).then((reason) => {
+            if (reason === "offline") markReplyTimeout(chatId, "offline");
+            else setDeliveryBroken(chatId, true);
+          });
         }
         setError(
           e instanceof ChatGatewayError
@@ -2291,13 +2348,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
     !!active &&
     !isGroupChat(active) &&
     (!!deliveryBrokenByChat[active.chat_id] ||
-      latestUserDeliveryBroken(messages) ||
+      latestUserDeliveryFailed(messages) ||
       (replySlot?.chatId === active.chat_id &&
         replySlot.phase === "timeout" &&
-        replySlot.reason === "offline"));
+        replySlot.reason === "undeliverable"));
   const activePresence = presenceForDot(active?.agent_status, activeDeliveryBroken);
+  // Offline banner only when ACN presence is offline — never from delivery heuristics alone.
   const activeOffline =
-    active && !isGroupChat(active) && isAgentOffline(activePresence);
+    active && !isGroupChat(active) && isAgentOffline(active.agent_status);
   const groupActive = !!(active && isGroupChat(active));
   const slashParsed = parseSlashDraft(draft);
   const slashMenuOpen = isSlashMenuDraft(draft);
