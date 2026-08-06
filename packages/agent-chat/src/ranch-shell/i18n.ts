@@ -13,6 +13,8 @@ export type RanchMessages = {
   online: string;
   busy: string;
   offline: string;
+  /** ACN still online, but last outbound chat delivery queued/failed. */
+  deliveryUnreachable: string;
   sending: string;
   sent: string;
   queuedOffline: string;
@@ -307,6 +309,7 @@ const en: RanchMessages = {
   online: "Online",
   busy: "Busy",
   offline: "Offline",
+  deliveryUnreachable: "Online — message not delivered",
   sending: "Sending",
   sent: "Sent",
   queuedOffline: "Not delivered yet",
@@ -629,6 +632,7 @@ const zh: RanchMessages = {
   online: "在线",
   busy: "忙碌",
   offline: "离线",
+  deliveryUnreachable: "在线 · 消息未送达",
   sending: "发送中",
   sent: "已发送",
   queuedOffline: "尚未送达",

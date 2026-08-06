@@ -83,12 +83,12 @@ function agentStatusDotColor(status?: string | null): string | null {
   if (!status) return null;
   switch (status.toLowerCase()) {
     case "active":
-      return "#22c55e"; // green-500
+      return "#22c55e"; // green-500 — ACN online + recent delivery ok
     case "busy":
-      return "#eab308"; // yellow-500
+      return "#eab308"; // yellow-500 — ACN busy, or online but undeliverable
     case "idle":
     case "offline":
-      return "#64748b"; // slate-500 — visible "not listening"
+      return "#64748b"; // slate-500 — ACN not listening
     default:
       return null;
   }
@@ -115,7 +115,7 @@ function agentStatusTitle(status: string | null | undefined, t: RanchMessages): 
   }
 }
 
-/** Latest user outbound transport is queued/failed → treat as offline for the green dot. */
+/** Latest user outbound transport is queued/failed (≠ ACN offline by itself). */
 function latestUserDeliveryBroken(msgs: ChatMessage[]): boolean {
   const recentUser = [...msgs].reverse().find((m) => m.sender_type === "user");
   if (!recentUser) return false;
@@ -123,13 +123,33 @@ function latestUserDeliveryBroken(msgs: ChatMessage[]): boolean {
   return d === "queued" || d === "failed";
 }
 
-/** Prefer delivery health over stale ACN "online" for presence dots. */
+/**
+ * Presence for dots — separate ACN alive from chat transport health.
+ * - offline/idle (gray): ACN registry says not listening
+ * - busy (amber): ACN online/busy, but last outbound delivery queued/failed
+ * - active (green): ACN online and delivery not known-broken
+ */
 function presenceForDot(
   acnStatus: string | null | undefined,
   deliveryBroken: boolean,
 ): string | null | undefined {
-  if (deliveryBroken) return "offline";
+  const s = (acnStatus || "").toLowerCase();
+  if (!s) return deliveryBroken ? "busy" : acnStatus;
+  if (s === "offline" || s === "idle") return s;
+  // Online/busy on ACN: amber warn on transport failure — never claim offline.
+  if (deliveryBroken) return "busy";
   return acnStatus;
+}
+
+function presenceTitle(
+  acnStatus: string | null | undefined,
+  deliveryBroken: boolean,
+  t: RanchMessages,
+): string | undefined {
+  const s = (acnStatus || "").toLowerCase();
+  const trulyOffline = s === "offline" || s === "idle";
+  if (deliveryBroken && !trulyOffline) return t.deliveryUnreachable;
+  return agentStatusTitle(presenceForDot(acnStatus, deliveryBroken), t);
 }
 
 function isGroupChat(c: ChatSummary): boolean {
@@ -2562,10 +2582,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
               const title = chatTitle(c);
               const preview =
                 c.last_message_content || (isGroupChat(c) ? t.groupChat : t.noMessagesYet);
-              const listPresence = presenceForDot(
-                c.agent_status,
-                !!deliveryBrokenByChat[c.chat_id],
-              );
+              const listBroken = !!deliveryBrokenByChat[c.chat_id];
+              const listPresence = presenceForDot(c.agent_status, listBroken);
+              const listTitle = presenceTitle(c.agent_status, listBroken, t);
               const dot = !isGroupChat(c) ? agentStatusDotColor(listPresence) : null;
               return (
                 <button
@@ -2574,8 +2593,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   onClick={() => void openConversation(c)}
                   title={
                     !isGroupChat(c)
-                      ? [c.agent_id, agentStatusTitle(listPresence, t)].filter(Boolean).join(" · ") ||
-                        undefined
+                      ? [c.agent_id, listTitle].filter(Boolean).join(" · ") || undefined
                       : undefined
                   }
                   style={{
@@ -2601,7 +2619,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     {dot ? (
                       <span
                         aria-hidden
-                        title={agentStatusTitle(listPresence, t)}
+                        title={listTitle}
                         style={{
                           position: "absolute",
                           right: -1,
@@ -2917,7 +2935,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       {!isGroupChat(active) && agentStatusDotColor(activePresence) ? (
                         <span
                           aria-hidden
-                          title={agentStatusTitle(activePresence, t)}
+                          title={presenceTitle(
+                            active.agent_status,
+                            activeDeliveryBroken,
+                            t,
+                          )}
                           style={{
                             position: "absolute",
                             right: -1,
@@ -3738,7 +3760,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       {!groupActive && agentStatusDotColor(activePresence) ? (
                         <span
                           aria-hidden
-                          title={agentStatusTitle(activePresence, t)}
+                          title={presenceTitle(
+                            active.agent_status,
+                            activeDeliveryBroken,
+                            t,
+                          )}
                           style={{
                             position: "absolute",
                             right: 0,
@@ -4077,7 +4103,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           </div>
                           <div style={{ fontSize: 13, color: colors.text }}>
                             {activeDeliveryBroken
-                              ? t.offline
+                              ? presenceTitle(active.agent_status, true, t) ||
+                                t.deliveryUnreachable
                               : ownedAgentDetail?.status === "online"
                                 ? t.online
                                 : ownedAgentDetail?.status === "offline"
