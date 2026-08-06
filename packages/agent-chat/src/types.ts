@@ -86,6 +86,8 @@ export type RanchChatShellProps = {
   gatewayBaseUrl: string;
   directoryAgents?: AgentDirectoryItem[];
   title?: string;
+  /** Optional brand mark URL (e.g. /logo.png). Shown in the chat-list header. */
+  logoUrl?: string;
   /** side panel (default) or fullscreen */
   mode?: AgentChatMode;
   open?: boolean;

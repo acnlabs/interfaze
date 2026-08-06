@@ -1186,6 +1186,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     gatewayBaseUrl,
     directoryAgents = [],
     title = "Chats",
+    logoUrl,
     mode: modeProp = "side",
     open: openProp,
     onOpenChange,
@@ -2548,7 +2549,25 @@ export function RanchChatShell(props: RanchChatShellProps) {
       >
         <div style={listHeader}>
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 650, display: "flex", alignItems: "center", gap: 8 }}>
-            <span aria-hidden>💬</span> {title}
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- package has no Next Image
+              <img
+                src={logoUrl}
+                alt={title}
+                width={28}
+                height={28}
+                style={{
+                  width: 28,
+                  height: 28,
+                  objectFit: "contain",
+                  borderRadius: 6,
+                  flexShrink: 0,
+                }}
+              />
+            ) : (
+              <span aria-hidden>💬</span>
+            )}
+            {title}
           </h2>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <LanguageSwitcher locale={uiLocale} onChange={setLocale} t={t} />

@@ -66,9 +66,21 @@ function AuthenticatedGate() {
 
 function Brand() {
   return (
-    <h1 style={{ margin: "0 0 12px", fontSize: 40, letterSpacing: "-0.03em", fontWeight: 700 }}>
-      {siteName}
-    </h1>
+    <div style={{ margin: "0 0 8px" }}>
+      {/* Logo already includes INTERFAZE wordmark — keep as hero brand signal. */}
+      <img
+        src="/logo.png"
+        alt={siteName}
+        width={220}
+        height={220}
+        style={{
+          display: "block",
+          width: "min(220px, 56vw)",
+          height: "auto",
+          objectFit: "contain",
+        }}
+      />
+    </div>
   );
 }
 
@@ -81,7 +93,7 @@ const gateStyle: CSSProperties = {
   padding: "48px 32px",
   gap: 16,
   background:
-    "radial-gradient(ellipse 80% 50% at 20% 0%, rgba(16,185,129,0.18), transparent 55%), var(--bg)",
+    "radial-gradient(ellipse 80% 50% at 20% 0%, rgba(34,211,238,0.14), transparent 55%), var(--bg)",
 };
 
 const ctaStyle: CSSProperties = {

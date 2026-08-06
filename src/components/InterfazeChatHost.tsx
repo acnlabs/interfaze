@@ -169,6 +169,7 @@ export default function InterfazeChatHost() {
       directoryAgents={directoryAgents}
       allowGroupChat
       title="Interfaze"
+      logoUrl="/logo.png"
       connectGuideUrl="https://github.com/acnlabs/interfaze/blob/main/CONNECT.md"
       agentPlanetBaseUrl="https://agentplanet.org"
       interfazeBaseUrl={

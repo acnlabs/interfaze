@@ -12,7 +12,13 @@ export default function AuthCallbackPage() {
   if (error) {
     return (
       <main style={{ padding: 48 }}>
-        <h1>Interfaze</h1>
+        <img
+          src="/logo.png"
+          alt="Interfaze"
+          width={120}
+          height={120}
+          style={{ display: "block", width: 120, height: "auto", marginBottom: 16 }}
+        />
         <p style={{ color: "#f87171" }}>{error.message}</p>
         <a href="/">Back</a>
       </main>
