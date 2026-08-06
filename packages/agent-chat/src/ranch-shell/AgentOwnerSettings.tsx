@@ -1,8 +1,21 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { createPortal } from "react-dom";
-import { ChatGatewayError, type GatewayClient, type MyAgentSummary } from "../gateway";
+import {
+  ChatGatewayError,
+  type GatewayClient,
+  type MyAgentAllowlistEntry,
+  type MyAgentSummary,
+} from "../gateway";
 import { copyText } from "./connectPrompt";
 import type { RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
@@ -399,6 +412,14 @@ export function AgentOwnerSettings({
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [policyMsg, setPolicyMsg] = useState<string | null>(null);
   const [policyError, setPolicyError] = useState<string | null>(null);
+
+  const [allowlist, setAllowlist] = useState<MyAgentAllowlistEntry[]>([]);
+  const [allowlistTotal, setAllowlistTotal] = useState(0);
+  const [allowlistLoading, setAllowlistLoading] = useState(false);
+  const [allowlistError, setAllowlistError] = useState<string | null>(null);
+  const [allowlistDraft, setAllowlistDraft] = useState("");
+  const [allowlistActing, setAllowlistActing] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [confirmClosedPolicy, setConfirmClosedPolicy] = useState(false);
 
   useEffect(() => {
@@ -472,6 +493,73 @@ export function AgentOwnerSettings({
   const selectedPolicy = policyDraft ?? savedPolicy;
   const policyDirty = policyDraft !== null && policyDraft !== savedPolicy;
   const canSavePolicy = policyDirty && !savingPolicy && !busy;
+  const showAllowlistEditor =
+    selectedPolicy === "allowlist" || savedPolicy === "allowlist";
+
+  const loadAllowlist = useCallback(async () => {
+    setAllowlistLoading(true);
+    setAllowlistError(null);
+    try {
+      const data = await client.listMyAgentAllowlist(detail.agent_id);
+      setAllowlist(data.entries ?? []);
+      setAllowlistTotal(data.total ?? (data.entries ?? []).length);
+    } catch {
+      setAllowlist([]);
+      setAllowlistTotal(0);
+      setAllowlistError(t.myAgentsAllowlistLoadFailed);
+    } finally {
+      setAllowlistLoading(false);
+    }
+  }, [client, detail.agent_id, t.myAgentsAllowlistLoadFailed]);
+
+  useEffect(() => {
+    if (!showAllowlistEditor) return;
+    void loadAllowlist();
+  }, [showAllowlistEditor, loadAllowlist]);
+
+  const addAllowlistMember = async () => {
+    if (allowlistActing) return;
+    const target = allowlistDraft.trim();
+    if (!target || target.length > 128) {
+      setAllowlistError(t.myAgentsAllowlistInvalidId);
+      return;
+    }
+    if (target === detail.agent_id) {
+      setAllowlistError(t.myAgentsAllowlistSelf);
+      return;
+    }
+    setAllowlistActing(true);
+    setAllowlistError(null);
+    try {
+      await client.addMyAgentAllowlistMember(detail.agent_id, target);
+      setAllowlistDraft("");
+      await loadAllowlist();
+    } catch (e) {
+      const code = e instanceof ChatGatewayError ? e.code : "";
+      if (code === "rate_limited") setAllowlistError(t.myAgentsAllowlistFull);
+      else if (code === "agent_not_found") setAllowlistError(t.myAgentsAllowlistAddFailed);
+      else if (code === "invalid_request") setAllowlistError(t.myAgentsAllowlistInvalidId);
+      else setAllowlistError(t.myAgentsAllowlistAddFailed);
+    } finally {
+      setAllowlistActing(false);
+    }
+  };
+
+  const removeAllowlistMember = async (targetId: string) => {
+    if (allowlistActing) return;
+    setAllowlistActing(true);
+    setRemovingId(targetId);
+    setAllowlistError(null);
+    try {
+      await client.removeMyAgentAllowlistMember(detail.agent_id, targetId);
+      await loadAllowlist();
+    } catch {
+      setAllowlistError(t.myAgentsAllowlistRemoveFailed);
+    } finally {
+      setAllowlistActing(false);
+      setRemovingId(null);
+    }
+  };
 
   const saving = savingProfile || savingDelivery || savingPolicy;
   const hasEdits = profileDirty || deliveryDirty || policyDirty;
@@ -897,6 +985,127 @@ export function AgentOwnerSettings({
             </div>
           </button>
         </div>
+
+        {showAllowlistEditor ? (
+          <div
+            style={{
+              marginTop: 12,
+              padding: "12px 12px",
+              borderRadius: 10,
+              border: `1px solid ${colors.border}`,
+              background: colors.bg,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 8,
+                flexWrap: "wrap",
+              }}
+            >
+              <span style={{ fontSize: 12, fontWeight: 650, color: colors.text }}>
+                {t.myAgentsAllowlistTitle}
+              </span>
+              <span style={{ fontSize: 11, color: colors.muted }}>
+                {t.myAgentsAllowlistCount(String(allowlistTotal))}
+              </span>
+            </div>
+            <p style={{ margin: "0 0 10px", fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
+              {t.myAgentsAllowlistHint}
+            </p>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <input
+                value={allowlistDraft}
+                onChange={(e) => setAllowlistDraft(e.target.value)}
+                placeholder={t.myAgentsAllowlistPlaceholder}
+                disabled={busy || allowlistActing}
+                style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void addAllowlistMember();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                style={{ ...btnPrimary, fontSize: 12, fontWeight: 600, flexShrink: 0 }}
+                disabled={busy || allowlistActing || !allowlistDraft.trim()}
+                onClick={() => void addAllowlistMember()}
+              >
+                {allowlistActing && !removingId ? t.loading : t.myAgentsAllowlistAdd}
+              </button>
+            </div>
+            {allowlistError ? (
+              <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>
+                {allowlistError}
+              </p>
+            ) : null}
+            {allowlistLoading ? (
+              <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>{t.loading}</p>
+            ) : allowlist.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>
+                {t.myAgentsAllowlistEmpty}
+              </p>
+            ) : (
+              <ul
+                style={{
+                  listStyle: "none",
+                  margin: 0,
+                  padding: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                  maxHeight: 180,
+                  overflow: "auto",
+                }}
+              >
+                {allowlist.map((entry) => (
+                  <li
+                    key={entry.target_id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "8px 10px",
+                      borderRadius: 8,
+                      border: `1px solid ${colors.border}`,
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: colors.text,
+                          wordBreak: "break-all",
+                        }}
+                      >
+                        {entry.target_id}
+                      </div>
+                      {entry.reason ? (
+                        <div style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>
+                          {entry.reason}
+                        </div>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      style={{ ...btnGhost, fontSize: 11, padding: "4px 8px", flexShrink: 0 }}
+                      disabled={busy || allowlistActing}
+                      onClick={() => void removeAllowlistMember(entry.target_id)}
+                    >
+                      {removingId === entry.target_id ? t.loading : t.myAgentsAllowlistRemove}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
+
         {policyError ? (
           <p style={{ margin: "8px 0 0", fontSize: 12, color: colors.danger }}>{policyError}</p>
         ) : null}

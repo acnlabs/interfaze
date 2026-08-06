@@ -176,6 +176,19 @@ export type RanchMessages = {
   myAgentsPolicyFailed: string;
   myAgentsPolicyClosedConfirm: string;
   myAgentsPolicyClosedConfirmLabel: string;
+  myAgentsAllowlistTitle: string;
+  myAgentsAllowlistHint: string;
+  myAgentsAllowlistEmpty: string;
+  myAgentsAllowlistAdd: string;
+  myAgentsAllowlistRemove: string;
+  myAgentsAllowlistPlaceholder: string;
+  myAgentsAllowlistLoadFailed: string;
+  myAgentsAllowlistAddFailed: string;
+  myAgentsAllowlistRemoveFailed: string;
+  myAgentsAllowlistInvalidId: string;
+  myAgentsAllowlistSelf: string;
+  myAgentsAllowlistFull: string;
+  myAgentsAllowlistCount: (n: string) => string;
   myAgentsInboundNa: string;
   myAgentsDeliveryChoose: string;
   myAgentsDeliveryOptionPush: string;
@@ -473,7 +486,7 @@ const en: RanchMessages = {
   myAgentsPolicyOpenHelp: "Anyone on the network who can discover you may start a chat.",
   myAgentsPolicyAllowlist: "Allowlist only",
   myAgentsPolicyAllowlistHelp:
-    "Only senders on your allowlist go to the inbox. Edit the list on AgentPlanet / CLI — Interfaze only switches the mode. An empty list does not hard-block; others go to the inbox queue.",
+    "Only senders on your allowlist go straight through. An empty list does not hard-block; others go to the inbox queue.",
   myAgentsPolicyClosed: "Closed",
   myAgentsPolicyClosedHelp: "Inbound chats are rejected. You can still open chats as the owner from Interfaze in many cases, but the network cannot message this agent freely.",
   myAgentsPolicyManifest: "Inbox / queue",
@@ -484,6 +497,19 @@ const en: RanchMessages = {
   myAgentsPolicyClosedConfirm:
     "Close this agent to inbound network messages? Others will be rejected until you open it again.",
   myAgentsPolicyClosedConfirmLabel: "Close inbound",
+  myAgentsAllowlistTitle: "Allowlist",
+  myAgentsAllowlistHint: "Paste an agent id to trust. Mode must be Allowlist only for the list to gate inbound chat.",
+  myAgentsAllowlistEmpty: "No agents on the allowlist yet.",
+  myAgentsAllowlistAdd: "Add",
+  myAgentsAllowlistRemove: "Remove",
+  myAgentsAllowlistPlaceholder: "Agent id",
+  myAgentsAllowlistLoadFailed: "Couldn’t load allowlist.",
+  myAgentsAllowlistAddFailed: "Couldn’t add this agent.",
+  myAgentsAllowlistRemoveFailed: "Couldn’t remove this agent.",
+  myAgentsAllowlistInvalidId: "Enter a valid agent id.",
+  myAgentsAllowlistSelf: "An agent can’t allowlist itself.",
+  myAgentsAllowlistFull: "Allowlist is full (max 500).",
+  myAgentsAllowlistCount: (n) => `${n} on list`,
   myAgentsChatOpen: "Discoverable",
   myAgentsChatOpenHint:
     "Whether others on the network can find this agent and start a chat (from policy + visibility).",
@@ -761,7 +787,7 @@ const zh: RanchMessages = {
   myAgentsPolicyOpenHelp: "网络上能发现你的人都可以开聊。",
   myAgentsPolicyAllowlist: "仅白名单",
   myAgentsPolicyAllowlistHelp:
-    "仅白名单内的发送者进收件箱。名单请在 AgentPlanet / CLI 编辑——Interfaze 只切换模式。名单为空时不会硬拒绝，其他人会进排队收件箱。",
+    "只有白名单上的发送者直接放行。名单为空不会硬拦；其他人进收件箱队列。",
   myAgentsPolicyClosed: "已关闭",
   myAgentsPolicyClosedHelp: "拒绝入站网络消息。你作为主人仍可在 Interfaze 开聊，但别人不能随意找这个 agent。",
   myAgentsPolicyManifest: "收件箱 / 排队",
@@ -772,6 +798,19 @@ const zh: RanchMessages = {
   myAgentsPolicyClosedConfirm:
     "关闭此 agent 的入站网络消息？在重新打开之前，其他人会被拒绝。",
   myAgentsPolicyClosedConfirmLabel: "关闭入站",
+  myAgentsAllowlistTitle: "白名单",
+  myAgentsAllowlistHint: "粘贴要信任的 agent id。接待模式需为「仅白名单」时，名单才会拦截入站。",
+  myAgentsAllowlistEmpty: "白名单还是空的。",
+  myAgentsAllowlistAdd: "添加",
+  myAgentsAllowlistRemove: "移除",
+  myAgentsAllowlistPlaceholder: "Agent id",
+  myAgentsAllowlistLoadFailed: "无法加载白名单。",
+  myAgentsAllowlistAddFailed: "无法添加此 agent。",
+  myAgentsAllowlistRemoveFailed: "无法移除此 agent。",
+  myAgentsAllowlistInvalidId: "请输入有效的 agent id。",
+  myAgentsAllowlistSelf: "不能把自己加进白名单。",
+  myAgentsAllowlistFull: "白名单已满（最多 500）。",
+  myAgentsAllowlistCount: (n) => `名单 ${n} 人`,
   myAgentsChatOpen: "可被发现",
   myAgentsChatOpenHint: "其他人是否能在网络里找到这个 agent 并开聊（综合策略与可见性）。",
   myAgentsOpenChat: "开聊",

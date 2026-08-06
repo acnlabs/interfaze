@@ -139,6 +139,25 @@ export type MyAgentSpendApproveResponse = {
   wallet: MyAgentWallet;
 };
 
+export type MyAgentAllowlistEntry = {
+  target_id: string;
+  created_at: string;
+  reason?: string | null;
+};
+
+export type MyAgentAllowlist = {
+  owner_id: string;
+  entries: MyAgentAllowlistEntry[];
+  total: number;
+};
+
+export type MyAgentAllowlistAction = {
+  owner_id: string;
+  target_id: string;
+  allowlisted: boolean;
+  changed: boolean;
+};
+
 /** Owned ACN agent row from GET /api/chat/my-agents (management + directory mine). */
 export type MyAgentSummary = {
   agent_id: string;
@@ -251,6 +270,16 @@ export type GatewayClient = {
     requestId: string,
     reason?: string,
   ) => Promise<MyAgentSpendRequest>;
+  listMyAgentAllowlist: (agentId: string) => Promise<MyAgentAllowlist>;
+  addMyAgentAllowlistMember: (
+    agentId: string,
+    targetId: string,
+    reason?: string,
+  ) => Promise<MyAgentAllowlistAction>;
+  removeMyAgentAllowlistMember: (
+    agentId: string,
+    targetId: string,
+  ) => Promise<MyAgentAllowlistAction>;
   addParticipant: (chatId: string, agentId: string) => Promise<ChatParticipant>;
   removeParticipant: (chatId: string, participantId: string) => Promise<void>;
   updateChat: (chatId: string, patch: { title?: string; description?: string }) => Promise<ChatSummary>;
@@ -434,6 +463,23 @@ export function createGatewayClient(
           method: "POST",
           body: JSON.stringify(reason ? { reason } : {}),
         },
+      ),
+    listMyAgentAllowlist: (agentId) =>
+      request<MyAgentAllowlist>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/allowlist`,
+      ),
+    addMyAgentAllowlistMember: (agentId, targetId, reason) =>
+      request<MyAgentAllowlistAction>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/allowlist/${encodeURIComponent(targetId)}`,
+        {
+          method: "POST",
+          body: JSON.stringify(reason ? { reason } : {}),
+        },
+      ),
+    removeMyAgentAllowlistMember: (agentId, targetId) =>
+      request<MyAgentAllowlistAction>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/allowlist/${encodeURIComponent(targetId)}`,
+        { method: "DELETE" },
       ),
     listMessages: (chatId) =>
       request<ChatMessage[]>(`/api/chats/${encodeURIComponent(chatId)}/messages?limit=50`),
