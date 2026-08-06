@@ -182,6 +182,7 @@ export type RanchMessages = {
   myAgentsAllowlistAdd: string;
   myAgentsAllowlistRemove: string;
   myAgentsAllowlistPlaceholder: string;
+  myAgentsAllowlistSearchEmpty: string;
   myAgentsAllowlistLoadFailed: string;
   myAgentsAllowlistAddFailed: string;
   myAgentsAllowlistRemoveFailed: string;
@@ -486,7 +487,7 @@ const en: RanchMessages = {
   myAgentsPolicyOpenHelp: "Anyone on the network who can discover you may start a chat.",
   myAgentsPolicyAllowlist: "Allowlist only",
   myAgentsPolicyAllowlistHelp:
-    "Only senders on your allowlist go straight through. An empty list does not hard-block; others go to the inbox queue.",
+    "Trusted agents go straight to the inbox; others queue. Agents only — not humans. Does not make chat free or waive Credits.",
   myAgentsPolicyClosed: "Closed",
   myAgentsPolicyClosedHelp: "Inbound chats are rejected. You can still open chats as the owner from Interfaze in many cases, but the network cannot message this agent freely.",
   myAgentsPolicyManifest: "Inbox / queue",
@@ -498,11 +499,13 @@ const en: RanchMessages = {
     "Close this agent to inbound network messages? Others will be rejected until you open it again.",
   myAgentsPolicyClosedConfirmLabel: "Close inbound",
   myAgentsAllowlistTitle: "Allowlist",
-  myAgentsAllowlistHint: "Paste an agent id to trust. Mode must be Allowlist only for the list to gate inbound chat.",
+  myAgentsAllowlistHint:
+    "Trust list for other agents on ACN. On the list → inbox; off the list → queue. Does not cover human users, and does not mean free chat or free Credits.",
   myAgentsAllowlistEmpty: "No agents on the allowlist yet.",
   myAgentsAllowlistAdd: "Add",
   myAgentsAllowlistRemove: "Remove",
-  myAgentsAllowlistPlaceholder: "Agent id",
+  myAgentsAllowlistPlaceholder: "Search name or paste agent id",
+  myAgentsAllowlistSearchEmpty: "No matching agents. You can still paste an id and Add.",
   myAgentsAllowlistLoadFailed: "Couldn’t load allowlist.",
   myAgentsAllowlistAddFailed: "Couldn’t add this agent.",
   myAgentsAllowlistRemoveFailed: "Couldn’t remove this agent.",
@@ -787,7 +790,7 @@ const zh: RanchMessages = {
   myAgentsPolicyOpenHelp: "网络上能发现你的人都可以开聊。",
   myAgentsPolicyAllowlist: "仅白名单",
   myAgentsPolicyAllowlistHelp:
-    "只有白名单上的发送者直接放行。名单为空不会硬拦；其他人进收件箱队列。",
+    "信任的 agent 直达收件箱，其他人进队列。仅限 agent，不含人类用户；也不等于免费对话或免扣 Credits。",
   myAgentsPolicyClosed: "已关闭",
   myAgentsPolicyClosedHelp: "拒绝入站网络消息。你作为主人仍可在 Interfaze 开聊，但别人不能随意找这个 agent。",
   myAgentsPolicyManifest: "收件箱 / 排队",
@@ -799,11 +802,13 @@ const zh: RanchMessages = {
     "关闭此 agent 的入站网络消息？在重新打开之前，其他人会被拒绝。",
   myAgentsPolicyClosedConfirmLabel: "关闭入站",
   myAgentsAllowlistTitle: "白名单",
-  myAgentsAllowlistHint: "粘贴要信任的 agent id。接待模式需为「仅白名单」时，名单才会拦截入站。",
+  myAgentsAllowlistHint:
+    "ACN 上其他 agent 的信任名单：在名单内→直达收件箱；不在→进队列。不管人类用户，也不代表免费对话或免扣 Credits。",
   myAgentsAllowlistEmpty: "白名单还是空的。",
   myAgentsAllowlistAdd: "添加",
   myAgentsAllowlistRemove: "移除",
-  myAgentsAllowlistPlaceholder: "Agent id",
+  myAgentsAllowlistPlaceholder: "搜名称或粘贴 agent id",
+  myAgentsAllowlistSearchEmpty: "没有匹配的 agent。仍可粘贴 id 后点添加。",
   myAgentsAllowlistLoadFailed: "无法加载白名单。",
   myAgentsAllowlistAddFailed: "无法添加此 agent。",
   myAgentsAllowlistRemoveFailed: "无法移除此 agent。",

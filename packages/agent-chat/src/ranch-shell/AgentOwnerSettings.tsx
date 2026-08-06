@@ -12,6 +12,7 @@ import {
 import { createPortal } from "react-dom";
 import {
   ChatGatewayError,
+  type ChatAgentSearchHit,
   type GatewayClient,
   type MyAgentAllowlistEntry,
   type MyAgentSummary,
@@ -420,6 +421,8 @@ export function AgentOwnerSettings({
   const [allowlistDraft, setAllowlistDraft] = useState("");
   const [allowlistActing, setAllowlistActing] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [allowlistHits, setAllowlistHits] = useState<ChatAgentSearchHit[]>([]);
+  const [allowlistSearching, setAllowlistSearching] = useState(false);
   const [confirmClosedPolicy, setConfirmClosedPolicy] = useState(false);
 
   useEffect(() => {
@@ -517,9 +520,48 @@ export function AgentOwnerSettings({
     void loadAllowlist();
   }, [showAllowlistEditor, loadAllowlist]);
 
-  const addAllowlistMember = async () => {
+  useEffect(() => {
+    if (!showAllowlistEditor) {
+      setAllowlistHits([]);
+      setAllowlistSearching(false);
+      return;
+    }
+    const q = allowlistDraft.trim();
+    if (q.length < 2) {
+      setAllowlistHits([]);
+      setAllowlistSearching(false);
+      return;
+    }
+    let cancelled = false;
+    setAllowlistSearching(true);
+    const handle = window.setTimeout(() => {
+      void client
+        .searchAgents(q, 8)
+        .then((hits) => {
+          if (cancelled) return;
+          const onList = new Set(allowlist.map((e) => e.target_id));
+          setAllowlistHits(
+            (hits ?? []).filter(
+              (h) => h.agent_id !== detail.agent_id && !onList.has(h.agent_id),
+            ),
+          );
+        })
+        .catch(() => {
+          if (!cancelled) setAllowlistHits([]);
+        })
+        .finally(() => {
+          if (!cancelled) setAllowlistSearching(false);
+        });
+    }, 280);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [allowlistDraft, showAllowlistEditor, client, detail.agent_id, allowlist]);
+
+  const addAllowlistMember = async (targetOverride?: string) => {
     if (allowlistActing) return;
-    const target = allowlistDraft.trim();
+    const target = (targetOverride ?? allowlistDraft).trim();
     if (!target || target.length > 128) {
       setAllowlistError(t.myAgentsAllowlistInvalidId);
       return;
@@ -533,6 +575,7 @@ export function AgentOwnerSettings({
     try {
       await client.addMyAgentAllowlistMember(detail.agent_id, target);
       setAllowlistDraft("");
+      setAllowlistHits([]);
       await loadAllowlist();
     } catch (e) {
       const code = e instanceof ChatGatewayError ? e.code : "";
@@ -1015,7 +1058,7 @@ export function AgentOwnerSettings({
             <p style={{ margin: "0 0 10px", fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
               {t.myAgentsAllowlistHint}
             </p>
-            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <input
                 value={allowlistDraft}
                 onChange={(e) => setAllowlistDraft(e.target.value)}
@@ -1038,6 +1081,61 @@ export function AgentOwnerSettings({
                 {allowlistActing && !removingId ? t.loading : t.myAgentsAllowlistAdd}
               </button>
             </div>
+            {allowlistDraft.trim().length >= 2 ? (
+              <div
+                style={{
+                  marginBottom: 10,
+                  borderRadius: 8,
+                  border: `1px solid ${colors.border}`,
+                  maxHeight: 140,
+                  overflow: "auto",
+                }}
+              >
+                {allowlistSearching ? (
+                  <p style={{ margin: 0, padding: "8px 10px", fontSize: 12, color: colors.muted }}>
+                    {t.loading}
+                  </p>
+                ) : allowlistHits.length === 0 ? (
+                  <p style={{ margin: 0, padding: "8px 10px", fontSize: 12, color: colors.muted }}>
+                    {t.myAgentsAllowlistSearchEmpty}
+                  </p>
+                ) : (
+                  allowlistHits.map((hit) => (
+                    <button
+                      key={hit.agent_id}
+                      type="button"
+                      disabled={busy || allowlistActing}
+                      onClick={() => void addAllowlistMember(hit.agent_id)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "8px 10px",
+                        border: "none",
+                        borderBottom: `1px solid ${colors.border}`,
+                        background: "transparent",
+                        color: colors.text,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div style={{ fontSize: 12, fontWeight: 600 }}>
+                        {hit.name?.trim() || hit.agent_id}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: colors.muted,
+                          marginTop: 2,
+                          wordBreak: "break-all",
+                        }}
+                      >
+                        {hit.agent_id}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : null}
             {allowlistError ? (
               <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>
                 {allowlistError}
