@@ -110,6 +110,35 @@ export type MyAgentSpendPolicyUpdate = {
   reserve_floor?: number;
 };
 
+export type SpendRequestStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "expired"
+  | "cancelled";
+
+export type MyAgentSpendRequest = {
+  request_id: string;
+  agent_id: string;
+  amount: number;
+  description: string;
+  status: SpendRequestStatus | string;
+  created_at: string | null;
+  expires_at: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  reject_reason: string | null;
+};
+
+export type MyAgentSpendRequestList = {
+  requests: MyAgentSpendRequest[];
+};
+
+export type MyAgentSpendApproveResponse = {
+  request: MyAgentSpendRequest;
+  wallet: MyAgentWallet;
+};
+
 /** Owned ACN agent row from GET /api/chat/my-agents (management + directory mine). */
 export type MyAgentSummary = {
   agent_id: string;
@@ -208,6 +237,20 @@ export type GatewayClient = {
     agentId: string,
     patch: MyAgentSpendPolicyUpdate,
   ) => Promise<MyAgentSpendPolicy>;
+  listMyAgentSpendRequests: (
+    agentId: string,
+    status?: SpendRequestStatus,
+    limit?: number,
+  ) => Promise<MyAgentSpendRequestList>;
+  approveMyAgentSpendRequest: (
+    agentId: string,
+    requestId: string,
+  ) => Promise<MyAgentSpendApproveResponse>;
+  rejectMyAgentSpendRequest: (
+    agentId: string,
+    requestId: string,
+    reason?: string,
+  ) => Promise<MyAgentSpendRequest>;
   addParticipant: (chatId: string, agentId: string) => Promise<ChatParticipant>;
   removeParticipant: (chatId: string, participantId: string) => Promise<void>;
   updateChat: (chatId: string, patch: { title?: string; description?: string }) => Promise<ChatSummary>;
@@ -369,6 +412,27 @@ export function createGatewayClient(
         {
           method: "PATCH",
           body: JSON.stringify(patch),
+        },
+      ),
+    listMyAgentSpendRequests: (agentId, status, limit = 50) => {
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      if (status) params.set("status", status);
+      return request<MyAgentSpendRequestList>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/wallet/spend-requests?${params}`,
+      );
+    },
+    approveMyAgentSpendRequest: (agentId, requestId) =>
+      request<MyAgentSpendApproveResponse>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/wallet/spend-requests/${encodeURIComponent(requestId)}/approve`,
+        { method: "POST", body: "{}" },
+      ),
+    rejectMyAgentSpendRequest: (agentId, requestId, reason) =>
+      request<MyAgentSpendRequest>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/wallet/spend-requests/${encodeURIComponent(requestId)}/reject`,
+        {
+          method: "POST",
+          body: JSON.stringify(reason ? { reason } : {}),
         },
       ),
     listMessages: (chatId) =>

@@ -5,6 +5,7 @@ import {
   ChatGatewayError,
   type GatewayClient,
   type MyAgentSpendPolicy,
+  type MyAgentSpendRequest,
   type MyAgentWallet,
   type MyAgentWalletTx,
   type SpendAutonomy,
@@ -125,7 +126,23 @@ export function AgentOwnerWallet({
   const [policyLoading, setPolicyLoading] = useState(false);
   const [policyError, setPolicyError] = useState<string | null>(null);
 
+  const [showApprovals, setShowApprovals] = useState(false);
+  const [approvals, setApprovals] = useState<MyAgentSpendRequest[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [approvalsLoading, setApprovalsLoading] = useState(false);
+  const [approvalsError, setApprovalsError] = useState<string | null>(null);
+  const [actioningId, setActioningId] = useState<string | null>(null);
+
   const rechargeUrl = `${agentPlanetBaseUrl.replace(/\/+$/, "")}/wallet`;
+
+  const reloadPendingCount = useCallback(async () => {
+    try {
+      const data = await client.listMyAgentSpendRequests(agentId, "pending", 50);
+      setPendingCount((data.requests ?? []).length);
+    } catch {
+      /* badge is optional; don't block wallet */
+    }
+  }, [client, agentId]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -154,7 +171,8 @@ export function AgentOwnerWallet({
     } finally {
       setLoading(false);
     }
-  }, [client, agentId, t.walletLoadFailed]);
+    void reloadPendingCount();
+  }, [client, agentId, t.walletLoadFailed, reloadPendingCount]);
 
   useEffect(() => {
     void reload();
@@ -186,6 +204,60 @@ export function AgentOwnerWallet({
       setPolicyError(t.spendPolicyLoadFailed);
     } finally {
       setPolicyLoading(false);
+    }
+  };
+
+  const loadApprovals = async () => {
+    setApprovalsLoading(true);
+    setApprovalsError(null);
+    try {
+      const data = await client.listMyAgentSpendRequests(agentId, "pending", 50);
+      const rows = data.requests ?? [];
+      setApprovals(rows);
+      setPendingCount(rows.length);
+    } catch {
+      setApprovals([]);
+      setApprovalsError(t.spendApprovalsLoadFailed);
+    } finally {
+      setApprovalsLoading(false);
+    }
+  };
+
+  const openApprovals = () => {
+    setShowApprovals(true);
+    void loadApprovals();
+  };
+
+  const handleApprove = async (requestId: string) => {
+    if (actioningId) return;
+    setActioningId(requestId);
+    setApprovalsError(null);
+    try {
+      const res = await client.approveMyAgentSpendRequest(agentId, requestId);
+      setWallet(res.wallet);
+      setFlash(t.spendApprovalsApproveOk);
+      await loadApprovals();
+      const list = await client.listMyAgentWalletTransactions(agentId, 1, 15);
+      setTxs(list.transactions ?? []);
+    } catch {
+      setApprovalsError(t.spendApprovalsActionFailed);
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleReject = async (requestId: string) => {
+    if (actioningId) return;
+    setActioningId(requestId);
+    setApprovalsError(null);
+    try {
+      await client.rejectMyAgentSpendRequest(agentId, requestId);
+      setFlash(t.spendApprovalsRejectOk);
+      await loadApprovals();
+    } catch {
+      setApprovalsError(t.spendApprovalsActionFailed);
+    } finally {
+      setActioningId(null);
     }
   };
 
@@ -363,7 +435,43 @@ export function AgentOwnerWallet({
                 </span>
               </p>
             ) : null}
-            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button
+              type="button"
+              style={{
+                ...btnGhost,
+                width: "100%",
+                marginTop: 12,
+                fontSize: 12,
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+              disabled={busy || acting}
+              onClick={openApprovals}
+            >
+              {t.spendApprovals}
+              {pendingCount > 0 ? (
+                <span
+                  style={{
+                    minWidth: 18,
+                    height: 18,
+                    padding: "0 5px",
+                    borderRadius: 9,
+                    background: colors.accent,
+                    color: "#fff",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    lineHeight: "18px",
+                    textAlign: "center",
+                  }}
+                >
+                  {pendingCount > 99 ? "99+" : pendingCount}
+                </span>
+              ) : null}
+            </button>
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <button
                 type="button"
                 style={{ ...btnPrimary, flex: 1, fontWeight: 600 }}
@@ -785,6 +893,143 @@ export function AgentOwnerWallet({
                 </div>
               </>
             )}
+          </div>
+        </div>
+      ) : null}
+
+      {showApprovals ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 80,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+            overflow: "auto",
+          }}
+          onClick={() => {
+            if (!actioningId) setShowApprovals(false);
+          }}
+        >
+          <div
+            style={{
+              width: "min(420px, 100%)",
+              background: colors.panel,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 12,
+              padding: 20,
+              margin: "auto",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 650, color: colors.text }}>
+              {t.spendApprovalsTitle}
+            </h3>
+            <p style={{ margin: "0 0 14px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+              {t.spendApprovalsHint}
+            </p>
+
+            {approvalsError ? (
+              <p style={{ margin: "0 0 12px", fontSize: 12, color: colors.danger }}>
+                {approvalsError}
+              </p>
+            ) : null}
+
+            {approvalsLoading ? (
+              <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
+            ) : approvals.length === 0 ? (
+              <p style={{ color: colors.muted, fontSize: 13, margin: "12px 0 0" }}>
+                {t.spendApprovalsEmpty}
+              </p>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                  maxHeight: "50vh",
+                  overflow: "auto",
+                }}
+              >
+                {approvals.map((r) => (
+                  <div
+                    key={r.request_id}
+                    style={{
+                      padding: "12px 12px",
+                      borderRadius: 8,
+                      border: `1px solid ${colors.border}`,
+                      background: colors.bg,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        marginBottom: 4,
+                      }}
+                    >
+                      <span style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>
+                        {fmtCredits(r.amount)} Credits
+                      </span>
+                      <span style={{ fontSize: 11, color: colors.muted, flexShrink: 0 }}>
+                        {fmtTxTime(r.created_at)}
+                      </span>
+                    </div>
+                    <p
+                      style={{
+                        margin: "0 0 8px",
+                        fontSize: 12,
+                        color: colors.muted,
+                        lineHeight: 1.4,
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {r.description || "—"}
+                    </p>
+                    {r.expires_at ? (
+                      <p style={{ margin: "0 0 10px", fontSize: 11, color: colors.muted }}>
+                        {t.spendApprovalsExpires(fmtTxTime(r.expires_at))}
+                      </p>
+                    ) : null}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        type="button"
+                        style={{ ...btnPrimary, flex: 1, fontSize: 12, fontWeight: 600 }}
+                        disabled={actioningId === r.request_id}
+                        onClick={() => void handleApprove(r.request_id)}
+                      >
+                        {actioningId === r.request_id ? t.loading : t.spendApprovalsApprove}
+                      </button>
+                      <button
+                        type="button"
+                        style={{ ...btnGhost, flex: 1, fontSize: 12, fontWeight: 600 }}
+                        disabled={actioningId === r.request_id}
+                        onClick={() => void handleReject(r.request_id)}
+                      >
+                        {t.spendApprovalsReject}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+              <button
+                type="button"
+                style={btnGhost}
+                disabled={!!actioningId}
+                onClick={() => setShowApprovals(false)}
+              >
+                {t.cancel}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

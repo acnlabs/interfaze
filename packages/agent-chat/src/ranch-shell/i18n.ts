@@ -266,6 +266,17 @@ export type RanchMessages = {
   spendWindowRemaining: string;
   spendWindowUsage: (spent: string, remaining: string, hours: string) => string;
   spendCurrent: string;
+  spendApprovals: string;
+  spendApprovalsTitle: string;
+  spendApprovalsHint: string;
+  spendApprovalsEmpty: string;
+  spendApprovalsLoadFailed: string;
+  spendApprovalsApprove: string;
+  spendApprovalsReject: string;
+  spendApprovalsApproveOk: string;
+  spendApprovalsRejectOk: string;
+  spendApprovalsActionFailed: string;
+  spendApprovalsExpires: (date: string) => string;
   yes: string;
   no: string;
   unknown: string;
@@ -553,6 +564,18 @@ const en: RanchMessages = {
   spendWindowUsage: (spent, remaining, hours) =>
     `Last ${hours}h — spent ${spent} · remaining ${remaining}`,
   spendCurrent: "Current",
+  spendApprovals: "Approvals",
+  spendApprovalsTitle: "Spend approvals",
+  spendApprovalsHint:
+    "Requests that exceeded this agent’s spend policy. Approving debits Credits immediately.",
+  spendApprovalsEmpty: "No pending spend requests.",
+  spendApprovalsLoadFailed: "Couldn’t load spend approvals.",
+  spendApprovalsApprove: "Approve",
+  spendApprovalsReject: "Reject",
+  spendApprovalsApproveOk: "Spend approved",
+  spendApprovalsRejectOk: "Spend rejected",
+  spendApprovalsActionFailed: "Couldn’t update this spend request.",
+  spendApprovalsExpires: (date) => `Expires ${date}`,
   yes: "Yes",
   no: "No",
   unknown: "Unknown",
@@ -828,6 +851,18 @@ const zh: RanchMessages = {
   spendWindowUsage: (spent, remaining, hours) =>
     `近 ${hours} 小时 — 已花 ${spent} · 剩余 ${remaining}`,
   spendCurrent: "当前",
+  spendApprovals: "审批",
+  spendApprovalsTitle: "消费审批",
+  spendApprovalsHint:
+    "超过消费授权额度的支出申请。批准后会立即从 Credits 扣款。",
+  spendApprovalsEmpty: "暂无待审批的支出申请。",
+  spendApprovalsLoadFailed: "无法加载消费审批。",
+  spendApprovalsApprove: "批准",
+  spendApprovalsReject: "拒绝",
+  spendApprovalsApproveOk: "已批准支出",
+  spendApprovalsRejectOk: "已拒绝支出",
+  spendApprovalsActionFailed: "无法处理该支出申请。",
+  spendApprovalsExpires: (date) => `截止 ${date}`,
   yes: "是",
   no: "否",
   unknown: "未知",
