@@ -1151,6 +1151,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     onReauth,
     connectGuideUrl,
     agentPlanetBaseUrl,
+    interfazeBaseUrl,
     locale: localeProp,
     onLocaleChange,
     onOwnedAgentUpdated,
@@ -2670,6 +2671,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             client={client}
             connectGuideUrl={connectGuideUrl}
             agentPlanetBaseUrl={agentPlanetBaseUrl}
+            interfazeBaseUrl={interfazeBaseUrl}
             locale={uiLocale}
             messages={t}
             busy={busy}
@@ -3949,6 +3951,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           detail={ownedAgentDetail}
                           messages={t}
                           agentPlanetBaseUrl={agentPlanetBaseUrl}
+                          interfazeBaseUrl={interfazeBaseUrl}
                           connectGuideUrl={connectGuideUrl}
                           busy={busy}
                           onUpdated={applyOwnedAgentProfileUpdate}

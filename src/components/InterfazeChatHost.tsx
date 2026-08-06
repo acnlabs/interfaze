@@ -171,6 +171,12 @@ export default function InterfazeChatHost() {
       title="Interfaze"
       connectGuideUrl="https://github.com/acnlabs/interfaze/blob/main/CONNECT.md"
       agentPlanetBaseUrl="https://agentplanet.org"
+      interfazeBaseUrl={
+        (process.env.NEXT_PUBLIC_APP_ORIGIN || "https://interfaze.io").replace(
+          /\/+$/,
+          "",
+        )
+      }
       account={
         isAuthenticated && user
           ? {

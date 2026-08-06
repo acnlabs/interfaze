@@ -15,8 +15,10 @@ import { btnGhost, btnPrimary, colors } from "./styles";
 type Props = {
   client: GatewayClient;
   connectGuideUrl?: string;
-  /** AgentPlanet origin for gift deep-link. Default https://agentplanet.org */
+  /** AgentPlanet origin for wallet recharge deep-link. Default https://agentplanet.org */
   agentPlanetBaseUrl?: string;
+  /** Public Interfaze origin for gift accept links. Default https://interfaze.io */
+  interfazeBaseUrl?: string;
   locale: RanchLocale;
   messages: RanchMessages;
   busy?: boolean;
@@ -46,6 +48,7 @@ export function MyAgentsPanel({
   client,
   connectGuideUrl,
   agentPlanetBaseUrl = "https://agentplanet.org",
+  interfazeBaseUrl = "https://interfaze.io",
   locale,
   messages: t,
   busy,
@@ -198,6 +201,7 @@ export function MyAgentsPanel({
                 detail={detail}
                 messages={t}
                 agentPlanetBaseUrl={agentPlanetBaseUrl}
+                interfazeBaseUrl={interfazeBaseUrl}
                 connectGuideUrl={connectGuideUrl}
                 busy={busy}
                 onUpdated={(row) => {

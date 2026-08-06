@@ -103,10 +103,15 @@ export type RanchChatShellProps = {
    */
   connectGuideUrl?: string;
   /**
-   * AgentPlanet origin for gift/manage deep-links (v0 leaves Interfaze).
+   * AgentPlanet origin for wallet recharge / external manage deep-links.
    * Default: https://agentplanet.org
    */
   agentPlanetBaseUrl?: string;
+  /**
+   * Public Interfaze origin used when building gift accept links.
+   * Default: https://interfaze.io (override for local / preview hosts).
+   */
+  interfazeBaseUrl?: string;
   /**
    * UI locale (BCP-47). Supported: `en` (default), `zh`.
    * Other values fall back to English.

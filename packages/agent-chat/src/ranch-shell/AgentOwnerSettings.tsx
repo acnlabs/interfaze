@@ -340,6 +340,8 @@ type Props = {
   detail: MyAgentSummary;
   messages: RanchMessages;
   agentPlanetBaseUrl?: string;
+  /** Public host for gift accept links. Default https://interfaze.io */
+  interfazeBaseUrl?: string;
   connectGuideUrl?: string;
   busy?: boolean;
   /** When false, hide receiving-messages section (Info already shows a summary). */
@@ -361,6 +363,7 @@ export function AgentOwnerSettings({
   messages: t,
   // Kept for call-site compatibility (wallet / external deep-links live elsewhere).
   agentPlanetBaseUrl: _agentPlanetBaseUrl = "https://agentplanet.org",
+  interfazeBaseUrl = "https://interfaze.io",
   connectGuideUrl,
   busy,
   showConnectSection = true,
@@ -770,8 +773,13 @@ export function AgentOwnerSettings({
     void client
       .createMyAgentTransferInvite(detail.agent_id)
       .then((res) => {
+        const configured = interfazeBaseUrl.replace(/\/+$/, "");
+        // Prefer host-configured public origin; fall back to current origin for local.
         const origin =
-          typeof window !== "undefined" ? window.location.origin.replace(/\/+$/, "") : "";
+          configured ||
+          (typeof window !== "undefined"
+            ? window.location.origin.replace(/\/+$/, "")
+            : "https://interfaze.io");
         const path = res.share_url.startsWith("/")
           ? res.share_url
           : `/${res.share_url}`;
