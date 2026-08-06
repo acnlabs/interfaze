@@ -359,7 +359,8 @@ export function AgentOwnerSettings({
   client,
   detail,
   messages: t,
-  agentPlanetBaseUrl = "https://agentplanet.org",
+  // Kept for call-site compatibility (wallet / external deep-links live elsewhere).
+  agentPlanetBaseUrl: _agentPlanetBaseUrl = "https://agentplanet.org",
   connectGuideUrl,
   busy,
   showConnectSection = true,
@@ -376,6 +377,11 @@ export function AgentOwnerSettings({
   const [keyCopied, setKeyCopied] = useState(false);
   const [rotateError, setRotateError] = useState<string | null>(null);
   const [dangerError, setDangerError] = useState<string | null>(null);
+  const [giftOpen, setGiftOpen] = useState(false);
+  const [giftUrl, setGiftUrl] = useState<string | null>(null);
+  const [giftBusy, setGiftBusy] = useState(false);
+  const [giftCopied, setGiftCopied] = useState(false);
+  const [giftError, setGiftError] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState(detail.name || "");
   const [descDraft, setDescDraft] = useState(detail.description || "");
   const [tagsDraft, setTagsDraft] = useState(formatTagsInput(detail.tags));
@@ -449,7 +455,13 @@ export function AgentOwnerSettings({
     setConfirmClosedPolicy(false);
   }, [detail.agent_id, detail.policy_mode]);
 
-  const giftUrl = `${agentPlanetBaseUrl.replace(/\/+$/, "")}/agents/${encodeURIComponent(detail.agent_id)}`;
+  useEffect(() => {
+    setGiftOpen(false);
+    setGiftUrl(null);
+    setGiftBusy(false);
+    setGiftCopied(false);
+    setGiftError(null);
+  }, [detail.agent_id]);
 
   const nameTrim = nameDraft.trim();
   const descTrim = descDraft.trim();
@@ -747,7 +759,59 @@ export function AgentOwnerSettings({
       .finally(() => setRotating(false));
   };
 
-  const dangerBusy = deleting || rotating || saving || !!busy;
+  const dangerBusy = deleting || rotating || giftBusy || saving || !!busy;
+
+  const openGift = () => {
+    setGiftOpen(true);
+    setGiftError(null);
+    setGiftCopied(false);
+    if (giftUrl || giftBusy) return;
+    setGiftBusy(true);
+    void client
+      .createMyAgentTransferInvite(detail.agent_id)
+      .then((res) => {
+        const origin =
+          typeof window !== "undefined" ? window.location.origin.replace(/\/+$/, "") : "";
+        const path = res.share_url.startsWith("/")
+          ? res.share_url
+          : `/${res.share_url}`;
+        setGiftUrl(`${origin}${path}`);
+      })
+      .catch(() => {
+        setGiftError(t.myAgentsGiftFailed);
+      })
+      .finally(() => setGiftBusy(false));
+  };
+
+  const closeGift = () => {
+    if (giftBusy) return;
+    setGiftOpen(false);
+  };
+
+  const cancelGift = () => {
+    setGiftBusy(true);
+    setGiftError(null);
+    void client
+      .cancelMyAgentTransferInvite(detail.agent_id)
+      .catch(() => {
+        /* best-effort revoke; close regardless */
+      })
+      .finally(() => {
+        setGiftUrl(null);
+        setGiftBusy(false);
+        setGiftOpen(false);
+        setGiftCopied(false);
+      });
+  };
+
+  const copyGiftLink = () => {
+    if (!giftUrl) return;
+    void copyText(giftUrl).then((ok) => {
+      if (!ok) return;
+      setGiftCopied(true);
+      window.setTimeout(() => setGiftCopied(false), 2000);
+    });
+  };
 
   const deleteConfirmOk = (() => {
     const typed = deleteTyped.trim();
@@ -1281,25 +1345,15 @@ export function AgentOwnerSettings({
         >
           {t.myAgentsDelete}
         </button>
-        {/* External gift/transfer — last, away from in-shell danger ops */}
-        <a
-          href={giftUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            ...btnGhost,
-            display: "block",
-            width: "100%",
-            textAlign: "center",
-            textDecoration: "none",
-            boxSizing: "border-box",
-          }}
+        {/* Gift / transfer ownership — last, away from delete */}
+        <button
+          type="button"
+          style={{ ...btnGhost, width: "100%" }}
+          disabled={dangerBusy}
+          onClick={openGift}
         >
           {t.myAgentsGift}
-          <span style={{ color: colors.muted, marginLeft: 6, fontSize: 11 }}>
-            ({t.myAgentsGiftExternal})
-          </span>
-        </a>
+        </button>
       </div>
 
       {confirmRelay ? (
@@ -1410,6 +1464,115 @@ export function AgentOwnerSettings({
                 {saving ? t.loading : t.myAgentsPolicyClosedConfirmLabel}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {giftOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={t.myAgentsGiftTitle}
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+          onClick={closeGift}
+        >
+          <div
+            style={{
+              width: "min(360px, 100%)",
+              background: colors.panel,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 12,
+              padding: 20,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 12,
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>
+                {t.myAgentsGiftTitle}
+              </h3>
+              <button
+                type="button"
+                style={{ ...btnGhost, padding: "4px 10px" }}
+                disabled={giftBusy}
+                onClick={closeGift}
+              >
+                ×
+              </button>
+            </div>
+            {giftBusy && !giftUrl ? (
+              <p style={{ margin: "0 0 12px", fontSize: 13, color: colors.muted }}>
+                {t.myAgentsGiftGenerating}
+              </p>
+            ) : giftError ? (
+              <p style={{ margin: "0 0 12px", fontSize: 13, color: colors.danger }}>
+                {giftError}
+              </p>
+            ) : giftUrl ? (
+              <>
+                <p
+                  style={{
+                    margin: "0 0 12px",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    color: colors.muted,
+                  }}
+                >
+                  {t.myAgentsGiftHint}
+                </p>
+                <div
+                  style={{
+                    ...inputStyle,
+                    marginBottom: 12,
+                    wordBreak: "break-all",
+                    fontSize: 12,
+                    lineHeight: 1.45,
+                    userSelect: "all",
+                  }}
+                >
+                  {giftUrl}
+                </div>
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    style={btnGhost}
+                    disabled={giftBusy}
+                    onClick={cancelGift}
+                  >
+                    {t.myAgentsGiftCancel}
+                  </button>
+                  <button
+                    type="button"
+                    style={btnPrimary}
+                    disabled={giftBusy}
+                    onClick={copyGiftLink}
+                  >
+                    {giftCopied ? t.myAgentsGiftCopied : t.myAgentsGiftCopy}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button type="button" style={btnGhost} onClick={closeGift}>
+                  {t.myAgentsGiftClose}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       ) : null}

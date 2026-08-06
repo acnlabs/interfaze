@@ -280,6 +280,14 @@ export type GatewayClient = {
     agentId: string,
     targetId: string,
   ) => Promise<MyAgentAllowlistAction>;
+  /** Create (or return pending) gift invite; share_url is relative. */
+  createMyAgentTransferInvite: (agentId: string) => Promise<{
+    invite_token: string;
+    expires_at: string;
+    share_url: string;
+  }>;
+  /** Cancel pending gift invite for an owned agent. */
+  cancelMyAgentTransferInvite: (agentId: string) => Promise<{ success: boolean }>;
   addParticipant: (chatId: string, agentId: string) => Promise<ChatParticipant>;
   removeParticipant: (chatId: string, participantId: string) => Promise<void>;
   updateChat: (chatId: string, patch: { title?: string; description?: string }) => Promise<ChatSummary>;
@@ -479,6 +487,20 @@ export function createGatewayClient(
     removeMyAgentAllowlistMember: (agentId, targetId) =>
       request<MyAgentAllowlistAction>(
         `/api/chat/my-agents/${encodeURIComponent(agentId)}/allowlist/${encodeURIComponent(targetId)}`,
+        { method: "DELETE" },
+      ),
+    createMyAgentTransferInvite: (agentId) =>
+      request<{
+        invite_token: string;
+        expires_at: string;
+        share_url: string;
+      }>(`/api/chat/my-agents/${encodeURIComponent(agentId)}/transfer-invite`, {
+        method: "POST",
+        body: "{}",
+      }),
+    cancelMyAgentTransferInvite: (agentId) =>
+      request<{ success: boolean }>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/transfer-invite`,
         { method: "DELETE" },
       ),
     listMessages: (chatId) =>

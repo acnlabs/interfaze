@@ -1,18 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
-import { useRouter } from "next/navigation";
 
+/**
+ * Auth0 redirect landing. Navigation after login is handled by
+ * Auth0Provider ``onRedirectCallback`` (honors ``appState.returnTo``).
+ */
 export default function AuthCallbackPage() {
-  const { isLoading, isAuthenticated, error } = useAuth0();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (isLoading) return;
-    if (error) return;
-    if (isAuthenticated) router.replace("/");
-  }, [isLoading, isAuthenticated, error, router]);
+  const { isLoading, error } = useAuth0();
 
   if (error) {
     return (
@@ -26,7 +21,7 @@ export default function AuthCallbackPage() {
 
   return (
     <main style={{ padding: 48, color: "#a1a1aa" }}>
-      Completing sign-in…
+      {isLoading ? "Completing sign-in…" : "Redirecting…"}
     </main>
   );
 }

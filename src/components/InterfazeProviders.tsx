@@ -1,6 +1,6 @@
 "use client";
 
-import { Auth0Provider } from "@auth0/auth0-react";
+import { Auth0Provider, type AppState } from "@auth0/auth0-react";
 import type { ReactNode } from "react";
 import {
   AUTH0_AUDIENCE,
@@ -9,6 +9,13 @@ import {
   AUTH0_SCOPE,
   isAuth0Configured,
 } from "@/lib/auth0";
+
+function onRedirectCallback(appState?: AppState) {
+  const raw = typeof appState?.returnTo === "string" ? appState.returnTo : "/";
+  // Only same-origin relative paths — never open-redirect off-site.
+  const returnTo = raw.startsWith("/") && !raw.startsWith("//") ? raw : "/";
+  window.location.replace(returnTo);
+}
 
 export default function InterfazeProviders({ children }: { children: ReactNode }) {
   if (!isAuth0Configured()) {
@@ -35,6 +42,7 @@ export default function InterfazeProviders({ children }: { children: ReactNode }
       useRefreshTokens
       // If refresh token is missing/expired, fall back to silent iframe auth.
       useRefreshTokensFallback
+      onRedirectCallback={onRedirectCallback}
     >
       {children}
     </Auth0Provider>

@@ -224,7 +224,14 @@ export type RanchMessages = {
   myAgentsRotateDismiss: string;
   myAgentsRotateFailed: string;
   myAgentsGift: string;
-  myAgentsGiftExternal: string;
+  myAgentsGiftTitle: string;
+  myAgentsGiftHint: string;
+  myAgentsGiftGenerating: string;
+  myAgentsGiftCopy: string;
+  myAgentsGiftCopied: string;
+  myAgentsGiftCancel: string;
+  myAgentsGiftClose: string;
+  myAgentsGiftFailed: string;
   myAgentsDelete: string;
   myAgentsDeleteConfirm: string;
   myAgentsDeleteConfirmLabel: string;
@@ -531,8 +538,16 @@ const en: RanchMessages = {
   myAgentsRotateCopied: "Copied",
   myAgentsRotateDismiss: "I’ve saved it",
   myAgentsRotateFailed: "Couldn’t rotate the key.",
-  myAgentsGift: "Gift on AgentPlanet",
-  myAgentsGiftExternal: "Leaves Interfaze",
+  myAgentsGift: "Gift agent",
+  myAgentsGiftTitle: "Gift this agent",
+  myAgentsGiftHint:
+    "Share this link. The recipient must sign in to accept ownership. You stay owner until they accept.",
+  myAgentsGiftGenerating: "Creating invite…",
+  myAgentsGiftCopy: "Copy link",
+  myAgentsGiftCopied: "Copied",
+  myAgentsGiftCancel: "Cancel invite",
+  myAgentsGiftClose: "Done",
+  myAgentsGiftFailed: "Couldn’t create a gift invite.",
   myAgentsDelete: "Delete agent",
   myAgentsDeleteConfirm:
     "Delete this agent permanently? This cannot be undone. The ACN registry entry is removed; chats on Interfaze are not cleared automatically.",
@@ -833,8 +848,16 @@ const zh: RanchMessages = {
   myAgentsRotateCopied: "已复制",
   myAgentsRotateDismiss: "我已保存",
   myAgentsRotateFailed: "无法轮换 key。",
-  myAgentsGift: "在 AgentPlanet 赠送",
-  myAgentsGiftExternal: "将离开 Interfaze",
+  myAgentsGift: "赠送 Agent",
+  myAgentsGiftTitle: "赠送此 Agent",
+  myAgentsGiftHint:
+    "把链接发给对方。对方需登录后才能接受所有权；在对方接受前你仍是主人。",
+  myAgentsGiftGenerating: "正在生成邀请…",
+  myAgentsGiftCopy: "复制链接",
+  myAgentsGiftCopied: "已复制",
+  myAgentsGiftCancel: "取消邀请",
+  myAgentsGiftClose: "完成",
+  myAgentsGiftFailed: "无法创建赠送邀请。",
   myAgentsDelete: "删除 Agent",
   myAgentsDeleteConfirm:
     "确定永久删除此 agent？此操作不可撤销。ACN 注册表记录会被移除；Interfaze 上的聊天记录不会自动清除。",
