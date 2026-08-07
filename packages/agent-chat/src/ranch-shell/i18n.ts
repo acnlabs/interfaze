@@ -135,9 +135,24 @@ export type RanchMessages = {
   reLogin: string;
   /** Manage owned agents (ACN registry claim layer — not runtime processes). */
   myAgentsManage: string;
-  /** Account menu: Subnet management (v0 placeholder). */
+  /** Account menu: Manage hub (owned / joined). */
+  accountManage: string;
+  /** Account menu: Discover hub (network directory). */
+  accountDiscover: string;
+  hubAgents: string;
+  hubManageSection: string;
+  hubDiscoverSection: string;
+  hubManageIntro: string;
+  hubDiscoverIntro: string;
+  hubAgentsManageHint: string;
+  hubAgentsDiscoverHint: string;
+  hubSubnetsManageHint: string;
+  hubSubnetsDiscoverHint: string;
+  hubOrgsManageHint: string;
+  hubOrgsDiscoverHint: string;
+  /** Account menu / hub: Subnet label. */
   networkSubnets: string;
-  /** Account menu: Org management (v0 placeholder). */
+  /** Account menu / hub: Org label. */
   networkOrgs: string;
   /** Badge / trailing label for unavailable features. */
   comingSoon: string;
@@ -441,6 +456,19 @@ const en: RanchMessages = {
   searchAgents: "Search agents…",
   discoverAgents: "Discoverable",
   myAgentsManage: "Manage agents",
+  accountManage: "Manage",
+  accountDiscover: "Discover",
+  hubAgents: "Agents",
+  hubManageSection: "Yours",
+  hubDiscoverSection: "On the network",
+  hubManageIntro: "Things you own or have joined — not the public directory.",
+  hubDiscoverIntro: "Find agents and (later) public subnets and orgs on ACN.",
+  hubAgentsManageHint: "Claimed ACN identities you own",
+  hubAgentsDiscoverHint: "Search discoverable agents and start a chat",
+  hubSubnetsManageHint: "Subnets you own or participate in",
+  hubSubnetsDiscoverHint: "Public subnets you can explore",
+  hubOrgsManageHint: "Orgs you created or joined",
+  hubOrgsDiscoverHint: "Public orgs on the network",
   networkSubnets: "Subnets",
   networkOrgs: "Orgs",
   comingSoon: "Coming soon",
@@ -758,6 +786,19 @@ const zh: RanchMessages = {
   account: "账户",
   language: "语言",
   myAgentsManage: "管理 Agents",
+  accountManage: "管理",
+  accountDiscover: "发现",
+  hubAgents: "Agents",
+  hubManageSection: "我的",
+  hubDiscoverSection: "网络上",
+  hubManageIntro: "你拥有或已加入的——不是公开目录。",
+  hubDiscoverIntro: "在 ACN 上发现可聊的 agent，以及（后续）公开子网与组织。",
+  hubAgentsManageHint: "你已认领的 ACN 身份",
+  hubAgentsDiscoverHint: "搜索可发现的 agent 并开聊",
+  hubSubnetsManageHint: "你拥有或参与的子网",
+  hubSubnetsDiscoverHint: "可浏览的公开子网",
+  hubOrgsManageHint: "你创建或加入的组织",
+  hubOrgsDiscoverHint: "网络上的公开组织",
   networkSubnets: "子网",
   networkOrgs: "组织",
   comingSoon: "即将支持",

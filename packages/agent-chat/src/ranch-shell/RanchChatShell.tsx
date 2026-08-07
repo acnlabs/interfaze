@@ -26,6 +26,7 @@ import {
   FieldHint,
 } from "./AgentOwnerSettings";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
+import { AccountHubPanel, type AccountHubKind } from "./AccountHubPanel";
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
 import { CONNECT_PROMPTS, copyText } from "./connectPrompt";
@@ -958,12 +959,14 @@ function LanguageSwitcher({
 function AccountFooter({
   account,
   onLogout,
-  onManageAgents,
+  onManage,
+  onDiscover,
   t,
 }: {
   account: RanchChatAccount;
   onLogout?: () => void;
-  onManageAgents?: () => void;
+  onManage?: () => void;
+  onDiscover?: () => void;
   t: RanchMessages;
 }) {
   const label = (account.name || account.email || t.account).trim();
@@ -1060,14 +1063,14 @@ function AccountFooter({
             overflow: "hidden",
           }}
         >
-          {onManageAgents ? (
+          {onManage ? (
             <button
               type="button"
               role="menuitem"
               style={menuItemStyle}
               onClick={() => {
                 setMenuOpen(false);
-                onManageAgents();
+                onManage();
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = colors.hover;
@@ -1079,52 +1082,32 @@ function AccountFooter({
               <span aria-hidden style={{ width: 16, textAlign: "center", color: colors.muted }}>
                 ◇
               </span>
-              {t.myAgentsManage}
+              {t.accountManage}
             </button>
           ) : null}
-          {onManageAgents ? (
-            <>
-              <button
-                type="button"
-                role="menuitem"
-                disabled
-                aria-disabled="true"
-                title={t.comingSoon}
-                style={{
-                  ...menuItemStyle,
-                  color: colors.muted,
-                  cursor: "not-allowed",
-                  opacity: 0.75,
-                }}
-              >
-                <span aria-hidden style={{ width: 16, textAlign: "center" }}>
-                  ⊞
-                </span>
-                <span style={{ flex: 1 }}>{t.networkSubnets}</span>
-                <span style={{ fontSize: 11, color: colors.muted }}>{t.comingSoon}</span>
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                disabled
-                aria-disabled="true"
-                title={t.comingSoon}
-                style={{
-                  ...menuItemStyle,
-                  color: colors.muted,
-                  cursor: "not-allowed",
-                  opacity: 0.75,
-                }}
-              >
-                <span aria-hidden style={{ width: 16, textAlign: "center" }}>
-                  ◎
-                </span>
-                <span style={{ flex: 1 }}>{t.networkOrgs}</span>
-                <span style={{ fontSize: 11, color: colors.muted }}>{t.comingSoon}</span>
-              </button>
-            </>
+          {onDiscover ? (
+            <button
+              type="button"
+              role="menuitem"
+              style={menuItemStyle}
+              onClick={() => {
+                setMenuOpen(false);
+                onDiscover();
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = colors.hover;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
+            >
+              <span aria-hidden style={{ width: 16, textAlign: "center", color: colors.muted }}>
+                ◎
+              </span>
+              {t.accountDiscover}
+            </button>
           ) : null}
-          {onManageAgents && onLogout ? (
+          {(onManage || onDiscover) && onLogout ? (
             <div style={{ height: 1, background: colors.border, margin: "2px 0" }} />
           ) : null}
           {onLogout ? (
@@ -1355,6 +1338,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [agentStatuses, setAgentStatuses] = useState<Record<string, string>>({});
   /** Ranch-style: tap header → members panel. */
   const [showMembersPanel, setShowMembersPanel] = useState(false);
+  const [accountHub, setAccountHub] = useState<AccountHubKind | null>(null);
   const [showMyAgents, setShowMyAgents] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -2896,9 +2880,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
           <AccountFooter
             account={account}
             onLogout={onLogout}
-            onManageAgents={() => {
+            onManage={() => {
               setShowPicker(false);
-              setShowMyAgents(true);
+              setShowMyAgents(false);
+              setAccountHub("manage");
+            }}
+            onDiscover={() => {
+              setShowPicker(false);
+              setShowMyAgents(false);
+              setAccountHub("discover");
             }}
             t={t}
           />
@@ -2919,6 +2909,22 @@ export function RanchChatShell(props: RanchChatShellProps) {
           />
         )}
 
+        {accountHub ? (
+          <AccountHubPanel
+            kind={accountHub}
+            messages={t}
+            onClose={() => setAccountHub(null)}
+            onOpenMyAgents={() => {
+              setAccountHub(null);
+              setShowMyAgents(true);
+            }}
+            onOpenDiscoverAgents={() => {
+              setAccountHub(null);
+              setShowPicker(true);
+            }}
+          />
+        ) : null}
+
         {showMyAgents ? (
           <MyAgentsPanel
             client={client}
@@ -2928,9 +2934,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
             locale={uiLocale}
             messages={t}
             busy={busy}
-            onClose={() => setShowMyAgents(false)}
+            onClose={() => {
+              setShowMyAgents(false);
+              setAccountHub("manage");
+            }}
             onOpenChat={(id) => {
               setShowMyAgents(false);
+              setAccountHub(null);
               void startDirect(id);
             }}
             onAgentUpdated={(row, previousName) => {
