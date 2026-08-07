@@ -88,6 +88,13 @@ export type PlanUsage = {
     dialog_credits: number;
     by_agent: Array<{ agent_id: string; credits: number }>;
   };
+  /** User self-serve monthly on-demand spend cap (works on Free). */
+  on_demand?: {
+    mode: "unlimited" | "fixed";
+    limit_credits: number | null;
+    spent_credits: number;
+    remaining_credits: number | null;
+  };
   chat_billing_enabled: boolean;
 };
 
@@ -288,6 +295,10 @@ export type GatewayClient = {
   ) => Promise<MyAgentWalletTxList>;
   /** Plan entitlement + dialog usage (not Wallet balance). */
   getPlanUsage: () => Promise<PlanUsage>;
+  putOnDemandLimit: (
+    mode: "unlimited" | "fixed",
+    limitCredits?: number | null,
+  ) => Promise<PlanUsage>;
   /** Account default collaboration tank size (preference; no lock). */
   getCollabCap: () => Promise<{ cap_credits: number }>;
   putCollabCap: (capCredits: number) => Promise<{ cap_credits: number }>;
@@ -468,6 +479,14 @@ export function createGatewayClient(
       ),
     getHumanWallet: () => request<HumanWallet>("/api/chat/wallet"),
     getPlanUsage: () => request<PlanUsage>("/api/chat/plan-usage"),
+    putOnDemandLimit: (mode, limitCredits) =>
+      request<PlanUsage>("/api/chat/plan-usage/on-demand-limit", {
+        method: "PUT",
+        body: JSON.stringify({
+          mode,
+          limit_credits: mode === "fixed" ? (limitCredits ?? 0) : undefined,
+        }),
+      }),
     listHumanWalletTransactions: (page = 1, pageSize = 20) => {
       const params = new URLSearchParams();
       params.set("page", String(page));

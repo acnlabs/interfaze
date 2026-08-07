@@ -175,6 +175,14 @@ export type RanchMessages = {
   accountPlanOnDemand: string;
   accountPlanDialogUsage: string;
   accountPlanOnDemandHint: string;
+  accountPlanMonthlyLimit: string;
+  accountPlanMonthlyLimitHint: string;
+  accountPlanLimitFixed: string;
+  accountPlanLimitUnlimited: string;
+  accountPlanLimitSave: string;
+  accountPlanLimitSaved: string;
+  accountPlanLimitSaveFailed: string;
+  accountPlanUsedOfLimit: string;
   accountPlanUsedPct: string;
   accountPlanByAgent: string;
   accountPlanBillingOff: string;
@@ -537,12 +545,20 @@ const en: RanchMessages = {
     "Included usage for models behind Interfaze / platform agents — the pack Plan sells.",
   accountPlanNotIncluded: "Not included",
   accountPlanOnDemand: "On-Demand Usage",
-  accountPlanDialogUsage: "Beyond included",
+  accountPlanDialogUsage: "On-Demand",
   accountPlanOnDemandHint:
-    "Usage past your included official agents’ models, billed on demand. Top up via Open Wallet if needed.",
+    "This month’s on-demand spend (beyond any included official pack). Free plans count all dialog usage here.",
+  accountPlanMonthlyLimit: "Monthly Limit",
+  accountPlanMonthlyLimitHint: "Set a fixed on-demand cap or leave it unlimited.",
+  accountPlanLimitFixed: "Fixed",
+  accountPlanLimitUnlimited: "Unlimited",
+  accountPlanLimitSave: "Save",
+  accountPlanLimitSaved: "Saved",
+  accountPlanLimitSaveFailed: "Couldn’t save limit.",
+  accountPlanUsedOfLimit: "{used} / {limit}",
   accountPlanUsedPct: "{n}% used",
   accountPlanByAgent: "By agent",
-  accountPlanBillingOff: "Dialog billing is off on this host — usage stays at zero until enabled.",
+  accountPlanBillingOff: "Host has not enabled charging yet — totals stay at zero until then.",
   accountPlanOpenWallet: "Open Wallet",
   accountPlanEmptyUsage: "No on-demand charges this period.",
   accountPlanComingSoon: "Paid tiers coming later",
@@ -913,11 +929,20 @@ const zh: RanchMessages = {
     "方案含包计量的是官方 agent 背后的模型用量——Plan 卖的就是这块。",
   accountPlanNotIncluded: "不含",
   accountPlanOnDemand: "按量用量",
-  accountPlanDialogUsage: "超出含包",
-  accountPlanOnDemandHint: "超出官方 agent 模型含包后的按量费用。不够时点「打开钱包」充值。",
+  accountPlanDialogUsage: "按量",
+  accountPlanOnDemandHint:
+    "本月按量花费（有官方含包时只计超出部分）。Free 下对话用量都算在这里。",
+  accountPlanMonthlyLimit: "月度限额",
+  accountPlanMonthlyLimitHint: "可设固定按量上限，或选不限额。",
+  accountPlanLimitFixed: "固定",
+  accountPlanLimitUnlimited: "不限额",
+  accountPlanLimitSave: "保存",
+  accountPlanLimitSaved: "已保存",
+  accountPlanLimitSaveFailed: "无法保存限额。",
+  accountPlanUsedOfLimit: "{used} / {limit}",
   accountPlanUsedPct: "已用 {n}%",
   accountPlanByAgent: "按 agent",
-  accountPlanBillingOff: "本环境未开启对话扣费，用量会显示为 0。",
+  accountPlanBillingOff: "本环境尚未开启扣费，金额会显示为 0。",
   accountPlanOpenWallet: "打开钱包",
   accountPlanEmptyUsage: "本周期尚无按量费用。",
   accountPlanComingSoon: "付费档位稍后开放",

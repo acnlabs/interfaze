@@ -213,6 +213,10 @@ export function AccountPlanUsagePanel({
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<PlanUsage | null>(null);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [limitMode, setLimitMode] = useState<"unlimited" | "fixed">("unlimited");
+  const [limitInput, setLimitInput] = useState("200");
+  const [limitBusy, setLimitBusy] = useState(false);
+  const [limitMsg, setLimitMsg] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -221,7 +225,11 @@ export function AccountPlanUsagePanel({
     void client
       .getPlanUsage()
       .then((row) => {
-        if (!cancelled) setData(row);
+        if (cancelled) return;
+        setData(row);
+        const mode = row.on_demand?.mode === "fixed" ? "fixed" : "unlimited";
+        setLimitMode(mode);
+        setLimitInput(String(row.on_demand?.limit_credits ?? 200));
       })
       .catch(() => {
         if (!cancelled) setError(t.accountPlanUsageLoadFailed);
@@ -241,8 +249,35 @@ export function AccountPlanUsagePanel({
   const used = data?.usage.dialog_credits ?? 0;
   const byAgent = data?.usage.by_agent ?? [];
   const { dateLabel, daysLeft } = periodMeta(data?.period.end, locale);
-  // Soft visual scale for PAYG (no included pack): full bar at 100 Credits.
-  const onDemandRatio = used <= 0 ? 0 : Math.min(1, used / 100);
+  const odSpent = data?.on_demand?.spent_credits ?? used;
+  const odLimit =
+    data?.on_demand?.mode === "fixed" ? (data.on_demand.limit_credits ?? 0) : null;
+  const onDemandRatio =
+    odLimit != null && odLimit > 0
+      ? Math.min(1, odSpent / odLimit)
+      : odSpent <= 0
+        ? 0
+        : Math.min(1, odSpent / 200);
+
+  async function saveOnDemandLimit() {
+    setLimitBusy(true);
+    setLimitMsg(null);
+    try {
+      const lim = Math.max(0, Math.trunc(Number(limitInput) || 0));
+      const row = await client.putOnDemandLimit(
+        limitMode,
+        limitMode === "fixed" ? lim : undefined,
+      );
+      setData(row);
+      setLimitMode(row.on_demand?.mode === "fixed" ? "fixed" : "unlimited");
+      setLimitInput(String(row.on_demand?.limit_credits ?? (lim || 200)));
+      setLimitMsg(t.accountPlanLimitSaved);
+    } catch {
+      setLimitMsg(t.accountPlanLimitSaveFailed);
+    } finally {
+      setLimitBusy(false);
+    }
+  }
 
   return (
     <PanelChrome title={t.accountPlanUsage} onClose={onClose} closeLabel={t.close}>
@@ -334,7 +369,7 @@ export function AccountPlanUsagePanel({
 
           <section>
             <h3 style={planSectionLabel}>{t.accountPlanOnDemand}</h3>
-            <div style={{ ...planCard, display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ ...planCard, display: "flex", flexDirection: "column", gap: 18 }}>
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                   <span style={{ fontSize: 13, fontWeight: 600 }}>{t.accountPlanDialogUsage}</span>
@@ -345,16 +380,83 @@ export function AccountPlanUsagePanel({
                       fontVariantNumeric: "tabular-nums",
                     }}
                   >
-                    {fmtCredits(used)} {t.walletBalance}
+                    {odLimit != null
+                      ? fmtTpl(t.accountPlanUsedOfLimit, {
+                          used: fmtCredits(odSpent),
+                          limit: fmtCredits(odLimit),
+                        })
+                      : `${fmtCredits(odSpent)} ${t.walletBalance}`}
                   </span>
                 </div>
                 <UsageBar ratio={onDemandRatio} tone="neutral" />
                 <p style={{ margin: "8px 0 0", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
-                  {!data?.chat_billing_enabled
-                    ? t.accountPlanBillingOff
-                    : t.accountPlanOnDemandHint}
+                  {t.accountPlanOnDemandHint}
+                  {!data?.chat_billing_enabled ? ` ${t.accountPlanBillingOff}` : ""}
                 </p>
               </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 10,
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div style={{ flex: "1 1 140px", minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{t.accountPlanMonthlyLimit}</div>
+                  <p style={{ margin: "4px 0 0", fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
+                    {t.accountPlanMonthlyLimitHint}
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                  <select
+                    value={limitMode}
+                    onChange={(e) =>
+                      setLimitMode(e.target.value === "fixed" ? "fixed" : "unlimited")
+                    }
+                    style={{
+                      ...btnGhost,
+                      padding: "6px 8px",
+                      appearance: "auto",
+                      background: "#121820",
+                    }}
+                  >
+                    <option value="fixed">{t.accountPlanLimitFixed}</option>
+                    <option value="unlimited">{t.accountPlanLimitUnlimited}</option>
+                  </select>
+                  {limitMode === "fixed" ? (
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={limitInput}
+                      onChange={(e) => setLimitInput(e.target.value)}
+                      style={{
+                        width: 72,
+                        border: `1px solid ${colors.border}`,
+                        background: "#121820",
+                        color: colors.text,
+                        borderRadius: 8,
+                        padding: "6px 8px",
+                        fontSize: 13,
+                      }}
+                    />
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={limitBusy}
+                    style={{ ...btnGhost, padding: "6px 10px", opacity: limitBusy ? 0.6 : 1 }}
+                    onClick={() => void saveOnDemandLimit()}
+                  >
+                    {t.accountPlanLimitSave}
+                  </button>
+                </div>
+              </div>
+              {limitMsg ? (
+                <p style={{ margin: 0, fontSize: 11, color: colors.muted }}>{limitMsg}</p>
+              ) : null}
 
               {byAgent.length === 0 ? (
                 <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>
@@ -365,7 +467,7 @@ export function AccountPlanUsagePanel({
                   <p style={{ ...sectionTitle, marginBottom: 6 }}>{t.accountPlanByAgent}</p>
                   <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
                     {byAgent.map((row) => {
-                      const share = used > 0 ? row.credits / used : 0;
+                      const share = odSpent > 0 ? row.credits / odSpent : 0;
                       return (
                         <li key={row.agent_id} style={{ padding: "10px 0 0" }}>
                           <div
