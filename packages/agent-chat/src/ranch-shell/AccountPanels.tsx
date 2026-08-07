@@ -391,7 +391,6 @@ export function AccountPlanUsagePanel({
                 <UsageBar ratio={onDemandRatio} tone="neutral" />
                 <p style={{ margin: "8px 0 0", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
                   {t.accountPlanOnDemandHint}
-                  {!data?.chat_billing_enabled ? ` ${t.accountPlanBillingOff}` : ""}
                 </p>
               </div>
 

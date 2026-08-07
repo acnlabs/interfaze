@@ -185,7 +185,6 @@ export type RanchMessages = {
   accountPlanUsedOfLimit: string;
   accountPlanUsedPct: string;
   accountPlanByAgent: string;
-  accountPlanBillingOff: string;
   accountPlanOpenWallet: string;
   accountPlanEmptyUsage: string;
   accountPlanComingSoon: string;
@@ -546,8 +545,7 @@ const en: RanchMessages = {
   accountPlanNotIncluded: "Not included",
   accountPlanOnDemand: "On-Demand Usage",
   accountPlanDialogUsage: "On-Demand",
-  accountPlanOnDemandHint:
-    "This month’s on-demand spend (beyond any included official pack). Free plans count all dialog usage here.",
+  accountPlanOnDemandHint: "Usage past your limit is billed later as on-demand.",
   accountPlanMonthlyLimit: "Monthly Limit",
   accountPlanMonthlyLimitHint: "Set a fixed on-demand cap or leave it unlimited.",
   accountPlanLimitFixed: "Fixed",
@@ -930,8 +928,7 @@ const zh: RanchMessages = {
   accountPlanNotIncluded: "不含",
   accountPlanOnDemand: "按量用量",
   accountPlanDialogUsage: "按量",
-  accountPlanOnDemandHint:
-    "本月按量花费（有官方含包时只计超出部分）。Free 下对话用量都算在这里。",
+  accountPlanOnDemandHint: "超出限额的用量稍后按需计费。",
   accountPlanMonthlyLimit: "月度限额",
   accountPlanMonthlyLimitHint: "可设固定按量上限，或选不限额。",
   accountPlanLimitFixed: "固定",
