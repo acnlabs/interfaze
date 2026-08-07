@@ -143,3 +143,142 @@ export function AccountPlanUsagePanel({
     </PanelChrome>
   );
 }
+
+/** Hub for user-created Agents / Subnets / Orgs — not listed in the account menu. */
+export function AccountManagePanel({
+  messages: t,
+  onClose,
+  onOpenAgents,
+}: {
+  messages: RanchMessages;
+  onClose: () => void;
+  onOpenAgents: () => void;
+}) {
+  const items: Array<{
+    key: string;
+    label: string;
+    hint: string;
+    comingSoon?: boolean;
+    onSelect?: () => void;
+  }> = [
+    {
+      key: "agents",
+      label: t.hubAgents,
+      hint: t.hubAgentsManageHint,
+      onSelect: onOpenAgents,
+    },
+    {
+      key: "subnets",
+      label: t.networkSubnets,
+      hint: t.hubSubnetsManageHint,
+      comingSoon: true,
+    },
+    {
+      key: "orgs",
+      label: t.networkOrgs,
+      hint: t.hubOrgsManageHint,
+      comingSoon: true,
+    },
+  ];
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 40,
+        background: colors.bg,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "10px 12px",
+          borderBottom: `1px solid ${colors.border}`,
+          flexShrink: 0,
+        }}
+      >
+        <button type="button" style={btnGhost} onClick={onClose} aria-label={t.close}>
+          ←
+        </button>
+        <strong style={{ fontSize: 14, flex: 1 }}>{t.accountManage}</strong>
+        <span style={{ width: 40 }} />
+      </div>
+      <div style={{ flex: 1, overflow: "auto", padding: "16px 0" }}>
+        <div style={{ padding: "0 14px 10px" }}>
+          <p style={sectionTitle}>{t.hubManageSection}</p>
+          <p style={{ margin: 0, fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
+            {t.hubManageIntro}
+          </p>
+        </div>
+        <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          {items.map((item) => {
+            const disabled = !!item.comingSoon || !item.onSelect;
+            return (
+              <li key={item.key}>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  aria-disabled={disabled || undefined}
+                  title={item.comingSoon ? t.comingSoon : undefined}
+                  onClick={() => item.onSelect?.()}
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    border: "none",
+                    borderBottom: `1px solid ${colors.border}`,
+                    background: "transparent",
+                    color: disabled ? colors.muted : colors.text,
+                    padding: "12px 14px",
+                    cursor: disabled ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    opacity: disabled ? 0.8 : 1,
+                  }}
+                >
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        fontSize: 14,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {item.label}
+                      {item.comingSoon ? (
+                        <span style={{ fontSize: 11, fontWeight: 500, color: colors.muted }}>
+                          {t.comingSoon}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span
+                      style={{
+                        display: "block",
+                        marginTop: 3,
+                        fontSize: 11,
+                        color: colors.muted,
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {item.hint}
+                    </span>
+                  </span>
+                  {!disabled ? (
+                    <span style={{ color: colors.muted, fontSize: 14 }}>›</span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
+  );
+}

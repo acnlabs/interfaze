@@ -26,7 +26,11 @@ import {
   FieldHint,
 } from "./AgentOwnerSettings";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
-import { AccountPlanUsagePanel, AccountProfilePanel } from "./AccountPanels";
+import {
+  AccountManagePanel,
+  AccountPlanUsagePanel,
+  AccountProfilePanel,
+} from "./AccountPanels";
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
 import { CONNECT_PROMPTS, copyText } from "./connectPrompt";
@@ -960,16 +964,16 @@ function AccountFooter({
   account,
   onLogout,
   onProfile,
+  onManage,
   onPlanUsage,
-  onManageAgents,
   onDiscoverAgents,
   t,
 }: {
   account: RanchChatAccount;
   onLogout?: () => void;
   onProfile?: () => void;
+  onManage?: () => void;
   onPlanUsage?: () => void;
-  onManageAgents?: () => void;
   onDiscoverAgents?: () => void;
   t: RanchMessages;
 }) {
@@ -1045,27 +1049,8 @@ function AccountFooter({
     fn?.();
   };
 
-  const comingSoonRow = (itemLabel: string) => (
-    <button
-      type="button"
-      role="menuitem"
-      disabled
-      aria-disabled="true"
-      title={t.comingSoon}
-      style={{
-        ...menuItemStyle,
-        color: colors.muted,
-        cursor: "not-allowed",
-        opacity: 0.75,
-      }}
-    >
-      <span style={{ flex: 1 }}>{itemLabel}</span>
-      <span style={{ fontSize: 11, color: colors.muted }}>{t.comingSoon}</span>
-    </button>
-  );
-
   const hasUpper =
-    !!(onProfile || onPlanUsage || onManageAgents || onDiscoverAgents);
+    !!(onProfile || onManage || onPlanUsage || onDiscoverAgents);
 
   return (
     <div
@@ -1114,6 +1099,17 @@ function AccountFooter({
               <span style={{ flex: 1 }}>{t.accountProfile}</span>
             </button>
           ) : null}
+          {onManage ? (
+            <button
+              type="button"
+              role="menuitem"
+              style={menuItemStyle}
+              onClick={() => runAndClose(onManage)}
+              {...hoverHandlers}
+            >
+              <span style={{ flex: 1 }}>{t.accountManage}</span>
+            </button>
+          ) : null}
           {onPlanUsage ? (
             <button
               type="button"
@@ -1125,19 +1121,8 @@ function AccountFooter({
               <span style={{ flex: 1 }}>{t.accountPlanUsage}</span>
             </button>
           ) : null}
-          {onProfile || onPlanUsage ? (
+          {(onProfile || onManage || onPlanUsage) && onDiscoverAgents ? (
             <div style={{ height: 1, background: colors.border, margin: "2px 0" }} />
-          ) : null}
-          {onManageAgents ? (
-            <button
-              type="button"
-              role="menuitem"
-              style={menuItemStyle}
-              onClick={() => runAndClose(onManageAgents)}
-              {...hoverHandlers}
-            >
-              <span style={{ flex: 1 }}>{t.myAgentsManage}</span>
-            </button>
           ) : null}
           {onDiscoverAgents ? (
             <button
@@ -1149,12 +1134,6 @@ function AccountFooter({
             >
               <span style={{ flex: 1 }}>{t.accountDiscover}</span>
             </button>
-          ) : null}
-          {onManageAgents || onDiscoverAgents ? (
-            <>
-              {comingSoonRow(t.networkSubnets)}
-              {comingSoonRow(t.networkOrgs)}
-            </>
           ) : null}
           {hasUpper && onLogout ? (
             <div style={{ height: 1, background: colors.border, margin: "2px 0" }} />
@@ -1381,6 +1360,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showMembersPanel, setShowMembersPanel] = useState(false);
   const [showMyAgents, setShowMyAgents] = useState(false);
   const [showAccountProfile, setShowAccountProfile] = useState(false);
+  const [showAccountManage, setShowAccountManage] = useState(false);
   const [showAccountPlan, setShowAccountPlan] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -2925,24 +2905,28 @@ export function RanchChatShell(props: RanchChatShellProps) {
             onProfile={() => {
               setShowPicker(false);
               setShowMyAgents(false);
+              setShowAccountManage(false);
               setShowAccountPlan(false);
               setShowAccountProfile(true);
+            }}
+            onManage={() => {
+              setShowPicker(false);
+              setShowMyAgents(false);
+              setShowAccountProfile(false);
+              setShowAccountPlan(false);
+              setShowAccountManage(true);
             }}
             onPlanUsage={() => {
               setShowPicker(false);
               setShowMyAgents(false);
               setShowAccountProfile(false);
+              setShowAccountManage(false);
               setShowAccountPlan(true);
-            }}
-            onManageAgents={() => {
-              setShowPicker(false);
-              setShowAccountProfile(false);
-              setShowAccountPlan(false);
-              setShowMyAgents(true);
             }}
             onDiscoverAgents={() => {
               setShowMyAgents(false);
               setShowAccountProfile(false);
+              setShowAccountManage(false);
               setShowAccountPlan(false);
               setShowPicker(true);
             }}
@@ -2973,6 +2957,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
           />
         ) : null}
 
+        {showAccountManage ? (
+          <AccountManagePanel
+            messages={t}
+            onClose={() => setShowAccountManage(false)}
+            onOpenAgents={() => {
+              setShowAccountManage(false);
+              setShowMyAgents(true);
+            }}
+          />
+        ) : null}
+
         {showAccountPlan ? (
           <AccountPlanUsagePanel
             messages={t}
@@ -2989,9 +2984,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
             locale={uiLocale}
             messages={t}
             busy={busy}
-            onClose={() => setShowMyAgents(false)}
+            onClose={() => {
+              setShowMyAgents(false);
+              setShowAccountManage(true);
+            }}
             onOpenChat={(id) => {
               setShowMyAgents(false);
+              setShowAccountManage(false);
               void startDirect(id);
             }}
             onAgentUpdated={(row, previousName) => {
