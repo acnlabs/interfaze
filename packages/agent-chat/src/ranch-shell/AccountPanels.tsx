@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import type { GatewayClient, HumanWallet, MyAgentWalletTx } from "../gateway";
+import type {
+  ChatCollabBudget,
+  GatewayClient,
+  HumanWallet,
+  MyAgentWalletTx,
+  PlanUsage,
+} from "../gateway";
 import type { RanchChatAccount } from "../types";
 import type { RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors } from "./styles";
@@ -126,21 +132,138 @@ export function AccountProfilePanel({
 }
 
 export function AccountPlanUsagePanel({
+  client,
   messages: t,
+  locale = "en",
   onClose,
+  onOpenWallet,
 }: {
+  client: GatewayClient;
   messages: RanchMessages;
+  locale?: "en" | "zh";
   onClose: () => void;
+  onOpenWallet?: () => void;
 }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<PlanUsage | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    void client
+      .getPlanUsage()
+      .then((row) => {
+        if (!cancelled) setData(row);
+      })
+      .catch(() => {
+        if (!cancelled) setError(t.accountPlanUsageLoadFailed);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, t.accountPlanUsageLoadFailed]);
+
+  const planLabel =
+    locale === "zh"
+      ? data?.plan.label_zh || data?.plan.label || "—"
+      : data?.plan.label || "—";
+  const used = data?.usage.dialog_credits ?? 0;
+  const allowance = data?.allowance.dialog_credits ?? null;
+  const remaining = data?.allowance.dialog_credits_remaining ?? null;
+  const byAgent = data?.usage.by_agent ?? [];
+
   return (
     <PanelChrome title={t.accountPlanUsage} onClose={onClose} closeLabel={t.close}>
-      <h3 style={sectionTitle}>{t.comingSoon}</h3>
-      <p style={{ margin: 0, fontSize: 13, color: colors.text, lineHeight: 1.55 }}>
+      <p style={{ margin: "0 0 16px", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
         {t.accountPlanUsageBody}
       </p>
-      <p style={{ margin: "12px 0 0", fontSize: 12, color: colors.muted, lineHeight: 1.55 }}>
-        {t.accountPlanUsageHint}
-      </p>
+      {loading ? (
+        <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
+      ) : error ? (
+        <p style={{ color: colors.danger, fontSize: 13 }}>{error}</p>
+      ) : (
+        <>
+          <h3 style={sectionTitle}>{t.accountPlanCurrent}</h3>
+          <p style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700 }}>{planLabel}</p>
+          <p style={{ margin: "0 0 20px", fontSize: 12, color: colors.muted }}>
+            {data?.allowance.honored === true && allowance != null
+              ? `${t.accountPlanAllowance}: ${fmtCredits(allowance)}${
+                  remaining != null
+                    ? ` · ${fmtCredits(remaining)} ${t.accountPlanRemaining}`
+                    : ""
+                }`
+              : t.accountPlanPayg}
+          </p>
+
+          <h3 style={sectionTitle}>{t.accountPlanUsageThisMonth}</h3>
+          <p style={{ margin: "0 0 4px", fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em" }}>
+            {fmtCredits(used)}
+          </p>
+          <p style={{ margin: "0 0 12px", fontSize: 12, color: colors.muted }}>
+            {t.walletBalance}
+          </p>
+          {!data?.chat_billing_enabled ? (
+            <p style={{ margin: "0 0 16px", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
+              {t.accountPlanBillingOff}
+            </p>
+          ) : null}
+
+          {byAgent.length === 0 ? (
+            <p style={{ margin: "0 0 20px", fontSize: 12, color: colors.muted }}>
+              {t.accountPlanEmptyUsage}
+            </p>
+          ) : (
+            <>
+              <h3 style={sectionTitle}>{t.accountPlanByAgent}</h3>
+              <ul style={{ listStyle: "none", margin: "0 0 20px", padding: 0 }}>
+                {byAgent.map((row) => (
+                  <li
+                    key={row.agent_id}
+                    style={{
+                      padding: "10px 0",
+                      borderBottom: `1px solid ${colors.border}`,
+                      display: "flex",
+                      gap: 10,
+                      alignItems: "baseline",
+                    }}
+                  >
+                    <span
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {row.agent_id}
+                    </span>
+                    <span style={{ fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
+                      {fmtCredits(row.credits)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {onOpenWallet ? (
+            <button type="button" style={{ ...btnPrimary, width: "100%" }} onClick={onOpenWallet}>
+              {t.accountPlanOpenWallet}
+            </button>
+          ) : null}
+          <p style={{ margin: "12px 0 0", fontSize: 12, color: colors.muted, lineHeight: 1.55 }}>
+            {t.accountPlanUsageHint}
+          </p>
+        </>
+      )}
     </PanelChrome>
   );
 }
@@ -156,7 +279,176 @@ function fmtTxTime(iso: string | null | undefined): string {
   return d.toLocaleString();
 }
 
-/** Human Credits wallet — separate from Plan & Usage and agent wallets. */
+/** Account default collab tank + optional per-chat remaining controls. */
+export function ChatCollabBudgetSection({
+  client,
+  messages: t,
+  chatId,
+}: {
+  client: GatewayClient;
+  messages: RanchMessages;
+  chatId?: string | null;
+}) {
+  const [cap, setCap] = useState(0);
+  const [capDraft, setCapDraft] = useState("0");
+  const [budget, setBudget] = useState<ChatCollabBudget | null>(null);
+  const [addDraft, setAddDraft] = useState("20");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const reload = () => {
+    setErr(null);
+    void client
+      .getCollabCap()
+      .then((r) => {
+        setCap(r.cap_credits);
+        setCapDraft(String(r.cap_credits));
+      })
+      .catch(() => setErr(t.sendFailed));
+    if (chatId) {
+      void client
+        .getChatCollabBudget(chatId)
+        .then(setBudget)
+        .catch(() => setBudget(null));
+    } else {
+      setBudget(null);
+    }
+  };
+
+  useEffect(() => {
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on chat/client
+  }, [client, chatId]);
+
+  return (
+    <div>
+      <h3 style={sectionTitle}>{t.collabBudget}</h3>
+      <p style={{ margin: "0 0 12px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+        {t.collabBudgetHint}
+      </p>
+      {err ? (
+        <p style={{ color: colors.danger, fontSize: 12, margin: "0 0 8px" }}>{err}</p>
+      ) : null}
+      <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
+        {t.collabAccountCap}
+      </label>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        <input
+          type="number"
+          min={0}
+          value={capDraft}
+          onChange={(e) => setCapDraft(e.target.value)}
+          style={{
+            flex: 1,
+            padding: "8px 10px",
+            borderRadius: 8,
+            border: `1px solid ${colors.border}`,
+            background: colors.bg,
+            color: colors.text,
+            fontSize: 14,
+          }}
+        />
+        <button
+          type="button"
+          style={btnPrimary}
+          disabled={busy}
+          onClick={() => {
+            const n = Math.max(0, Math.trunc(Number(capDraft) || 0));
+            setBusy(true);
+            void client
+              .putCollabCap(n)
+              .then((r) => {
+                setCap(r.cap_credits);
+                setCapDraft(String(r.cap_credits));
+              })
+              .catch(() => setErr(t.sendFailed))
+              .finally(() => setBusy(false));
+          }}
+        >
+          {t.collabSave}
+        </button>
+      </div>
+      {chatId ? (
+        <>
+          <p style={{ margin: "0 0 4px", fontSize: 12, color: colors.muted }}>
+            {t.collabRemaining}:{" "}
+            <strong style={{ color: colors.text }}>
+              {fmtCredits(budget?.remaining_credits ?? 0)}
+            </strong>
+          </p>
+          <p style={{ margin: "0 0 10px", fontSize: 11, color: colors.muted }}>
+            {budget?.can_auto ? t.collabAutoOn : t.collabAutoOff}
+            {cap > 0 ? ` · ${t.collabAccountCap} ${cap}` : ""}
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+            <input
+              type="number"
+              min={1}
+              value={addDraft}
+              onChange={(e) => setAddDraft(e.target.value)}
+              style={{
+                width: 88,
+                padding: "8px 10px",
+                borderRadius: 8,
+                border: `1px solid ${colors.border}`,
+                background: colors.bg,
+                color: colors.text,
+                fontSize: 14,
+              }}
+            />
+            <button
+              type="button"
+              style={btnPrimary}
+              disabled={busy}
+              onClick={() => {
+                const n = Math.max(1, Math.trunc(Number(addDraft) || 0));
+                setBusy(true);
+                void client
+                  .addChatCollabBudget(chatId, n)
+                  .then(setBudget)
+                  .catch(() => setErr(t.sendFailed))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              {t.collabAdd}
+            </button>
+            <button
+              type="button"
+              style={btnGhost}
+              disabled={busy || cap <= 0}
+              onClick={() => {
+                setBusy(true);
+                void client
+                  .ensureChatCollabDefault(chatId)
+                  .then(setBudget)
+                  .catch(() => setErr(t.sendFailed))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              {t.collabApplyDefault}
+            </button>
+            <button
+              type="button"
+              style={btnGhost}
+              disabled={busy || !(budget && budget.remaining_credits > 0)}
+              onClick={() => {
+                setBusy(true);
+                void client
+                  .releaseChatCollabBudget(chatId)
+                  .then((r) => setBudget(r))
+                  .catch(() => setErr(t.sendFailed))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              {t.collabRelease}
+            </button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export function AccountWalletPanel({
   client,
   messages: t,
@@ -214,7 +506,9 @@ export function AccountWalletPanel({
           <p style={{ margin: "0 0 4px", fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em" }}>
             {fmtCredits(wallet?.balance ?? 0)}
           </p>
-          <p style={{ margin: "0 0 16px", fontSize: 12, color: colors.muted }}>Credits</p>
+          <p style={{ margin: "0 0 16px", fontSize: 12, color: colors.muted }}>
+            {t.walletBalance}
+          </p>
           <a
             href={rechargeUrl}
             target="_blank"
@@ -232,6 +526,9 @@ export function AccountWalletPanel({
           <p style={{ margin: "0 0 16px", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
             {t.walletRechargeExternalHint}
           </p>
+          <div style={{ marginBottom: 24 }}>
+            <ChatCollabBudgetSection client={client} messages={t} />
+          </div>
           <h3 style={sectionTitle}>{t.accountWalletRecent}</h3>
           {txs.length === 0 ? (
             <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>{t.accountWalletEmptyTx}</p>

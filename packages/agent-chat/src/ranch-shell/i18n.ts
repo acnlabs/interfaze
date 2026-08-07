@@ -36,6 +36,8 @@ export type RanchMessages = {
   searchAgents: string;
   discoverAgents: string;
   unreachable: string;
+  rateLimited: string;
+  billingUnavailable: string;
   sendFailed: string;
   expand: string;
   collapse: string;
@@ -143,12 +145,33 @@ export type RanchMessages = {
   accountProfileHint: string;
   accountWallet: string;
   accountWalletHint: string;
+  collabBudget: string;
+  collabBudgetHint: string;
+  collabAccountCap: string;
+  collabRemaining: string;
+  collabAdd: string;
+  collabApplyDefault: string;
+  collabRelease: string;
+  collabSave: string;
+  collabAutoOn: string;
+  collabAutoOff: string;
+  collabNeedTopup: string;
   accountWalletLoadFailed: string;
   accountWalletEmptyTx: string;
   accountWalletRecent: string;
   accountPlanUsage: string;
   accountPlanUsageBody: string;
   accountPlanUsageHint: string;
+  accountPlanUsageLoadFailed: string;
+  accountPlanCurrent: string;
+  accountPlanUsageThisMonth: string;
+  accountPlanPayg: string;
+  accountPlanAllowance: string;
+  accountPlanByAgent: string;
+  accountPlanBillingOff: string;
+  accountPlanOpenWallet: string;
+  accountPlanEmptyUsage: string;
+  accountPlanRemaining: string;
   hubAgents: string;
   hubManageSection: string;
   hubDiscoverSection: string;
@@ -364,6 +387,8 @@ const en: RanchMessages = {
   viewConnectGuide: "Full guide",
   pasteAgentId: "Paste an agent id",
   unreachable: "Can’t reach this agent for chat right now.",
+  rateLimited: "Not enough credits to send. Top up in Wallet or check Plan & Usage.",
+  billingUnavailable: "Billing check unavailable. Try again in a moment.",
   sendFailed: "Send failed",
   expand: "Expand",
   collapse: "Collapse",
@@ -472,14 +497,35 @@ const en: RanchMessages = {
   accountProfileHint: "Signed-in account from your identity provider. Edit name and avatar there for now.",
   accountWallet: "Wallet",
   accountWalletHint: "Your human Credits balance. Agent wallets stay under each agent.",
+  collabBudget: "Collaboration budget",
+  collabBudgetHint:
+    "Oil tank for multi-agent help. With remaining Credits, collaboration runs without asking each time.",
+  collabAccountCap: "Default tank size",
+  collabRemaining: "Remaining in this chat",
+  collabAdd: "Add to chat",
+  collabApplyDefault: "Fill from default",
+  collabRelease: "Refund unused",
+  collabSave: "Save",
+  collabAutoOn: "Auto collaboration on",
+  collabAutoOff: "Empty — add Credits to allow collaboration",
+  collabNeedTopup: "Collaboration budget is empty. Add Credits in Info to continue multi-agent help.",
   accountWalletLoadFailed: "Couldn’t load wallet.",
   accountWalletEmptyTx: "No transactions yet.",
   accountWalletRecent: "Recent activity",
   accountPlanUsage: "Plan & Usage",
   accountPlanUsageBody:
-    "Plan benefits, allowances, and (later) usage against agents you talk to directly — not your Credits balance.",
-  accountPlanUsageHint:
-    "Wallet is separate. Chat metering and plan tiers are not live yet.",
+    "Plan benefits and dialog usage against agents you talk to directly — not your Credits balance.",
+  accountPlanUsageHint: "Top up Credits in Wallet. This page does not hold your balance.",
+  accountPlanUsageLoadFailed: "Couldn’t load plan & usage.",
+  accountPlanCurrent: "Current plan",
+  accountPlanUsageThisMonth: "Dialog usage this month",
+  accountPlanPayg: "Pay as you go from Wallet",
+  accountPlanAllowance: "Included dialog Credits",
+  accountPlanByAgent: "By agent",
+  accountPlanBillingOff: "Dialog billing is off on this host — usage stays at zero until enabled.",
+  accountPlanOpenWallet: "Open Wallet",
+  accountPlanEmptyUsage: "No dialog charges this month.",
+  accountPlanRemaining: "remaining",
   hubAgents: "Agents",
   hubManageSection: "Yours",
   hubDiscoverSection: "On the network",
@@ -715,6 +761,8 @@ const zh: RanchMessages = {
   viewConnectGuide: "完整说明",
   pasteAgentId: "粘贴 agent id 试试",
   unreachable: "暂时联系不上对方。",
+  rateLimited: "余额不足，无法发送。请先去钱包充值，或查看套餐与用量。",
+  billingUnavailable: "计费服务暂时不可用，请稍后再试。",
   sendFailed: "发送失败",
   expand: "全屏",
   collapse: "收起",
@@ -814,13 +862,33 @@ const zh: RanchMessages = {
   accountProfileHint: "登录账号来自身份提供方。目前请在那里修改名称与头像。",
   accountWallet: "钱包",
   accountWalletHint: "你本人的 Credits 余额。Agent 钱包在各自 Agent 详情里。",
+  collabBudget: "协作预算",
+  collabBudgetHint: "多智能体协作用的额度油箱。有剩余时自动放行，不用每次点同意。",
+  collabAccountCap: "默认额度",
+  collabRemaining: "本会话剩余",
+  collabAdd: "加到本会话",
+  collabApplyDefault: "用默认额度填充",
+  collabRelease: "退回未用",
+  collabSave: "保存",
+  collabAutoOn: "自动协作已开启",
+  collabAutoOff: "额度空 — 加 Credits 后才可自动协作",
+  collabNeedTopup: "协作预算已用完。请在 Info 里加额度，才能继续多智能体协作。",
   accountWalletLoadFailed: "无法加载钱包。",
   accountWalletEmptyTx: "暂无流水。",
   accountWalletRecent: "最近流水",
   accountPlanUsage: "方案与用量",
-  accountPlanUsageBody:
-    "方案权益、额度，以及（后续）你直接对话的 agent 用量——不含 Credits 余额。",
-  accountPlanUsageHint: "钱包是单独入口。对话计量与套餐档位尚未上线。",
+  accountPlanUsageBody: "方案权益，以及你直接对话的 agent 用量——不含 Credits 余额。",
+  accountPlanUsageHint: "充值请去钱包。本页不显示余额。",
+  accountPlanUsageLoadFailed: "无法加载方案与用量。",
+  accountPlanCurrent: "当前方案",
+  accountPlanUsageThisMonth: "本月对话用量",
+  accountPlanPayg: "按用量从钱包扣费",
+  accountPlanAllowance: "方案含对话额度",
+  accountPlanByAgent: "按 agent",
+  accountPlanBillingOff: "本环境未开启对话扣费，用量会显示为 0。",
+  accountPlanOpenWallet: "打开钱包",
+  accountPlanEmptyUsage: "本月尚无对话扣费。",
+  accountPlanRemaining: "剩余",
   hubAgents: "Agents",
   hubManageSection: "我的",
   hubDiscoverSection: "网络上",
@@ -964,17 +1032,17 @@ const zh: RanchMessages = {
   myAgentsDeleteHasSubnets:
     "此 agent 仍拥有子网。请先在 AgentPlanet 转移或删除这些子网。",
   walletTab: "钱包",
-  walletBalance: "Credits",
-  walletCreditsHint: "可转账。充值 / 提取只针对 Credits。",
+  walletBalance: "星币",
+  walletCreditsHint: "可转账。充值 / 提取只针对星币。",
   walletApPoints: "AP 积分",
   walletApPointsHint: "平台行为奖励，不可转出。",
-  walletOwnerBalance: "你的 Credits",
+  walletOwnerBalance: "你的星币",
   walletTopup: "充值",
   walletWithdraw: "提取",
-  walletAmount: "金额（Credits）",
-  walletAmountHint: "整数 Credits。100 Credits = 1 本区法币单位。",
-  walletTopupDialogTitle: "充值 Credits",
-  walletWithdrawDialogTitle: "提取 Credits",
+  walletAmount: "金额（星币）",
+  walletAmountHint: "整数星币。100 星币 = 1 本区法币单位。",
+  walletTopupDialogTitle: "充值星币",
+  walletWithdrawDialogTitle: "提取星币",
   walletTopupConfirmLabel: "确认充值",
   walletWithdrawConfirmLabel: "确认提取",
   walletTopupOk: "已充值",

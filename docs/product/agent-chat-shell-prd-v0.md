@@ -145,7 +145,7 @@ v0 **必须**打通下列闭环；遗留的 agent-system / 按框架分支路径
 
 | 方向 | v0 约定 |
 |---|---|
-| **人 → agent** | 用户消息先写入 `messages`（`/api/chats/{id}/messages`），再由 Gateway **ACN Adapter** 投递到目标 `agent_id`（ACN communication / A2A 或统一投递端口）。**无** OpenClaw/Hermes 专用分支。群聊：按产品规则投递被 @ 的 agent，或广播给群内全部 agent（实现选定一种并写进模块边界文档；推荐 **@ 必达 + 未 @ 可选广播策略可配**）。 |
+| **人 → agent** | 用户消息先写入 `messages`（`/api/chats/{id}/messages`），再由 Gateway **ACN Adapter** 投递到目标 `agent_id`（ACN communication / A2A 或统一投递端口）。**无** OpenClaw/Hermes 专用分支。群聊投递：**@ 必达**；**无 @ 不默认广播**全员 agent（与 chat-gateway-boundary §4 一致）。显式「问全员」才扩成全体 mentions。计费与投递目标同一解析，见 [interfaze-plan-usage-v0](./interfaze-plan-usage-v0.md) P9/P14/P15。 |
 | **agent → 人** | agent 经 ACN 回程（webhook / Gateway 拉取 / A2A 回调，实现选定一种）→ **规范化写入同一 `chat_id` 的 `messages`**（`sender` = 该 `agent_id`）→ 经现有 **`WS /ws` subscribe `chat_id`** 推前端。Stream 若存在，必须关联同一 `chat_id` / message id，避免双账本。宿主契约见 [chat-agent-writeback-v0](../architecture/chat-agent-writeback-v0.md)。 |
 | **失败区分** | `GET /api/chat/health` 只表示 **Gateway/壳**；单 agent 不可达用消息级/发送级错误：`agent_unreachable`（与 `agent_not_found`、`chat_forbidden` 区分）。UI 文案须能说清「壳挂了」vs「这个 agent 离线」。 |
 | **幂等** | 同一客户端发送 id / 上游回执 id 重放不得产生重复用户可见消息。 |
@@ -256,7 +256,7 @@ Host 业务工具代理（如 Concierge `create_task`）**不属于** Shell 核�
 - **Topics 心智（Interfaze / RanchChatShell）：** 见 §4.3 Thread / Topics 产品句——时间线分段为主，Topics 目录次之，过滤页再次之；`@` 管投递，话题管归属，二者正交。
 - **主人接 Interfaze（人话）：** [interfaze-connect-agent.md](./interfaze-connect-agent.md)。  
 - **ACN Agent 管理（非 runtime）：** [interfaze-acn-agent-management-v0.md](./interfaze-acn-agent-management-v0.md)——「我的 Agents」管身份/连接/权限，不管模型·通道·Skill 安装。  
-- 计费钩子 v0 只要求**可接**（日限额/余额 → `rate_limited`），具体 Credits/星币价表由 Host 定。  
+- 计费钩子 v0 只要求**可接**（日限额/余额 → `rate_limited`），具体 Credits/星币价表由 Host 定。Interfaze 账号经济与扣费前置假设见 [interfaze-plan-usage-v0](./interfaze-plan-usage-v0.md)（§4）。  
 - D8：subnet/org 链接触发器二期加粗；v0 验收不依赖其完成。  
 - [Labs Concierge](./labs-concierge-prd-v0.md) 仅描述 **AgentPlanet 官方客户 agent + 业务工具**，对话壳验收以本文为准。  
 - 请将 #18 / #56 **拆分或改标题**：Shell（父）与 Concierge 工具（子）分开跟踪，避免按旧「平行 `/api/labs/chat` IM」开工。  

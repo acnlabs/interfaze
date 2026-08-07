@@ -340,7 +340,11 @@ export function AgentChatShell(props: AgentChatShellProps) {
             ? isAssistant
               ? "助手暂时无法连接，请稍后再试"
               : "Agent unreachable (gateway is up)"
-            : e.message
+            : e.code === "rate_limited"
+              ? isAssistant
+                ? "余额不足，无法发送"
+                : "Not enough credits to send"
+              : e.message
           : isAssistant
             ? "发送失败"
             : "Send failed";

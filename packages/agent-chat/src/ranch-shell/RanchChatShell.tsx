@@ -31,6 +31,7 @@ import {
   AccountPlanUsagePanel,
   AccountProfilePanel,
   AccountWalletPanel,
+  ChatCollabBudgetSection,
 } from "./AccountPanels";
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
@@ -1366,6 +1367,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [loadingChats, setLoadingChats] = useState(true);
   const [active, setActive] = useState<ChatSummary | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  /** P13: agent writeback asked for collab but tank empty / shortfall. */
+  const collabNeedTopup = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const meta = messages[i]?.metadata;
+      if (!meta || typeof meta !== "object") continue;
+      const collab = (meta as { collab?: { need_topup?: boolean } }).collab;
+      if (collab?.need_topup) return true;
+    }
+    return false;
+  }, [messages]);
   /** agent_id → display name (group chats). */
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
   /** agent_id → presence status (group chats; from participants API). */
@@ -2197,7 +2208,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
         e instanceof ChatGatewayError
           ? e.code === "agent_unreachable"
             ? t.unreachable
-            : e.message
+            : e.code === "rate_limited"
+              ? t.rateLimited
+              : e.code === "acn_unavailable"
+                ? t.billingUnavailable
+                : e.message
           : t.sendFailed,
       );
       try {
@@ -2313,7 +2328,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
           e instanceof ChatGatewayError
             ? e.code === "agent_unreachable"
               ? t.unreachable
-              : e.message
+              : e.code === "rate_limited"
+                ? t.rateLimited
+                : e.code === "acn_unavailable"
+                  ? t.billingUnavailable
+                  : e.message
             : t.sendFailed,
         );
       } finally {
@@ -2998,8 +3017,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
         {showAccountPlan ? (
           <AccountPlanUsagePanel
+            client={client}
             messages={t}
+            locale={uiLocale}
             onClose={() => setShowAccountPlan(false)}
+            onOpenWallet={() => {
+              setShowAccountPlan(false);
+              setShowAccountWallet(true);
+            }}
           />
         ) : null}
 
@@ -3470,6 +3495,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 ) : null}
               </div>
 
+              {collabNeedTopup ? (
+                <div
+                  style={{
+                    padding: "8px 14px",
+                    color: colors.muted,
+                    fontSize: 12,
+                    lineHeight: 1.45,
+                    borderTop: `1px solid ${colors.border}`,
+                    background: colors.accentSoft,
+                  }}
+                >
+                  {t.collabNeedTopup}
+                </div>
+              ) : null}
               {error && (
                 <div style={{ padding: "8px 14px", color: colors.danger, fontSize: 12 }}>{error}</div>
               )}
@@ -4361,6 +4400,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   : agentStatusTitle(activePresence, t) || t.offline}
                           </div>
                         </div>
+                        <ChatCollabBudgetSection
+                          client={client}
+                          messages={t}
+                          chatId={active.chat_id}
+                        />
                         {ownedAgentDetail?.name ? (
                           <div>
                             <div

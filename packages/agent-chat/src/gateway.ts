@@ -63,6 +63,44 @@ export type HumanWallet = {
   owner_id?: string | null;
 };
 
+/** Plan entitlement + dialog usage from GET /api/chat/plan-usage. */
+export type PlanUsage = {
+  plan: {
+    code: string;
+    label: string;
+    label_zh?: string;
+    features?: string[];
+    status?: string;
+  };
+  period: {
+    start: string;
+    end: string;
+    kind: string;
+  };
+  allowance: {
+    dialog_credits: number | null;
+    dialog_credits_used: number;
+    dialog_credits_remaining: number | null;
+    /** False until dialog settle consumes included pack before Wallet. */
+    honored?: boolean;
+  };
+  usage: {
+    dialog_credits: number;
+    by_agent: Array<{ agent_id: string; credits: number }>;
+  };
+  chat_billing_enabled: boolean;
+};
+
+/** Per-chat collaboration oil tank (P13). */
+export type ChatCollabBudget = {
+  cap_credits: number;
+  remaining_credits: number;
+  can_auto: boolean;
+  task_id?: string | null;
+  account_cap_credits?: number;
+  added?: number;
+};
+
 /** Owned agent wallet from GET /api/chat/my-agents/{id}/wallet. */
 export type MyAgentWallet = {
   agent_id: string;
@@ -248,6 +286,13 @@ export type GatewayClient = {
     page?: number,
     pageSize?: number,
   ) => Promise<MyAgentWalletTxList>;
+  /** Account default collaboration tank size (preference; no lock). */
+  getCollabCap: () => Promise<{ cap_credits: number }>;
+  putCollabCap: (capCredits: number) => Promise<{ cap_credits: number }>;
+  getChatCollabBudget: (chatId: string) => Promise<ChatCollabBudget>;
+  addChatCollabBudget: (chatId: string, amount: number) => Promise<ChatCollabBudget>;
+  ensureChatCollabDefault: (chatId: string) => Promise<ChatCollabBudget>;
+  releaseChatCollabBudget: (chatId: string) => Promise<ChatCollabBudget & { refunded?: number }>;
   /** Owned agent wallet + owner human balance (Credits). */
   getMyAgentWallet: (agentId: string) => Promise<MyAgentWallet>;
   listMyAgentWalletTransactions: (
@@ -420,6 +465,7 @@ export function createGatewayClient(
         },
       ),
     getHumanWallet: () => request<HumanWallet>("/api/chat/wallet"),
+    getPlanUsage: () => request<PlanUsage>("/api/chat/plan-usage"),
     listHumanWalletTransactions: (page = 1, pageSize = 20) => {
       const params = new URLSearchParams();
       params.set("page", String(page));
@@ -428,6 +474,34 @@ export function createGatewayClient(
         `/api/chat/wallet/transactions?${params}`,
       );
     },
+    getCollabCap: () => request<{ cap_credits: number }>("/api/chat/collab-cap"),
+    putCollabCap: (capCredits) =>
+      request<{ cap_credits: number }>("/api/chat/collab-cap", {
+        method: "PUT",
+        body: JSON.stringify({ cap_credits: capCredits }),
+      }),
+    getChatCollabBudget: (chatId) =>
+      request<ChatCollabBudget>(
+        `/api/chat/chats/${encodeURIComponent(chatId)}/collab-budget`,
+      ),
+    addChatCollabBudget: (chatId, amount) =>
+      request<ChatCollabBudget>(
+        `/api/chat/chats/${encodeURIComponent(chatId)}/collab-budget`,
+        {
+          method: "POST",
+          body: JSON.stringify({ amount }),
+        },
+      ),
+    ensureChatCollabDefault: (chatId) =>
+      request<ChatCollabBudget>(
+        `/api/chat/chats/${encodeURIComponent(chatId)}/collab-budget/ensure-default`,
+        { method: "POST", body: "{}" },
+      ),
+    releaseChatCollabBudget: (chatId) =>
+      request<ChatCollabBudget & { refunded?: number }>(
+        `/api/chat/chats/${encodeURIComponent(chatId)}/collab-budget/release`,
+        { method: "POST", body: "{}" },
+      ),
     getMyAgentWallet: (agentId) =>
       request<MyAgentWallet>(
         `/api/chat/my-agents/${encodeURIComponent(agentId)}/wallet`,
