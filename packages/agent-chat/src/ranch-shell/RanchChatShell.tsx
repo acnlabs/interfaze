@@ -1051,6 +1051,7 @@ function AccountFooter({
           }}
         >
         <div
+          className="ranch-account-menu-panel"
           style={{
             background: "#1c2330",
             border: `1px solid ${colors.border}`,
@@ -2605,6 +2606,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
           background: currentColor;
           display: inline-block;
           animation: ranch-reply-bounce 1.2s ease-in-out infinite;
+        }
+        @keyframes ranch-account-menu-in {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .ranch-account-menu-panel {
+          animation: ranch-account-menu-in 200ms ease-out;
+          transform-origin: bottom center;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ranch-account-menu-panel { animation: none; }
         }
       `}</style>
       <div
