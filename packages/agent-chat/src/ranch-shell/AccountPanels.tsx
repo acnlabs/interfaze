@@ -287,30 +287,37 @@ export function AccountPlanUsagePanel({
           </section>
 
           <section>
-            <h3 style={planSectionLabel}>
-              {fmtTpl(t.accountPlanIncludedIn, { plan: planLabel })}
-            </h3>
-            <div style={{ ...planCard, display: "flex", flexDirection: "column", gap: 18 }}>
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{t.accountPlanOwnedFree}</span>
-                  <span style={{ fontSize: 12, color: colors.muted }}>0%</span>
-                </div>
-                <UsageBar ratio={0} tone="accent" />
-                <p style={{ margin: "8px 0 0", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
-                  {t.accountPlanOwnedFreeHint}
-                </p>
-              </div>
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{t.accountPlanCollabFeature}</span>
-                  <span style={{ fontSize: 12, color: colors.muted }}>{t.accountPlanPayg}</span>
-                </div>
-                <UsageBar ratio={0} tone="neutral" />
-                <p style={{ margin: "8px 0 0", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
-                  {t.accountPlanCollabFeatureHint}
-                </p>
-              </div>
+            <h3 style={planSectionLabel}>{t.accountPlanBillingRules}</h3>
+            <div style={planCard}>
+              <ul
+                style={{
+                  listStyle: "none",
+                  margin: 0,
+                  padding: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
+                {[
+                  t.accountPlanRuleOwned,
+                  t.accountPlanRuleOthers,
+                  t.accountPlanRuleOfficial,
+                ].map((line) => (
+                  <li
+                    key={line}
+                    style={{
+                      fontSize: 12,
+                      color: colors.muted,
+                      lineHeight: 1.5,
+                      paddingLeft: 12,
+                      borderLeft: `2px solid ${colors.border}`,
+                    }}
+                  >
+                    {line}
+                  </li>
+                ))}
+              </ul>
             </div>
           </section>
 
@@ -483,25 +490,27 @@ export function AccountPlanUsagePanel({
                   gap: 8,
                 }}
               >
-                {[t.accountPlanOwnedFree, t.accountPlanCollabFeature, t.accountPlanPayg].map(
-                  (line) => (
-                    <li
-                      key={line}
-                      style={{
-                        display: "flex",
-                        gap: 8,
-                        fontSize: 12,
-                        color: colors.muted,
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      <span aria-hidden style={{ color: colors.text }}>
-                        ✓
-                      </span>
-                      <span>{line}</span>
-                    </li>
-                  ),
-                )}
+                {[
+                  t.accountPlanRuleOwned,
+                  t.accountPlanRuleOthers,
+                  t.accountPlanPayg,
+                ].map((line) => (
+                  <li
+                    key={line}
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      fontSize: 12,
+                      color: colors.muted,
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <span aria-hidden style={{ color: colors.text }}>
+                      ✓
+                    </span>
+                    <span>{line}</span>
+                  </li>
+                ))}
               </ul>
               <button
                 type="button"
