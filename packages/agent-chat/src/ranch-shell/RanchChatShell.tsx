@@ -1051,6 +1051,48 @@ function AccountFooter({
               {t.myAgentsManage}
             </button>
           ) : null}
+          {onManageAgents ? (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                disabled
+                aria-disabled="true"
+                title={t.comingSoon}
+                style={{
+                  ...menuItemStyle,
+                  color: colors.muted,
+                  cursor: "not-allowed",
+                  opacity: 0.75,
+                }}
+              >
+                <span aria-hidden style={{ width: 16, textAlign: "center" }}>
+                  ⊞
+                </span>
+                <span style={{ flex: 1 }}>{t.networkSubnets}</span>
+                <span style={{ fontSize: 11, color: colors.muted }}>{t.comingSoon}</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled
+                aria-disabled="true"
+                title={t.comingSoon}
+                style={{
+                  ...menuItemStyle,
+                  color: colors.muted,
+                  cursor: "not-allowed",
+                  opacity: 0.75,
+                }}
+              >
+                <span aria-hidden style={{ width: 16, textAlign: "center" }}>
+                  ◎
+                </span>
+                <span style={{ flex: 1 }}>{t.networkOrgs}</span>
+                <span style={{ fontSize: 11, color: colors.muted }}>{t.comingSoon}</span>
+              </button>
+            </>
+          ) : null}
           {onManageAgents && onLogout ? (
             <div style={{ height: 1, background: colors.border, margin: "2px 0" }} />
           ) : null}
@@ -2550,7 +2592,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
         <div style={listHeader}>
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 650, display: "flex", alignItems: "center", gap: 8 }}>
             {logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element -- package has no Next Image
               <img
                 src={logoUrl}
                 alt={title}

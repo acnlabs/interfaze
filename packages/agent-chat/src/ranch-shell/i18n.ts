@@ -135,6 +135,12 @@ export type RanchMessages = {
   reLogin: string;
   /** Manage owned agents (ACN registry claim layer — not runtime processes). */
   myAgentsManage: string;
+  /** Account menu: Subnet management (v0 placeholder). */
+  networkSubnets: string;
+  /** Account menu: Org management (v0 placeholder). */
+  networkOrgs: string;
+  /** Badge / trailing label for unavailable features. */
+  comingSoon: string;
   myAgentsTitle: string;
   myAgentsEmptyTitle: string;
   myAgentsEmptyBody: string;
@@ -435,6 +441,9 @@ const en: RanchMessages = {
   searchAgents: "Search agents…",
   discoverAgents: "Discoverable",
   myAgentsManage: "Manage agents",
+  networkSubnets: "Subnets",
+  networkOrgs: "Orgs",
+  comingSoon: "Coming soon",
   myAgentsTitle: "My agents",
   myAgentsEmptyTitle: "No agents claimed yet",
   myAgentsEmptyBody:
@@ -749,6 +758,9 @@ const zh: RanchMessages = {
   account: "账户",
   language: "语言",
   myAgentsManage: "管理 Agents",
+  networkSubnets: "子网",
+  networkOrgs: "组织",
+  comingSoon: "即将支持",
   myAgentsTitle: "我的 Agents",
   myAgentsEmptyTitle: "还没有认领的 agent",
   myAgentsEmptyBody:
