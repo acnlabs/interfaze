@@ -290,32 +290,16 @@ export function AccountPlanUsagePanel({
             <h3 style={planSectionLabel}>
               {fmtTpl(t.accountPlanIncludedIn, { plan: planLabel })}
             </h3>
-            <div style={{ ...planCard, display: "flex", flexDirection: "column", gap: 18 }}>
-              {(
-                [
-                  {
-                    key: "agents",
-                    title: t.accountPlanOfficialAgents,
-                    hint: t.accountPlanOfficialAgentsHint,
-                    tone: "accent" as const,
-                  },
-                  {
-                    key: "models",
-                    title: t.accountPlanOfficialModels,
-                    hint: t.accountPlanOfficialModelsHint,
-                    tone: "neutral" as const,
-                  },
-                ] as const
-              ).map((row) => {
-                // Free / unhonored: no official pack yet — show empty included meters.
+            <div style={planCard}>
+              {(() => {
+                // Free / unhonored: no official pack yet — show empty included meter.
                 const hasPack =
                   data?.allowance.honored === true &&
                   data.allowance.dialog_credits != null &&
                   data.allowance.dialog_credits > 0;
-                const pack = hasPack ? (data!.allowance.dialog_credits as number) : 0;
-                // Until settle splits official agents vs models, both rows share pack headroom.
+                const pack = hasPack ? (data.allowance.dialog_credits as number) : 0;
                 const usedPack = hasPack
-                  ? Math.min(pack, data!.allowance.dialog_credits_used || 0)
+                  ? Math.min(pack, data.allowance.dialog_credits_used || 0)
                   : 0;
                 const ratio = hasPack && pack > 0 ? usedPack / pack : 0;
                 const right = hasPack
@@ -324,12 +308,14 @@ export function AccountPlanUsagePanel({
                     })
                   : t.accountPlanNotIncluded;
                 return (
-                  <div key={row.key}>
+                  <div>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600 }}>{row.title}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>
+                        {t.accountPlanOfficialAgentModels}
+                      </span>
                       <span style={{ fontSize: 12, color: colors.muted }}>{right}</span>
                     </div>
-                    <UsageBar ratio={ratio} tone={row.tone} />
+                    <UsageBar ratio={ratio} tone="accent" />
                     <p
                       style={{
                         margin: "8px 0 0",
@@ -338,11 +324,11 @@ export function AccountPlanUsagePanel({
                         lineHeight: 1.45,
                       }}
                     >
-                      {row.hint}
+                      {t.accountPlanOfficialAgentModelsHint}
                     </p>
                   </div>
                 );
-              })}
+              })()}
             </div>
           </section>
 
@@ -515,11 +501,7 @@ export function AccountPlanUsagePanel({
                   gap: 8,
                 }}
               >
-                {[
-                  t.accountPlanOfficialAgents,
-                  t.accountPlanOfficialModels,
-                  t.accountPlanPayg,
-                ].map((line) => (
+                {[t.accountPlanOfficialAgentModels, t.accountPlanPayg].map((line) => (
                   <li
                     key={line}
                     style={{
