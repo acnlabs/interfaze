@@ -286,6 +286,8 @@ export type GatewayClient = {
     page?: number,
     pageSize?: number,
   ) => Promise<MyAgentWalletTxList>;
+  /** Plan entitlement + dialog usage (not Wallet balance). */
+  getPlanUsage: () => Promise<PlanUsage>;
   /** Account default collaboration tank size (preference; no lock). */
   getCollabCap: () => Promise<{ cap_credits: number }>;
   putCollabCap: (capCredits: number) => Promise<{ cap_credits: number }>;
