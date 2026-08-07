@@ -4080,9 +4080,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       : activeIsOwned
                         ? ([
                             ["info", t.infoTab],
-                            ["settings", t.settingsTab],
                             ["wallet", t.walletTab],
                             ["topics", t.topics],
+                            ["settings", t.settingsTab],
                           ] as const)
                         : ([
                             ["info", t.infoTab],
