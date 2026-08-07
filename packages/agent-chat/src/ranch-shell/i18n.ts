@@ -168,10 +168,12 @@ export type RanchMessages = {
   accountPlanYourCurrent: string;
   accountPlanResetOn: string;
   accountPlanDaysLeft: string;
-  accountPlanBillingRules: string;
-  accountPlanRuleOwned: string;
-  accountPlanRuleOthers: string;
-  accountPlanRuleOfficial: string;
+  accountPlanIncludedIn: string;
+  accountPlanOfficialAgents: string;
+  accountPlanOfficialAgentsHint: string;
+  accountPlanOfficialModels: string;
+  accountPlanOfficialModelsHint: string;
+  accountPlanNotIncluded: string;
   accountPlanOnDemand: string;
   accountPlanDialogUsage: string;
   accountPlanOnDemandHint: string;
@@ -531,24 +533,25 @@ const en: RanchMessages = {
   accountPlanYourCurrent: "Your current plan",
   accountPlanResetOn: "Usage period resets on {date}",
   accountPlanDaysLeft: "{n} days left",
-  accountPlanBillingRules: "How dialog billing works",
-  accountPlanRuleOwned: "Your own agents are always free — on every plan.",
-  accountPlanRuleOthers:
-    "Others’ agents bill on demand at their price, unless they set themselves free.",
-  accountPlanRuleOfficial:
-    "Included usage (when plans sell it) only covers official agents and models the platform controls.",
+  accountPlanIncludedIn: "Included in {plan}",
+  accountPlanOfficialAgents: "Official agents",
+  accountPlanOfficialAgentsHint:
+    "Included Credits for Interfaze / platform agents. Not marketplace listings.",
+  accountPlanOfficialModels: "Official models",
+  accountPlanOfficialModelsHint: "Included usage for models the platform provides under this plan.",
+  accountPlanNotIncluded: "Not included",
   accountPlanOnDemand: "On-Demand Usage",
-  accountPlanDialogUsage: "Dialog with others’ agents",
+  accountPlanDialogUsage: "Beyond included",
   accountPlanOnDemandHint:
-    "This period’s on-demand dialog charges. Top up Credits via Open Wallet if needed.",
+    "Usage past included official agents/models, billed on demand. Top up via Open Wallet if needed.",
   accountPlanUsedPct: "{n}% used",
   accountPlanByAgent: "By agent",
   accountPlanBillingOff: "Dialog billing is off on this host — usage stays at zero until enabled.",
   accountPlanOpenWallet: "Open Wallet",
-  accountPlanEmptyUsage: "No on-demand dialog charges this period.",
+  accountPlanEmptyUsage: "No on-demand charges this period.",
   accountPlanComingSoon: "Paid tiers coming later",
   accountPlanFreeBlurb:
-    "Free means no subscription fee. Others’ agents still bill on demand; your own agents stay free.",
+    "Free has no subscription fee and no included official pack. Upgrade later for included official agents and models.",
   hubAgents: "Agents",
   hubManageSection: "Yours",
   hubDiscoverSection: "On the network",
@@ -908,20 +911,22 @@ const zh: RanchMessages = {
   accountPlanYourCurrent: "当前方案",
   accountPlanResetOn: "用量周期重置于 {date}",
   accountPlanDaysLeft: "还剩 {n} 天",
-  accountPlanBillingRules: "对话怎么计费",
-  accountPlanRuleOwned: "自有 agent 任何档位都免费。",
-  accountPlanRuleOthers: "他人 agent 默认按对方报价按量付费；对方设免费则不收。",
-  accountPlanRuleOfficial: "以后若方案含额度，只会覆盖官方可控的 agent / 模型。",
+  accountPlanIncludedIn: "包含于 {plan}",
+  accountPlanOfficialAgents: "官方 agent",
+  accountPlanOfficialAgentsHint: "方案含包只覆盖 Interfaze / 平台官方 agent，不含市场挂牌。",
+  accountPlanOfficialModels: "官方模型",
+  accountPlanOfficialModelsHint: "方案含包覆盖平台提供的模型用量。",
+  accountPlanNotIncluded: "不含",
   accountPlanOnDemand: "按量用量",
-  accountPlanDialogUsage: "与他人 agent 的对话",
-  accountPlanOnDemandHint: "本周期按量对话扣费。不够时点「打开钱包」充值。",
+  accountPlanDialogUsage: "超出含包",
+  accountPlanOnDemandHint: "超出官方含包后的按量费用。不够时点「打开钱包」充值。",
   accountPlanUsedPct: "已用 {n}%",
   accountPlanByAgent: "按 agent",
   accountPlanBillingOff: "本环境未开启对话扣费，用量会显示为 0。",
   accountPlanOpenWallet: "打开钱包",
-  accountPlanEmptyUsage: "本周期尚无按量对话扣费。",
+  accountPlanEmptyUsage: "本周期尚无按量费用。",
   accountPlanComingSoon: "付费档位稍后开放",
-  accountPlanFreeBlurb: "Free 无订阅费。他人 agent 仍按量；自有 agent 始终免费。",
+  accountPlanFreeBlurb: "Free 无订阅费、无官方含包。升级后可含官方 agent 与模型额度。",
   hubAgents: "Agents",
   hubManageSection: "我的",
   hubDiscoverSection: "网络上",

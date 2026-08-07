@@ -287,37 +287,62 @@ export function AccountPlanUsagePanel({
           </section>
 
           <section>
-            <h3 style={planSectionLabel}>{t.accountPlanBillingRules}</h3>
-            <div style={planCard}>
-              <ul
-                style={{
-                  listStyle: "none",
-                  margin: 0,
-                  padding: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                }}
-              >
-                {[
-                  t.accountPlanRuleOwned,
-                  t.accountPlanRuleOthers,
-                  t.accountPlanRuleOfficial,
-                ].map((line) => (
-                  <li
-                    key={line}
-                    style={{
-                      fontSize: 12,
-                      color: colors.muted,
-                      lineHeight: 1.5,
-                      paddingLeft: 12,
-                      borderLeft: `2px solid ${colors.border}`,
-                    }}
-                  >
-                    {line}
-                  </li>
-                ))}
-              </ul>
+            <h3 style={planSectionLabel}>
+              {fmtTpl(t.accountPlanIncludedIn, { plan: planLabel })}
+            </h3>
+            <div style={{ ...planCard, display: "flex", flexDirection: "column", gap: 18 }}>
+              {(
+                [
+                  {
+                    key: "agents",
+                    title: t.accountPlanOfficialAgents,
+                    hint: t.accountPlanOfficialAgentsHint,
+                    tone: "accent" as const,
+                  },
+                  {
+                    key: "models",
+                    title: t.accountPlanOfficialModels,
+                    hint: t.accountPlanOfficialModelsHint,
+                    tone: "neutral" as const,
+                  },
+                ] as const
+              ).map((row) => {
+                // Free / unhonored: no official pack yet — show empty included meters.
+                const hasPack =
+                  data?.allowance.honored === true &&
+                  data.allowance.dialog_credits != null &&
+                  data.allowance.dialog_credits > 0;
+                const pack = hasPack ? (data!.allowance.dialog_credits as number) : 0;
+                // Until settle splits official agents vs models, both rows share pack headroom.
+                const usedPack = hasPack
+                  ? Math.min(pack, data!.allowance.dialog_credits_used || 0)
+                  : 0;
+                const ratio = hasPack && pack > 0 ? usedPack / pack : 0;
+                const right = hasPack
+                  ? fmtTpl(t.accountPlanUsedPct, {
+                      n: Math.round(ratio * 100),
+                    })
+                  : t.accountPlanNotIncluded;
+                return (
+                  <div key={row.key}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{row.title}</span>
+                      <span style={{ fontSize: 12, color: colors.muted }}>{right}</span>
+                    </div>
+                    <UsageBar ratio={ratio} tone={row.tone} />
+                    <p
+                      style={{
+                        margin: "8px 0 0",
+                        fontSize: 11,
+                        color: colors.muted,
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {row.hint}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           </section>
 
@@ -491,8 +516,8 @@ export function AccountPlanUsagePanel({
                 }}
               >
                 {[
-                  t.accountPlanRuleOwned,
-                  t.accountPlanRuleOthers,
+                  t.accountPlanOfficialAgents,
+                  t.accountPlanOfficialModels,
                   t.accountPlanPayg,
                 ].map((line) => (
                   <li
