@@ -163,7 +163,6 @@ export type RanchMessages = {
   accountPlanUsageLoadFailed: string;
   accountPlanCurrent: string;
   accountPlanPayg: string;
-  accountPlanPaygPrice: string;
   accountPlanAdjust: string;
   accountPlanAdjustTitle: string;
   accountPlanYourCurrent: string;
@@ -528,7 +527,6 @@ const en: RanchMessages = {
   accountPlanUsageLoadFailed: "Couldn’t load plan & usage.",
   accountPlanCurrent: "Current plan",
   accountPlanPayg: "Pay as you go",
-  accountPlanPaygPrice: "Wallet",
   accountPlanAdjust: "Adjust Plan",
   accountPlanAdjustTitle: "Adjust your plan",
   accountPlanYourCurrent: "Your current plan",
@@ -541,14 +539,16 @@ const en: RanchMessages = {
   accountPlanCollabFeatureHint: "Set a default tank in Wallet; remaining Credits auto-allow multi-agent help.",
   accountPlanOnDemand: "On-Demand Usage",
   accountPlanDialogUsage: "Dialog usage",
-  accountPlanOnDemandHint: "Charged from Wallet when you talk to others’ agents. Top up in Wallet.",
+  accountPlanOnDemandHint:
+    "Usage against others’ agents is billed on demand. Top up Credits via Open Wallet if needed.",
   accountPlanUsedPct: "{n}% used",
   accountPlanByAgent: "By agent",
   accountPlanBillingOff: "Dialog billing is off on this host — usage stays at zero until enabled.",
   accountPlanOpenWallet: "Open Wallet",
   accountPlanEmptyUsage: "No on-demand dialog charges this period.",
   accountPlanComingSoon: "Paid tiers coming later",
-  accountPlanFreeBlurb: "Direct dialog with others’ agents bills from your Wallet. Owned agents stay free.",
+  accountPlanFreeBlurb:
+    "Talking to others’ agents is billed on demand. Agents you own stay free.",
   hubAgents: "Agents",
   hubManageSection: "Yours",
   hubDiscoverSection: "On the network",
@@ -903,7 +903,6 @@ const zh: RanchMessages = {
   accountPlanUsageLoadFailed: "无法加载方案与用量。",
   accountPlanCurrent: "当前方案",
   accountPlanPayg: "按量付费",
-  accountPlanPaygPrice: "钱包",
   accountPlanAdjust: "调整方案",
   accountPlanAdjustTitle: "调整你的方案",
   accountPlanYourCurrent: "当前方案",
@@ -916,14 +915,14 @@ const zh: RanchMessages = {
   accountPlanCollabFeatureHint: "在钱包设默认额度；有剩余时多智能体协作自动放行。",
   accountPlanOnDemand: "按量用量",
   accountPlanDialogUsage: "对话用量",
-  accountPlanOnDemandHint: "与他人 agent 对话从钱包扣费。充值请打开钱包。",
+  accountPlanOnDemandHint: "与他人 agent 的对话按量计费；不够时点「打开钱包」充值。",
   accountPlanUsedPct: "已用 {n}%",
   accountPlanByAgent: "按 agent",
   accountPlanBillingOff: "本环境未开启对话扣费，用量会显示为 0。",
   accountPlanOpenWallet: "打开钱包",
   accountPlanEmptyUsage: "本周期尚无按量对话扣费。",
   accountPlanComingSoon: "付费档位稍后开放",
-  accountPlanFreeBlurb: "与他人 agent 直接对话从钱包扣费；自有 agent 免费。",
+  accountPlanFreeBlurb: "与他人 agent 对话按量计费；自有 agent 免费。",
   hubAgents: "Agents",
   hubManageSection: "我的",
   hubDiscoverSection: "网络上",

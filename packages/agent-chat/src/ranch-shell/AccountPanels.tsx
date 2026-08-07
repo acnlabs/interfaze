@@ -259,10 +259,7 @@ export function AccountPlanUsagePanel({
                 <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>
                   {planLabel}
                 </span>
-                <span style={{ fontSize: 14, color: colors.muted }}>
-                  {t.accountPlanPayg}
-                  <span style={{ opacity: 0.7 }}> · {t.accountPlanPaygPrice}</span>
-                </span>
+                <span style={{ fontSize: 14, color: colors.muted }}>{t.accountPlanPayg}</span>
               </div>
               <p style={{ margin: "8px 0 0", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
                 {fmtTpl(t.accountPlanResetOn, { date: dateLabel })}
@@ -472,9 +469,6 @@ export function AccountPlanUsagePanel({
               <p style={{ margin: 0, fontSize: 15, fontWeight: 650 }}>{planLabel}</p>
               <p style={{ margin: "8px 0 0", fontSize: 28, fontWeight: 700, letterSpacing: "-0.03em" }}>
                 {t.accountPlanPayg}
-              </p>
-              <p style={{ margin: "4px 0 0", fontSize: 12, color: colors.muted }}>
-                {t.accountPlanPaygPrice}
               </p>
               <p style={{ margin: "12px 0 0", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
                 {t.accountPlanFreeBlurb}
