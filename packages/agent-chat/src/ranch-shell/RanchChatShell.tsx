@@ -26,6 +26,7 @@ import {
   FieldHint,
 } from "./AgentOwnerSettings";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
+import { AccountPlanUsagePanel, AccountProfilePanel } from "./AccountPanels";
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
 import { CONNECT_PROMPTS, copyText } from "./connectPrompt";
@@ -958,12 +959,16 @@ function LanguageSwitcher({
 function AccountFooter({
   account,
   onLogout,
+  onProfile,
+  onPlanUsage,
   onManageAgents,
   onDiscoverAgents,
   t,
 }: {
   account: RanchChatAccount;
   onLogout?: () => void;
+  onProfile?: () => void;
+  onPlanUsage?: () => void;
   onManageAgents?: () => void;
   onDiscoverAgents?: () => void;
   t: RanchMessages;
@@ -971,8 +976,6 @@ function AccountFooter({
   const label = (account.name || account.email || t.account).trim();
   const initial = label.slice(0, 1).toUpperCase() || "?";
   const [menuOpen, setMenuOpen] = useState(false);
-  const [manageOpen, setManageOpen] = useState(true);
-  const [discoverOpen, setDiscoverOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const closeTimerRef = useRef<number | null>(null);
 
@@ -1028,21 +1031,6 @@ function AccountFooter({
     textAlign: "left",
   };
 
-  const sectionHeaderStyle: CSSProperties = {
-    ...menuItemStyle,
-    padding: "8px 12px",
-    fontSize: 11,
-    fontWeight: 700,
-    letterSpacing: "0.06em",
-    textTransform: "uppercase",
-    color: colors.muted,
-  };
-
-  const nestedItemStyle: CSSProperties = {
-    ...menuItemStyle,
-    paddingLeft: 28,
-  };
-
   const hoverHandlers = {
     onMouseEnter: (e: { currentTarget: HTMLElement }) => {
       e.currentTarget.style.background = colors.hover;
@@ -1052,9 +1040,12 @@ function AccountFooter({
     },
   };
 
-  const showNetwork = !!(onManageAgents || onDiscoverAgents);
+  const runAndClose = (fn?: () => void) => {
+    setMenuOpen(false);
+    fn?.();
+  };
 
-  const comingSoonRow = (label: string) => (
+  const comingSoonRow = (itemLabel: string) => (
     <button
       type="button"
       role="menuitem"
@@ -1062,16 +1053,19 @@ function AccountFooter({
       aria-disabled="true"
       title={t.comingSoon}
       style={{
-        ...nestedItemStyle,
+        ...menuItemStyle,
         color: colors.muted,
         cursor: "not-allowed",
         opacity: 0.75,
       }}
     >
-      <span style={{ flex: 1 }}>{label}</span>
+      <span style={{ flex: 1 }}>{itemLabel}</span>
       <span style={{ fontSize: 11, color: colors.muted }}>{t.comingSoon}</span>
     </button>
   );
+
+  const hasUpper =
+    !!(onProfile || onPlanUsage || onManageAgents || onDiscoverAgents);
 
   return (
     <div
@@ -1109,77 +1103,60 @@ function AccountFooter({
             overflow: "hidden",
           }}
         >
+          {onProfile ? (
+            <button
+              type="button"
+              role="menuitem"
+              style={menuItemStyle}
+              onClick={() => runAndClose(onProfile)}
+              {...hoverHandlers}
+            >
+              <span style={{ flex: 1 }}>{t.accountProfile}</span>
+            </button>
+          ) : null}
+          {onPlanUsage ? (
+            <button
+              type="button"
+              role="menuitem"
+              style={menuItemStyle}
+              onClick={() => runAndClose(onPlanUsage)}
+              {...hoverHandlers}
+            >
+              <span style={{ flex: 1 }}>{t.accountPlanUsage}</span>
+            </button>
+          ) : null}
+          {onProfile || onPlanUsage ? (
+            <div style={{ height: 1, background: colors.border, margin: "2px 0" }} />
+          ) : null}
           {onManageAgents ? (
-            <>
-              <button
-                type="button"
-                role="menuitem"
-                aria-expanded={manageOpen}
-                style={sectionHeaderStyle}
-                onClick={() => setManageOpen((v) => !v)}
-                {...hoverHandlers}
-              >
-                <span aria-hidden style={{ width: 16, textAlign: "center" }}>
-                  {manageOpen ? "▾" : "▸"}
-                </span>
-                <span style={{ flex: 1 }}>{t.accountManage}</span>
-              </button>
-              {manageOpen ? (
-                <>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    style={nestedItemStyle}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onManageAgents();
-                    }}
-                    {...hoverHandlers}
-                  >
-                    <span style={{ flex: 1 }}>{t.hubAgents}</span>
-                  </button>
-                  {comingSoonRow(t.networkSubnets)}
-                  {comingSoonRow(t.networkOrgs)}
-                </>
-              ) : null}
-            </>
+            <button
+              type="button"
+              role="menuitem"
+              style={menuItemStyle}
+              onClick={() => runAndClose(onManageAgents)}
+              {...hoverHandlers}
+            >
+              <span style={{ flex: 1 }}>{t.myAgentsManage}</span>
+            </button>
           ) : null}
           {onDiscoverAgents ? (
+            <button
+              type="button"
+              role="menuitem"
+              style={menuItemStyle}
+              onClick={() => runAndClose(onDiscoverAgents)}
+              {...hoverHandlers}
+            >
+              <span style={{ flex: 1 }}>{t.accountDiscover}</span>
+            </button>
+          ) : null}
+          {onManageAgents || onDiscoverAgents ? (
             <>
-              <button
-                type="button"
-                role="menuitem"
-                aria-expanded={discoverOpen}
-                style={sectionHeaderStyle}
-                onClick={() => setDiscoverOpen((v) => !v)}
-                {...hoverHandlers}
-              >
-                <span aria-hidden style={{ width: 16, textAlign: "center" }}>
-                  {discoverOpen ? "▾" : "▸"}
-                </span>
-                <span style={{ flex: 1 }}>{t.accountDiscover}</span>
-              </button>
-              {discoverOpen ? (
-                <>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    style={nestedItemStyle}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onDiscoverAgents();
-                    }}
-                    {...hoverHandlers}
-                  >
-                    <span style={{ flex: 1 }}>{t.hubAgents}</span>
-                  </button>
-                  {comingSoonRow(t.networkSubnets)}
-                  {comingSoonRow(t.networkOrgs)}
-                </>
-              ) : null}
+              {comingSoonRow(t.networkSubnets)}
+              {comingSoonRow(t.networkOrgs)}
             </>
           ) : null}
-          {showNetwork && onLogout ? (
+          {hasUpper && onLogout ? (
             <div style={{ height: 1, background: colors.border, margin: "2px 0" }} />
           ) : null}
           {onLogout ? (
@@ -1187,10 +1164,7 @@ function AccountFooter({
               type="button"
               role="menuitem"
               style={menuItemStyle}
-              onClick={() => {
-                setMenuOpen(false);
-                onLogout();
-              }}
+              onClick={() => runAndClose(onLogout)}
               {...hoverHandlers}
             >
               <span aria-hidden style={{ width: 16, textAlign: "center", color: colors.muted }}>
@@ -1406,6 +1380,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   /** Ranch-style: tap header → members panel. */
   const [showMembersPanel, setShowMembersPanel] = useState(false);
   const [showMyAgents, setShowMyAgents] = useState(false);
+  const [showAccountProfile, setShowAccountProfile] = useState(false);
+  const [showAccountPlan, setShowAccountPlan] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -2946,12 +2922,28 @@ export function RanchChatShell(props: RanchChatShellProps) {
           <AccountFooter
             account={account}
             onLogout={onLogout}
+            onProfile={() => {
+              setShowPicker(false);
+              setShowMyAgents(false);
+              setShowAccountPlan(false);
+              setShowAccountProfile(true);
+            }}
+            onPlanUsage={() => {
+              setShowPicker(false);
+              setShowMyAgents(false);
+              setShowAccountProfile(false);
+              setShowAccountPlan(true);
+            }}
             onManageAgents={() => {
               setShowPicker(false);
+              setShowAccountProfile(false);
+              setShowAccountPlan(false);
               setShowMyAgents(true);
             }}
             onDiscoverAgents={() => {
               setShowMyAgents(false);
+              setShowAccountProfile(false);
+              setShowAccountPlan(false);
               setShowPicker(true);
             }}
             t={t}
@@ -2972,6 +2964,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
             onCreateGroup={(titleText, ids) => void startGroup(titleText, ids)}
           />
         )}
+
+        {showAccountProfile && account ? (
+          <AccountProfilePanel
+            account={account}
+            messages={t}
+            onClose={() => setShowAccountProfile(false)}
+          />
+        ) : null}
+
+        {showAccountPlan ? (
+          <AccountPlanUsagePanel
+            messages={t}
+            onClose={() => setShowAccountPlan(false)}
+          />
+        ) : null}
 
         {showMyAgents ? (
           <MyAgentsPanel

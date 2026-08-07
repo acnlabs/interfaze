@@ -139,6 +139,11 @@ export type RanchMessages = {
   accountManage: string;
   /** Account menu: Discover hub (network directory). */
   accountDiscover: string;
+  accountProfile: string;
+  accountProfileHint: string;
+  accountPlanUsage: string;
+  accountPlanUsageBody: string;
+  accountPlanUsageHint: string;
   hubAgents: string;
   hubManageSection: string;
   hubDiscoverSection: string;
@@ -458,6 +463,11 @@ const en: RanchMessages = {
   myAgentsManage: "Manage agents",
   accountManage: "Manage",
   accountDiscover: "Discover",
+  accountProfile: "Profile",
+  accountProfileHint: "Signed-in account from your identity provider. Edit name and avatar there for now.",
+  accountPlanUsage: "Plan & Usage",
+  accountPlanUsageBody: "Plan, credits, and usage for Interfaze will show up here.",
+  accountPlanUsageHint: "Billing and quotas are not managed in this menu yet.",
   hubAgents: "Agents",
   hubManageSection: "Yours",
   hubDiscoverSection: "On the network",
@@ -788,6 +798,11 @@ const zh: RanchMessages = {
   myAgentsManage: "管理 Agents",
   accountManage: "管理",
   accountDiscover: "发现",
+  accountProfile: "个人资料",
+  accountProfileHint: "登录账号来自身份提供方。目前请在那里修改名称与头像。",
+  accountPlanUsage: "方案与用量",
+  accountPlanUsageBody: "Interfaze 的方案、积分与用量将显示在这里。",
+  accountPlanUsageHint: "计费与配额暂不在此菜单管理。",
   hubAgents: "Agents",
   hubManageSection: "我的",
   hubDiscoverSection: "网络上",
