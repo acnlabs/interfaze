@@ -3021,10 +3021,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
             messages={t}
             locale={uiLocale}
             onClose={() => setShowAccountPlan(false)}
-            onOpenWallet={() => {
-              setShowAccountPlan(false);
-              setShowAccountWallet(true);
-            }}
           />
         ) : null}
 

@@ -185,7 +185,6 @@ export type RanchMessages = {
   accountPlanUsedOfLimit: string;
   accountPlanUsedPct: string;
   accountPlanByAgent: string;
-  accountPlanOpenWallet: string;
   accountPlanEmptyUsage: string;
   accountPlanComingSoon: string;
   accountPlanFreeBlurb: string;
@@ -556,11 +555,10 @@ const en: RanchMessages = {
   accountPlanUsedOfLimit: "{used} / {limit}",
   accountPlanUsedPct: "{n}% used",
   accountPlanByAgent: "By agent",
-  accountPlanOpenWallet: "Open Wallet",
   accountPlanEmptyUsage: "No on-demand charges this period.",
   accountPlanComingSoon: "Paid tiers coming later",
   accountPlanFreeBlurb:
-    "Free has no subscription fee and no included pack for official agents’ models. Upgrade later for included usage.",
+    "No subscription fee and no included pack for official agents’ models.",
   hubAgents: "Agents",
   hubManageSection: "Yours",
   hubDiscoverSection: "On the network",
@@ -938,10 +936,9 @@ const zh: RanchMessages = {
   accountPlanUsedOfLimit: "{used} / {limit}",
   accountPlanUsedPct: "已用 {n}%",
   accountPlanByAgent: "按 agent",
-  accountPlanOpenWallet: "打开钱包",
   accountPlanEmptyUsage: "本周期尚无按量费用。",
   accountPlanComingSoon: "付费档位稍后开放",
-  accountPlanFreeBlurb: "Free 无订阅费、无官方 agent 模型含包。升级后可含这部分用量。",
+  accountPlanFreeBlurb: "无订阅费，也不含官方 agent 模型额度。",
   hubAgents: "Agents",
   hubManageSection: "我的",
   hubDiscoverSection: "网络上",

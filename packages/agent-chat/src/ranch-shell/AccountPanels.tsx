@@ -201,13 +201,11 @@ export function AccountPlanUsagePanel({
   messages: t,
   locale = "en",
   onClose,
-  onOpenWallet,
 }: {
   client: GatewayClient;
   messages: RanchMessages;
   locale?: "en" | "zh";
   onClose: () => void;
-  onOpenWallet?: () => void;
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -300,7 +298,7 @@ export function AccountPlanUsagePanel({
                 {fmtTpl(t.accountPlanResetOn, { date: dateLabel })}
                 {daysLeft > 0 ? ` (${fmtTpl(t.accountPlanDaysLeft, { n: daysLeft })})` : ""}
               </p>
-              <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+              <div style={{ marginTop: 14 }}>
                 <button
                   type="button"
                   style={{ ...btnGhost, padding: "7px 12px", fontSize: 13 }}
@@ -308,15 +306,6 @@ export function AccountPlanUsagePanel({
                 >
                   {t.accountPlanAdjust}
                 </button>
-                {onOpenWallet ? (
-                  <button
-                    type="button"
-                    style={{ ...btnGhost, padding: "7px 12px", fontSize: 13 }}
-                    onClick={onOpenWallet}
-                  >
-                    {t.accountPlanOpenWallet}
-                  </button>
-                ) : null}
               </div>
             </div>
           </section>
