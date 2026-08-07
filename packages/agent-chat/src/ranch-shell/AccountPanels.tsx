@@ -131,6 +131,71 @@ export function AccountProfilePanel({
   );
 }
 
+const planCard: CSSProperties = {
+  background: "#1a222d",
+  borderRadius: 12,
+  padding: "16px 16px 14px",
+  border: `1px solid ${colors.border}`,
+};
+
+const planSectionLabel: CSSProperties = {
+  margin: "0 0 10px",
+  fontSize: 13,
+  fontWeight: 500,
+  color: colors.muted,
+};
+
+function UsageBar({
+  ratio,
+  tone = "accent",
+}: {
+  ratio: number;
+  tone?: "accent" | "neutral";
+}) {
+  const pct = Math.max(0, Math.min(100, Math.round(ratio * 100)));
+  return (
+    <div
+      style={{
+        height: 5,
+        borderRadius: 999,
+        background: "rgba(255,255,255,0.08)",
+        overflow: "hidden",
+        marginTop: 8,
+      }}
+    >
+      <div
+        style={{
+          width: `${pct}%`,
+          height: "100%",
+          borderRadius: 999,
+          background: tone === "accent" ? "#7aa2f7" : "rgba(232,238,245,0.55)",
+          transition: "width 240ms ease",
+        }}
+      />
+    </div>
+  );
+}
+
+function fmtTpl(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ""));
+}
+
+function periodMeta(
+  endIso: string | undefined,
+  locale: "en" | "zh",
+): { dateLabel: string; daysLeft: number } {
+  if (!endIso) return { dateLabel: "—", daysLeft: 0 };
+  const end = new Date(endIso);
+  if (Number.isNaN(end.getTime())) return { dateLabel: endIso, daysLeft: 0 };
+  const now = Date.now();
+  const daysLeft = Math.max(0, Math.ceil((end.getTime() - now) / 86_400_000));
+  const dateLabel = end.toLocaleDateString(locale === "zh" ? "zh-CN" : "en-US", {
+    month: "short",
+    day: "numeric",
+  });
+  return { dateLabel, daysLeft };
+}
+
 export function AccountPlanUsagePanel({
   client,
   messages: t,
@@ -147,6 +212,7 @@ export function AccountPlanUsagePanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<PlanUsage | null>(null);
+  const [adjustOpen, setAdjustOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,97 +239,306 @@ export function AccountPlanUsagePanel({
       ? data?.plan.label_zh || data?.plan.label || "—"
       : data?.plan.label || "—";
   const used = data?.usage.dialog_credits ?? 0;
-  const allowance = data?.allowance.dialog_credits ?? null;
-  const remaining = data?.allowance.dialog_credits_remaining ?? null;
   const byAgent = data?.usage.by_agent ?? [];
+  const { dateLabel, daysLeft } = periodMeta(data?.period.end, locale);
+  // Soft visual scale for PAYG (no included pack): full bar at 100 Credits.
+  const onDemandRatio = used <= 0 ? 0 : Math.min(1, used / 100);
 
   return (
     <PanelChrome title={t.accountPlanUsage} onClose={onClose} closeLabel={t.close}>
-      <p style={{ margin: "0 0 16px", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
-        {t.accountPlanUsageBody}
-      </p>
       {loading ? (
         <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
       ) : error ? (
         <p style={{ color: colors.danger, fontSize: 13 }}>{error}</p>
       ) : (
-        <>
-          <h3 style={sectionTitle}>{t.accountPlanCurrent}</h3>
-          <p style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700 }}>{planLabel}</p>
-          <p style={{ margin: "0 0 20px", fontSize: 12, color: colors.muted }}>
-            {data?.allowance.honored === true && allowance != null
-              ? `${t.accountPlanAllowance}: ${fmtCredits(allowance)}${
-                  remaining != null
-                    ? ` · ${fmtCredits(remaining)} ${t.accountPlanRemaining}`
-                    : ""
-                }`
-              : t.accountPlanPayg}
-          </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+          <section>
+            <h3 style={{ ...sectionTitle, marginBottom: 10 }}>{t.accountPlanCurrent}</h3>
+            <div style={planCard}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>
+                  {planLabel}
+                </span>
+                <span style={{ fontSize: 14, color: colors.muted }}>
+                  {t.accountPlanPayg}
+                  <span style={{ opacity: 0.7 }}> · {t.accountPlanPaygPrice}</span>
+                </span>
+              </div>
+              <p style={{ margin: "8px 0 0", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
+                {fmtTpl(t.accountPlanResetOn, { date: dateLabel })}
+                {daysLeft > 0 ? ` (${fmtTpl(t.accountPlanDaysLeft, { n: daysLeft })})` : ""}
+              </p>
+              <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  style={{ ...btnGhost, padding: "7px 12px", fontSize: 13 }}
+                  onClick={() => setAdjustOpen(true)}
+                >
+                  {t.accountPlanAdjust}
+                </button>
+                {onOpenWallet ? (
+                  <button
+                    type="button"
+                    style={{ ...btnGhost, padding: "7px 12px", fontSize: 13 }}
+                    onClick={onOpenWallet}
+                  >
+                    {t.accountPlanOpenWallet}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </section>
 
-          <h3 style={sectionTitle}>{t.accountPlanUsageThisMonth}</h3>
-          <p style={{ margin: "0 0 4px", fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em" }}>
-            {fmtCredits(used)}
-          </p>
-          <p style={{ margin: "0 0 12px", fontSize: 12, color: colors.muted }}>
-            {t.walletBalance}
-          </p>
-          {!data?.chat_billing_enabled ? (
-            <p style={{ margin: "0 0 16px", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
-              {t.accountPlanBillingOff}
-            </p>
-          ) : null}
+          <section>
+            <h3 style={planSectionLabel}>
+              {fmtTpl(t.accountPlanIncludedIn, { plan: planLabel })}
+            </h3>
+            <div style={{ ...planCard, display: "flex", flexDirection: "column", gap: 18 }}>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{t.accountPlanOwnedFree}</span>
+                  <span style={{ fontSize: 12, color: colors.muted }}>0%</span>
+                </div>
+                <UsageBar ratio={0} tone="accent" />
+                <p style={{ margin: "8px 0 0", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
+                  {t.accountPlanOwnedFreeHint}
+                </p>
+              </div>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{t.accountPlanCollabFeature}</span>
+                  <span style={{ fontSize: 12, color: colors.muted }}>{t.accountPlanPayg}</span>
+                </div>
+                <UsageBar ratio={0} tone="neutral" />
+                <p style={{ margin: "8px 0 0", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
+                  {t.accountPlanCollabFeatureHint}
+                </p>
+              </div>
+            </div>
+          </section>
 
-          {byAgent.length === 0 ? (
-            <p style={{ margin: "0 0 20px", fontSize: 12, color: colors.muted }}>
-              {t.accountPlanEmptyUsage}
-            </p>
-          ) : (
-            <>
-              <h3 style={sectionTitle}>{t.accountPlanByAgent}</h3>
-              <ul style={{ listStyle: "none", margin: "0 0 20px", padding: 0 }}>
-                {byAgent.map((row) => (
-                  <li
-                    key={row.agent_id}
+          <section>
+            <h3 style={planSectionLabel}>{t.accountPlanOnDemand}</h3>
+            <div style={{ ...planCard, display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{t.accountPlanDialogUsage}</span>
+                  <span
                     style={{
-                      padding: "10px 0",
-                      borderBottom: `1px solid ${colors.border}`,
-                      display: "flex",
-                      gap: 10,
-                      alignItems: "baseline",
+                      fontSize: 13,
+                      color: colors.muted,
+                      fontVariantNumeric: "tabular-nums",
                     }}
                   >
-                    <span
+                    {fmtCredits(used)} {t.walletBalance}
+                  </span>
+                </div>
+                <UsageBar ratio={onDemandRatio} tone="neutral" />
+                <p style={{ margin: "8px 0 0", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
+                  {!data?.chat_billing_enabled
+                    ? t.accountPlanBillingOff
+                    : t.accountPlanOnDemandHint}
+                </p>
+              </div>
+
+              {byAgent.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>
+                  {t.accountPlanEmptyUsage}
+                </p>
+              ) : (
+                <div>
+                  <p style={{ ...sectionTitle, marginBottom: 6 }}>{t.accountPlanByAgent}</p>
+                  <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                    {byAgent.map((row) => {
+                      const share = used > 0 ? row.credits / used : 0;
+                      return (
+                        <li key={row.agent_id} style={{ padding: "10px 0 0" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 10,
+                              alignItems: "baseline",
+                            }}
+                          >
+                            <span
+                              style={{
+                                flex: 1,
+                                minWidth: 0,
+                                fontSize: 13,
+                                fontWeight: 600,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {row.agent_id}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 12,
+                                color: colors.muted,
+                                fontVariantNumeric: "tabular-nums",
+                              }}
+                            >
+                              {fmtTpl(t.accountPlanUsedPct, {
+                                n: Math.round(share * 100),
+                              })}
+                              {" · "}
+                              {fmtCredits(row.credits)}
+                            </span>
+                          </div>
+                          <UsageBar ratio={share} tone="accent" />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {adjustOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={t.accountPlanAdjustTitle}
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onClick={() => setAdjustOpen(false)}
+        >
+          <div
+            style={{
+              width: "min(360px, 100%)",
+              maxHeight: "90%",
+              overflow: "auto",
+              background: "#141a22",
+              borderRadius: 14,
+              border: `1px solid ${colors.border}`,
+              padding: "20px 18px 16px",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.45)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 16,
+              }}
+            >
+              <strong style={{ fontSize: 16 }}>{t.accountPlanAdjustTitle}</strong>
+              <button
+                type="button"
+                style={{ ...btnGhost, width: 28, height: 28, padding: 0 }}
+                onClick={() => setAdjustOpen(false)}
+                aria-label={t.close}
+              >
+                ×
+              </button>
+            </div>
+            <div
+              style={{
+                ...planCard,
+                position: "relative",
+                background: "#1e2733",
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: 12,
+                  right: 12,
+                  fontSize: 11,
+                  padding: "3px 8px",
+                  borderRadius: 999,
+                  background: "rgba(255,255,255,0.08)",
+                  color: colors.muted,
+                }}
+              >
+                {t.accountPlanCurrent}
+              </span>
+              <p style={{ margin: 0, fontSize: 15, fontWeight: 650 }}>{planLabel}</p>
+              <p style={{ margin: "8px 0 0", fontSize: 28, fontWeight: 700, letterSpacing: "-0.03em" }}>
+                {t.accountPlanPayg}
+              </p>
+              <p style={{ margin: "4px 0 0", fontSize: 12, color: colors.muted }}>
+                {t.accountPlanPaygPrice}
+              </p>
+              <p style={{ margin: "12px 0 0", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
+                {t.accountPlanFreeBlurb}
+              </p>
+              <ul
+                style={{
+                  listStyle: "none",
+                  margin: "14px 0 0",
+                  padding: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                {[t.accountPlanOwnedFree, t.accountPlanCollabFeature, t.accountPlanPayg].map(
+                  (line) => (
+                    <li
+                      key={line}
                       style={{
-                        flex: 1,
-                        minWidth: 0,
-                        fontSize: 13,
-                        fontWeight: 600,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
+                        display: "flex",
+                        gap: 8,
+                        fontSize: 12,
+                        color: colors.muted,
+                        lineHeight: 1.4,
                       }}
                     >
-                      {row.agent_id}
-                    </span>
-                    <span style={{ fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
-                      {fmtCredits(row.credits)}
-                    </span>
-                  </li>
-                ))}
+                      <span aria-hidden style={{ color: colors.text }}>
+                        ✓
+                      </span>
+                      <span>{line}</span>
+                    </li>
+                  ),
+                )}
               </ul>
-            </>
-          )}
-
-          {onOpenWallet ? (
-            <button type="button" style={{ ...btnPrimary, width: "100%" }} onClick={onOpenWallet}>
-              {t.accountPlanOpenWallet}
-            </button>
-          ) : null}
-          <p style={{ margin: "12px 0 0", fontSize: 12, color: colors.muted, lineHeight: 1.55 }}>
-            {t.accountPlanUsageHint}
-          </p>
-        </>
-      )}
+              <button
+                type="button"
+                disabled
+                style={{
+                  ...btnGhost,
+                  width: "100%",
+                  marginTop: 16,
+                  padding: "9px 12px",
+                  background: "rgba(255,255,255,0.08)",
+                  cursor: "default",
+                  opacity: 0.9,
+                }}
+              >
+                {t.accountPlanYourCurrent}
+              </button>
+            </div>
+            <p
+              style={{
+                margin: "14px 0 0",
+                fontSize: 11,
+                color: colors.muted,
+                textAlign: "center",
+                lineHeight: 1.45,
+              }}
+            >
+              {t.accountPlanComingSoon}
+            </p>
+          </div>
+        </div>
+      ) : null}
     </PanelChrome>
   );
 }

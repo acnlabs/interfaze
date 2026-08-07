@@ -160,18 +160,30 @@ export type RanchMessages = {
   accountWalletEmptyTx: string;
   accountWalletRecent: string;
   accountPlanUsage: string;
-  accountPlanUsageBody: string;
-  accountPlanUsageHint: string;
   accountPlanUsageLoadFailed: string;
   accountPlanCurrent: string;
-  accountPlanUsageThisMonth: string;
   accountPlanPayg: string;
-  accountPlanAllowance: string;
+  accountPlanPaygPrice: string;
+  accountPlanAdjust: string;
+  accountPlanAdjustTitle: string;
+  accountPlanYourCurrent: string;
+  accountPlanResetOn: string;
+  accountPlanDaysLeft: string;
+  accountPlanIncludedIn: string;
+  accountPlanOwnedFree: string;
+  accountPlanOwnedFreeHint: string;
+  accountPlanCollabFeature: string;
+  accountPlanCollabFeatureHint: string;
+  accountPlanOnDemand: string;
+  accountPlanDialogUsage: string;
+  accountPlanOnDemandHint: string;
+  accountPlanUsedPct: string;
   accountPlanByAgent: string;
   accountPlanBillingOff: string;
   accountPlanOpenWallet: string;
   accountPlanEmptyUsage: string;
-  accountPlanRemaining: string;
+  accountPlanComingSoon: string;
+  accountPlanFreeBlurb: string;
   hubAgents: string;
   hubManageSection: string;
   hubDiscoverSection: string;
@@ -513,19 +525,30 @@ const en: RanchMessages = {
   accountWalletEmptyTx: "No transactions yet.",
   accountWalletRecent: "Recent activity",
   accountPlanUsage: "Plan & Usage",
-  accountPlanUsageBody:
-    "Plan benefits and dialog usage against agents you talk to directly — not your Credits balance.",
-  accountPlanUsageHint: "Top up Credits in Wallet. This page does not hold your balance.",
   accountPlanUsageLoadFailed: "Couldn’t load plan & usage.",
   accountPlanCurrent: "Current plan",
-  accountPlanUsageThisMonth: "Dialog usage this month",
-  accountPlanPayg: "Pay as you go from Wallet",
-  accountPlanAllowance: "Included dialog Credits",
+  accountPlanPayg: "Pay as you go",
+  accountPlanPaygPrice: "Wallet",
+  accountPlanAdjust: "Adjust Plan",
+  accountPlanAdjustTitle: "Adjust your plan",
+  accountPlanYourCurrent: "Your current plan",
+  accountPlanResetOn: "Usage period resets on {date}",
+  accountPlanDaysLeft: "{n} days left",
+  accountPlanIncludedIn: "Included in {plan}",
+  accountPlanOwnedFree: "Owned agents",
+  accountPlanOwnedFreeHint: "Chat with agents you own is free — no dialog Credits.",
+  accountPlanCollabFeature: "Collaboration oil tank",
+  accountPlanCollabFeatureHint: "Set a default tank in Wallet; remaining Credits auto-allow multi-agent help.",
+  accountPlanOnDemand: "On-Demand Usage",
+  accountPlanDialogUsage: "Dialog usage",
+  accountPlanOnDemandHint: "Charged from Wallet when you talk to others’ agents. Top up in Wallet.",
+  accountPlanUsedPct: "{n}% used",
   accountPlanByAgent: "By agent",
   accountPlanBillingOff: "Dialog billing is off on this host — usage stays at zero until enabled.",
   accountPlanOpenWallet: "Open Wallet",
-  accountPlanEmptyUsage: "No dialog charges this month.",
-  accountPlanRemaining: "remaining",
+  accountPlanEmptyUsage: "No on-demand dialog charges this period.",
+  accountPlanComingSoon: "Paid tiers coming later",
+  accountPlanFreeBlurb: "Direct dialog with others’ agents bills from your Wallet. Owned agents stay free.",
   hubAgents: "Agents",
   hubManageSection: "Yours",
   hubDiscoverSection: "On the network",
@@ -871,24 +894,36 @@ const zh: RanchMessages = {
   collabRelease: "退回未用",
   collabSave: "保存",
   collabAutoOn: "自动协作已开启",
-  collabAutoOff: "额度空 — 加 Credits 后才可自动协作",
+  collabAutoOff: "额度空 — 加星币后才可自动协作",
   collabNeedTopup: "协作预算已用完。请在 Info 里加额度，才能继续多智能体协作。",
   accountWalletLoadFailed: "无法加载钱包。",
   accountWalletEmptyTx: "暂无流水。",
   accountWalletRecent: "最近流水",
   accountPlanUsage: "方案与用量",
-  accountPlanUsageBody: "方案权益，以及你直接对话的 agent 用量——不含 Credits 余额。",
-  accountPlanUsageHint: "充值请去钱包。本页不显示余额。",
   accountPlanUsageLoadFailed: "无法加载方案与用量。",
   accountPlanCurrent: "当前方案",
-  accountPlanUsageThisMonth: "本月对话用量",
-  accountPlanPayg: "按用量从钱包扣费",
-  accountPlanAllowance: "方案含对话额度",
+  accountPlanPayg: "按量付费",
+  accountPlanPaygPrice: "钱包",
+  accountPlanAdjust: "调整方案",
+  accountPlanAdjustTitle: "调整你的方案",
+  accountPlanYourCurrent: "当前方案",
+  accountPlanResetOn: "用量周期重置于 {date}",
+  accountPlanDaysLeft: "还剩 {n} 天",
+  accountPlanIncludedIn: "包含于 {plan}",
+  accountPlanOwnedFree: "自有 agent",
+  accountPlanOwnedFreeHint: "与自有 agent 对话不计对话费用。",
+  accountPlanCollabFeature: "协作油箱",
+  accountPlanCollabFeatureHint: "在钱包设默认额度；有剩余时多智能体协作自动放行。",
+  accountPlanOnDemand: "按量用量",
+  accountPlanDialogUsage: "对话用量",
+  accountPlanOnDemandHint: "与他人 agent 对话从钱包扣费。充值请打开钱包。",
+  accountPlanUsedPct: "已用 {n}%",
   accountPlanByAgent: "按 agent",
   accountPlanBillingOff: "本环境未开启对话扣费，用量会显示为 0。",
   accountPlanOpenWallet: "打开钱包",
-  accountPlanEmptyUsage: "本月尚无对话扣费。",
-  accountPlanRemaining: "剩余",
+  accountPlanEmptyUsage: "本周期尚无按量对话扣费。",
+  accountPlanComingSoon: "付费档位稍后开放",
+  accountPlanFreeBlurb: "与他人 agent 直接对话从钱包扣费；自有 agent 免费。",
   hubAgents: "Agents",
   hubManageSection: "我的",
   hubDiscoverSection: "网络上",
