@@ -141,6 +141,11 @@ export type RanchMessages = {
   accountDiscover: string;
   accountProfile: string;
   accountProfileHint: string;
+  accountWallet: string;
+  accountWalletHint: string;
+  accountWalletLoadFailed: string;
+  accountWalletEmptyTx: string;
+  accountWalletRecent: string;
   accountPlanUsage: string;
   accountPlanUsageBody: string;
   accountPlanUsageHint: string;
@@ -465,9 +470,16 @@ const en: RanchMessages = {
   accountDiscover: "Discover",
   accountProfile: "Profile",
   accountProfileHint: "Signed-in account from your identity provider. Edit name and avatar there for now.",
+  accountWallet: "Wallet",
+  accountWalletHint: "Your human Credits balance. Agent wallets stay under each agent.",
+  accountWalletLoadFailed: "Couldn’t load wallet.",
+  accountWalletEmptyTx: "No transactions yet.",
+  accountWalletRecent: "Recent activity",
   accountPlanUsage: "Plan & Usage",
-  accountPlanUsageBody: "Plan, credits, and usage for Interfaze will show up here.",
-  accountPlanUsageHint: "Billing and quotas are not managed in this menu yet.",
+  accountPlanUsageBody:
+    "Plan benefits, allowances, and (later) usage against agents you talk to directly — not your Credits balance.",
+  accountPlanUsageHint:
+    "Wallet is separate. Chat metering and plan tiers are not live yet.",
   hubAgents: "Agents",
   hubManageSection: "Yours",
   hubDiscoverSection: "On the network",
@@ -800,9 +812,15 @@ const zh: RanchMessages = {
   accountDiscover: "发现",
   accountProfile: "个人资料",
   accountProfileHint: "登录账号来自身份提供方。目前请在那里修改名称与头像。",
+  accountWallet: "钱包",
+  accountWalletHint: "你本人的 Credits 余额。Agent 钱包在各自 Agent 详情里。",
+  accountWalletLoadFailed: "无法加载钱包。",
+  accountWalletEmptyTx: "暂无流水。",
+  accountWalletRecent: "最近流水",
   accountPlanUsage: "方案与用量",
-  accountPlanUsageBody: "Interfaze 的方案、积分与用量将显示在这里。",
-  accountPlanUsageHint: "计费与配额暂不在此菜单管理。",
+  accountPlanUsageBody:
+    "方案权益、额度，以及（后续）你直接对话的 agent 用量——不含 Credits 余额。",
+  accountPlanUsageHint: "钱包是单独入口。对话计量与套餐档位尚未上线。",
   hubAgents: "Agents",
   hubManageSection: "我的",
   hubDiscoverSection: "网络上",

@@ -55,6 +55,14 @@ export type ChatAgentSearchHit = {
   acl_reason?: string | null;
 };
 
+/** Human Credits wallet from GET /api/chat/wallet. */
+export type HumanWallet = {
+  wallet_id: string;
+  balance: number;
+  status?: string | null;
+  owner_id?: string | null;
+};
+
 /** Owned agent wallet from GET /api/chat/my-agents/{id}/wallet. */
 export type MyAgentWallet = {
   agent_id: string;
@@ -234,6 +242,12 @@ export type GatewayClient = {
     agentId: string,
     patch: { mode: "open" | "allowlist" | "closed" },
   ) => Promise<MyAgentSummary>;
+  /** Signed-in human Credits wallet. */
+  getHumanWallet: () => Promise<HumanWallet>;
+  listHumanWalletTransactions: (
+    page?: number,
+    pageSize?: number,
+  ) => Promise<MyAgentWalletTxList>;
   /** Owned agent wallet + owner human balance (Credits). */
   getMyAgentWallet: (agentId: string) => Promise<MyAgentWallet>;
   listMyAgentWalletTransactions: (
@@ -405,6 +419,15 @@ export function createGatewayClient(
           body: JSON.stringify(patch),
         },
       ),
+    getHumanWallet: () => request<HumanWallet>("/api/chat/wallet"),
+    listHumanWalletTransactions: (page = 1, pageSize = 20) => {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("page_size", String(pageSize));
+      return request<MyAgentWalletTxList>(
+        `/api/chat/wallet/transactions?${params}`,
+      );
+    },
     getMyAgentWallet: (agentId) =>
       request<MyAgentWallet>(
         `/api/chat/my-agents/${encodeURIComponent(agentId)}/wallet`,

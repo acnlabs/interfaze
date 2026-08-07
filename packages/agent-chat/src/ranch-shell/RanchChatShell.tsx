@@ -30,6 +30,7 @@ import {
   AccountManagePanel,
   AccountPlanUsagePanel,
   AccountProfilePanel,
+  AccountWalletPanel,
 } from "./AccountPanels";
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
@@ -965,6 +966,7 @@ function AccountFooter({
   onLogout,
   onProfile,
   onManage,
+  onWallet,
   onPlanUsage,
   onDiscoverAgents,
   t,
@@ -973,6 +975,7 @@ function AccountFooter({
   onLogout?: () => void;
   onProfile?: () => void;
   onManage?: () => void;
+  onWallet?: () => void;
   onPlanUsage?: () => void;
   onDiscoverAgents?: () => void;
   t: RanchMessages;
@@ -1050,7 +1053,7 @@ function AccountFooter({
   };
 
   const hasUpper =
-    !!(onProfile || onManage || onPlanUsage || onDiscoverAgents);
+    !!(onProfile || onManage || onWallet || onPlanUsage || onDiscoverAgents);
 
   return (
     <div
@@ -1110,6 +1113,17 @@ function AccountFooter({
               <span style={{ flex: 1 }}>{t.accountManage}</span>
             </button>
           ) : null}
+          {onWallet ? (
+            <button
+              type="button"
+              role="menuitem"
+              style={menuItemStyle}
+              onClick={() => runAndClose(onWallet)}
+              {...hoverHandlers}
+            >
+              <span style={{ flex: 1 }}>{t.accountWallet}</span>
+            </button>
+          ) : null}
           {onPlanUsage ? (
             <button
               type="button"
@@ -1121,7 +1135,7 @@ function AccountFooter({
               <span style={{ flex: 1 }}>{t.accountPlanUsage}</span>
             </button>
           ) : null}
-          {(onProfile || onManage || onPlanUsage) && onDiscoverAgents ? (
+          {(onProfile || onManage || onWallet || onPlanUsage) && onDiscoverAgents ? (
             <div style={{ height: 1, background: colors.border, margin: "2px 0" }} />
           ) : null}
           {onDiscoverAgents ? (
@@ -1361,7 +1375,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showMyAgents, setShowMyAgents] = useState(false);
   const [showAccountProfile, setShowAccountProfile] = useState(false);
   const [showAccountManage, setShowAccountManage] = useState(false);
+  const [showAccountWallet, setShowAccountWallet] = useState(false);
   const [showAccountPlan, setShowAccountPlan] = useState(false);
+
+  const closeAccountSurfaces = () => {
+    setShowAccountProfile(false);
+    setShowAccountManage(false);
+    setShowAccountWallet(false);
+    setShowAccountPlan(false);
+    setShowMyAgents(false);
+  };
   const [showAddMember, setShowAddMember] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -2904,30 +2927,26 @@ export function RanchChatShell(props: RanchChatShellProps) {
             onLogout={onLogout}
             onProfile={() => {
               setShowPicker(false);
-              setShowMyAgents(false);
-              setShowAccountManage(false);
-              setShowAccountPlan(false);
+              closeAccountSurfaces();
               setShowAccountProfile(true);
             }}
             onManage={() => {
               setShowPicker(false);
-              setShowMyAgents(false);
-              setShowAccountProfile(false);
-              setShowAccountPlan(false);
+              closeAccountSurfaces();
               setShowAccountManage(true);
+            }}
+            onWallet={() => {
+              setShowPicker(false);
+              closeAccountSurfaces();
+              setShowAccountWallet(true);
             }}
             onPlanUsage={() => {
               setShowPicker(false);
-              setShowMyAgents(false);
-              setShowAccountProfile(false);
-              setShowAccountManage(false);
+              closeAccountSurfaces();
               setShowAccountPlan(true);
             }}
             onDiscoverAgents={() => {
-              setShowMyAgents(false);
-              setShowAccountProfile(false);
-              setShowAccountManage(false);
-              setShowAccountPlan(false);
+              closeAccountSurfaces();
               setShowPicker(true);
             }}
             t={t}
@@ -2965,6 +2984,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
               setShowAccountManage(false);
               setShowMyAgents(true);
             }}
+          />
+        ) : null}
+
+        {showAccountWallet ? (
+          <AccountWalletPanel
+            client={client}
+            messages={t}
+            agentPlanetBaseUrl={agentPlanetBaseUrl}
+            onClose={() => setShowAccountWallet(false)}
           />
         ) : null}
 
