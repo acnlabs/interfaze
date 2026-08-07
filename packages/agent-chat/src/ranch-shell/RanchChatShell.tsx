@@ -970,6 +970,29 @@ function AccountFooter({
   const initial = label.slice(0, 1).toUpperCase() || "?";
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
+
+  const clearCloseTimer = () => {
+    if (closeTimerRef.current != null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
+
+  const openMenu = () => {
+    clearCloseTimer();
+    setMenuOpen(true);
+  };
+
+  const scheduleCloseMenu = () => {
+    clearCloseTimer();
+    closeTimerRef.current = window.setTimeout(() => {
+      setMenuOpen(false);
+      closeTimerRef.current = null;
+    }, 160);
+  };
+
+  useEffect(() => () => clearCloseTimer(), []);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -1004,6 +1027,8 @@ function AccountFooter({
   return (
     <div
       ref={rootRef}
+      onMouseEnter={openMenu}
+      onMouseLeave={scheduleCloseMenu}
       style={{
         position: "relative",
         borderTop: `1px solid ${colors.border}`,
@@ -1020,13 +1045,18 @@ function AccountFooter({
             left: 8,
             right: 8,
             bottom: "100%",
-            marginBottom: 6,
+            // Transparent bridge so pointer can move into the menu without flicker.
+            paddingBottom: 6,
+            zIndex: 30,
+          }}
+        >
+        <div
+          style={{
             background: "#1c2330",
             border: `1px solid ${colors.border}`,
             borderRadius: 10,
             boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
             overflow: "hidden",
-            zIndex: 30,
           }}
         >
           {onManageAgents ? (
@@ -1118,6 +1148,7 @@ function AccountFooter({
               {t.logOut}
             </button>
           ) : null}
+        </div>
         </div>
       ) : null}
 
