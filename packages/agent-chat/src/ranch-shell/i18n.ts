@@ -190,7 +190,16 @@ export type RanchMessages = {
   accountPlanFreeBlurb: string;
   accountPlanProBlurb: string;
   accountPlanUpgrade: string;
+  accountPlanRenew: string;
+  accountPlanExpiresOn: string;
   accountPlanBuyBusy: string;
+  accountPlanBuyConfirmTitle: string;
+  accountPlanBuyConfirmBody: string;
+  accountPlanBuyConfirmRenewBody: string;
+  accountPlanBuyConfirm: string;
+  accountPlanBuyCancel: string;
+  accountPlanBuySuccess: string;
+  accountPlanBuySuccessRenew: string;
   accountPlanBuyFailed: string;
   accountPlanNeedCredits: string;
   accountPlanOpenWallet: string;
@@ -570,9 +579,20 @@ const en: RanchMessages = {
   accountPlanFreeBlurb:
     "No subscription fee and no included pack — pay as you go from your Wallet.",
   accountPlanProBlurb:
-    "Top up your Wallet with cash, then spend Credits to unlock this plan. Includes a matching dialog usage pack for billable chats (official + marketplace); your own agents stay free. Usage beyond the pack still uses Wallet Credits.",
+    "Top up your Wallet with cash, then spend Credits for 30 days of this plan. Includes a matching dialog usage pack for billable chats (official + marketplace); your own agents stay free. Usage beyond the pack still uses Wallet Credits. Access ends when the period expires — renew anytime.",
   accountPlanUpgrade: "Upgrade",
+  accountPlanRenew: "Renew",
+  accountPlanExpiresOn: "Access until {date}",
   accountPlanBuyBusy: "Purchasing…",
+  accountPlanBuyConfirmTitle: "Confirm purchase",
+  accountPlanBuyConfirmBody:
+    "Spend {credits} Credits from your Wallet for 30 days of {plan}? Included dialog pack: {pack}.",
+  accountPlanBuyConfirmRenewBody:
+    "Spend {credits} Credits to renew {plan} for another 30 days and refresh the included dialog pack ({pack})?",
+  accountPlanBuyConfirm: "Confirm",
+  accountPlanBuyCancel: "Cancel",
+  accountPlanBuySuccess: "You’re on {plan} until {date}.",
+  accountPlanBuySuccessRenew: "Renewed {plan} until {date}.",
   accountPlanBuyFailed: "Couldn’t purchase this plan.",
   accountPlanNeedCredits: "Not enough Credits. Top up your Wallet, then try again.",
   accountPlanOpenWallet: "Open Wallet",
@@ -961,9 +981,20 @@ const zh: RanchMessages = {
   accountPlanComingSoon: "付费档位稍后开放",
   accountPlanFreeBlurb: "无订阅费、无含包，对话从钱包按量扣费。",
   accountPlanProBlurb:
-    "先用法币给钱包充值星币，再用星币解锁该方案。含等额对话用量包（官方 + 市场他人 agent 的有偿对话）；自有 agent 仍免费。超出部分仍从钱包按量扣。",
+    "先用法币给钱包充值星币，再用星币购买该方案 30 天。含等额对话用量包（官方 + 市场他人 agent 的有偿对话）；自有 agent 仍免费。超出部分仍从钱包按量扣。到期后回到免费档，可随时续费。",
   accountPlanUpgrade: "升级",
+  accountPlanRenew: "续费",
+  accountPlanExpiresOn: "有效期至 {date}",
   accountPlanBuyBusy: "购买中…",
+  accountPlanBuyConfirmTitle: "确认购买",
+  accountPlanBuyConfirmBody:
+    "将从钱包扣除 {credits} 星币，获得 {plan} 30 天？含包对话用量：{pack}。",
+  accountPlanBuyConfirmRenewBody:
+    "将从钱包扣除 {credits} 星币，为 {plan} 续费 30 天，并刷新含包对话用量（{pack}）？",
+  accountPlanBuyConfirm: "确认购买",
+  accountPlanBuyCancel: "取消",
+  accountPlanBuySuccess: "已开通 {plan}，有效至 {date}。",
+  accountPlanBuySuccessRenew: "已续费 {plan}，有效至 {date}。",
   accountPlanBuyFailed: "无法购买该方案。",
   accountPlanNeedCredits: "星币不足。请先给钱包充值，再重试。",
   accountPlanOpenWallet: "打开钱包",

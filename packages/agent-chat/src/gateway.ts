@@ -85,6 +85,12 @@ export type PlanUsage = {
     label_zh?: string;
     features?: string[];
     status?: string;
+    /** ISO end of paid access; null on Free / expired. */
+    paid_until?: string | null;
+    /** Rolling paid period length in days (renew stacks). */
+    period_days?: number;
+    /** True when current paid tier can be renewed via purchase. */
+    renewable?: boolean;
   };
   /** Adjust Plan cards; Free + purchasable paid tiers. */
   catalog?: PlanCatalogEntry[];
@@ -318,7 +324,7 @@ export type GatewayClient = {
     limitCredits?: number | null,
   ) => Promise<PlanUsage>;
   /** Spend Wallet Credits to activate a purchasable catalog tier. */
-  purchasePlan: (planCode: string) => Promise<PlanUsage>;
+  purchasePlan: (planCode: string, idempotencyKey?: string) => Promise<PlanUsage>;
   /** Account default collaboration tank size (preference; no lock). */
   getCollabCap: () => Promise<{ cap_credits: number }>;
   putCollabCap: (capCredits: number) => Promise<{ cap_credits: number }>;
@@ -507,10 +513,13 @@ export function createGatewayClient(
           limit_credits: mode === "fixed" ? (limitCredits ?? 0) : undefined,
         }),
       }),
-    purchasePlan: (planCode) =>
+    purchasePlan: (planCode, idempotencyKey) =>
       request<PlanUsage>("/api/chat/plan-usage/purchase", {
         method: "POST",
-        body: JSON.stringify({ plan_code: planCode }),
+        body: JSON.stringify({
+          plan_code: planCode,
+          ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
+        }),
       }),
     listHumanWalletTransactions: (page = 1, pageSize = 20) => {
       const params = new URLSearchParams();

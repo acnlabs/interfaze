@@ -221,7 +221,24 @@ export function AccountPlanUsagePanel({
   const [limitMsg, setLimitMsg] = useState<string | null>(null);
   const [buyBusy, setBuyBusy] = useState<string | null>(null);
   const [buyMsg, setBuyMsg] = useState<string | null>(null);
+  const [buyMsgTone, setBuyMsgTone] = useState<"muted" | "ok" | "danger">("muted");
+  const [confirmTier, setConfirmTier] = useState<PlanCatalogEntry | null>(null);
+  const [confirmIsRenew, setConfirmIsRenew] = useState(false);
+  const [purchaseIdem, setPurchaseIdem] = useState<string | null>(null);
   const rechargeUrl = `${agentPlanetBaseUrl.replace(/\/$/, "")}/wallet?recharge=1`;
+
+  function newPurchaseIdem(): string {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return `plan-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  function clearConfirm() {
+    setConfirmTier(null);
+    setConfirmIsRenew(false);
+    setPurchaseIdem(null);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -254,6 +271,7 @@ export function AccountPlanUsagePanel({
   const used = data?.usage.dialog_credits ?? 0;
   const byAgent = data?.usage.by_agent ?? [];
   const { dateLabel, daysLeft } = periodMeta(data?.period.end, locale);
+  const paidUntilMeta = periodMeta(data?.plan.paid_until ?? undefined, locale);
   const odSpent = data?.on_demand?.spent_credits ?? used;
   const odLimit =
     data?.on_demand?.mode === "fixed" ? (data.on_demand.limit_credits ?? 0) : null;
@@ -284,16 +302,41 @@ export function AccountPlanUsagePanel({
     }
   }
 
-  async function buyPlan(code: string) {
+  function requestBuyPlan(tier: PlanCatalogEntry, *, renew = false) {
+    setBuyMsg(null);
+    setBuyMsgTone("muted");
+    setConfirmIsRenew(renew);
+    setPurchaseIdem(newPurchaseIdem());
+    setConfirmTier(tier);
+  }
+
+  async function confirmBuyPlan() {
+    if (!confirmTier) return;
+    const code = confirmTier.code;
+    const wasRenew = confirmIsRenew;
+    const idem = purchaseIdem ?? newPurchaseIdem();
+    if (!purchaseIdem) setPurchaseIdem(idem);
+    const tierLabel =
+      locale === "zh" ? confirmTier.label_zh || confirmTier.label : confirmTier.label;
     setBuyBusy(code);
     setBuyMsg(null);
+    setBuyMsgTone("muted");
     try {
-      const row = await client.purchasePlan(code);
+      const row = await client.purchasePlan(code, idem);
       setData(row);
       setLimitMode(row.on_demand?.mode === "fixed" ? "fixed" : "unlimited");
       setLimitInput(String(row.on_demand?.limit_credits ?? 200));
-      setAdjustOpen(false);
+      clearConfirm();
+      const untilLabel = periodMeta(row.plan.paid_until ?? undefined, locale).dateLabel;
+      setBuyMsgTone("ok");
+      setBuyMsg(
+        fmtTpl(wasRenew ? t.accountPlanBuySuccessRenew : t.accountPlanBuySuccess, {
+          plan: tierLabel,
+          date: untilLabel,
+        }),
+      );
     } catch (err) {
+      setBuyMsgTone("danger");
       if (err instanceof ChatGatewayError && err.code === "insufficient_credits") {
         setBuyMsg(t.accountPlanNeedCredits);
       } else {
@@ -339,8 +382,15 @@ export function AccountPlanUsagePanel({
                 </span>
               </div>
               <p style={{ margin: "8px 0 0", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
-                {fmtTpl(t.accountPlanResetOn, { date: dateLabel })}
-                {daysLeft > 0 ? ` (${fmtTpl(t.accountPlanDaysLeft, { n: daysLeft })})` : ""}
+                {currentCode !== "free" && data?.plan.paid_until
+                  ? `${fmtTpl(t.accountPlanExpiresOn, { date: paidUntilMeta.dateLabel })}${
+                      paidUntilMeta.daysLeft > 0
+                        ? ` (${fmtTpl(t.accountPlanDaysLeft, { n: paidUntilMeta.daysLeft })})`
+                        : ""
+                    }`
+                  : `${fmtTpl(t.accountPlanResetOn, { date: dateLabel })}${
+                      daysLeft > 0 ? ` (${fmtTpl(t.accountPlanDaysLeft, { n: daysLeft })})` : ""
+                    }`}
               </p>
               <div style={{ marginTop: 14 }}>
                 <button
@@ -564,7 +614,12 @@ export function AccountPlanUsagePanel({
             justifyContent: "center",
             padding: 16,
           }}
-          onClick={() => setAdjustOpen(false)}
+          onClick={() => {
+            if (buyBusy) return;
+            clearConfirm();
+            setBuyMsg(null);
+            setAdjustOpen(false);
+          }}
         >
           <div
             style={{
@@ -576,6 +631,7 @@ export function AccountPlanUsagePanel({
               border: `1px solid ${colors.border}`,
               padding: "20px 18px 16px",
               boxShadow: "0 24px 64px rgba(0,0,0,0.45)",
+              position: "relative",
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -591,7 +647,12 @@ export function AccountPlanUsagePanel({
               <button
                 type="button"
                 style={{ ...btnGhost, width: 28, height: 28, padding: 0 }}
-                onClick={() => setAdjustOpen(false)}
+                onClick={() => {
+                  if (buyBusy) return;
+                  clearConfirm();
+                  setBuyMsg(null);
+                  setAdjustOpen(false);
+                }}
                 aria-label={t.close}
               >
                 ×
@@ -666,6 +727,20 @@ export function AccountPlanUsagePanel({
                     >
                       {price}
                     </p>
+                    {isCurrent && !isFree && data?.plan.paid_until ? (
+                      <p
+                        style={{
+                          margin: "6px 0 0",
+                          fontSize: 12,
+                          color: colors.muted,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {fmtTpl(t.accountPlanExpiresOn, {
+                          date: paidUntilMeta.dateLabel,
+                        })}
+                      </p>
+                    ) : null}
                     <p
                       style={{
                         margin: "12px 0 0",
@@ -704,7 +779,22 @@ export function AccountPlanUsagePanel({
                         </li>
                       ))}
                     </ul>
-                    {isCurrent ? (
+                    {isCurrent && tier.purchasable ? (
+                      <button
+                        type="button"
+                        disabled={busy || buyBusy != null || confirmTier != null}
+                        style={{
+                          ...btnPrimary,
+                          width: "100%",
+                          marginTop: 16,
+                          padding: "9px 12px",
+                          opacity: busy || buyBusy != null || confirmTier != null ? 0.7 : 1,
+                        }}
+                        onClick={() => requestBuyPlan(tier, { renew: true })}
+                      >
+                        {t.accountPlanRenew}
+                      </button>
+                    ) : isCurrent ? (
                       <button
                         type="button"
                         disabled
@@ -723,26 +813,38 @@ export function AccountPlanUsagePanel({
                     ) : tier.purchasable ? (
                       <button
                         type="button"
-                        disabled={busy || buyBusy != null}
+                        disabled={busy || buyBusy != null || confirmTier != null}
                         style={{
                           ...btnPrimary,
                           width: "100%",
                           marginTop: 16,
                           padding: "9px 12px",
-                          opacity: busy || buyBusy != null ? 0.7 : 1,
+                          opacity: busy || buyBusy != null || confirmTier != null ? 0.7 : 1,
                         }}
-                        onClick={() => void buyPlan(tier.code)}
+                        onClick={() => requestBuyPlan(tier)}
                       >
-                        {busy ? t.accountPlanBuyBusy : t.accountPlanUpgrade}
+                        {t.accountPlanUpgrade}
                       </button>
                     ) : null}
                   </div>
                 );
               })}
             </div>
-            {buyMsg ? (
+            {buyMsg && !confirmTier ? (
               <div style={{ marginTop: 12, textAlign: "center" }}>
-                <p style={{ margin: 0, fontSize: 12, color: colors.danger, lineHeight: 1.45 }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 12,
+                    color:
+                      buyMsgTone === "ok"
+                        ? "#7dcea0"
+                        : buyMsgTone === "danger"
+                          ? colors.danger
+                          : colors.muted,
+                    lineHeight: 1.45,
+                  }}
+                >
                   {buyMsg}
                 </p>
                 {buyMsg === t.accountPlanNeedCredits ? (
@@ -760,6 +862,120 @@ export function AccountPlanUsagePanel({
                     {t.accountPlanOpenWallet}
                   </a>
                 ) : null}
+              </div>
+            ) : null}
+
+            {confirmTier ? (
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label={t.accountPlanBuyConfirmTitle}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  zIndex: 2,
+                  background: "rgba(0,0,0,0.62)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 16,
+                  borderRadius: 14,
+                }}
+              >
+                <div
+                  style={{
+                    width: "100%",
+                    background: "#1a222d",
+                    borderRadius: 12,
+                    border: `1px solid ${colors.border}`,
+                    padding: "16px 14px 14px",
+                  }}
+                >
+                  <strong style={{ fontSize: 15 }}>{t.accountPlanBuyConfirmTitle}</strong>
+                  <p
+                    style={{
+                      margin: "10px 0 0",
+                      fontSize: 13,
+                      color: colors.muted,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {fmtTpl(
+                      confirmIsRenew
+                        ? t.accountPlanBuyConfirmRenewBody
+                        : t.accountPlanBuyConfirmBody,
+                      {
+                        plan:
+                          locale === "zh"
+                            ? confirmTier.label_zh || confirmTier.label
+                            : confirmTier.label,
+                        credits: fmtCredits(confirmTier.price_credits ?? 0),
+                        pack: fmtCredits(confirmTier.dialog_allowance_credits ?? 0),
+                      },
+                    )}
+                  </p>
+                  {buyMsg && buyMsgTone === "danger" ? (
+                    <div style={{ marginTop: 12 }}>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: 12,
+                          color: colors.danger,
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        {buyMsg}
+                      </p>
+                      {buyMsg === t.accountPlanNeedCredits ? (
+                        <a
+                          href={rechargeUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            display: "inline-block",
+                            marginTop: 8,
+                            fontSize: 12,
+                            color: colors.accent,
+                          }}
+                        >
+                          {t.accountPlanOpenWallet}
+                        </a>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      marginTop: 16,
+                      justifyContent: "flex-end",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      disabled={buyBusy != null}
+                      style={{ ...btnGhost, padding: "8px 12px" }}
+                      onClick={() => {
+                        clearConfirm();
+                        setBuyMsg(null);
+                      }}
+                    >
+                      {t.accountPlanBuyCancel}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={buyBusy != null}
+                      style={{
+                        ...btnPrimary,
+                        padding: "8px 12px",
+                        opacity: buyBusy != null ? 0.7 : 1,
+                      }}
+                      onClick={() => void confirmBuyPlan()}
+                    >
+                      {buyBusy ? t.accountPlanBuyBusy : t.accountPlanBuyConfirm}
+                    </button>
+                  </div>
+                </div>
               </div>
             ) : null}
           </div>
