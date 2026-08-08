@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type {
   ChatCollabBudget,
   GatewayClient,
@@ -223,12 +223,28 @@ export function AccountPlanUsagePanel({
   const [buyMsgTone, setBuyMsgTone] = useState<"muted" | "ok" | "danger">("muted");
   const [confirmTier, setConfirmTier] = useState<PlanCatalogEntry | null>(null);
   const [confirmIsRenew, setConfirmIsRenew] = useState(false);
+  type CheckoutWatch = {
+    code: string;
+    priorCode: string;
+    paidUntil: string | null;
+    wasRenew: boolean;
+    watchUntil: number;
+  };
+  /** Open Host checkouts may overlap; keep a short watch list (not a single overwrite). */
+  const checkoutWatchesRef = useRef<CheckoutWatch[]>([]);
   const rechargeUrl = `${agentPlanetBaseUrl.replace(/\/$/, "")}/wallet?recharge=1`;
 
   function clearConfirm() {
     setConfirmTier(null);
     setConfirmIsRenew(false);
   }
+
+  const applyPlanUsage = useCallback((row: PlanUsage) => {
+    setData(row);
+    const mode = row.on_demand?.mode === "fixed" ? "fixed" : "unlimited";
+    setLimitMode(mode);
+    setLimitInput(String(row.on_demand?.limit_credits ?? 200));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -238,10 +254,7 @@ export function AccountPlanUsagePanel({
       .getPlanUsage()
       .then((row) => {
         if (cancelled) return;
-        setData(row);
-        const mode = row.on_demand?.mode === "fixed" ? "fixed" : "unlimited";
-        setLimitMode(mode);
-        setLimitInput(String(row.on_demand?.limit_credits ?? 200));
+        applyPlanUsage(row);
       })
       .catch(() => {
         if (!cancelled) setError(t.accountPlanUsageLoadFailed);
@@ -252,7 +265,63 @@ export function AccountPlanUsagePanel({
     return () => {
       cancelled = true;
     };
-  }, [client, t.accountPlanUsageLoadFailed]);
+  }, [client, t.accountPlanUsageLoadFailed, applyPlanUsage]);
+
+  const refreshAfterCheckout = useCallback(async () => {
+    const now = Date.now();
+    checkoutWatchesRef.current = checkoutWatchesRef.current.filter((w) => now <= w.watchUntil);
+    if (checkoutWatchesRef.current.length === 0) return;
+    try {
+      const row = await client.getPlanUsage();
+      applyPlanUsage(row);
+      const nextCode = (row.plan?.code || "free").toLowerCase();
+      const nextUntil = row.plan?.paid_until ?? null;
+      let matched: CheckoutWatch | null = null;
+      for (const baseline of checkoutWatchesRef.current) {
+        const onTarget = nextCode === baseline.code;
+        // Do not use pack-used drops: monthly pack counters can reset without payment.
+        const untilMoved = nextUntil != null && nextUntil !== baseline.paidUntil;
+        const tierMoved = onTarget && baseline.priorCode !== nextCode;
+        const firstPaid = onTarget && baseline.paidUntil == null && nextUntil != null;
+        if (onTarget && (untilMoved || tierMoved || firstPaid)) {
+          matched = baseline;
+          break;
+        }
+      }
+      if (!matched) return;
+      const date =
+        periodMeta(nextUntil ?? undefined, locale).dateLabel || nextUntil || "—";
+      const planName =
+        locale === "zh" ? row.plan.label_zh || row.plan.label : row.plan.label;
+      setBuyMsgTone("ok");
+      setBuyMsg(
+        fmtTpl(
+          matched.wasRenew ? t.accountPlanBuySuccessRenew : t.accountPlanBuySuccess,
+          { plan: planName || matched.code, date },
+        ),
+      );
+      // Drop watches for the activated tier (and expired ones).
+      checkoutWatchesRef.current = checkoutWatchesRef.current.filter(
+        (w) => w.code !== matched!.code && Date.now() <= w.watchUntil,
+      );
+    } catch {
+      /* keep watching until watchUntil */
+    }
+  }, [applyPlanUsage, client, locale, t.accountPlanBuySuccess, t.accountPlanBuySuccessRenew]);
+
+  useEffect(() => {
+    const onReturn = () => {
+      if (checkoutWatchesRef.current.length === 0) return;
+      if (document.visibilityState && document.visibilityState !== "visible") return;
+      void refreshAfterCheckout();
+    };
+    window.addEventListener("focus", onReturn);
+    document.addEventListener("visibilitychange", onReturn);
+    return () => {
+      window.removeEventListener("focus", onReturn);
+      document.removeEventListener("visibilitychange", onReturn);
+    };
+  }, [refreshAfterCheckout]);
 
   const planLabel =
     locale === "zh"
@@ -293,6 +362,7 @@ export function AccountPlanUsagePanel({
   }
 
   function requestBuyPlan(tier: PlanCatalogEntry, opts?: { renew?: boolean }) {
+    if (buyBusy) return;
     setBuyMsg(null);
     setBuyMsgTone("muted");
     setConfirmIsRenew(Boolean(opts?.renew));
@@ -315,7 +385,8 @@ export function AccountPlanUsagePanel({
 
   async function confirmBuyPlan() {
     if (!confirmTier) return;
-    const code = confirmTier.code;
+    const code = confirmTier.code.toLowerCase() === "ultra" ? "max" : confirmTier.code.toLowerCase();
+    const wasRenew = confirmIsRenew;
     setBuyBusy(code);
     setBuyMsg(null);
     setBuyMsgTone("muted");
@@ -327,10 +398,23 @@ export function AccountPlanUsagePanel({
       } catch {
         // Fall back to Host deep-link constructed above.
       }
+      const watch: CheckoutWatch = {
+        code,
+        priorCode: (data?.plan.code || "free").toLowerCase(),
+        paidUntil: data?.plan.paid_until ?? null,
+        wasRenew,
+        watchUntil: Date.now() + 15 * 60 * 1000,
+      };
+      const now = Date.now();
+      checkoutWatchesRef.current = [
+        ...checkoutWatchesRef.current.filter((w) => now <= w.watchUntil),
+        watch,
+      ].slice(-4);
       window.open(checkoutUrl, "_blank", "noopener,noreferrer");
       clearConfirm();
       setBuyMsgTone("muted");
-      setBuyMsg(t.accountPlanOpenCheckout);
+      setBuyMsg(t.accountPlanCheckoutPending);
+      void refreshAfterCheckout();
     } catch {
       setBuyMsgTone("danger");
       setBuyMsg(t.accountPlanBuyFailed);
@@ -388,7 +472,18 @@ export function AccountPlanUsagePanel({
                 <button
                   type="button"
                   style={{ ...btnGhost, padding: "7px 12px", fontSize: 13 }}
-                  onClick={() => setAdjustOpen(true)}
+                  onClick={() => {
+                    const now = Date.now();
+                    checkoutWatchesRef.current = checkoutWatchesRef.current.filter(
+                      (w) => now <= w.watchUntil,
+                    );
+                    if (checkoutWatchesRef.current.length > 0) {
+                      setBuyMsgTone("muted");
+                      setBuyMsg(t.accountPlanCheckoutPending);
+                      void refreshAfterCheckout();
+                    }
+                    setAdjustOpen(true);
+                  }}
                 >
                   {t.accountPlanAdjust}
                 </button>
@@ -609,7 +704,7 @@ export function AccountPlanUsagePanel({
           onClick={() => {
             if (buyBusy) return;
             clearConfirm();
-            setBuyMsg(null);
+            // Keep checkout watch + success/pending message across dismiss.
             setAdjustOpen(false);
           }}
         >
@@ -642,7 +737,6 @@ export function AccountPlanUsagePanel({
                 onClick={() => {
                   if (buyBusy) return;
                   clearConfirm();
-                  setBuyMsg(null);
                   setAdjustOpen(false);
                 }}
                 aria-label={t.close}

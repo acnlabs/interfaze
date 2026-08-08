@@ -204,6 +204,7 @@ export type RanchMessages = {
   accountPlanNeedCredits: string;
   accountPlanOpenWallet: string;
   accountPlanOpenCheckout: string;
+  accountPlanCheckoutPending: string;
   accountPlanPriceCredits: string;
   accountPlanPriceFiatUsd: string;
   accountPlanPriceFiatCny: string;
@@ -598,6 +599,8 @@ const en: RanchMessages = {
   accountPlanNeedCredits: "Not enough Credits. Top up your Wallet, then try again.",
   accountPlanOpenWallet: "Open Wallet",
   accountPlanOpenCheckout: "Pay on AgentPlanet",
+  accountPlanCheckoutPending:
+    "Checkout opened. After you finish paying, return here — we’ll refresh your plan.",
   accountPlanPriceCredits: "{n} Credits",
   accountPlanPriceFiatUsd: "${n}/mo",
   accountPlanPriceFiatCny: "¥{n}/月",
@@ -1001,6 +1004,7 @@ const zh: RanchMessages = {
   accountPlanNeedCredits: "星币不足。请先给钱包充值，再重试。",
   accountPlanOpenWallet: "打开钱包",
   accountPlanOpenCheckout: "去 AgentPlanet 支付",
+  accountPlanCheckoutPending: "已打开收银台。支付完成后回到此页，我们会刷新套餐状态。",
   accountPlanPriceCredits: "{n} 星币",
   accountPlanPriceFiatUsd: "${n}/mo",
   accountPlanPriceFiatCny: "¥{n}/月",
