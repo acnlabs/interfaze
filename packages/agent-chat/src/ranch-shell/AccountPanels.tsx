@@ -603,12 +603,21 @@ export function AccountPlanUsagePanel({
                 const tierLabel =
                   locale === "zh" ? tier.label_zh || tier.label : tier.label;
                 const isFree = tier.code.toLowerCase() === "free";
-                const price =
-                  tier.price_credits != null && tier.price_credits > 0
-                    ? fmtTpl(t.accountPlanPriceCredits, {
-                        n: fmtCredits(tier.price_credits),
-                      })
-                    : t.accountPlanPayg;
+                const price = (() => {
+                  if (tier.fiat_amount != null && tier.fiat_amount > 0) {
+                    const n = String(tier.fiat_amount);
+                    if ((tier.fiat_currency || "").toUpperCase() === "CNY") {
+                      return fmtTpl(t.accountPlanPriceFiatCny, { n });
+                    }
+                    return fmtTpl(t.accountPlanPriceFiatUsd, { n });
+                  }
+                  if (tier.price_credits != null && tier.price_credits > 0) {
+                    return fmtTpl(t.accountPlanPriceCredits, {
+                      n: fmtCredits(tier.price_credits),
+                    });
+                  }
+                  return t.accountPlanPayg;
+                })();
                 const blurb = isFree ? t.accountPlanFreeBlurb : t.accountPlanProBlurb;
                 const bullets = isFree
                   ? [t.accountPlanIncludedUsage, t.accountPlanPayg]

@@ -71,6 +71,9 @@ export type PlanCatalogEntry = {
   price_credits: number | null;
   purchasable: boolean;
   dialog_allowance_credits: number | null;
+  /** List price in local fiat (USD global / CNY cn). */
+  fiat_amount?: number | null;
+  fiat_currency?: "USD" | "CNY" | string | null;
   features?: string[];
 };
 
@@ -85,6 +88,8 @@ export type PlanUsage = {
   };
   /** Adjust Plan cards; Free + purchasable paid tiers. */
   catalog?: PlanCatalogEntry[];
+  /** Backend plan market: global (USD) or cn (CNY). */
+  market?: "global" | "cn" | string;
   period: {
     start: string;
     end: string;

@@ -195,6 +195,8 @@ export type RanchMessages = {
   accountPlanNeedCredits: string;
   accountPlanOpenWallet: string;
   accountPlanPriceCredits: string;
+  accountPlanPriceFiatUsd: string;
+  accountPlanPriceFiatCny: string;
   accountPlanIncludedPack: string;
   hubAgents: string;
   hubManageSection: string;
@@ -568,13 +570,15 @@ const en: RanchMessages = {
   accountPlanFreeBlurb:
     "No subscription fee and no included pack — pay as you go from your Wallet.",
   accountPlanProBlurb:
-    "Top up your Wallet with cash, then spend Credits to unlock Pro. Includes a dialog usage pack for billable chats (official + marketplace); your own agents stay free. Usage beyond the pack still uses Wallet Credits.",
+    "Top up your Wallet with cash, then spend Credits to unlock this plan. Includes a matching dialog usage pack for billable chats (official + marketplace); your own agents stay free. Usage beyond the pack still uses Wallet Credits.",
   accountPlanUpgrade: "Upgrade",
   accountPlanBuyBusy: "Purchasing…",
   accountPlanBuyFailed: "Couldn’t purchase this plan.",
   accountPlanNeedCredits: "Not enough Credits. Top up your Wallet, then try again.",
   accountPlanOpenWallet: "Open Wallet",
   accountPlanPriceCredits: "{n} Credits",
+  accountPlanPriceFiatUsd: "${n}/mo",
+  accountPlanPriceFiatCny: "¥{n}/月",
   accountPlanIncludedPack: "{n} included dialog usage",
   hubAgents: "Agents",
   hubManageSection: "Yours",
@@ -957,13 +961,15 @@ const zh: RanchMessages = {
   accountPlanComingSoon: "付费档位稍后开放",
   accountPlanFreeBlurb: "无订阅费、无含包，对话从钱包按量扣费。",
   accountPlanProBlurb:
-    "先用法币给钱包充值星币，再用星币解锁 Pro。含对话用量包（官方 + 市场他人 agent 的有偿对话）；自有 agent 仍免费。超出部分仍从钱包按量扣。",
+    "先用法币给钱包充值星币，再用星币解锁该方案。含等额对话用量包（官方 + 市场他人 agent 的有偿对话）；自有 agent 仍免费。超出部分仍从钱包按量扣。",
   accountPlanUpgrade: "升级",
   accountPlanBuyBusy: "购买中…",
   accountPlanBuyFailed: "无法购买该方案。",
   accountPlanNeedCredits: "星币不足。请先给钱包充值，再重试。",
   accountPlanOpenWallet: "打开钱包",
   accountPlanPriceCredits: "{n} 星币",
+  accountPlanPriceFiatUsd: "${n}/mo",
+  accountPlanPriceFiatCny: "¥{n}/月",
   accountPlanIncludedPack: "含对话用量 {n}",
   hubAgents: "Agents",
   hubManageSection: "我的",
