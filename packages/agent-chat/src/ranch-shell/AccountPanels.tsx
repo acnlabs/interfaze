@@ -6,8 +6,10 @@ import type {
   GatewayClient,
   HumanWallet,
   MyAgentWalletTx,
+  PlanCatalogEntry,
   PlanUsage,
 } from "../gateway";
+import { ChatGatewayError } from "../gateway";
 import type { RanchChatAccount } from "../types";
 import type { RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors } from "./styles";
@@ -200,11 +202,13 @@ export function AccountPlanUsagePanel({
   client,
   messages: t,
   locale = "en",
+  agentPlanetBaseUrl = "https://agentplanet.org",
   onClose,
 }: {
   client: GatewayClient;
   messages: RanchMessages;
   locale?: "en" | "zh";
+  agentPlanetBaseUrl?: string;
   onClose: () => void;
 }) {
   const [loading, setLoading] = useState(true);
@@ -215,6 +219,9 @@ export function AccountPlanUsagePanel({
   const [limitInput, setLimitInput] = useState("200");
   const [limitBusy, setLimitBusy] = useState(false);
   const [limitMsg, setLimitMsg] = useState<string | null>(null);
+  const [buyBusy, setBuyBusy] = useState<string | null>(null);
+  const [buyMsg, setBuyMsg] = useState<string | null>(null);
+  const rechargeUrl = `${agentPlanetBaseUrl.replace(/\/$/, "")}/wallet?recharge=1`;
 
   useEffect(() => {
     let cancelled = false;
@@ -277,6 +284,41 @@ export function AccountPlanUsagePanel({
     }
   }
 
+  async function buyPlan(code: string) {
+    setBuyBusy(code);
+    setBuyMsg(null);
+    try {
+      const row = await client.purchasePlan(code);
+      setData(row);
+      setLimitMode(row.on_demand?.mode === "fixed" ? "fixed" : "unlimited");
+      setLimitInput(String(row.on_demand?.limit_credits ?? 200));
+      setAdjustOpen(false);
+    } catch (err) {
+      if (err instanceof ChatGatewayError && err.code === "insufficient_credits") {
+        setBuyMsg(t.accountPlanNeedCredits);
+      } else {
+        setBuyMsg(t.accountPlanBuyFailed);
+      }
+    } finally {
+      setBuyBusy(null);
+    }
+  }
+
+  const catalog: PlanCatalogEntry[] =
+    data?.catalog && data.catalog.length > 0
+      ? data.catalog
+      : [
+          {
+            code: "free",
+            label: "Free",
+            label_zh: "免费",
+            price_credits: null,
+            purchasable: false,
+            dialog_allowance_credits: null,
+          },
+        ];
+  const currentCode = (data?.plan.code || "free").toLowerCase();
+
   return (
     <PanelChrome title={t.accountPlanUsage} onClose={onClose} closeLabel={t.close}>
       {loading ? (
@@ -292,7 +334,9 @@ export function AccountPlanUsagePanel({
                 <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>
                   {planLabel}
                 </span>
-                <span style={{ fontSize: 14, color: colors.muted }}>{t.accountPlanPayg}</span>
+                <span style={{ fontSize: 14, color: colors.muted }}>
+                  {currentCode === "free" ? t.accountPlanPayg : t.accountPlanIncludedUsage}
+                </span>
               </div>
               <p style={{ margin: "8px 0 0", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
                 {fmtTpl(t.accountPlanResetOn, { date: dateLabel })}
@@ -335,7 +379,7 @@ export function AccountPlanUsagePanel({
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                       <span style={{ fontSize: 13, fontWeight: 600 }}>
-                        {t.accountPlanOfficialAgentModels}
+                        {t.accountPlanIncludedUsage}
                       </span>
                       <span style={{ fontSize: 12, color: colors.muted }}>{right}</span>
                     </div>
@@ -348,7 +392,7 @@ export function AccountPlanUsagePanel({
                         lineHeight: 1.45,
                       }}
                     >
-                      {t.accountPlanOfficialAgentModelsHint}
+                      {t.accountPlanIncludedUsageHint}
                     </p>
                   </div>
                 );
@@ -553,89 +597,162 @@ export function AccountPlanUsagePanel({
                 ×
               </button>
             </div>
-            <div
-              style={{
-                ...planCard,
-                position: "relative",
-                background: "#1e2733",
-              }}
-            >
-              <span
-                style={{
-                  position: "absolute",
-                  top: 12,
-                  right: 12,
-                  fontSize: 11,
-                  padding: "3px 8px",
-                  borderRadius: 999,
-                  background: "rgba(255,255,255,0.08)",
-                  color: colors.muted,
-                }}
-              >
-                {t.accountPlanCurrent}
-              </span>
-              <p style={{ margin: 0, fontSize: 15, fontWeight: 650 }}>{planLabel}</p>
-              <p style={{ margin: "8px 0 0", fontSize: 28, fontWeight: 700, letterSpacing: "-0.03em" }}>
-                {t.accountPlanPayg}
-              </p>
-              <p style={{ margin: "12px 0 0", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
-                {t.accountPlanFreeBlurb}
-              </p>
-              <ul
-                style={{
-                  listStyle: "none",
-                  margin: "14px 0 0",
-                  padding: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 8,
-                }}
-              >
-                {[t.accountPlanOfficialAgentModels, t.accountPlanPayg].map((line) => (
-                  <li
-                    key={line}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {catalog.map((tier) => {
+                const isCurrent = tier.code.toLowerCase() === currentCode;
+                const tierLabel =
+                  locale === "zh" ? tier.label_zh || tier.label : tier.label;
+                const isFree = tier.code.toLowerCase() === "free";
+                const price =
+                  tier.price_credits != null && tier.price_credits > 0
+                    ? fmtTpl(t.accountPlanPriceCredits, {
+                        n: fmtCredits(tier.price_credits),
+                      })
+                    : t.accountPlanPayg;
+                const blurb = isFree ? t.accountPlanFreeBlurb : t.accountPlanProBlurb;
+                const bullets = isFree
+                  ? [t.accountPlanIncludedUsage, t.accountPlanPayg]
+                  : [
+                      tier.dialog_allowance_credits != null
+                        ? fmtTpl(t.accountPlanIncludedPack, {
+                            n: fmtCredits(tier.dialog_allowance_credits),
+                          })
+                        : t.accountPlanIncludedUsage,
+                      t.accountPlanPayg,
+                    ];
+                const busy = buyBusy === tier.code;
+                return (
+                  <div
+                    key={tier.code}
                     style={{
-                      display: "flex",
-                      gap: 8,
-                      fontSize: 12,
-                      color: colors.muted,
-                      lineHeight: 1.4,
+                      ...planCard,
+                      position: "relative",
+                      background: isCurrent ? "#1e2733" : "#161c24",
                     }}
                   >
-                    <span aria-hidden style={{ color: colors.text }}>
-                      ✓
-                    </span>
-                    <span>{line}</span>
-                  </li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                disabled
-                style={{
-                  ...btnGhost,
-                  width: "100%",
-                  marginTop: 16,
-                  padding: "9px 12px",
-                  background: "rgba(255,255,255,0.08)",
-                  cursor: "default",
-                  opacity: 0.9,
-                }}
-              >
-                {t.accountPlanYourCurrent}
-              </button>
+                    {isCurrent ? (
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: 12,
+                          right: 12,
+                          fontSize: 11,
+                          padding: "3px 8px",
+                          borderRadius: 999,
+                          background: "rgba(255,255,255,0.08)",
+                          color: colors.muted,
+                        }}
+                      >
+                        {t.accountPlanCurrent}
+                      </span>
+                    ) : null}
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 650 }}>{tierLabel}</p>
+                    <p
+                      style={{
+                        margin: "8px 0 0",
+                        fontSize: 28,
+                        fontWeight: 700,
+                        letterSpacing: "-0.03em",
+                      }}
+                    >
+                      {price}
+                    </p>
+                    <p
+                      style={{
+                        margin: "12px 0 0",
+                        fontSize: 12,
+                        color: colors.muted,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {blurb}
+                    </p>
+                    <ul
+                      style={{
+                        listStyle: "none",
+                        margin: "14px 0 0",
+                        padding: 0,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8,
+                      }}
+                    >
+                      {bullets.map((line) => (
+                        <li
+                          key={line}
+                          style={{
+                            display: "flex",
+                            gap: 8,
+                            fontSize: 12,
+                            color: colors.muted,
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          <span aria-hidden style={{ color: colors.text }}>
+                            ✓
+                          </span>
+                          <span>{line}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    {isCurrent ? (
+                      <button
+                        type="button"
+                        disabled
+                        style={{
+                          ...btnGhost,
+                          width: "100%",
+                          marginTop: 16,
+                          padding: "9px 12px",
+                          background: "rgba(255,255,255,0.08)",
+                          cursor: "default",
+                          opacity: 0.9,
+                        }}
+                      >
+                        {t.accountPlanYourCurrent}
+                      </button>
+                    ) : tier.purchasable ? (
+                      <button
+                        type="button"
+                        disabled={busy || buyBusy != null}
+                        style={{
+                          ...btnPrimary,
+                          width: "100%",
+                          marginTop: 16,
+                          padding: "9px 12px",
+                          opacity: busy || buyBusy != null ? 0.7 : 1,
+                        }}
+                        onClick={() => void buyPlan(tier.code)}
+                      >
+                        {busy ? t.accountPlanBuyBusy : t.accountPlanUpgrade}
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
-            <p
-              style={{
-                margin: "14px 0 0",
-                fontSize: 11,
-                color: colors.muted,
-                textAlign: "center",
-                lineHeight: 1.45,
-              }}
-            >
-              {t.accountPlanComingSoon}
-            </p>
+            {buyMsg ? (
+              <div style={{ marginTop: 12, textAlign: "center" }}>
+                <p style={{ margin: 0, fontSize: 12, color: colors.danger, lineHeight: 1.45 }}>
+                  {buyMsg}
+                </p>
+                {buyMsg === t.accountPlanNeedCredits ? (
+                  <a
+                    href={rechargeUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      display: "inline-block",
+                      marginTop: 8,
+                      fontSize: 12,
+                      color: colors.accent,
+                    }}
+                  >
+                    {t.accountPlanOpenWallet}
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

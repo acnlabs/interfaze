@@ -169,8 +169,8 @@ export type RanchMessages = {
   accountPlanResetOn: string;
   accountPlanDaysLeft: string;
   accountPlanIncludedIn: string;
-  accountPlanOfficialAgentModels: string;
-  accountPlanOfficialAgentModelsHint: string;
+  accountPlanIncludedUsage: string;
+  accountPlanIncludedUsageHint: string;
   accountPlanNotIncluded: string;
   accountPlanOnDemand: string;
   accountPlanDialogUsage: string;
@@ -188,6 +188,14 @@ export type RanchMessages = {
   accountPlanEmptyUsage: string;
   accountPlanComingSoon: string;
   accountPlanFreeBlurb: string;
+  accountPlanProBlurb: string;
+  accountPlanUpgrade: string;
+  accountPlanBuyBusy: string;
+  accountPlanBuyFailed: string;
+  accountPlanNeedCredits: string;
+  accountPlanOpenWallet: string;
+  accountPlanPriceCredits: string;
+  accountPlanIncludedPack: string;
   hubAgents: string;
   hubManageSection: string;
   hubDiscoverSection: string;
@@ -538,9 +546,9 @@ const en: RanchMessages = {
   accountPlanResetOn: "Usage period resets on {date}",
   accountPlanDaysLeft: "{n} days left",
   accountPlanIncludedIn: "Included in {plan}",
-  accountPlanOfficialAgentModels: "Official agents’ models",
-  accountPlanOfficialAgentModelsHint:
-    "Included usage for models behind Interfaze / platform agents — the pack Plan sells.",
+  accountPlanIncludedUsage: "Included dialog usage",
+  accountPlanIncludedUsageHint:
+    "Paid plans cover billable chats with official and marketplace agents. Your own agents stay free and don’t use this pack.",
   accountPlanNotIncluded: "Not included",
   accountPlanOnDemand: "On-Demand Usage",
   accountPlanDialogUsage: "On-Demand",
@@ -558,7 +566,16 @@ const en: RanchMessages = {
   accountPlanEmptyUsage: "No on-demand charges this period.",
   accountPlanComingSoon: "Paid tiers coming later",
   accountPlanFreeBlurb:
-    "No subscription fee and no included pack for official agents’ models.",
+    "No subscription fee and no included pack — pay as you go from your Wallet.",
+  accountPlanProBlurb:
+    "Top up your Wallet with cash, then spend Credits to unlock Pro. Includes a dialog usage pack for billable chats (official + marketplace); your own agents stay free. Usage beyond the pack still uses Wallet Credits.",
+  accountPlanUpgrade: "Upgrade",
+  accountPlanBuyBusy: "Purchasing…",
+  accountPlanBuyFailed: "Couldn’t purchase this plan.",
+  accountPlanNeedCredits: "Not enough Credits. Top up your Wallet, then try again.",
+  accountPlanOpenWallet: "Open Wallet",
+  accountPlanPriceCredits: "{n} Credits",
+  accountPlanIncludedPack: "{n} included dialog usage",
   hubAgents: "Agents",
   hubManageSection: "Yours",
   hubDiscoverSection: "On the network",
@@ -919,9 +936,9 @@ const zh: RanchMessages = {
   accountPlanResetOn: "用量周期重置于 {date}",
   accountPlanDaysLeft: "还剩 {n} 天",
   accountPlanIncludedIn: "包含于 {plan}",
-  accountPlanOfficialAgentModels: "官方 agent 的模型",
-  accountPlanOfficialAgentModelsHint:
-    "方案含包计量的是官方 agent 背后的模型用量——Plan 卖的就是这块。",
+  accountPlanIncludedUsage: "含包对话用量",
+  accountPlanIncludedUsageHint:
+    "付费方案覆盖与官方及市场上其他 agent 的有偿对话。自有 agent 仍免费，不消耗含包。",
   accountPlanNotIncluded: "不含",
   accountPlanOnDemand: "按量用量",
   accountPlanDialogUsage: "按量",
@@ -938,7 +955,16 @@ const zh: RanchMessages = {
   accountPlanByAgent: "按 agent",
   accountPlanEmptyUsage: "本周期尚无按量费用。",
   accountPlanComingSoon: "付费档位稍后开放",
-  accountPlanFreeBlurb: "无订阅费，也不含官方 agent 模型额度。",
+  accountPlanFreeBlurb: "无订阅费、无含包，对话从钱包按量扣费。",
+  accountPlanProBlurb:
+    "先用法币给钱包充值星币，再用星币解锁 Pro。含对话用量包（官方 + 市场他人 agent 的有偿对话）；自有 agent 仍免费。超出部分仍从钱包按量扣。",
+  accountPlanUpgrade: "升级",
+  accountPlanBuyBusy: "购买中…",
+  accountPlanBuyFailed: "无法购买该方案。",
+  accountPlanNeedCredits: "星币不足。请先给钱包充值，再重试。",
+  accountPlanOpenWallet: "打开钱包",
+  accountPlanPriceCredits: "{n} 星币",
+  accountPlanIncludedPack: "含对话用量 {n}",
   hubAgents: "Agents",
   hubManageSection: "我的",
   hubDiscoverSection: "网络上",

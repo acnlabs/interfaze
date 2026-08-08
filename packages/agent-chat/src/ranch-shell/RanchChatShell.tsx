@@ -3020,6 +3020,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             client={client}
             messages={t}
             locale={uiLocale}
+            agentPlanetBaseUrl={agentPlanetBaseUrl}
             onClose={() => setShowAccountPlan(false)}
           />
         ) : null}

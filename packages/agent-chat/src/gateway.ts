@@ -63,6 +63,17 @@ export type HumanWallet = {
   owner_id?: string | null;
 };
 
+/** Catalog tier from GET /api/chat/plan-usage. */
+export type PlanCatalogEntry = {
+  code: string;
+  label: string;
+  label_zh?: string;
+  price_credits: number | null;
+  purchasable: boolean;
+  dialog_allowance_credits: number | null;
+  features?: string[];
+};
+
 /** Plan entitlement + dialog usage from GET /api/chat/plan-usage. */
 export type PlanUsage = {
   plan: {
@@ -72,6 +83,8 @@ export type PlanUsage = {
     features?: string[];
     status?: string;
   };
+  /** Adjust Plan cards; Free + purchasable paid tiers. */
+  catalog?: PlanCatalogEntry[];
   period: {
     start: string;
     end: string;
@@ -299,6 +312,8 @@ export type GatewayClient = {
     mode: "unlimited" | "fixed",
     limitCredits?: number | null,
   ) => Promise<PlanUsage>;
+  /** Spend Wallet Credits to activate a purchasable catalog tier. */
+  purchasePlan: (planCode: string) => Promise<PlanUsage>;
   /** Account default collaboration tank size (preference; no lock). */
   getCollabCap: () => Promise<{ cap_credits: number }>;
   putCollabCap: (capCredits: number) => Promise<{ cap_credits: number }>;
@@ -486,6 +501,11 @@ export function createGatewayClient(
           mode,
           limit_credits: mode === "fixed" ? (limitCredits ?? 0) : undefined,
         }),
+      }),
+    purchasePlan: (planCode) =>
+      request<PlanUsage>("/api/chat/plan-usage/purchase", {
+        method: "POST",
+        body: JSON.stringify({ plan_code: planCode }),
       }),
     listHumanWalletTransactions: (page = 1, pageSize = 20) => {
       const params = new URLSearchParams();
