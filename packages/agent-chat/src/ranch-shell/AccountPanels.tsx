@@ -302,10 +302,10 @@ export function AccountPlanUsagePanel({
     }
   }
 
-  function requestBuyPlan(tier: PlanCatalogEntry, *, renew = false) {
+  function requestBuyPlan(tier: PlanCatalogEntry, opts?: { renew?: boolean }) {
     setBuyMsg(null);
     setBuyMsgTone("muted");
-    setConfirmIsRenew(renew);
+    setConfirmIsRenew(Boolean(opts?.renew));
     setPurchaseIdem(newPurchaseIdem());
     setConfirmTier(tier);
   }
