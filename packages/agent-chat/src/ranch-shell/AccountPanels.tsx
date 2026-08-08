@@ -9,7 +9,6 @@ import type {
   PlanCatalogEntry,
   PlanUsage,
 } from "../gateway";
-import { ChatGatewayError } from "../gateway";
 import type { RanchChatAccount } from "../types";
 import type { RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors } from "./styles";
@@ -224,20 +223,11 @@ export function AccountPlanUsagePanel({
   const [buyMsgTone, setBuyMsgTone] = useState<"muted" | "ok" | "danger">("muted");
   const [confirmTier, setConfirmTier] = useState<PlanCatalogEntry | null>(null);
   const [confirmIsRenew, setConfirmIsRenew] = useState(false);
-  const [purchaseIdem, setPurchaseIdem] = useState<string | null>(null);
   const rechargeUrl = `${agentPlanetBaseUrl.replace(/\/$/, "")}/wallet?recharge=1`;
-
-  function newPurchaseIdem(): string {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-      return crypto.randomUUID();
-    }
-    return `plan-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  }
 
   function clearConfirm() {
     setConfirmTier(null);
     setConfirmIsRenew(false);
-    setPurchaseIdem(null);
   }
 
   useEffect(() => {
@@ -306,42 +296,44 @@ export function AccountPlanUsagePanel({
     setBuyMsg(null);
     setBuyMsgTone("muted");
     setConfirmIsRenew(Boolean(opts?.renew));
-    setPurchaseIdem(newPurchaseIdem());
     setConfirmTier(tier);
+  }
+
+  function tierFiatLabel(tier: PlanCatalogEntry): string {
+    if (tier.fiat_amount != null && tier.fiat_amount > 0) {
+      const n = String(tier.fiat_amount);
+      if ((tier.fiat_currency || "").toUpperCase() === "CNY") {
+        return fmtTpl(t.accountPlanPriceFiatCny, { n });
+      }
+      return fmtTpl(t.accountPlanPriceFiatUsd, { n });
+    }
+    if (tier.price_credits != null && tier.price_credits > 0) {
+      return fmtTpl(t.accountPlanPriceCredits, { n: fmtCredits(tier.price_credits) });
+    }
+    return "—";
   }
 
   async function confirmBuyPlan() {
     if (!confirmTier) return;
     const code = confirmTier.code;
-    const wasRenew = confirmIsRenew;
-    const idem = purchaseIdem ?? newPurchaseIdem();
-    if (!purchaseIdem) setPurchaseIdem(idem);
-    const tierLabel =
-      locale === "zh" ? confirmTier.label_zh || confirmTier.label : confirmTier.label;
     setBuyBusy(code);
     setBuyMsg(null);
     setBuyMsgTone("muted");
     try {
-      const row = await client.purchasePlan(code, idem);
-      setData(row);
-      setLimitMode(row.on_demand?.mode === "fixed" ? "fixed" : "unlimited");
-      setLimitInput(String(row.on_demand?.limit_credits ?? 200));
-      clearConfirm();
-      const untilLabel = periodMeta(row.plan.paid_until ?? undefined, locale).dateLabel;
-      setBuyMsgTone("ok");
-      setBuyMsg(
-        fmtTpl(wasRenew ? t.accountPlanBuySuccessRenew : t.accountPlanBuySuccess, {
-          plan: tierLabel,
-          date: untilLabel,
-        }),
-      );
-    } catch (err) {
-      setBuyMsgTone("danger");
-      if (err instanceof ChatGatewayError && err.code === "insufficient_credits") {
-        setBuyMsg(t.accountPlanNeedCredits);
-      } else {
-        setBuyMsg(t.accountPlanBuyFailed);
+      let checkoutUrl = `${agentPlanetBaseUrl.replace(/\/$/, "")}/wallet?plan=${encodeURIComponent(code)}`;
+      try {
+        const row = await client.getPlanCheckout(code);
+        if (row.checkout_url) checkoutUrl = row.checkout_url;
+      } catch {
+        // Fall back to Host deep-link constructed above.
       }
+      window.open(checkoutUrl, "_blank", "noopener,noreferrer");
+      clearConfirm();
+      setBuyMsgTone("muted");
+      setBuyMsg(t.accountPlanOpenCheckout);
+    } catch {
+      setBuyMsgTone("danger");
+      setBuyMsg(t.accountPlanBuyFailed);
     } finally {
       setBuyBusy(null);
     }
@@ -909,7 +901,7 @@ export function AccountPlanUsagePanel({
                           locale === "zh"
                             ? confirmTier.label_zh || confirmTier.label
                             : confirmTier.label,
-                        credits: fmtCredits(confirmTier.price_credits ?? 0),
+                        price: tierFiatLabel(confirmTier),
                         pack: fmtCredits(confirmTier.dialog_allowance_credits ?? 0),
                       },
                     )}

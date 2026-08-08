@@ -203,6 +203,7 @@ export type RanchMessages = {
   accountPlanBuyFailed: string;
   accountPlanNeedCredits: string;
   accountPlanOpenWallet: string;
+  accountPlanOpenCheckout: string;
   accountPlanPriceCredits: string;
   accountPlanPriceFiatUsd: string;
   accountPlanPriceFiatCny: string;
@@ -579,23 +580,24 @@ const en: RanchMessages = {
   accountPlanFreeBlurb:
     "No subscription fee and no included pack — pay as you go from your Wallet.",
   accountPlanProBlurb:
-    "Top up your Wallet with cash, then spend Credits for 30 days of this plan. Includes a matching dialog usage pack for billable chats (official + marketplace); your own agents stay free. Usage beyond the pack still uses Wallet Credits. Access ends when the period expires — renew anytime.",
-  accountPlanUpgrade: "Upgrade",
+    "Pay with cash to subscribe for 30 days. Includes a matching dialog usage pack for billable chats (official + marketplace); your own agents stay free. Usage beyond the pack uses Wallet Credits. Access ends when the period expires — renew anytime.",
+  accountPlanUpgrade: "Subscribe",
   accountPlanRenew: "Renew",
   accountPlanExpiresOn: "Access until {date}",
-  accountPlanBuyBusy: "Purchasing…",
-  accountPlanBuyConfirmTitle: "Confirm purchase",
+  accountPlanBuyBusy: "Opening checkout…",
+  accountPlanBuyConfirmTitle: "Continue to checkout",
   accountPlanBuyConfirmBody:
-    "Spend {credits} Credits from your Wallet for 30 days of {plan}? Included dialog pack: {pack}.",
+    "You’ll pay {price} for 30 days of {plan} (cash checkout on AgentPlanet). Included dialog pack: {pack}. Wallet Credits are not charged for the subscription.",
   accountPlanBuyConfirmRenewBody:
-    "Spend {credits} Credits to renew {plan} for another 30 days and refresh the included dialog pack ({pack})?",
-  accountPlanBuyConfirm: "Confirm",
+    "You’ll pay {price} to renew {plan} for another 30 days and refresh the included dialog pack ({pack}). Wallet Credits are not charged.",
+  accountPlanBuyConfirm: "Continue to pay",
   accountPlanBuyCancel: "Cancel",
   accountPlanBuySuccess: "You’re on {plan} until {date}.",
   accountPlanBuySuccessRenew: "Renewed {plan} until {date}.",
-  accountPlanBuyFailed: "Couldn’t purchase this plan.",
+  accountPlanBuyFailed: "Couldn’t open checkout for this plan.",
   accountPlanNeedCredits: "Not enough Credits. Top up your Wallet, then try again.",
   accountPlanOpenWallet: "Open Wallet",
+  accountPlanOpenCheckout: "Pay on AgentPlanet",
   accountPlanPriceCredits: "{n} Credits",
   accountPlanPriceFiatUsd: "${n}/mo",
   accountPlanPriceFiatCny: "¥{n}/月",
@@ -981,23 +983,24 @@ const zh: RanchMessages = {
   accountPlanComingSoon: "付费档位稍后开放",
   accountPlanFreeBlurb: "无订阅费、无含包，对话从钱包按量扣费。",
   accountPlanProBlurb:
-    "先用法币给钱包充值星币，再用星币购买该方案 30 天。含等额对话用量包（官方 + 市场他人 agent 的有偿对话）；自有 agent 仍免费。超出部分仍从钱包按量扣。到期后回到免费档，可随时续费。",
-  accountPlanUpgrade: "升级",
+    "用法币订阅 30 天。含等额对话用量包（官方 + 市场他人 agent 的有偿对话）；自有 agent 仍免费。超出部分从钱包按量扣。到期回免费档，可随时续费。订阅不扣钱包星币。",
+  accountPlanUpgrade: "订阅",
   accountPlanRenew: "续费",
   accountPlanExpiresOn: "有效期至 {date}",
-  accountPlanBuyBusy: "购买中…",
-  accountPlanBuyConfirmTitle: "确认购买",
+  accountPlanBuyBusy: "打开收银台…",
+  accountPlanBuyConfirmTitle: "前往支付",
   accountPlanBuyConfirmBody:
-    "将从钱包扣除 {credits} 星币，获得 {plan} 30 天？含包对话用量：{pack}。",
+    "将支付 {price} 获得 {plan} 30 天（在 AgentPlanet 用法币结账）。含包对话用量：{pack}。订阅不扣钱包星币。",
   accountPlanBuyConfirmRenewBody:
-    "将从钱包扣除 {credits} 星币，为 {plan} 续费 30 天，并刷新含包对话用量（{pack}）？",
-  accountPlanBuyConfirm: "确认购买",
+    "将支付 {price} 为 {plan} 续费 30 天，并刷新含包（{pack}）。订阅不扣钱包星币。",
+  accountPlanBuyConfirm: "去支付",
   accountPlanBuyCancel: "取消",
   accountPlanBuySuccess: "已开通 {plan}，有效至 {date}。",
   accountPlanBuySuccessRenew: "已续费 {plan}，有效至 {date}。",
-  accountPlanBuyFailed: "无法购买该方案。",
+  accountPlanBuyFailed: "无法打开该方案的收银台。",
   accountPlanNeedCredits: "星币不足。请先给钱包充值，再重试。",
   accountPlanOpenWallet: "打开钱包",
+  accountPlanOpenCheckout: "去 AgentPlanet 支付",
   accountPlanPriceCredits: "{n} 星币",
   accountPlanPriceFiatUsd: "${n}/mo",
   accountPlanPriceFiatCny: "¥{n}/月",

@@ -324,7 +324,15 @@ export type GatewayClient = {
     limitCredits?: number | null,
   ) => Promise<PlanUsage>;
   /** Spend Wallet Credits to activate a purchasable catalog tier. */
+  /** @deprecated Credits purchase disabled — use getPlanCheckout. */
   purchasePlan: (planCode: string, idempotencyKey?: string) => Promise<PlanUsage>;
+  getPlanCheckout: (planCode: string) => Promise<{
+    plan_code: string;
+    checkout_url: string;
+    fiat_amount: number | null;
+    fiat_currency: string | null;
+    period_days: number;
+  }>;
   /** Account default collaboration tank size (preference; no lock). */
   getCollabCap: () => Promise<{ cap_credits: number }>;
   putCollabCap: (capCredits: number) => Promise<{ cap_credits: number }>;
@@ -521,6 +529,17 @@ export function createGatewayClient(
           ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
         }),
       }),
+    getPlanCheckout: (planCode) => {
+      const params = new URLSearchParams();
+      params.set("plan_code", planCode);
+      return request<{
+        plan_code: string;
+        checkout_url: string;
+        fiat_amount: number | null;
+        fiat_currency: string | null;
+        period_days: number;
+      }>(`/api/chat/plan-usage/checkout?${params}`);
+    },
     listHumanWalletTransactions: (page = 1, pageSize = 20) => {
       const params = new URLSearchParams();
       params.set("page", String(page));
