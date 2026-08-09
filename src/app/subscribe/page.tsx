@@ -12,7 +12,6 @@ import {
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth0 } from "@auth0/auth0-react";
-import { PayPalScriptProvider, PayPalButtons, FUNDING } from "@paypal/react-paypal-js";
 import {
   AUTH0_AUDIENCE,
   AUTH0_SCOPE,
@@ -263,134 +262,59 @@ function SubscribeInner() {
         </div>
         {success ? <p style={{ color: "#10b981", fontSize: 13 }}>{success}</p> : null}
         {error ? <p style={{ color: "#ef4444", fontSize: 13 }}>{error}</p> : null}
-        {/* PayPal popups break inside iframes (about:blank). Break out to top-level checkout. */}
-        {!success && embed && inIframe ? (
-          <>
-            <p style={{ ...muted, marginBottom: 8, fontSize: 12 }}>
-              PayPal cannot finish inside this panel. Continue on the full checkout page.
-            </p>
-            <button
-              type="button"
-              style={btnStyle}
-              onClick={() => {
-                const path = withEmbedParentOrigin(
-                  `/subscribe?plan=${planCode}${renew ? "&renew=1" : ""}`,
-                  parentOriginParam,
-                );
-                const url = `${window.location.origin}${path}`;
+        {/* Full-page approve_url redirect — SDK popup often opens about:blank in this host. */}
+        {!success && PAYPAL_CLIENT_ID ? (
+          <button
+            type="button"
+            style={paypalBtnStyle}
+            disabled={paying}
+            onClick={() => {
+              void (async () => {
+                setError(null);
+                setPaying(true);
                 try {
+                  const token = await tokenGetter();
+                  if (!token) throw new Error("Not signed in");
+                  const cancelPath = withEmbedParentOrigin(
+                    `/subscribe?plan=${planCode}&paypal=cancel${renew ? "&renew=1" : ""}`,
+                    parentOriginParam,
+                  );
+                  const res = await fetch(
+                    `${gateway}/api/users/me/wallet/paypal/create-order`,
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                      },
+                      body: JSON.stringify({
+                        amount: plan.amountUsd,
+                        currency: "USD",
+                        return_url: returnUrl,
+                        cancel_url: `${window.location.origin}${cancelPath}`,
+                        plan_code: planCode,
+                      }),
+                    },
+                  );
+                  const body = (await res.json().catch(() => ({}))) as {
+                    order_id?: string;
+                    approve_url?: string | null;
+                    detail?: string;
+                  };
+                  if (!res.ok || !body.approve_url) {
+                    throw new Error(body.detail || `Create failed (${res.status})`);
+                  }
                   const topWin = window.top || window;
-                  topWin.location.href = url;
-                } catch {
-                  window.open(url, "_blank", "noopener,noreferrer");
-                }
-              }}
-            >
-              Continue with PayPal
-            </button>
-          </>
-        ) : !success && PAYPAL_CLIENT_ID ? (
-          <PayPalScriptProvider
-            options={{ clientId: PAYPAL_CLIENT_ID, currency: "USD", locale: "en_US" }}
-          >
-            <div style={{ height: 40, overflow: "hidden" }}>
-              <PayPalButtons
-                fundingSource={FUNDING.PAYPAL}
-                style={{
-                  color: "gold",
-                  shape: "rect",
-                  label: "pay",
-                  height: 40,
-                  borderRadius: 0,
-                }}
-                disabled={paying}
-                createOrder={async () => {
-                  setError(null);
-                  setPaying(true);
-                  try {
-                    const token = await tokenGetter();
-                    if (!token) throw new Error("Not signed in");
-                    const res = await fetch(
-                      `${gateway}/api/users/me/wallet/paypal/create-order`,
-                      {
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                          Authorization: `Bearer ${token}`,
-                        },
-                        body: JSON.stringify({
-                          amount: plan.amountUsd,
-                          currency: "USD",
-                          return_url: returnUrl,
-                          cancel_url: `${typeof window !== "undefined" ? window.location.origin : ""}${withEmbedParentOrigin(
-                            `/subscribe?plan=${planCode}&paypal=cancel${renew ? "&renew=1" : ""}`,
-                            parentOriginParam,
-                          )}`,
-                          plan_code: planCode,
-                        }),
-                      },
-                    );
-                    const body = (await res.json()) as {
-                      order_id?: string;
-                      detail?: string;
-                    };
-                    if (!res.ok || !body.order_id) {
-                      throw new Error(body.detail || `Create failed (${res.status})`);
-                    }
-                    return body.order_id;
-                  } catch (e) {
-                    setPaying(false);
-                    setError(e instanceof Error ? e.message : "PayPal create failed");
-                    throw e;
-                  }
-                }}
-                onApprove={async (data) => {
-                  try {
-                    const token = await tokenGetter();
-                    if (!token) throw new Error("Not signed in");
-                    const res = await fetch(
-                      `${gateway}/api/users/me/wallet/paypal/capture`,
-                      {
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                          Authorization: `Bearer ${token}`,
-                        },
-                        body: JSON.stringify({ order_id: data.orderID }),
-                      },
-                    );
-                    const body = (await res.json()) as {
-                      status?: string;
-                      plan_code?: string;
-                      paid_until?: string | null;
-                      detail?: string;
-                    };
-                    if (!res.ok) throw new Error(body.detail || `Capture failed (${res.status})`);
-                    if (body.status === "plan_activated" && body.plan_code) {
-                      setSuccess(
-                        `${body.plan_code.toUpperCase()} active` +
-                          (body.paid_until
-                            ? ` until ${new Date(body.paid_until).toLocaleDateString()}`
-                            : ""),
-                      );
-                      notifyParent(body.plan_code, body.paid_until);
-                    } else {
-                      setError("Payment captured but plan was not activated.");
-                    }
-                  } catch (e) {
-                    setError(e instanceof Error ? e.message : "Capture failed");
-                  } finally {
-                    setPaying(false);
-                  }
-                }}
-                onCancel={() => setPaying(false)}
-                onError={() => {
-                  setError("PayPal error");
+                  topWin.location.assign(body.approve_url);
+                } catch (e) {
                   setPaying(false);
-                }}
-              />
-            </div>
-          </PayPalScriptProvider>
+                  setError(e instanceof Error ? e.message : "PayPal create failed");
+                }
+              })();
+            }}
+          >
+            {paying ? "Redirecting…" : "Pay with PayPal"}
+          </button>
         ) : !success ? (
           <p style={{ color: "#ef4444", fontSize: 13 }}>PayPal is not configured.</p>
         ) : null}
@@ -470,6 +394,13 @@ const btnStyle: CSSProperties = {
   fontWeight: 700,
   fontSize: 14,
   cursor: "pointer",
+};
+
+const paypalBtnStyle: CSSProperties = {
+  ...btnStyle,
+  background: "#ffc439",
+  color: "#003087",
+  marginTop: 8,
 };
 
 function SubscribeAuthGate() {
