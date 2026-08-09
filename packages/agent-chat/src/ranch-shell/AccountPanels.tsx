@@ -197,17 +197,49 @@ function periodMeta(
   return { dateLabel, daysLeft };
 }
 
+/** Exact Interfaze hosts (avoid `startsWith("interfaze.")` typosquat). */
+function isInterfazeHostname(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return (
+    h === "interfaze.io" ||
+    h.endsWith(".interfaze.io") ||
+    h === "interfaze.acnlabs.cn" ||
+    h.endsWith(".interfaze.acnlabs.cn") ||
+    h === "localhost" ||
+    h === "127.0.0.1"
+  );
+}
+
+function isTrustedCheckoutOrigin(origin: string, subscribeBase: string): boolean {
+  const trusted = new Set<string>(["https://interfaze.io", "https://interfaze.acnlabs.cn"]);
+  try {
+    trusted.add(new URL(subscribeBase).origin);
+  } catch {
+    /* ignore */
+  }
+  if (typeof window !== "undefined" && isInterfazeHostname(window.location.hostname)) {
+    trusted.add(window.location.origin);
+  }
+  return trusted.has(origin);
+}
+
+/** postMessage from /subscribe?embed=1 when plan activates. */
+export const PLAN_ACTIVATED_MSG = "interfaze:plan-activated";
+
 export function AccountPlanUsagePanel({
   client,
   messages: t,
   locale = "en",
   agentPlanetBaseUrl = "https://agentplanet.org",
+  interfazeBaseUrl = "https://interfaze.io",
   onClose,
 }: {
   client: GatewayClient;
   messages: RanchMessages;
   locale?: "en" | "zh";
   agentPlanetBaseUrl?: string;
+  /** Interfaze origin for /subscribe checkout (shell embed + deep link). */
+  interfazeBaseUrl?: string;
   onClose: () => void;
 }) {
   const [loading, setLoading] = useState(true);
@@ -223,6 +255,8 @@ export function AccountPlanUsagePanel({
   const [buyMsgTone, setBuyMsgTone] = useState<"muted" | "ok" | "danger">("muted");
   const [confirmTier, setConfirmTier] = useState<PlanCatalogEntry | null>(null);
   const [confirmIsRenew, setConfirmIsRenew] = useState(false);
+  /** In-shell Interfaze /subscribe embed (QR / PayPal). */
+  const [checkoutEmbedUrl, setCheckoutEmbedUrl] = useState<string | null>(null);
   type CheckoutWatch = {
     code: string;
     priorCode: string;
@@ -230,13 +264,64 @@ export function AccountPlanUsagePanel({
     wasRenew: boolean;
     watchUntil: number;
   };
-  /** Open Host checkouts may overlap; keep a short watch list (not a single overwrite). */
+  /** Open checkouts may overlap; keep a short watch list (not a single overwrite). */
   const checkoutWatchesRef = useRef<CheckoutWatch[]>([]);
   const rechargeUrl = `${agentPlanetBaseUrl.replace(/\/$/, "")}/wallet?recharge=1`;
+  /**
+   * Prefer Host-injected interfazeBaseUrl. If already on an Interfaze host,
+   * use same origin (WeChat /subscribe). Do not fall back to AgentPlanet origin —
+   * plan checkout lives on Interfaze, not Host wallet.
+   */
+  const subscribeBase = (() => {
+    const fromProp = (interfazeBaseUrl || "").replace(/\/$/, "");
+    if (typeof window !== "undefined") {
+      const { hostname, origin } = window.location;
+      if (isInterfazeHostname(hostname)) return origin;
+    }
+    return fromProp || "https://interfaze.io";
+  })();
 
   function clearConfirm() {
     setConfirmTier(null);
     setConfirmIsRenew(false);
+  }
+
+  function buildSubscribeUrl(code: string, renew: boolean, embed: boolean): string {
+    const u = new URL(`${subscribeBase}/subscribe`);
+    u.searchParams.set("plan", code);
+    if (renew) u.searchParams.set("renew", "1");
+    if (embed) {
+      u.searchParams.set("embed", "1");
+      if (typeof window !== "undefined") {
+        u.searchParams.set("parent_origin", window.location.origin);
+      }
+    }
+    return u.toString();
+  }
+
+  function allowedCheckoutOrigin(url: string | null): string | null {
+    if (!url) return null;
+    try {
+      const origin = new URL(url).origin;
+      if (!isTrustedCheckoutOrigin(origin, subscribeBase)) return null;
+      return origin;
+    } catch {
+      return null;
+    }
+  }
+
+  function resolveTrustedCheckoutUrl(candidate: string): string | null {
+    try {
+      const u = new URL(candidate);
+      if (!isTrustedCheckoutOrigin(u.origin, subscribeBase)) return null;
+      // Checkout UI is /subscribe (or nested under it) — reject arbitrary paths.
+      if (u.pathname !== "/subscribe" && !u.pathname.startsWith("/subscribe/")) {
+        return null;
+      }
+      return u.toString();
+    } catch {
+      return null;
+    }
   }
 
   const applyPlanUsage = useCallback((row: PlanUsage) => {
@@ -391,12 +476,23 @@ export function AccountPlanUsagePanel({
     setBuyMsg(null);
     setBuyMsgTone("muted");
     try {
-      let checkoutUrl = `${agentPlanetBaseUrl.replace(/\/$/, "")}/wallet?plan=${encodeURIComponent(code)}`;
+      let checkoutUrl = buildSubscribeUrl(code, wasRenew, true);
       try {
         const row = await client.getPlanCheckout(code);
-        if (row.checkout_url) checkoutUrl = row.checkout_url;
+        if (row.checkout_url) {
+          const trusted = resolveTrustedCheckoutUrl(row.checkout_url);
+          if (trusted) {
+            const u = new URL(trusted);
+            if (wasRenew) u.searchParams.set("renew", "1");
+            u.searchParams.set("embed", "1");
+            if (typeof window !== "undefined") {
+              u.searchParams.set("parent_origin", window.location.origin);
+            }
+            checkoutUrl = u.toString();
+          }
+        }
       } catch {
-        // Fall back to Host deep-link constructed above.
+        // Fall back to Interfaze /subscribe constructed above.
       }
       const watch: CheckoutWatch = {
         code,
@@ -410,8 +506,8 @@ export function AccountPlanUsagePanel({
         ...checkoutWatchesRef.current.filter((w) => now <= w.watchUntil),
         watch,
       ].slice(-4);
-      window.open(checkoutUrl, "_blank", "noopener,noreferrer");
       clearConfirm();
+      setCheckoutEmbedUrl(checkoutUrl);
       setBuyMsgTone("muted");
       setBuyMsg(t.accountPlanCheckoutPending);
       void refreshAfterCheckout();
@@ -422,6 +518,24 @@ export function AccountPlanUsagePanel({
       setBuyBusy(null);
     }
   }
+
+  useEffect(() => {
+    if (!checkoutEmbedUrl) return;
+    const expectedOrigin = allowedCheckoutOrigin(checkoutEmbedUrl);
+    // Refuse to listen when embed URL origin is untrusted / unparseable.
+    if (!expectedOrigin) return;
+    const onMsg = (ev: MessageEvent) => {
+      if (ev.origin !== expectedOrigin) return;
+      const data = ev.data;
+      if (!data || typeof data !== "object") return;
+      if ((data as { type?: string }).type !== PLAN_ACTIVATED_MSG) return;
+      setCheckoutEmbedUrl(null);
+      setBuyMsgTone("ok");
+      void refreshAfterCheckout();
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [checkoutEmbedUrl, refreshAfterCheckout]);
 
   const catalog: PlanCatalogEntry[] =
     data?.catalog && data.catalog.length > 0
@@ -1064,6 +1178,77 @@ export function AccountPlanUsagePanel({
                 </div>
               </div>
             ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {checkoutEmbedUrl ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={locale === "zh" ? "界面订阅" : "Interfaze Subscribe"}
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 60,
+            background: "rgba(0,0,0,0.65)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 12,
+          }}
+          onClick={() => setCheckoutEmbedUrl(null)}
+        >
+          <div
+            style={{
+              width: "min(420px, 100%)",
+              height: "min(640px, 92%)",
+              background: "#0a0a0a",
+              borderRadius: 14,
+              border: `1px solid ${colors.border}`,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 12px",
+                borderBottom: `1px solid ${colors.border}`,
+              }}
+            >
+              <strong style={{ fontSize: 14 }}>
+                {locale === "zh" ? "界面订阅" : "Interfaze Subscribe"}
+              </strong>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <a
+                  href={checkoutEmbedUrl.replace(/([?&])embed=1&?/, "$1").replace(/[?&]$/, "")}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: 12, color: colors.muted }}
+                >
+                  {locale === "zh" ? "新窗口打开" : "Open page"}
+                </a>
+                <button
+                  type="button"
+                  style={{ ...btnGhost, width: 28, height: 28, padding: 0 }}
+                  onClick={() => setCheckoutEmbedUrl(null)}
+                  aria-label={t.close}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <iframe
+              title={locale === "zh" ? "界面订阅" : "Interfaze Subscribe"}
+              src={checkoutEmbedUrl}
+              style={{ flex: 1, width: "100%", border: 0, background: "#0a0a0a" }}
+            />
           </div>
         </div>
       ) : null}

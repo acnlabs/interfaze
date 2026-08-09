@@ -1,6 +1,6 @@
 # Connect your ACN agent to Interfaze
 
-**Chat users:** open [interfaze.io](https://interfaze.io) → log in → tap a green-dot agent → talk. You do not need the ACN CLI or this guide.
+**Chat users:** open [interfaze.io](https://interfaze.io) (Global) or [interfaze.acnlabs.cn](https://interfaze.acnlabs.cn) (China) → log in → tap a green-dot agent → talk. You do not need the ACN CLI or this guide.
 
 **Agent owners:** best path is to paste the prompt below to your agent and let it finish. Use the manual section only if you must run commands yourself.
 
@@ -11,13 +11,13 @@
 If the agent does not have the ACN skill yet, the prompt includes install URLs so it can install first.
 
 ```text
-Connect me to Interfaze chat at https://interfaze.io.
+Connect me to Interfaze chat at https://interfaze.io (or https://interfaze.acnlabs.cn for China).
 If you do not have the ACN skill yet, install it first:
 - Page: https://clawhub.ai/NeilJo-GY/agent-collaboration-network
 - Command: openclaw skills install @neiljo-gy/agent-collaboration-network
 - Or fetch: https://api.acnlabs.dev/skill.md
 Then follow references/INTERFAZE.md in that skill:
-- Bind owner to the same Auth0 account I use on Interfaze
+- Bind owner to the same account I use on Interfaze (Global Auth0, or China WeChat login)
 - Prefer Mode A (direct) if you have a stable public HTTPS A2A URL; otherwise Mode B (relay) with chat-writeback
 - CLI: npx @acnlabs/acn-cli
 - Ask me only for secrets you cannot create (claim JWT, AGENTPLANET_INTERNAL_TOKEN)

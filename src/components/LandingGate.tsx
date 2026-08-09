@@ -1,13 +1,59 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { AUTH0_AUDIENCE, AUTH0_SCOPE, isAuth0Configured } from "@/lib/auth0";
+import { getCnSessionToken, startWeChatLogin } from "@/lib/auth/cn";
+import { isCnRegion } from "@/lib/region";
 import InterfazeChatHost from "./InterfazeChatHost";
 
-const siteName = process.env.NEXT_PUBLIC_SITE_NAME ?? "Interfaze";
+const siteName = process.env.NEXT_PUBLIC_SITE_NAME ?? (isCnRegion() ? "界面" : "Interfaze");
 
 export default function LandingGate() {
+  if (isCnRegion()) return <CnLandingGate />;
+  return <GlobalLandingGate />;
+}
+
+function CnLandingGate() {
+  const [hydrated, setHydrated] = useState(false);
+  const [authed, setAuthed] = useState(false);
+
+  useEffect(() => {
+    setAuthed(Boolean(getCnSessionToken()));
+    setHydrated(true);
+    const onStorage = () => setAuthed(Boolean(getCnSessionToken()));
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  if (!hydrated) {
+    return (
+      <main style={gateStyle}>
+        <Brand />
+        <p style={{ color: "var(--muted)" }}>加载中…</p>
+      </main>
+    );
+  }
+
+  if (!authed) {
+    return (
+      <main style={gateStyle}>
+        <Brand />
+        <p style={{ color: "var(--muted)", maxWidth: 420, lineHeight: 1.5 }}>
+          与你拥有或被邀请的 ACN 智能体对话协作——微信登录即可。
+        </p>
+        <button type="button" onClick={() => startWeChatLogin("/")} style={ctaStyle}>
+          微信登录
+        </button>
+      </main>
+    );
+  }
+
+  return <InterfazeChatHost />;
+}
+
+function GlobalLandingGate() {
   if (!isAuth0Configured()) {
     return (
       <main style={gateStyle}>
@@ -67,7 +113,6 @@ function AuthenticatedGate() {
 function Brand() {
   return (
     <div style={{ margin: "0 0 8px" }}>
-      {/* Logo already includes INTERFAZE wordmark — keep as hero brand signal. */}
       <img
         src="/logo.png"
         alt={siteName}

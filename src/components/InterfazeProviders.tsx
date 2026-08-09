@@ -9,21 +9,20 @@ import {
   AUTH0_SCOPE,
   isAuth0Configured,
 } from "@/lib/auth0";
+import { isCnRegion } from "@/lib/region";
 
 function onRedirectCallback(appState?: AppState) {
   const raw = typeof appState?.returnTo === "string" ? appState.returnTo : "/";
-  // Only same-origin relative paths — never open-redirect off-site.
   const returnTo = raw.startsWith("/") && !raw.startsWith("//") ? raw : "/";
   window.location.replace(returnTo);
 }
 
 export default function InterfazeProviders({ children }: { children: ReactNode }) {
-  if (!isAuth0Configured()) {
+  // CN uses WeChat JWT — no Auth0Provider (hooks must not run without it).
+  if (isCnRegion() || !isAuth0Configured()) {
     return <>{children}</>;
   }
 
-  // Prefer the actual browser origin so *.vercel.app keeps working while
-  // interfaze.io DNS is propagating; APP_ORIGIN is SSR/fallback only.
   const origin =
     (typeof window !== "undefined" ? window.location.origin : null) ||
     process.env.NEXT_PUBLIC_APP_ORIGIN?.replace(/\/+$/, "") ||
@@ -40,7 +39,6 @@ export default function InterfazeProviders({ children }: { children: ReactNode }
       }}
       cacheLocation="localstorage"
       useRefreshTokens
-      // If refresh token is missing/expired, fall back to silent iframe auth.
       useRefreshTokensFallback
       onRedirectCallback={onRedirectCallback}
     >

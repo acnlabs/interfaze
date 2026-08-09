@@ -9,6 +9,8 @@ import {
   isAuth0Configured,
 } from "@/lib/auth0";
 import { getGatewayBaseUrl } from "@/lib/gateway";
+import { isCnRegion } from "@/lib/region";
+import CnTransferAccept from "@/components/CnTransferAccept";
 
 type InvitePreview = {
   agent: { name: string; description: string | null; status: string };
@@ -284,6 +286,7 @@ function TransferAcceptInner() {
 }
 
 export default function TransferAcceptPage() {
+  if (isCnRegion()) return <CnTransferAccept />;
   return (
     <Suspense
       fallback={
