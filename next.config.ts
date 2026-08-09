@@ -17,6 +17,20 @@ const nextConfig: NextConfig = {
     },
   },
   reactStrictMode: false,
+  // PayPal SDK checkout opens a popup; default COOP same-origin yields about:blank.
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          {
+            key: "Cross-Origin-Opener-Policy",
+            value: "same-origin-allow-popups",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

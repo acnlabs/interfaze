@@ -59,7 +59,12 @@ function SubscribeInner() {
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [inIframe, setInIframe] = useState(false);
   const paypalCaptureDoneRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setInIframe(window.parent !== window);
+  }, []);
 
   const tokenGetter = useCallback(async () => {
     if (!isAuth0Configured() || !isAuthenticated) return null;
@@ -189,7 +194,6 @@ function SubscribeInner() {
   }
 
   if (!isAuthenticated) {
-    const inIframe = typeof window !== "undefined" && window.parent !== window;
     return (
       <main style={pageStyle(embed)}>
         {!embed ? <Header /> : null}
@@ -259,7 +263,33 @@ function SubscribeInner() {
         </div>
         {success ? <p style={{ color: "#10b981", fontSize: 13 }}>{success}</p> : null}
         {error ? <p style={{ color: "#ef4444", fontSize: 13 }}>{error}</p> : null}
-        {!success && PAYPAL_CLIENT_ID ? (
+        {/* PayPal popups break inside iframes (about:blank). Break out to top-level checkout. */}
+        {!success && embed && inIframe ? (
+          <>
+            <p style={{ ...muted, marginBottom: 8, fontSize: 12 }}>
+              PayPal cannot finish inside this panel. Continue on the full checkout page.
+            </p>
+            <button
+              type="button"
+              style={btnStyle}
+              onClick={() => {
+                const path = withEmbedParentOrigin(
+                  `/subscribe?plan=${planCode}${renew ? "&renew=1" : ""}`,
+                  parentOriginParam,
+                );
+                const url = `${window.location.origin}${path}`;
+                try {
+                  const topWin = window.top || window;
+                  topWin.location.href = url;
+                } catch {
+                  window.open(url, "_blank", "noopener,noreferrer");
+                }
+              }}
+            >
+              Continue with PayPal
+            </button>
+          </>
+        ) : !success && PAYPAL_CLIENT_ID ? (
           <PayPalScriptProvider
             options={{ clientId: PAYPAL_CLIENT_ID, currency: "USD", locale: "en_US" }}
           >
@@ -293,7 +323,7 @@ function SubscribeInner() {
                           currency: "USD",
                           return_url: returnUrl,
                           cancel_url: `${typeof window !== "undefined" ? window.location.origin : ""}${withEmbedParentOrigin(
-                            `/subscribe?plan=${planCode}&paypal=cancel${renew ? "&renew=1" : ""}${embed ? "&embed=1" : ""}`,
+                            `/subscribe?plan=${planCode}&paypal=cancel${renew ? "&renew=1" : ""}`,
                             parentOriginParam,
                           )}`,
                           plan_code: planCode,

@@ -1247,6 +1247,8 @@ export function AccountPlanUsagePanel({
             <iframe
               title={locale === "zh" ? "界面订阅" : "Interfaze Subscribe"}
               src={checkoutEmbedUrl}
+              allow="payment"
+              referrerPolicy="strict-origin-when-cross-origin"
               style={{ flex: 1, width: "100%", border: 0, background: "#0a0a0a" }}
             />
           </div>
