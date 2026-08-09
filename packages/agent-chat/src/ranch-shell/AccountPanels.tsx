@@ -468,6 +468,16 @@ export function AccountPlanUsagePanel({
     return "—";
   }
 
+  /** CN WeChat Native QR works in-panel; Global PayPal must be top-level (popups break in iframes). */
+  function prefersInPanelCheckout(url: string): boolean {
+    try {
+      const h = new URL(url).hostname.toLowerCase();
+      return h === "interfaze.acnlabs.cn" || h.endsWith(".interfaze.acnlabs.cn");
+    } catch {
+      return false;
+    }
+  }
+
   async function confirmBuyPlan() {
     if (!confirmTier) return;
     const code = confirmTier.code.toLowerCase() === "ultra" ? "max" : confirmTier.code.toLowerCase();
@@ -476,7 +486,7 @@ export function AccountPlanUsagePanel({
     setBuyMsg(null);
     setBuyMsgTone("muted");
     try {
-      let checkoutUrl = buildSubscribeUrl(code, wasRenew, true);
+      let checkoutUrl = buildSubscribeUrl(code, wasRenew, false);
       try {
         const row = await client.getPlanCheckout(code);
         if (row.checkout_url) {
@@ -484,10 +494,7 @@ export function AccountPlanUsagePanel({
           if (trusted) {
             const u = new URL(trusted);
             if (wasRenew) u.searchParams.set("renew", "1");
-            u.searchParams.set("embed", "1");
-            if (typeof window !== "undefined") {
-              u.searchParams.set("parent_origin", window.location.origin);
-            }
+            u.searchParams.delete("embed");
             checkoutUrl = u.toString();
           }
         }
@@ -507,9 +514,29 @@ export function AccountPlanUsagePanel({
         watch,
       ].slice(-4);
       clearConfirm();
-      setCheckoutEmbedUrl(checkoutUrl);
       setBuyMsgTone("muted");
       setBuyMsg(t.accountPlanCheckoutPending);
+
+      if (prefersInPanelCheckout(checkoutUrl)) {
+        const u = new URL(checkoutUrl);
+        u.searchParams.set("embed", "1");
+        if (typeof window !== "undefined") {
+          u.searchParams.set("parent_origin", window.location.origin);
+        }
+        setCheckoutEmbedUrl(u.toString());
+      } else if (typeof window !== "undefined") {
+        // Global PayPal: navigate (same origin) or open tab — never iframe.
+        try {
+          const dest = new URL(checkoutUrl, window.location.origin);
+          if (dest.origin === window.location.origin) {
+            window.location.assign(dest.toString());
+          } else {
+            window.open(dest.toString(), "_blank", "noopener,noreferrer");
+          }
+        } catch {
+          window.location.href = checkoutUrl;
+        }
+      }
       void refreshAfterCheckout();
     } catch {
       setBuyMsgTone("danger");
