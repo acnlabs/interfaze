@@ -7,6 +7,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useMemo,
   useState,
   type CSSProperties,
 } from "react";
@@ -26,6 +27,7 @@ import {
   withEmbedParentOrigin,
 } from "@/lib/embedParent";
 import { getAgentPlanetBaseUrl } from "@/lib/region";
+import { planCheckoutReturnHref, safeReturnTo } from "@/lib/safeReturnTo";
 import {
   clearPlanCheckoutStash,
   getPendingPlanCheckout,
@@ -57,6 +59,10 @@ function CnSubscribeInner() {
     searchParams.get("renew") === "1" || searchParams.get("renew") === "true";
   const embed = searchParams.get("embed") === "1";
   const parentOriginParam = resolveEmbedParentOrigin(searchParams.get("parent_origin"));
+  const afterPayReturnTo = useMemo(
+    () => safeReturnTo(searchParams.get("return_to")),
+    [searchParams],
+  );
   const notifyParent = useCallback(
     (plan: string, paidUntil?: string | null) => {
       notifyPlanActivated(plan, paidUntil, parentOriginParam);
@@ -185,7 +191,17 @@ function CnSubscribeInner() {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [nativeOrderId, success, planCode]);
+  }, [nativeOrderId, success, planCode, notifyParent]);
+
+  // Full-page checkout: leave /subscribe after success (embed uses postMessage instead).
+  useEffect(() => {
+    if (!success || embed) return;
+    const href = planCheckoutReturnHref(afterPayReturnTo);
+    const timer = window.setTimeout(() => {
+      window.location.replace(href);
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [success, embed, afterPayReturnTo]);
 
   const startPay = useCallback(
     async (opts?: { renew?: boolean }) => {
@@ -332,8 +348,20 @@ function CnSubscribeInner() {
           <span style={{ color: "#6b7280" }}>合计</span>
           <strong>¥{plan.amountYuan}</strong>
         </div>
-        {success ? <p style={{ color: "#10b981", fontSize: 13 }}>{success}</p> : null}
+        {success ? (
+          <p style={{ color: "#10b981", fontSize: 13 }}>
+            {success}
+            {!embed ? " 正在返回…" : ""}
+          </p>
+        ) : null}
         {error ? <p style={{ color: "#ef4444", fontSize: 13 }}>{error}</p> : null}
+        {success && !embed ? (
+          <p style={{ ...muted, marginTop: 12 }}>
+            <Link href={planCheckoutReturnHref(afterPayReturnTo)} style={linkStyle}>
+              返回界面
+            </Link>
+          </p>
+        ) : null}
         {needsRenewConfirm ? (
           <button
             type="button"

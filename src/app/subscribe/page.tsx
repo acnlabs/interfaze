@@ -24,6 +24,7 @@ import {
 } from "@/lib/embedParent";
 import { getGatewayBaseUrl } from "@/lib/gateway";
 import { isCnRegion } from "@/lib/region";
+import { planCheckoutReturnHref, safeReturnTo } from "@/lib/safeReturnTo";
 import CnSubscribeCheckout from "@/components/CnSubscribeCheckout";
 
 const PLAN_USD: Record<string, { label: string; amountUsd: number }> = {
@@ -36,20 +37,6 @@ const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? "";
 function normalizePlan(raw: string | null | undefined): string {
   const c = (raw || "").trim().toLowerCase();
   return c === "ultra" ? "max" : c;
-}
-
-/** Same-origin relative path only — blocks open redirects. */
-function safeReturnTo(raw: string | null | undefined): string {
-  const v = (raw || "").trim();
-  if (!v.startsWith("/") || v.startsWith("//")) return "/?account=plan";
-  try {
-    const u = new URL(v, "https://interfaze.local");
-    if (u.origin !== "https://interfaze.local") return "/?account=plan";
-    const path = `${u.pathname}${u.search}`;
-    return path || "/?account=plan";
-  } catch {
-    return "/?account=plan";
-  }
 }
 
 function SubscribeInner() {
@@ -207,10 +194,7 @@ function SubscribeInner() {
   // Always leave /subscribe after a successful non-embed checkout (PayPal full-page).
   useEffect(() => {
     if (!success || embed) return;
-    const dest = new URL(afterPayReturnTo, window.location.origin);
-    if (!dest.searchParams.get("account")) dest.searchParams.set("account", "plan");
-    dest.searchParams.set("checkout", "ok");
-    const href = dest.pathname + dest.search;
+    const href = planCheckoutReturnHref(afterPayReturnTo);
     const timer = window.setTimeout(() => {
       window.location.replace(href);
     }, 400);
