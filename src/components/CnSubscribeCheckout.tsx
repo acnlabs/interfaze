@@ -187,58 +187,63 @@ function CnSubscribeInner() {
     };
   }, [nativeOrderId, success, planCode]);
 
-  const startPay = useCallback(async () => {
-    if (!planCode || paying) return;
-    setPaying(true);
-    setError(null);
-    setSuccess(null);
-    setNeedsRenewConfirm(false);
-    try {
-      const pending = getPendingPlanCheckout(searchParams, planCode);
-      const started = await startPlanNativeCheckout(planCode, pending?.orderId || null, {
-        renew,
-      });
-      setNativeQr(started.codeUrl);
-      setNativeOrderId(started.orderId);
-    } catch (err) {
-      const gate = parsePlanCheckoutGate(err);
-      if (gate?.code === "already_paid" && gate.orderId) {
-        setError(gate.message);
-        setNativeOrderId(gate.orderId);
-        try {
-          const synced = await syncPlanCheckoutPayment(gate.orderId);
-          if (synced.status === "plan_activated") {
-            clearPlanCheckoutStash();
-            setNativeQr(null);
-            setSuccess(
-              `${(synced.plan_code || planCode).toUpperCase()} 已开通` +
-                (synced.paid_until
-                  ? `，有效至 ${new Date(synced.paid_until).toLocaleDateString()}`
-                  : ""),
-            );
-            setError(null);
-            notifyParent(synced.plan_code || planCode, synced.paid_until);
-          } else {
+  const startPay = useCallback(
+    async (opts?: { renew?: boolean }) => {
+      if (!planCode || paying) return;
+      const renewFlag = opts?.renew ?? renew;
+      if (opts?.renew) setRenew(true);
+      setPaying(true);
+      setError(null);
+      setSuccess(null);
+      setNeedsRenewConfirm(false);
+      try {
+        const pending = getPendingPlanCheckout(searchParams, planCode);
+        const started = await startPlanNativeCheckout(planCode, pending?.orderId || null, {
+          renew: renewFlag,
+        });
+        setNativeQr(started.codeUrl);
+        setNativeOrderId(started.orderId);
+      } catch (err) {
+        const gate = parsePlanCheckoutGate(err);
+        if (gate?.code === "already_paid" && gate.orderId) {
+          setError(gate.message);
+          setNativeOrderId(gate.orderId);
+          try {
+            const synced = await syncPlanCheckoutPayment(gate.orderId);
+            if (synced.status === "plan_activated") {
+              clearPlanCheckoutStash();
+              setNativeQr(null);
+              setSuccess(
+                `${(synced.plan_code || planCode).toUpperCase()} 已开通` +
+                  (synced.paid_until
+                    ? `，有效至 ${new Date(synced.paid_until).toLocaleDateString()}`
+                    : ""),
+              );
+              setError(null);
+              notifyParent(synced.plan_code || planCode, synced.paid_until);
+            } else {
+              setError(gate.message + "（可点下方「我已完成支付」）");
+            }
+          } catch {
             setError(gate.message + "（可点下方「我已完成支付」）");
           }
-        } catch {
-          setError(gate.message + "（可点下方「我已完成支付」）");
+        } else if (gate?.code === "already_active") {
+          setNeedsRenewConfirm(true);
+          setError(
+            gate.message +
+              (gate.paidUntil
+                ? `（有效至 ${new Date(gate.paidUntil).toLocaleDateString()}）`
+                : ""),
+          );
+        } else {
+          setError(gate?.message || (err instanceof Error ? err.message : "下单失败"));
         }
-      } else if (gate?.code === "already_active") {
-        setNeedsRenewConfirm(true);
-        setError(
-          gate.message +
-            (gate.paidUntil
-              ? `（有效至 ${new Date(gate.paidUntil).toLocaleDateString()}）`
-              : ""),
-        );
-      } else {
-        setError(gate?.message || (err instanceof Error ? err.message : "下单失败"));
+      } finally {
+        setPaying(false);
       }
-    } finally {
-      setPaying(false);
-    }
-  }, [planCode, paying, renew, searchParams]);
+    },
+    [planCode, paying, renew, searchParams, notifyParent],
+  );
 
   const plan = planCode ? PLAN_CNY[planCode] : null;
   const user = getCnSessionUser();
@@ -335,9 +340,8 @@ function CnSubscribeInner() {
             style={btnStyle}
             disabled={paying}
             onClick={() => {
-              setRenew(true);
               setNeedsRenewConfirm(false);
-              void startPay();
+              void startPay({ renew: true });
             }}
           >
             确认续费
