@@ -77,7 +77,10 @@ function SubscribeInner() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [inIframe, setInIframe] = useState(false);
+  /** Order ids whose capture already activated a plan (do not re-capture). */
   const paypalCaptureDoneRef = useRef<string | null>(null);
+  /** Order id with an in-flight capture; cleared on cleanup so remount can retry. */
+  const paypalCaptureInFlightRef = useRef<string | null>(null);
 
   useEffect(() => {
     setInIframe(window.parent !== window);
@@ -119,13 +122,16 @@ function SubscribeInner() {
     return () => window.removeEventListener("focus", onFocus);
   }, [embed, isAuthenticated]);
 
-  // PayPal redirect return (one-shot per order id; strip success params after).
+  const paypalReturn = searchParams.get("paypal");
+  const paypalOrderId = (searchParams.get("token") || "").trim();
+
+  // PayPal redirect return (idempotent per order; remount can retry if cancelled mid-flight).
   useEffect(() => {
-    if (!isAuthenticated || searchParams.get("paypal") !== "success" || !plan) return;
-    const orderId = (searchParams.get("token") || "").trim();
-    if (!orderId) return;
-    if (paypalCaptureDoneRef.current === orderId) return;
-    paypalCaptureDoneRef.current = orderId;
+    if (!isAuthenticated || paypalReturn !== "success" || !plan) return;
+    if (!paypalOrderId) return;
+    if (paypalCaptureDoneRef.current === paypalOrderId) return;
+    if (paypalCaptureInFlightRef.current === paypalOrderId) return;
+    paypalCaptureInFlightRef.current = paypalOrderId;
     let cancelled = false;
     setPaying(true);
     void (async () => {
@@ -138,7 +144,7 @@ function SubscribeInner() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ order_id: orderId }),
+          body: JSON.stringify({ order_id: paypalOrderId }),
         });
         const body = (await res.json().catch(() => ({}))) as {
           status?: string;
@@ -146,9 +152,10 @@ function SubscribeInner() {
           paid_until?: string | null;
           detail?: string;
         };
-        if (cancelled) return;
         if (!res.ok) throw new Error(body.detail || `Capture failed (${res.status})`);
         if (body.status === "plan_activated" && body.plan_code) {
+          paypalCaptureDoneRef.current = paypalOrderId;
+          // Apply even if this effect instance was cleaned up — payment already succeeded.
           setSuccess(
             `${body.plan_code.toUpperCase()} active` +
               (body.paid_until
@@ -160,30 +167,36 @@ function SubscribeInner() {
             history.replaceState(null, "", cleanSubscribePath());
           }
         } else {
-          setError("Payment captured but plan was not activated.");
-          if (typeof history !== "undefined") {
-            history.replaceState(null, "", cleanSubscribePath());
-          }
+          throw new Error("Payment captured but plan was not activated.");
         }
       } catch (e) {
         if (!cancelled) {
-          // Allow retry on hard failure (network / capture error).
-          paypalCaptureDoneRef.current = null;
           setError(e instanceof Error ? e.message : "Capture failed");
           if (typeof history !== "undefined") {
             history.replaceState(null, "", cleanSubscribePath());
           }
         }
       } finally {
+        if (paypalCaptureInFlightRef.current === paypalOrderId) {
+          paypalCaptureInFlightRef.current = null;
+        }
         if (!cancelled) setPaying(false);
       }
     })();
     return () => {
       cancelled = true;
+      // Release in-flight claim so a remount can retry; capture API is idempotent per order.
+      if (
+        paypalCaptureDoneRef.current !== paypalOrderId &&
+        paypalCaptureInFlightRef.current === paypalOrderId
+      ) {
+        paypalCaptureInFlightRef.current = null;
+      }
     };
   }, [
     isAuthenticated,
-    searchParams,
+    paypalReturn,
+    paypalOrderId,
     plan,
     gateway,
     tokenGetter,
@@ -235,7 +248,11 @@ function SubscribeInner() {
         {!embed ? <Header /> : null}
         <div style={cardStyle}>
           <h1 style={titleStyle}>Subscribe {plan.label}</h1>
-          <p style={muted}>Sign in to pay ${plan.amountUsd} for 30 days.</p>
+          <p style={muted}>
+            {paypalReturn === "success" && paypalOrderId
+              ? "Sign in to finish activating your paid plan."
+              : `Sign in to pay $${plan.amountUsd} for 30 days.`}
+          </p>
           {embed && inIframe ? (
             <p style={{ ...muted, marginBottom: 8, fontSize: 12 }}>
               Sign-in opens in a new tab. Return here after Auth0 completes.
@@ -254,6 +271,9 @@ function SubscribeInner() {
                       if (renew) q.set("renew", "1");
                       if (embed) q.set("embed", "1");
                       q.set("return_to", afterPayReturnTo);
+                      // Keep PayPal capture params across Auth0 re-login.
+                      if (paypalReturn) q.set("paypal", paypalReturn);
+                      if (paypalOrderId) q.set("token", paypalOrderId);
                       return `/subscribe?${q.toString()}`;
                     })(),
                     parentOriginParam,
