@@ -1294,6 +1294,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     onLocaleChange,
     onOwnedAgentUpdated,
     onOwnedAgentRemoved,
+    initialAccountPanel = null,
   } = props;
 
   const [uiLocale, setUiLocale] = useState<RanchLocale>(() => resolveRanchLocale(localeProp));
@@ -1396,6 +1397,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setShowAccountPlan(false);
     setShowMyAgents(false);
   };
+
+  // Deep-link back from plan checkout (PayPal full-page return).
+  useEffect(() => {
+    if (!initialAccountPanel) return;
+    closeAccountSurfaces();
+    if (initialAccountPanel === "plan") setShowAccountPlan(true);
+    else if (initialAccountPanel === "wallet") setShowAccountWallet(true);
+    else if (initialAccountPanel === "manage") setShowAccountManage(true);
+    else if (initialAccountPanel === "profile") setShowAccountProfile(true);
+  }, [initialAccountPanel]);
   const [showAddMember, setShowAddMember] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");

@@ -136,6 +136,11 @@ export type RanchChatShellProps = {
    * Host should drop it from the «mine» directory.
    */
   onOwnedAgentRemoved?: (agentId: string) => void;
+  /**
+   * Open an account surface on mount (e.g. after plan checkout return).
+   * Host typically sets this from `?account=plan`.
+   */
+  initialAccountPanel?: "plan" | "wallet" | "manage" | "profile" | null;
 };
 
 /** Outbound delivery on user messages (Chat Gateway → ACN). */

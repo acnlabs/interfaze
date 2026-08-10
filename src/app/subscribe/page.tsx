@@ -38,6 +38,20 @@ function normalizePlan(raw: string | null | undefined): string {
   return c === "ultra" ? "max" : c;
 }
 
+/** Same-origin relative path only — blocks open redirects. */
+function safeReturnTo(raw: string | null | undefined): string {
+  const v = (raw || "").trim();
+  if (!v.startsWith("/") || v.startsWith("//")) return "/?account=plan";
+  try {
+    const u = new URL(v, "https://interfaze.local");
+    if (u.origin !== "https://interfaze.local") return "/?account=plan";
+    const path = `${u.pathname}${u.search}`;
+    return path || "/?account=plan";
+  } catch {
+    return "/?account=plan";
+  }
+}
+
 function SubscribeInner() {
   const searchParams = useSearchParams();
   const { isAuthenticated, isLoading, loginWithRedirect, getAccessTokenSilently } = useAuth0();
@@ -46,6 +60,10 @@ function SubscribeInner() {
     searchParams.get("renew") === "1" || searchParams.get("renew") === "true";
   const embed = searchParams.get("embed") === "1";
   const parentOriginParam = resolveEmbedParentOrigin(searchParams.get("parent_origin"));
+  const afterPayReturnTo = useMemo(
+    () => safeReturnTo(searchParams.get("return_to")),
+    [searchParams],
+  );
   const notifyParent = useCallback(
     (code: string, paidUntil?: string | null) => {
       notifyPlanActivated(code, paidUntil, parentOriginParam);
@@ -77,8 +95,9 @@ function SubscribeInner() {
     if (renew) q.set("renew", "1");
     if (embed) q.set("embed", "1");
     if (parentOriginParam) q.set("parent_origin", parentOriginParam);
+    if (afterPayReturnTo) q.set("return_to", afterPayReturnTo);
     return `/subscribe?${q.toString()}`;
-  }, [planCode, renew, embed, parentOriginParam]);
+  }, [planCode, renew, embed, parentOriginParam, afterPayReturnTo]);
 
   const returnUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -86,8 +105,9 @@ function SubscribeInner() {
     if (renew) q.set("renew", "1");
     if (embed) q.set("embed", "1");
     if (parentOriginParam) q.set("parent_origin", parentOriginParam);
+    q.set("return_to", afterPayReturnTo);
     return `${window.location.origin}/subscribe?${q}`;
-  }, [planCode, renew, embed, parentOriginParam]);
+  }, [planCode, renew, embed, parentOriginParam, afterPayReturnTo]);
 
   // Auth0 may complete in a sibling tab (embed) — refresh session when focus returns.
   useEffect(() => {
@@ -136,22 +156,26 @@ function SubscribeInner() {
                 : ""),
           );
           notifyParent(body.plan_code, body.paid_until);
+          if (typeof history !== "undefined") {
+            history.replaceState(null, "", cleanSubscribePath());
+          }
         } else {
           setError("Payment captured but plan was not activated.");
+          if (typeof history !== "undefined") {
+            history.replaceState(null, "", cleanSubscribePath());
+          }
         }
       } catch (e) {
         if (!cancelled) {
           // Allow retry on hard failure (network / capture error).
           paypalCaptureDoneRef.current = null;
           setError(e instanceof Error ? e.message : "Capture failed");
-        }
-      } finally {
-        if (!cancelled) {
-          setPaying(false);
           if (typeof history !== "undefined") {
             history.replaceState(null, "", cleanSubscribePath());
           }
         }
+      } finally {
+        if (!cancelled) setPaying(false);
       }
     })();
     return () => {
@@ -166,6 +190,19 @@ function SubscribeInner() {
     notifyParent,
     cleanSubscribePath,
   ]);
+
+  // Always leave /subscribe after a successful non-embed checkout (PayPal full-page).
+  useEffect(() => {
+    if (!success || embed) return;
+    const dest = new URL(afterPayReturnTo, window.location.origin);
+    if (!dest.searchParams.get("account")) dest.searchParams.set("account", "plan");
+    dest.searchParams.set("checkout", "ok");
+    const href = dest.pathname + dest.search;
+    const timer = window.setTimeout(() => {
+      window.location.replace(href);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [success, embed, afterPayReturnTo]);
 
   if (!plan) {
     return (
@@ -212,7 +249,13 @@ function SubscribeInner() {
                 authorizationParams: { audience: AUTH0_AUDIENCE, scope: AUTH0_SCOPE },
                 appState: {
                   returnTo: withEmbedParentOrigin(
-                    `/subscribe?plan=${planCode}${renew ? "&renew=1" : ""}${embed ? "&embed=1" : ""}`,
+                    (() => {
+                      const q = new URLSearchParams({ plan: planCode });
+                      if (renew) q.set("renew", "1");
+                      if (embed) q.set("embed", "1");
+                      q.set("return_to", afterPayReturnTo);
+                      return `/subscribe?${q.toString()}`;
+                    })(),
                     parentOriginParam,
                   ),
                 },
@@ -260,8 +303,20 @@ function SubscribeInner() {
           <span style={{ color: "#6b7280" }}>Total</span>
           <strong>${plan.amountUsd} USD</strong>
         </div>
-        {success ? <p style={{ color: "#10b981", fontSize: 13 }}>{success}</p> : null}
+        {success ? (
+          <p style={{ color: "#10b981", fontSize: 13 }}>
+            {success}
+            {!embed ? " Returning to chat…" : ""}
+          </p>
+        ) : null}
         {error ? <p style={{ color: "#ef4444", fontSize: 13 }}>{error}</p> : null}
+        {success && !embed ? (
+          <p style={{ ...muted, marginTop: 12 }}>
+            <Link href={afterPayReturnTo} style={linkStyle}>
+              Back to Interfaze
+            </Link>
+          </p>
+        ) : null}
         {/* Full-page approve_url redirect — SDK popup often opens about:blank in this host. */}
         {!success && PAYPAL_CLIENT_ID ? (
           <button
@@ -275,8 +330,14 @@ function SubscribeInner() {
                 try {
                   const token = await tokenGetter();
                   if (!token) throw new Error("Not signed in");
+                  const cancelQ = new URLSearchParams({
+                    plan: planCode,
+                    paypal: "cancel",
+                    return_to: afterPayReturnTo,
+                  });
+                  if (renew) cancelQ.set("renew", "1");
                   const cancelPath = withEmbedParentOrigin(
-                    `/subscribe?plan=${planCode}&paypal=cancel${renew ? "&renew=1" : ""}`,
+                    `/subscribe?${cancelQ.toString()}`,
                     parentOriginParam,
                   );
                   const res = await fetch(

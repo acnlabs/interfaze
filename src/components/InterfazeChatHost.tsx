@@ -156,7 +156,30 @@ function GlobalChatHost() {
   const { getAccessTokenSilently, isAuthenticated, user, logout, loginWithRedirect } = useAuth0();
   const gatewayBaseUrl = getGatewayBaseUrl();
   const [directoryAgents, setDirectoryAgents] = useState<AgentDirectoryItem[]>([]);
+  const [initialAccountPanel, setInitialAccountPanel] = useState<
+    "plan" | "wallet" | "manage" | "profile" | null
+  >(null);
   const reauthStarted = useRef(false);
+
+  // After PayPal full-page checkout: /?account=plan&checkout=ok → reopen Plan panel.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const account = (sp.get("account") || "").toLowerCase();
+    if (
+      account !== "plan" &&
+      account !== "wallet" &&
+      account !== "manage" &&
+      account !== "profile"
+    ) {
+      return;
+    }
+    setInitialAccountPanel(account);
+    sp.delete("account");
+    sp.delete("checkout");
+    const q = sp.toString();
+    window.history.replaceState(null, "", q ? `${window.location.pathname}?${q}` : window.location.pathname);
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated) reauthStarted.current = false;
@@ -307,6 +330,7 @@ function GlobalChatHost() {
             }
           : null
       }
+      initialAccountPanel={initialAccountPanel}
       onLogout={isAuthenticated ? handleLogout : undefined}
       onReauth={
         isAuthenticated

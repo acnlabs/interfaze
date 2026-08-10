@@ -295,6 +295,9 @@ export function AccountPlanUsagePanel({
       if (typeof window !== "undefined") {
         u.searchParams.set("parent_origin", window.location.origin);
       }
+    } else if (typeof window !== "undefined") {
+      // After PayPal full-page return, land back on chat + reopen Plan.
+      u.searchParams.set("return_to", "/?account=plan");
     }
     return u.toString();
   }
@@ -495,6 +498,9 @@ export function AccountPlanUsagePanel({
             const u = new URL(trusted);
             if (wasRenew) u.searchParams.set("renew", "1");
             u.searchParams.delete("embed");
+            if (!u.searchParams.get("return_to")) {
+              u.searchParams.set("return_to", "/?account=plan");
+            }
             checkoutUrl = u.toString();
           }
         }
