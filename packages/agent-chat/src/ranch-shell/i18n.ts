@@ -241,6 +241,16 @@ export type RanchMessages = {
   myAgentsSaveProfile: string;
   myAgentsProfileSaved: string;
   myAgentsProfileFailed: string;
+  myAgentsSectionPricing: string;
+  myAgentsPricingHint: string;
+  myAgentsPricingInputLabel: string;
+  myAgentsPricingOutputLabel: string;
+  myAgentsPricingModelLabel: string;
+  myAgentsPricingModelHint: string;
+  myAgentsPricingUnlisted: string;
+  myAgentsSavePricing: string;
+  myAgentsPricingSaved: string;
+  myAgentsPricingFailed: string;
   myAgentsNameHint: string;
   myAgentsDescHint: string;
   myAgentsDescClearHint: string;
@@ -636,6 +646,18 @@ const en: RanchMessages = {
   myAgentsSaveProfile: "Save profile",
   myAgentsProfileSaved: "Saved",
   myAgentsProfileFailed: "Couldn’t save profile.",
+  myAgentsSectionPricing: "Pricing",
+  myAgentsPricingHint:
+    "What others pay per million tokens (USD). Applies to new chats only — in-flight hops keep their snapshot. Leave blank model id to keep the previous one.",
+  myAgentsPricingInputLabel: "Input · USD / 1M tokens",
+  myAgentsPricingOutputLabel: "Output · USD / 1M tokens",
+  myAgentsPricingModelLabel: "Model id (optional)",
+  myAgentsPricingModelHint: "Host catalog id, e.g. openai/gpt-4o-mini",
+  myAgentsPricingUnlisted:
+    "No listing yet — chats may use platform default until you save prices.",
+  myAgentsSavePricing: "Save pricing",
+  myAgentsPricingSaved: "Pricing saved",
+  myAgentsPricingFailed: "Couldn’t save pricing.",
   myAgentsNameHint: "2–100 characters, at least one letter",
   myAgentsDescHint: "10–500 characters",
   myAgentsDescClearHint: "Description can’t be cleared here — leave as-is or write 10+ characters.",
@@ -1040,6 +1062,17 @@ const zh: RanchMessages = {
   myAgentsSaveProfile: "保存资料",
   myAgentsProfileSaved: "已保存",
   myAgentsProfileFailed: "保存失败。",
+  myAgentsSectionPricing: "挂牌价",
+  myAgentsPricingHint:
+    "向对方收取的百万 token 单价（USD）。只影响之后的新对话；进行中的跳保留发前快照。留空 model id 则保留原值。",
+  myAgentsPricingInputLabel: "输入 · USD / 百万 token",
+  myAgentsPricingOutputLabel: "输出 · USD / 百万 token",
+  myAgentsPricingModelLabel: "模型 id（可选）",
+  myAgentsPricingModelHint: "Host Catalog 标识，如 openai/gpt-4o-mini",
+  myAgentsPricingUnlisted: "尚未挂牌——保存前对话可能使用平台默认价。",
+  myAgentsSavePricing: "保存挂牌价",
+  myAgentsPricingSaved: "挂牌价已保存",
+  myAgentsPricingFailed: "保存挂牌价失败。",
   myAgentsNameHint: "2–100 字，至少含一个字母",
   myAgentsDescHint: "10–500 字",
   myAgentsDescClearHint: "此处无法清空描述——保持原样，或填写 10 字以上。",

@@ -391,6 +391,23 @@ export function AgentOwnerSettings({
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const pricingFromDetail = (tp: MyAgentSummary["token_pricing"]) => ({
+    input: tp != null ? String(tp.input_price_per_million) : "",
+    output: tp != null ? String(tp.output_price_per_million) : "",
+    modelId: (tp?.model_id || "").trim(),
+  });
+  const [inputPriceDraft, setInputPriceDraft] = useState(
+    () => pricingFromDetail(detail.token_pricing).input,
+  );
+  const [outputPriceDraft, setOutputPriceDraft] = useState(
+    () => pricingFromDetail(detail.token_pricing).output,
+  );
+  const [modelIdDraft, setModelIdDraft] = useState(
+    () => pricingFromDetail(detail.token_pricing).modelId,
+  );
+  const [savingPricing, setSavingPricing] = useState(false);
+  const [pricingMsg, setPricingMsg] = useState<string | null>(null);
+  const [pricingError, setPricingError] = useState<string | null>(null);
   type DeliveryChoice = "direct" | "relay" | "none";
   const deliveryFromDetail = (d: string | null | undefined): DeliveryChoice => {
     if (d === "direct") return "direct";
@@ -443,6 +460,20 @@ export function AgentOwnerSettings({
   }, [detail.agent_id, detail.name, detail.description, detail.tags?.join("\u0001")]);
 
   useEffect(() => {
+    const p = pricingFromDetail(detail.token_pricing);
+    setInputPriceDraft(p.input);
+    setOutputPriceDraft(p.output);
+    setModelIdDraft(p.modelId);
+    setPricingMsg(null);
+    setPricingError(null);
+  }, [
+    detail.agent_id,
+    detail.token_pricing?.input_price_per_million,
+    detail.token_pricing?.output_price_per_million,
+    detail.token_pricing?.model_id,
+  ]);
+
+  useEffect(() => {
     setDeliveryDraft(deliveryFromDetail(detail.delivery));
     setEndpointDraft("");
     setDeliveryMsg(null);
@@ -486,6 +517,33 @@ export function AgentOwnerSettings({
     descOk &&
     (nameChanged || (descChanged && descTrim.length >= 10) || tagsChanged) &&
     !savingProfile &&
+    !busy;
+
+  const oldInput = detail.token_pricing?.input_price_per_million;
+  const oldOutput = detail.token_pricing?.output_price_per_million;
+  const oldModelId = (detail.token_pricing?.model_id || "").trim();
+  const parsePrice = (raw: string): number | null => {
+    const s = raw.trim();
+    if (!s) return null;
+    const n = Number(s);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  const inputParsed = parsePrice(inputPriceDraft);
+  const outputParsed = parsePrice(outputPriceDraft);
+  const modelIdTrim = modelIdDraft.trim();
+  const pricingDirty =
+    inputParsed !== null &&
+    outputParsed !== null &&
+    (oldInput == null ||
+      oldOutput == null ||
+      inputParsed !== oldInput ||
+      outputParsed !== oldOutput ||
+      modelIdTrim !== oldModelId);
+  const canSavePricing =
+    pricingDirty &&
+    inputParsed !== null &&
+    outputParsed !== null &&
+    !savingPricing &&
     !busy;
 
   const policyMode = (detail.policy_mode || "").toLowerCase();
@@ -619,10 +677,14 @@ export function AgentOwnerSettings({
     }
   };
 
-  const saving = savingProfile || savingDelivery || savingPolicy;
-  const hasEdits = profileDirty || deliveryDirty || policyDirty;
+  const saving = savingProfile || savingDelivery || savingPolicy || savingPricing;
+  const hasEdits = profileDirty || deliveryDirty || policyDirty || pricingDirty;
   const canSaveAny =
-    (canSaveProfile || canSaveDelivery || canSavePolicy) && !saving && !busy;
+    (canSaveProfile || canSaveDelivery || canSavePolicy) &&
+    !savingProfile &&
+    !savingDelivery &&
+    !savingPolicy &&
+    !busy;
 
   const runSaveProfile = (): Promise<MyAgentSummary | null> => {
     if (!canSaveProfile) return Promise.resolve(null);
@@ -654,6 +716,45 @@ export function AgentOwnerSettings({
         return null;
       })
       .finally(() => setSavingProfile(false));
+  };
+
+  const runSavePricing = (): Promise<MyAgentSummary | null> => {
+    if (!canSavePricing || inputParsed === null || outputParsed === null) {
+      return Promise.resolve(null);
+    }
+    setSavingPricing(true);
+    setPricingError(null);
+    setPricingMsg(null);
+    const body: {
+      input_price_per_million: number;
+      output_price_per_million: number;
+      model_id?: string;
+    } = {
+      input_price_per_million: inputParsed,
+      output_price_per_million: outputParsed,
+    };
+    if (modelIdTrim) body.model_id = modelIdTrim;
+    return client
+      .updateMyAgentTokenPricing(detail.agent_id, body)
+      .then((row) => {
+        setPricingMsg(t.myAgentsPricingSaved);
+        const p = pricingFromDetail(row.token_pricing);
+        setInputPriceDraft(p.input);
+        setOutputPriceDraft(p.output);
+        setModelIdDraft(p.modelId);
+        window.setTimeout(() => setPricingMsg(null), 2000);
+        onUpdated?.(row);
+        return row;
+      })
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof ChatGatewayError && err.message.trim()
+            ? err.message.trim()
+            : t.myAgentsPricingFailed;
+        setPricingError(msg);
+        return null;
+      })
+      .finally(() => setSavingPricing(false));
   };
 
   const runSaveDelivery = (): Promise<MyAgentSummary | null> => {
@@ -940,6 +1041,79 @@ export function AgentOwnerSettings({
         {profileMsg ? (
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>{profileMsg}</p>
         ) : null}
+      </section>
+
+      <section>
+        <h3 style={sectionTitle}>{t.myAgentsSectionPricing}</h3>
+        <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+          {t.myAgentsPricingHint}
+        </p>
+        {detail.token_pricing == null ? (
+          <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+            {t.myAgentsPricingUnlisted}
+          </p>
+        ) : null}
+        <label style={{ display: "block", marginBottom: 10 }}>
+          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+            {t.myAgentsPricingInputLabel}
+          </div>
+          <input
+            value={inputPriceDraft}
+            onChange={(e) => setInputPriceDraft(e.target.value)}
+            style={inputStyle}
+            inputMode="decimal"
+            disabled={busy || savingPricing}
+            autoComplete="off"
+          />
+        </label>
+        <label style={{ display: "block", marginBottom: 10 }}>
+          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+            {t.myAgentsPricingOutputLabel}
+          </div>
+          <input
+            value={outputPriceDraft}
+            onChange={(e) => setOutputPriceDraft(e.target.value)}
+            style={inputStyle}
+            inputMode="decimal"
+            disabled={busy || savingPricing}
+            autoComplete="off"
+          />
+        </label>
+        <label style={{ display: "block", marginBottom: 10 }}>
+          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+            {t.myAgentsPricingModelLabel}
+          </div>
+          <input
+            value={modelIdDraft}
+            onChange={(e) => setModelIdDraft(e.target.value)}
+            style={inputStyle}
+            placeholder="openai/gpt-4o-mini"
+            disabled={busy || savingPricing}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+            {t.myAgentsPricingModelHint}
+          </div>
+        </label>
+        {pricingError ? (
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>{pricingError}</p>
+        ) : null}
+        {pricingMsg ? (
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>{pricingMsg}</p>
+        ) : null}
+        <button
+          type="button"
+          style={{
+            ...btnGhost,
+            opacity: canSavePricing ? 1 : 0.45,
+            cursor: canSavePricing ? "pointer" : "default",
+          }}
+          disabled={!canSavePricing}
+          onClick={() => void runSavePricing()}
+        >
+          {savingPricing ? "…" : t.myAgentsSavePricing}
+        </button>
       </section>
 
       {showConnectSection ? (

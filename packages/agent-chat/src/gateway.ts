@@ -252,6 +252,13 @@ export type MyAgentSummary = {
   policy_mode?: string | null;
   chat_open?: boolean | null;
   owner?: string | null;
+  /** L2 listing from ACN (owner detail); null when unlisted. */
+  token_pricing?: {
+    input_price_per_million: number;
+    output_price_per_million: number;
+    currency?: string;
+    model_id?: string | null;
+  } | null;
   /** Present after a successful delivery PATCH when ACN returns follow-up copy. */
   next_step_hint?: string | null;
 };
@@ -300,6 +307,15 @@ export type GatewayClient = {
   updateMyAgentProfile: (
     agentId: string,
     patch: { name?: string; description?: string; tags?: string[] },
+  ) => Promise<MyAgentSummary>;
+  /** Owner-side L2 token pricing; omit modelId to keep prior on server. */
+  updateMyAgentTokenPricing: (
+    agentId: string,
+    pricing: {
+      input_price_per_million: number;
+      output_price_per_million: number;
+      model_id?: string;
+    },
   ) => Promise<MyAgentSummary>;
   /** Switch receive mode: push-to-URL (direct) or agent-pull (relay). */
   updateMyAgentDelivery: (
@@ -493,6 +509,14 @@ export function createGatewayClient(
         {
           method: "PATCH",
           body: JSON.stringify(patch),
+        },
+      ),
+    updateMyAgentTokenPricing: (agentId, pricing) =>
+      request<MyAgentSummary>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/token-pricing`,
+        {
+          method: "PUT",
+          body: JSON.stringify(pricing),
         },
       ),
     updateMyAgentDelivery: (agentId, patch) =>
