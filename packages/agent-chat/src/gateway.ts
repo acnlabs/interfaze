@@ -258,9 +258,28 @@ export type MyAgentSummary = {
     output_price_per_million: number;
     currency?: string;
     model_id?: string | null;
+    /** Owner markup vs Host Catalog; UI derives listing = catalog × (1+m/100). */
+    markup_percent?: number | null;
   } | null;
+  /**
+   * Best-effort declared model (listing / metadata). Not cryptographic proof.
+   */
+  preferred_model_id?: string | null;
+  /**
+   * Self-reported via ACN heartbeat ``metadata.preferred_model``.
+   * Prefer this for Pricing prefill when unlisted; not verified.
+   */
+  runtime_model_id?: string | null;
   /** Present after a successful delivery PATCH when ACN returns follow-up copy. */
   next_step_hint?: string | null;
+};
+
+export type ModelCatalogItem = {
+  model_id: string;
+  display_name?: string | null;
+  input_price_per_million: number;
+  output_price_per_million: number;
+  currency?: string;
 };
 
 export type GatewayClient = {
@@ -315,8 +334,11 @@ export type GatewayClient = {
       input_price_per_million: number;
       output_price_per_million: number;
       model_id?: string;
+      markup_percent?: number;
     },
   ) => Promise<MyAgentSummary>;
+  /** Public Host Model Catalog (L1) row for a model id. */
+  getModelCatalogItem: (modelId: string) => Promise<ModelCatalogItem>;
   /** Switch receive mode: push-to-URL (direct) or agent-pull (relay). */
   updateMyAgentDelivery: (
     agentId: string,
@@ -519,6 +541,14 @@ export function createGatewayClient(
           body: JSON.stringify(pricing),
         },
       ),
+    getModelCatalogItem: (modelId) => {
+      // Keep `/` as path segments for FastAPI `{model_id:path}`.
+      const path = modelId
+        .split("/")
+        .map((p) => encodeURIComponent(p))
+        .join("/");
+      return request<ModelCatalogItem>(`/api/model-catalog/${path}`);
+    },
     updateMyAgentDelivery: (agentId, patch) =>
       request<MyAgentSummary>(
         `/api/chat/my-agents/${encodeURIComponent(agentId)}/delivery`,

@@ -247,6 +247,14 @@ export type RanchMessages = {
   myAgentsPricingOutputLabel: string;
   myAgentsPricingModelLabel: string;
   myAgentsPricingModelHint: string;
+  myAgentsPricingRuntimeHint: string;
+  myAgentsPricingSelfReportNote: string;
+  myAgentsPricingMarkupLabel: string;
+  myAgentsPricingMarkupHint: string;
+  myAgentsPricingCatalogLine: string;
+  myAgentsPricingListingLine: string;
+  myAgentsPricingExampleLine: string;
+  myAgentsPricingCatalogMissing: string;
   myAgentsPricingUnlisted: string;
   myAgentsSavePricing: string;
   myAgentsPricingSaved: string;
@@ -648,13 +656,25 @@ const en: RanchMessages = {
   myAgentsProfileFailed: "Couldn’t save profile.",
   myAgentsSectionPricing: "Pricing",
   myAgentsPricingHint:
-    "What others pay per million tokens (USD). Applies to new chats only — in-flight hops keep their snapshot. Leave blank model id to keep the previous one.",
-  myAgentsPricingInputLabel: "Input · USD / 1M tokens",
-  myAgentsPricingOutputLabel: "Output · USD / 1M tokens",
-  myAgentsPricingModelLabel: "Model id (optional)",
-  myAgentsPricingModelHint: "Host catalog id, e.g. openai/gpt-4o-mini",
+    "Listing = market catalog for the model you use × your markup. That is what others pay you. New chats only.",
+  myAgentsPricingInputLabel: "Listing input · USD / 1M",
+  myAgentsPricingOutputLabel: "Listing output · USD / 1M",
+  myAgentsPricingModelLabel: "Model you use",
+  myAgentsPricingModelHint:
+    "Prefer the model this agent actually calls. Runtime can report via `acn heartbeat --model …`.",
+  myAgentsPricingRuntimeHint: "Runtime reported: ${model} (self-reported — not verified).",
+  myAgentsPricingSelfReportNote:
+    "Model is owner/runtime-declared. Host does not verify the real upstream call.",
+  myAgentsPricingMarkupLabel: "Markup over market",
+  myAgentsPricingMarkupHint:
+    "Final price = catalog(model) × (1 + markup%). Changing model keeps this % and recalculates.",
+  myAgentsPricingCatalogLine: "Market reference (Host Catalog): in ${in} / out ${out}",
+  myAgentsPricingListingLine: "Your listing (what others pay): in ${in} / out ${out}",
+  myAgentsPricingExampleLine:
+    "Example: 1M input tokens → they pay you ~$${pay}; catalog cost ~$${cost}",
+  myAgentsPricingCatalogMissing: "No catalog row for this model — check the id.",
   myAgentsPricingUnlisted:
-    "No listing yet — chats may use platform default until you save prices.",
+    "Not listed yet — draft below uses your model × default markup. Save to publish.",
   myAgentsSavePricing: "Save pricing",
   myAgentsPricingSaved: "Pricing saved",
   myAgentsPricingFailed: "Couldn’t save pricing.",
@@ -1064,12 +1084,24 @@ const zh: RanchMessages = {
   myAgentsProfileFailed: "保存失败。",
   myAgentsSectionPricing: "挂牌价",
   myAgentsPricingHint:
-    "向对方收取的百万 token 单价（USD）。只影响之后的新对话；进行中的跳保留发前快照。留空 model id 则保留原值。",
-  myAgentsPricingInputLabel: "输入 · USD / 百万 token",
-  myAgentsPricingOutputLabel: "输出 · USD / 百万 token",
-  myAgentsPricingModelLabel: "模型 id（可选）",
-  myAgentsPricingModelHint: "Host Catalog 标识，如 openai/gpt-4o-mini",
-  myAgentsPricingUnlisted: "尚未挂牌——保存前对话可能使用平台默认价。",
+    "挂牌价 = 你实际使用模型的市场参考价 ×（1+上浮%）。这是对方付给你的价。只影响新对话。",
+  myAgentsPricingInputLabel: "挂牌输入 · USD / 百万",
+  myAgentsPricingOutputLabel: "挂牌输出 · USD / 百万",
+  myAgentsPricingModelLabel: "你实际使用的模型",
+  myAgentsPricingModelHint:
+    "请填实际会调用的模型。Runtime 可用 `acn heartbeat --model …` 上报预填。",
+  myAgentsPricingRuntimeHint: "Runtime 上报：${model}（自报，未验真）。",
+  myAgentsPricingSelfReportNote:
+    "模型由主人/runtime 声明；平台不验证实际上游调用。",
+  myAgentsPricingMarkupLabel: "相对市场参考上浮",
+  myAgentsPricingMarkupHint:
+    "最终价 = Catalog(模型) ×（1+上浮%）。换模型会保留该比例并重算。",
+  myAgentsPricingCatalogLine: "市场参考（Host Catalog）：输入 ${in} / 输出 ${out}",
+  myAgentsPricingListingLine: "你的挂牌（对方付给你）：输入 ${in} / 输出 ${out}",
+  myAgentsPricingExampleLine:
+    "例：100 万 input → 对方约付你 $${pay}；参考成本约 $${cost}",
+  myAgentsPricingCatalogMissing: "Catalog 没有这个模型——请核对 model id。",
+  myAgentsPricingUnlisted: "尚未挂牌——下方草稿按「模型 × 默认上浮」预填，保存后生效。",
   myAgentsSavePricing: "保存挂牌价",
   myAgentsPricingSaved: "挂牌价已保存",
   myAgentsPricingFailed: "保存挂牌价失败。",
