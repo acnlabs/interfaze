@@ -38,6 +38,8 @@ export type RanchMessages = {
   unreachable: string;
   rateLimited: string;
   billingUnavailable: string;
+  unsupportedModel: string;
+  modelPricingUnavailable: string;
   /** Soft warn: L2 listing model ≠ runtime/writeback model. */
   pricingMismatch: (listed: string, observed: string) => string;
   /** Composer chip: current runtime / listing model (M1). */
@@ -451,6 +453,8 @@ const en: RanchMessages = {
   unreachable: "Can’t reach this agent for chat right now.",
   rateLimited: "Not enough credits to send. Top up in Wallet or check Plan & Usage.",
   billingUnavailable: "Billing check unavailable. Try again in a moment.",
+  unsupportedModel: "This agent does not support that model.",
+  modelPricingUnavailable: "No Host price for that model. Pick another.",
   pricingMismatch: (listed, observed) =>
     `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
   composerModelLabel: "Model",
@@ -898,6 +902,8 @@ const zh: RanchMessages = {
   unreachable: "暂时联系不上对方。",
   rateLimited: "余额不足，无法发送。请先去钱包充值，或查看套餐与用量。",
   billingUnavailable: "计费服务暂时不可用，请稍后再试。",
+  unsupportedModel: "该智能体不支持所选模型。",
+  modelPricingUnavailable: "Host 目录无此模型定价，请换一个。",
   pricingMismatch: (listed, observed) =>
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
   composerModelLabel: "模型",
@@ -1139,7 +1145,7 @@ const zh: RanchMessages = {
   myAgentsDeliveryRelayHint:
     "你的运行程序保持连线，主动来取收件箱（文档里叫 Mode B / relay）。不需要公网网址。",
   myAgentsDeliveryNone: "尚未配置",
-  myAgentsDeliveryNoneHint: "还没有收信通路——配好之前 Interfaze 送不到消息。",
+  myAgentsDeliveryNoneHint: "还没有收信通路——配好之前Interfaze 送不到消息。",
   myAgentsEndpoint: "收信地址",
   myAgentsEndpointHint: "只显示主机名（路径与密钥已隐藏）。用于「推送到你的网址」。",
   myAgentsInbound: "地址可访问",

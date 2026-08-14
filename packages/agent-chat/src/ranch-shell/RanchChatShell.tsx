@@ -1444,7 +1444,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
     listed_model_id?: string | null;
     runtime_model_id?: string | null;
     mismatched: boolean;
+    supported_models: string[];
+    model_options: Array<{
+      model_id: string;
+      is_listing?: boolean;
+      is_runtime?: boolean;
+      input_price_per_million?: number;
+      output_price_per_million?: number;
+      free?: boolean;
+    }>;
   } | null>(null);
+  /** User pick for this hop (S1). Sticky per chat until changed. */
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [ownedAgentLoading, setOwnedAgentLoading] = useState(false);
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [activeTopic, setActiveTopic] = useState<ThreadSummary | null>(null);
@@ -2166,7 +2177,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
         opts?.threadId !== undefined
           ? opts.threadId
           : (activeTopic?.id ?? composerTopic?.id ?? null);
-      await client.sendMessage(chatId, text, mentions, sendThreadId);
+      await client.sendMessage(chatId, text, mentions, sendThreadId, {
+        requested_model: selectedModelId,
+      });
       if (group && mentions) {
         if (mentions.length === 1) {
           const id = mentions[0]!;
@@ -2235,7 +2248,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
               ? t.rateLimited
               : e.code === "acn_unavailable"
                 ? t.billingUnavailable
-                : e.message
+                : e.code === "unsupported_model"
+                  ? t.unsupportedModel
+                  : e.code === "model_pricing_unavailable"
+                    ? t.modelPricingUnavailable
+                    : e.message
           : t.sendFailed,
       );
       try {
@@ -2289,6 +2306,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           text,
           mentions,
           activeTopic?.id ?? composerTopic?.id ?? null,
+          { requested_model: selectedModelId },
         );
         if (group && mentions) {
           if (mentions.length === 1) {
@@ -2355,7 +2373,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 ? t.rateLimited
                 : e.code === "acn_unavailable"
                   ? t.billingUnavailable
-                  : e.message
+                  : e.code === "unsupported_model"
+                    ? t.unsupportedModel
+                    : e.code === "model_pricing_unavailable"
+                      ? t.modelPricingUnavailable
+                      : e.message
             : t.sendFailed,
         );
       } finally {
@@ -2422,15 +2444,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
     };
   }, [showMembersPanel, activeIsOwned, active?.agent_id, infoTab, client]);
 
-  // M1: composer model chip (direct chats only).
+  // M1/M2: composer model picker (direct chats only).
   useEffect(() => {
     if (!active || isGroupChat(active) || !active.agent_id) {
       setComposerModel(null);
+      setSelectedModelId(null);
       return;
     }
     const bare = active.agent_id.replace(/^acn:/i, "").trim();
     if (!bare || bare.startsWith("sys:")) {
       setComposerModel(null);
+      setSelectedModelId(null);
       return;
     }
     let cancelled = false;
@@ -2439,14 +2463,34 @@ export function RanchChatShell(props: RanchChatShellProps) {
         .getAgentModelStatus(bare)
         .then((row) => {
           if (cancelled) return;
+          const supported = Array.isArray(row.supported_models)
+            ? row.supported_models.filter((m): m is string => typeof m === "string" && !!m.trim())
+            : [];
+          const options = Array.isArray(row.model_options) ? row.model_options : [];
+          const listed = row.listed_model_id ?? null;
+          const runtime = row.runtime_model_id ?? null;
           setComposerModel({
-            listed_model_id: row.listed_model_id ?? null,
-            runtime_model_id: row.runtime_model_id ?? null,
+            listed_model_id: listed,
+            runtime_model_id: runtime,
             mismatched: !!row.mismatched,
+            supported_models: supported,
+            model_options: options,
+          });
+          setSelectedModelId((prev) => {
+            const pool = supported.length
+              ? supported
+              : [listed, runtime].filter((m): m is string => !!m && !!m.trim());
+            if (prev && pool.some((m) => m.toLowerCase() === prev.toLowerCase())) {
+              return prev;
+            }
+            return listed || runtime || pool[0] || null;
           });
         })
         .catch(() => {
-          if (!cancelled) setComposerModel(null);
+          if (!cancelled) {
+            setComposerModel(null);
+            setSelectedModelId(null);
+          }
         });
     };
     load();
@@ -3916,50 +3960,115 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     {(() => {
                       const runtime = (composerModel.runtime_model_id || "").trim();
                       const listed = (composerModel.listed_model_id || "").trim();
-                      const primary = runtime || listed;
-                      const short = shortModelLabel(primary) || t.composerModelUnknown;
-                      const title = runtime
-                        ? listed && runtime.toLowerCase() !== listed.toLowerCase()
-                          ? t.composerModelMismatch(listed, runtime)
-                          : runtime
-                        : listed
-                          ? `${listed} (${t.composerModelListing})`
-                          : t.composerModelUnknown;
+                      const options = (() => {
+                        const fromApi = composerModel.supported_models.length
+                          ? composerModel.supported_models
+                          : [listed, runtime].filter(Boolean);
+                        const seen = new Set<string>();
+                        const out: string[] = [];
+                        for (const id of fromApi) {
+                          const k = id.toLowerCase();
+                          if (seen.has(k)) continue;
+                          seen.add(k);
+                          out.push(id);
+                        }
+                        if (selectedModelId && !seen.has(selectedModelId.toLowerCase())) {
+                          out.unshift(selectedModelId);
+                        }
+                        return out;
+                      })();
+                      const value = selectedModelId || listed || runtime || "";
+                      const valueTitle =
+                        composerModel.model_options.find(
+                          (o) => o.model_id.toLowerCase() === value.toLowerCase(),
+                        ) || null;
+                      const priceHint = valueTitle
+                        ? valueTitle.free
+                          ? "free"
+                          : typeof valueTitle.input_price_per_million === "number"
+                            ? `$${valueTitle.input_price_per_million}/M in`
+                            : ""
+                        : "";
+                      const canPick = options.length > 1;
                       return (
-                        <span
-                          title={title}
-                          aria-label={`${t.composerModelLabel}: ${title}`}
+                        <label
+                          title={value || t.composerModelUnknown}
+                          aria-label={`${t.composerModelLabel}: ${value || t.composerModelUnknown}`}
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
                             gap: 6,
-                            padding: "4px 10px",
+                            padding: canPick ? "2px 6px 2px 10px" : "4px 10px",
                             borderRadius: 999,
                             border: `1px solid ${colors.border}`,
                             background: colors.panel,
                             fontSize: 12,
                             color: colors.text,
                             maxWidth: "100%",
+                            cursor: canPick ? "pointer" : "default",
                           }}
                         >
                           <span style={{ color: colors.muted }}>{t.composerModelLabel}</span>
-                          <span
-                            style={{
-                              fontWeight: 600,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                              maxWidth: 160,
-                            }}
-                          >
-                            {short}
-                          </span>
-                          {!runtime && listed ? (
+                          {canPick ? (
+                            <>
+                              <select
+                                value={value}
+                                onChange={(e) => setSelectedModelId(e.target.value || null)}
+                                style={{
+                                  appearance: "none",
+                                  WebkitAppearance: "none",
+                                  border: "none",
+                                  background: "transparent",
+                                  color: colors.text,
+                                  fontWeight: 600,
+                                  fontSize: 12,
+                                  maxWidth: 160,
+                                  padding: "2px 0",
+                                  cursor: "pointer",
+                                  outline: "none",
+                                }}
+                              >
+                                {options.map((id) => (
+                                  <option key={id} value={id}>
+                                    {shortModelLabel(id) || id}
+                                  </option>
+                                ))}
+                              </select>
+                              <span
+                                aria-hidden
+                                style={{
+                                  color: colors.muted,
+                                  fontSize: 10,
+                                  lineHeight: 1,
+                                  marginLeft: -2,
+                                  marginRight: 2,
+                                }}
+                              >
+                                ▾
+                              </span>
+                            </>
+                          ) : (
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                maxWidth: 160,
+                              }}
+                            >
+                              {shortModelLabel(value) || t.composerModelUnknown}
+                            </span>
+                          )}
+                          {!runtime && listed && value.toLowerCase() === listed.toLowerCase() ? (
                             <span style={{ color: colors.muted, fontSize: 11 }}>
                               ({t.composerModelListing})
                             </span>
                           ) : null}
-                        </span>
+                          {priceHint ? (
+                            <span style={{ color: colors.muted, fontSize: 11 }}>{priceHint}</span>
+                          ) : null}
+                        </label>
                       );
                     })()}
                     {composerModel.mismatched &&

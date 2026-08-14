@@ -298,6 +298,7 @@ export type GatewayClient = {
     content: string,
     mentions?: string[],
     threadId?: string | null,
+    opts?: { requested_model?: string | null },
   ) => Promise<ChatMessage>;
   listThreads: (chatId: string) => Promise<ThreadSummary[]>;
   createThread: (
@@ -309,12 +310,23 @@ export type GatewayClient = {
   /** Owner's ACN agents (same region / alive as directory mine). */
   listMyAgents: (limit?: number) => Promise<MyAgentSummary[]>;
   getMyAgent: (agentId: string) => Promise<MyAgentSummary>;
-  /** Listed vs runtime model for composer (M1). */
+  /** Listed vs runtime model + supported options for composer (M1/M2). */
   getAgentModelStatus: (agentId: string) => Promise<{
     agent_id: string;
     listed_model_id?: string | null;
     runtime_model_id?: string | null;
     mismatched: boolean;
+    markup_percent?: number | null;
+    supported_models?: string[];
+    model_options?: Array<{
+      model_id: string;
+      is_listing?: boolean;
+      is_runtime?: boolean;
+      input_price_per_million?: number;
+      output_price_per_million?: number;
+      pricing_source?: string;
+      free?: boolean;
+    }>;
   }>;
   /** Rotate ACN API key; plaintext returned once — do not log. */
   rotateMyAgentKey: (agentId: string) => Promise<{
@@ -520,6 +532,17 @@ export function createGatewayClient(
         listed_model_id?: string | null;
         runtime_model_id?: string | null;
         mismatched: boolean;
+        markup_percent?: number | null;
+        supported_models?: string[];
+        model_options?: Array<{
+          model_id: string;
+          is_listing?: boolean;
+          is_runtime?: boolean;
+          input_price_per_million?: number;
+          output_price_per_million?: number;
+          pricing_source?: string;
+          free?: boolean;
+        }>;
       }>(`/api/chat/agents/${encodeURIComponent(agentId)}/model-status`),
     rotateMyAgentKey: (agentId) =>
       request<{
@@ -746,13 +769,16 @@ export function createGatewayClient(
       request<ChatMessage[]>(`/api/chats/${encodeURIComponent(chatId)}/messages?limit=50`),
     listParticipants: (chatId) =>
       request<ChatParticipant[]>(`/api/chats/${encodeURIComponent(chatId)}/participants`),
-    sendMessage: (chatId, content, mentions, threadId) =>
+    sendMessage: (chatId, content, mentions, threadId, opts) =>
       request<ChatMessage>(`/api/chats/${encodeURIComponent(chatId)}/messages`, {
         method: "POST",
         body: JSON.stringify({
           content,
           mentions: mentions ?? null,
           thread_id: threadId || null,
+          ...(opts?.requested_model
+            ? { requested_model: opts.requested_model }
+            : {}),
         }),
       }),
     listThreads: async (chatId) => {
