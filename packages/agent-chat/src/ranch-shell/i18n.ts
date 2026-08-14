@@ -456,7 +456,7 @@ const en: RanchMessages = {
   rateLimited: "Not enough credits to send. Top up in Wallet or check Plan & Usage.",
   billingUnavailable: "Billing check unavailable. Try again in a moment.",
   unsupportedModel: "This agent does not support that model.",
-  modelPricingUnavailable: "No Host price for that model. Pick another.",
+  modelPricingUnavailable: "No platform price for that model yet. Pick another or ask the owner to wait for Host pack coverage.",
   pricingMismatch: (listed, observed) =>
     `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
   composerModelLabel: "Model",
@@ -906,7 +906,7 @@ const zh: RanchMessages = {
   rateLimited: "余额不足，无法发送。请先去钱包充值，或查看套餐与用量。",
   billingUnavailable: "计费服务暂时不可用，请稍后再试。",
   unsupportedModel: "该智能体不支持所选模型。",
-  modelPricingUnavailable: "Host 目录无此模型定价，请换一个。",
+  modelPricingUnavailable: "平台暂无该模型报价，请换一个；或等 Host 价包录入后再试。",
   pricingMismatch: (listed, observed) =>
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
   composerModelLabel: "模型",
