@@ -398,7 +398,7 @@ function AgentReplyPendingBubble({ t }: { t: RanchMessages }) {
   );
 }
 
-type ReplyTimeoutReason = "offline" | "undeliverable" | "timeout";
+type ReplyTimeoutReason = "offline" | "undeliverable" | "timeout" | "no_reply";
 
 /** Explicit error in agent slot + retry (not a silent blank / endless spinner). */
 function AgentReplyTimeoutBubble({
@@ -415,7 +415,9 @@ function AgentReplyTimeoutBubble({
       ? t.timeoutOffline
       : reason === "undeliverable"
         ? t.timeoutUndeliverable
-        : t.timeoutGeneric;
+        : reason === "no_reply"
+          ? t.timeoutNoReply
+          : t.timeoutGeneric;
   return (
     <div
       style={{
@@ -1375,6 +1377,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [loadingChats, setLoadingChats] = useState(true);
   const [active, setActive] = useState<ChatSummary | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  messagesRef.current = messages;
   /** P13: agent writeback asked for collab but tank empty / shortfall. */
   const collabNeedTopup = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -1522,11 +1526,26 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, []);
 
   /**
-   * Re-query ACN presence via chat list, then decide offline vs undeliverable.
+   * Re-query ACN presence via chat list, then decide offline vs undeliverable vs no_reply.
    * Do not invent "offline" from delivery metadata alone.
+   * If Host already marked the last user hop delivered, prefer no_reply over undeliverable.
    */
   const resolveAfterDeliveryIssue = useCallback(
-    async (chatId: string): Promise<ReplyTimeoutReason> => {
+    async (chatId: string, msgs?: ChatMessage[]): Promise<ReplyTimeoutReason> => {
+      const sourceMsgs = msgs ?? messagesRef.current;
+      const lastUser = [...sourceMsgs].reverse().find((m) => m.sender_type === "user");
+      const deliveryMeta = lastUser?.metadata as
+        | {
+            delivery?: string;
+            delivery_by_agent?: Record<string, string>;
+          }
+        | undefined;
+      const hopDelivered =
+        (deliveryMeta?.delivery || "").toLowerCase() === "delivered" ||
+        Object.values(deliveryMeta?.delivery_by_agent || {}).some(
+          (s) => String(s).toLowerCase() === "delivered",
+        );
+
       try {
         const list = await client.listChats();
         setChats(list);
@@ -1541,6 +1560,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
             setDeliveryBroken(chatId, false);
             return "offline";
           }
+          if (hopDelivered) {
+            setDeliveryBroken(chatId, false);
+            return "no_reply";
+          }
           if ((row.agent_status || "").toLowerCase() === "active") {
             setDeliveryBroken(chatId, true);
             return "undeliverable";
@@ -1548,6 +1571,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
         }
       } catch {
         /* fall through */
+      }
+      if (hopDelivered) {
+        setDeliveryBroken(chatId, false);
+        return "no_reply";
       }
       // Presence unknown — don't claim offline.
       setDeliveryBroken(chatId, true);
@@ -2219,8 +2246,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
             noteAgentActivity(chatId, msgs);
             // Already offline at send: don't spin the full window before explaining.
             if (sentWhileOffline && i >= 2) {
-              const reason = await resolveAfterDeliveryIssue(chatId);
-              markReplyTimeout(chatId, reason === "offline" ? "offline" : "undeliverable");
+              const reason = await resolveAfterDeliveryIssue(chatId, msgs);
+              markReplyTimeout(
+                chatId,
+                reason === "offline"
+                  ? "offline"
+                  : reason === "no_reply"
+                    ? "no_reply"
+                    : "undeliverable",
+              );
               return;
             }
           } catch {
@@ -2228,8 +2262,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
           }
         }
         // Past the wait window → recheck ACN presence, then fact-based copy/dot.
-        const reason = await resolveAfterDeliveryIssue(chatId);
+        let latestMsgs: ChatMessage[] | undefined;
+        try {
+          latestMsgs = await client.listMessages(chatId);
+          setMessages((prev) => mergeServerMessagesWithLocalTopicMarkers(latestMsgs!, prev));
+        } catch {
+          /* ignore */
+        }
+        const reason = await resolveAfterDeliveryIssue(chatId, latestMsgs);
         if (reason === "offline") markReplyTimeout(chatId, "offline");
+        else if (reason === "no_reply") markReplyTimeout(chatId, "no_reply");
         else if (sentWhileOffline) markReplyTimeout(chatId, "undeliverable");
         else markReplyTimeout(chatId, reason === "undeliverable" ? "undeliverable" : "timeout");
       })();
@@ -2353,9 +2395,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
             chatId,
             reason === "offline"
               ? "offline"
-              : reason === "undeliverable"
-                ? "undeliverable"
-                : "timeout",
+              : reason === "no_reply"
+                ? "no_reply"
+                : reason === "undeliverable"
+                  ? "undeliverable"
+                  : "timeout",
           );
         })();
       } catch (e) {

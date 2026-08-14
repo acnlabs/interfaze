@@ -25,6 +25,8 @@ export type RanchMessages = {
   timeoutOffline: string;
   /** ACN may still be online; outbound chat delivery queued/failed. */
   timeoutUndeliverable: string;
+  /** Host delivered to agent, but no writeback within the wait window. */
+  timeoutNoReply: string;
   timeoutGeneric: string;
   noAgentsTitle: string;
   noAgentsBody: string;
@@ -443,6 +445,8 @@ const en: RanchMessages = {
     "This agent is offline and can’t reply. Try again when the status turns green.",
   timeoutUndeliverable:
     "Message didn’t reach the agent. It may still show online on ACN — check listen / writeback, then Retry.",
+  timeoutNoReply:
+    "The agent got your message but didn’t reply in time. If you just switched models, try the default (e.g. kimi) or Retry — that model hop may have failed on the runtime.",
   timeoutGeneric:
     "No reply yet. It may be unavailable here, or isn’t set up to write replies back to this chat.",
   noAgentsTitle: "No agents to chat with yet",
@@ -895,6 +899,8 @@ const zh: RanchMessages = {
   timeoutOffline: "当前agent离线，无法回复，请等状态变绿后再试。",
   timeoutUndeliverable:
     "消息没有送到 agent。ACN 上可能仍显示在线——请检查 listen / 回写，再点 Retry。",
+  timeoutNoReply:
+    "消息已送到 agent，但超时仍无回复。若刚切换模型，可先切回默认（如 kimi）再试——该模型在 runtime 上可能跑失败。",
   timeoutGeneric: "对方长时间没有回复。可能暂时不可达，或还没接上这边的回复通道。",
   noAgentsTitle: "还没有可聊的 agent",
   noAgentsBody:
