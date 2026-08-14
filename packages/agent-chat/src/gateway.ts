@@ -309,6 +309,13 @@ export type GatewayClient = {
   /** Owner's ACN agents (same region / alive as directory mine). */
   listMyAgents: (limit?: number) => Promise<MyAgentSummary[]>;
   getMyAgent: (agentId: string) => Promise<MyAgentSummary>;
+  /** Listed vs runtime model for composer (M1). */
+  getAgentModelStatus: (agentId: string) => Promise<{
+    agent_id: string;
+    listed_model_id?: string | null;
+    runtime_model_id?: string | null;
+    mismatched: boolean;
+  }>;
   /** Rotate ACN API key; plaintext returned once — do not log. */
   rotateMyAgentKey: (agentId: string) => Promise<{
     success: boolean;
@@ -507,6 +514,13 @@ export function createGatewayClient(
     },
     getMyAgent: (agentId) =>
       request<MyAgentSummary>(`/api/chat/my-agents/${encodeURIComponent(agentId)}`),
+    getAgentModelStatus: (agentId) =>
+      request<{
+        agent_id: string;
+        listed_model_id?: string | null;
+        runtime_model_id?: string | null;
+        mismatched: boolean;
+      }>(`/api/chat/agents/${encodeURIComponent(agentId)}/model-status`),
     rotateMyAgentKey: (agentId) =>
       request<{
         success: boolean;

@@ -40,6 +40,11 @@ export type RanchMessages = {
   billingUnavailable: string;
   /** Soft warn: L2 listing model ≠ runtime/writeback model. */
   pricingMismatch: (listed: string, observed: string) => string;
+  /** Composer chip: current runtime / listing model (M1). */
+  composerModelLabel: string;
+  composerModelUnknown: string;
+  composerModelListing: string;
+  composerModelMismatch: (listed: string, runtime: string) => string;
   sendFailed: string;
   expand: string;
   collapse: string;
@@ -448,6 +453,11 @@ const en: RanchMessages = {
   billingUnavailable: "Billing check unavailable. Try again in a moment.",
   pricingMismatch: (listed, observed) =>
     `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
+  composerModelLabel: "Model",
+  composerModelUnknown: "—",
+  composerModelListing: "listing",
+  composerModelMismatch: (listed, runtime) =>
+    `Listing ${listed} ≠ runtime ${runtime} (still billed at listing price)`,
   sendFailed: "Send failed",
   expand: "Expand",
   collapse: "Collapse",
@@ -890,6 +900,11 @@ const zh: RanchMessages = {
   billingUnavailable: "计费服务暂时不可用，请稍后再试。",
   pricingMismatch: (listed, observed) =>
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
+  composerModelLabel: "模型",
+  composerModelUnknown: "—",
+  composerModelListing: "挂牌",
+  composerModelMismatch: (listed, runtime) =>
+    `挂牌 ${listed} ≠ 运行 ${runtime}（仍按挂牌价结算）`,
   sendFailed: "发送失败",
   expand: "全屏",
   collapse: "收起",

@@ -283,62 +283,11 @@ function deliveryStatusLabel(delivery: string, t: RanchMessages): string {
   return t.delivered;
 }
 
-type PricingMismatchEntry = {
-  listed_model_id?: string;
-  observed_model_id?: string;
-  observed_via?: string;
-  severity?: string;
-};
-
-/** Soft mismatch entries from user-message ``metadata.billing.pricing_mismatch``. */
-function extractPricingMismatches(
-  meta: ChatMessage["metadata"],
-): PricingMismatchEntry[] {
-  const billing = meta && typeof meta === "object" ? meta.billing : null;
-  if (!billing || typeof billing !== "object") return [];
-  const map = (billing as { pricing_mismatch?: unknown }).pricing_mismatch;
-  if (!map || typeof map !== "object") return [];
-  return Object.values(map as Record<string, PricingMismatchEntry>).filter(
-    (m) =>
-      !!m &&
-      typeof m === "object" &&
-      typeof m.listed_model_id === "string" &&
-      typeof m.observed_model_id === "string",
-  );
-}
-
-function PricingMismatchFooter({
-  entries,
-  t,
-}: {
-  entries: PricingMismatchEntry[];
-  t: RanchMessages;
-}) {
-  if (entries.length === 0) return null;
-  const lines = entries.map((m) =>
-    t.pricingMismatch(m.listed_model_id!, m.observed_model_id!),
-  );
-  const full = lines.join(" · ");
-  return (
-    <div
-      title={full}
-      aria-label={full}
-      style={{
-        paddingRight: 2,
-        fontSize: 11,
-        lineHeight: 1.35,
-        color: "#fbbf24",
-        maxWidth: "100%",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
-        textAlign: "right",
-      }}
-    >
-      {lines[0]}
-      {lines.length > 1 ? ` · +${lines.length - 1}` : ""}
-    </div>
-  );
+function shortModelLabel(modelId: string | null | undefined): string {
+  const s = (modelId || "").trim();
+  if (!s) return "";
+  const slash = s.lastIndexOf("/");
+  return slash >= 0 ? s.slice(slash + 1) : s;
 }
 
 function DeliveryStatusFooter({
@@ -1491,6 +1440,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [infoTab, setInfoTab] = useState<"info" | "settings" | "wallet" | "members" | "topics">("info");
   /** Owned-agent ACN detail for Info (read-only) + Settings (manage). */
   const [ownedAgentDetail, setOwnedAgentDetail] = useState<MyAgentSummary | null>(null);
+  const [composerModel, setComposerModel] = useState<{
+    listed_model_id?: string | null;
+    runtime_model_id?: string | null;
+    mismatched: boolean;
+  } | null>(null);
   const [ownedAgentLoading, setOwnedAgentLoading] = useState(false);
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [activeTopic, setActiveTopic] = useState<ThreadSummary | null>(null);
@@ -2468,6 +2422,41 @@ export function RanchChatShell(props: RanchChatShellProps) {
     };
   }, [showMembersPanel, activeIsOwned, active?.agent_id, infoTab, client]);
 
+  // M1: composer model chip (direct chats only).
+  useEffect(() => {
+    if (!active || isGroupChat(active) || !active.agent_id) {
+      setComposerModel(null);
+      return;
+    }
+    const bare = active.agent_id.replace(/^acn:/i, "").trim();
+    if (!bare || bare.startsWith("sys:")) {
+      setComposerModel(null);
+      return;
+    }
+    let cancelled = false;
+    const load = () => {
+      void client
+        .getAgentModelStatus(bare)
+        .then((row) => {
+          if (cancelled) return;
+          setComposerModel({
+            listed_model_id: row.listed_model_id ?? null,
+            runtime_model_id: row.runtime_model_id ?? null,
+            mismatched: !!row.mismatched,
+          });
+        })
+        .catch(() => {
+          if (!cancelled) setComposerModel(null);
+        });
+    };
+    load();
+    const timer = window.setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [active?.chat_id, active?.agent_id, active?.type, client]);
+
   /** After owner renames an agent: refresh detail, chat titles, @ labels, host directory. */
   const applyOwnedAgentProfileUpdate = (
     row: MyAgentSummary,
@@ -3431,9 +3420,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     typeof m.metadata.delivery_by_agent === "object"
                       ? (m.metadata.delivery_by_agent as Record<string, string>)
                       : null;
-                  const pricingMismatches = isUser
-                    ? extractPricingMismatches(m.metadata)
-                    : [];
                   const group = active ? isGroupChat(active) : false;
                   const senderLabel =
                     !isUser && !topicStart && group
@@ -3534,9 +3520,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           names={agentNames}
                           t={t}
                         />
-                      ) : null}
-                      {isUser && pricingMismatches.length > 0 ? (
-                        <PricingMismatchFooter entries={pricingMismatches} t={t} />
                       ) : null}
                     </div>
                     </Fragment>
@@ -3918,6 +3901,92 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       </button>
                       );
                     })}
+                  </div>
+                ) : null}
+                {composerModel && active && !isGroupChat(active) ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      gap: 8,
+                      maxWidth: "100%",
+                    }}
+                  >
+                    {(() => {
+                      const runtime = (composerModel.runtime_model_id || "").trim();
+                      const listed = (composerModel.listed_model_id || "").trim();
+                      const primary = runtime || listed;
+                      const short = shortModelLabel(primary) || t.composerModelUnknown;
+                      const title = runtime
+                        ? listed && runtime.toLowerCase() !== listed.toLowerCase()
+                          ? t.composerModelMismatch(listed, runtime)
+                          : runtime
+                        : listed
+                          ? `${listed} (${t.composerModelListing})`
+                          : t.composerModelUnknown;
+                      return (
+                        <span
+                          title={title}
+                          aria-label={`${t.composerModelLabel}: ${title}`}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            border: `1px solid ${colors.border}`,
+                            background: colors.panel,
+                            fontSize: 12,
+                            color: colors.text,
+                            maxWidth: "100%",
+                          }}
+                        >
+                          <span style={{ color: colors.muted }}>{t.composerModelLabel}</span>
+                          <span
+                            style={{
+                              fontWeight: 600,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              maxWidth: 160,
+                            }}
+                          >
+                            {short}
+                          </span>
+                          {!runtime && listed ? (
+                            <span style={{ color: colors.muted, fontSize: 11 }}>
+                              ({t.composerModelListing})
+                            </span>
+                          ) : null}
+                        </span>
+                      );
+                    })()}
+                    {composerModel.mismatched &&
+                    composerModel.listed_model_id &&
+                    composerModel.runtime_model_id ? (
+                      <span
+                        title={t.composerModelMismatch(
+                          composerModel.listed_model_id,
+                          composerModel.runtime_model_id,
+                        )}
+                        style={{
+                          fontSize: 11,
+                          lineHeight: 1.35,
+                          color: "#fbbf24",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          maxWidth: "100%",
+                          flex: "1 1 120px",
+                        }}
+                      >
+                        {t.composerModelMismatch(
+                          shortModelLabel(composerModel.listed_model_id),
+                          shortModelLabel(composerModel.runtime_model_id),
+                        )}
+                      </span>
+                    ) : null}
                   </div>
                 ) : null}
                 <textarea
