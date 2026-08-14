@@ -38,6 +38,8 @@ export type RanchMessages = {
   unreachable: string;
   rateLimited: string;
   billingUnavailable: string;
+  /** Soft warn: L2 listing model ≠ runtime/writeback model. */
+  pricingMismatch: (listed: string, observed: string) => string;
   sendFailed: string;
   expand: string;
   collapse: string;
@@ -444,6 +446,8 @@ const en: RanchMessages = {
   unreachable: "Can’t reach this agent for chat right now.",
   rateLimited: "Not enough credits to send. Top up in Wallet or check Plan & Usage.",
   billingUnavailable: "Billing check unavailable. Try again in a moment.",
+  pricingMismatch: (listed, observed) =>
+    `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
   sendFailed: "Send failed",
   expand: "Expand",
   collapse: "Collapse",
@@ -884,6 +888,8 @@ const zh: RanchMessages = {
   unreachable: "暂时联系不上对方。",
   rateLimited: "余额不足，无法发送。请先去钱包充值，或查看套餐与用量。",
   billingUnavailable: "计费服务暂时不可用，请稍后再试。",
+  pricingMismatch: (listed, observed) =>
+    `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
   sendFailed: "发送失败",
   expand: "全屏",
   collapse: "收起",

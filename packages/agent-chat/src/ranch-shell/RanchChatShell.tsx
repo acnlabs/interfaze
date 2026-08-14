@@ -283,6 +283,64 @@ function deliveryStatusLabel(delivery: string, t: RanchMessages): string {
   return t.delivered;
 }
 
+type PricingMismatchEntry = {
+  listed_model_id?: string;
+  observed_model_id?: string;
+  observed_via?: string;
+  severity?: string;
+};
+
+/** Soft mismatch entries from user-message ``metadata.billing.pricing_mismatch``. */
+function extractPricingMismatches(
+  meta: ChatMessage["metadata"],
+): PricingMismatchEntry[] {
+  const billing = meta && typeof meta === "object" ? meta.billing : null;
+  if (!billing || typeof billing !== "object") return [];
+  const map = (billing as { pricing_mismatch?: unknown }).pricing_mismatch;
+  if (!map || typeof map !== "object") return [];
+  return Object.values(map as Record<string, PricingMismatchEntry>).filter(
+    (m) =>
+      !!m &&
+      typeof m === "object" &&
+      typeof m.listed_model_id === "string" &&
+      typeof m.observed_model_id === "string",
+  );
+}
+
+function PricingMismatchFooter({
+  entries,
+  t,
+}: {
+  entries: PricingMismatchEntry[];
+  t: RanchMessages;
+}) {
+  if (entries.length === 0) return null;
+  const lines = entries.map((m) =>
+    t.pricingMismatch(m.listed_model_id!, m.observed_model_id!),
+  );
+  const full = lines.join(" · ");
+  return (
+    <div
+      title={full}
+      aria-label={full}
+      style={{
+        paddingRight: 2,
+        fontSize: 11,
+        lineHeight: 1.35,
+        color: "#fbbf24",
+        maxWidth: "100%",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        textAlign: "right",
+      }}
+    >
+      {lines[0]}
+      {lines.length > 1 ? ` · +${lines.length - 1}` : ""}
+    </div>
+  );
+}
+
 function DeliveryStatusFooter({
   delivery,
   byAgent,
@@ -3373,6 +3431,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     typeof m.metadata.delivery_by_agent === "object"
                       ? (m.metadata.delivery_by_agent as Record<string, string>)
                       : null;
+                  const pricingMismatches = isUser
+                    ? extractPricingMismatches(m.metadata)
+                    : [];
                   const group = active ? isGroupChat(active) : false;
                   const senderLabel =
                     !isUser && !topicStart && group
@@ -3473,6 +3534,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           names={agentNames}
                           t={t}
                         />
+                      ) : null}
+                      {isUser && pricingMismatches.length > 0 ? (
+                        <PricingMismatchFooter entries={pricingMismatches} t={t} />
                       ) : null}
                     </div>
                     </Fragment>
