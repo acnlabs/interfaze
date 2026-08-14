@@ -540,7 +540,7 @@ export function AgentOwnerSettings({
     detail.runtime_model_id,
   ]);
 
-  // Pull L1 catalog for the declared model; listing = catalog × (1+markup%).
+  // Pull L1 catalog for the declared model; settle preview = catalog × (1+markup%).
   useEffect(() => {
     const mid = modelIdDraft.trim();
     if (!mid) {
