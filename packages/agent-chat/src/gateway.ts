@@ -326,6 +326,7 @@ export type GatewayClient = {
       output_price_per_million?: number;
       pricing_source?: string;
       free?: boolean;
+      priceable?: boolean;
     }>;
   }>;
   /** Rotate ACN API key; plaintext returned once — do not log. */
@@ -542,6 +543,7 @@ export function createGatewayClient(
           output_price_per_million?: number;
           pricing_source?: string;
           free?: boolean;
+          priceable?: boolean;
         }>;
       }>(`/api/chat/agents/${encodeURIComponent(agentId)}/model-status`),
     rotateMyAgentKey: (agentId) =>

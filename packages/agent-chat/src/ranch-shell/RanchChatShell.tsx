@@ -1452,6 +1452,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       input_price_per_million?: number;
       output_price_per_million?: number;
       free?: boolean;
+      priceable?: boolean;
     }>;
   } | null>(null);
   /** User pick for this hop (S1). Sticky per chat until changed. */
@@ -3983,11 +3984,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           (o) => o.model_id.toLowerCase() === value.toLowerCase(),
                         ) || null;
                       const priceHint = valueTitle
-                        ? valueTitle.free
-                          ? "free"
-                          : typeof valueTitle.input_price_per_million === "number"
-                            ? `$${valueTitle.input_price_per_million}/M in`
-                            : ""
+                        ? valueTitle.priceable === false
+                          ? t.composerModelNoPrice
+                          : valueTitle.free
+                            ? "free"
+                            : typeof valueTitle.input_price_per_million === "number"
+                              ? `$${Number(valueTitle.input_price_per_million.toPrecision(6))}/M in`
+                              : t.composerModelNoPrice
                         : "";
                       const canPick = options.length > 1;
                       return (
