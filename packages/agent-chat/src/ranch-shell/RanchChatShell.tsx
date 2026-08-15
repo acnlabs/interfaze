@@ -2261,15 +2261,33 @@ export function RanchChatShell(props: RanchChatShellProps) {
             /* ignore transient poll errors */
           }
         }
-        // Past the wait window → recheck ACN presence, then fact-based copy/dot.
+        // Past the wait window → last fetch, then fact-based copy/dot.
         let latestMsgs: ChatMessage[] | undefined;
         try {
           latestMsgs = await client.listMessages(chatId);
-          setMessages((prev) => mergeServerMessagesWithLocalTopicMarkers(latestMsgs!, prev));
         } catch {
           /* ignore */
         }
+        if (replyPollGenRef.current !== pollGen) return;
+        if (activeChatIdRef.current !== chatId) return;
+        if (seq !== loadSeqRef.current) return;
+        if (latestMsgs) {
+          setMessages((prev) => mergeServerMessagesWithLocalTopicMarkers(latestMsgs, prev));
+          const hasLateAgent = latestMsgs.some(
+            (m) =>
+              m.sender_type === "agent" &&
+              Date.parse(m.created_at) >= baseline - 2000,
+          );
+          if (hasLateAgent) {
+            setDeliveryBroken(chatId, false);
+            clearReplySlot(chatId);
+            void refreshChats();
+            return;
+          }
+        }
         const reason = await resolveAfterDeliveryIssue(chatId, latestMsgs);
+        if (replyPollGenRef.current !== pollGen) return;
+        if (activeChatIdRef.current !== chatId) return;
         if (reason === "offline") markReplyTimeout(chatId, "offline");
         else if (reason === "no_reply") markReplyTimeout(chatId, "no_reply");
         else if (sentWhileOffline) markReplyTimeout(chatId, "undeliverable");
@@ -2390,7 +2408,32 @@ export function RanchChatShell(props: RanchChatShellProps) {
               /* ignore */
             }
           }
-          const reason = await resolveAfterDeliveryIssue(chatId);
+          let latestMsgs: ChatMessage[] | undefined;
+          try {
+            latestMsgs = await client.listMessages(chatId);
+          } catch {
+            /* ignore */
+          }
+          if (replyPollGenRef.current !== pollGen) return;
+          if (activeChatIdRef.current !== chatId) return;
+          if (seq !== loadSeqRef.current) return;
+          if (latestMsgs) {
+            setMessages((prev) => mergeServerMessagesWithLocalTopicMarkers(latestMsgs, prev));
+            const hasLateAgent = latestMsgs.some(
+              (m) =>
+                m.sender_type === "agent" &&
+                Date.parse(m.created_at) >= baseline - 2000,
+            );
+            if (hasLateAgent) {
+              setDeliveryBroken(chatId, false);
+              clearReplySlot(chatId);
+              void refreshChats();
+              return;
+            }
+          }
+          const reason = await resolveAfterDeliveryIssue(chatId, latestMsgs);
+          if (replyPollGenRef.current !== pollGen) return;
+          if (activeChatIdRef.current !== chatId) return;
           markReplyTimeout(
             chatId,
             reason === "offline"
