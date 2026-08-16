@@ -290,6 +290,13 @@ function shortModelLabel(modelId: string | null | undefined): string {
   return slash >= 0 ? s.slice(slash + 1) : s;
 }
 
+/** Bubble footer: drop provider prefix, then cap length so in/out stay visible. */
+function compactModelLabel(modelId: string | null | undefined, max = 16): string {
+  const bare = shortModelLabel(modelId);
+  if (!bare || bare.length <= max) return bare;
+  return `${bare.slice(0, Math.max(1, max - 1))}…`;
+}
+
 /** Case-insensitive; ``provider/name`` equals bare ``name`` (Host settle rule). */
 function sameModelId(left: string | null | undefined, right: string | null | undefined): boolean {
   const a = (left || "").trim().toLowerCase();
@@ -331,6 +338,52 @@ function writeComposerModelPick(chatId: string, modelId: string | null): void {
   } catch {
     /* ignore quota / private mode */
   }
+}
+
+function hopUsageFromMessage(m: ChatMessage): {
+  input: number;
+  output: number;
+  modelId: string | null;
+} | null {
+  const raw = m.metadata?.usage;
+  if (!raw || typeof raw !== "object") return null;
+  const input = Number(raw.input_tokens);
+  const output = Number(raw.output_tokens);
+  const hasIn = Number.isFinite(input) && input > 0;
+  const hasOut = Number.isFinite(output) && output > 0;
+  if (!hasIn && !hasOut) return null;
+  const modelId =
+    typeof raw.model_id === "string" && raw.model_id.trim() ? raw.model_id.trim() : null;
+  return { input: hasIn ? input : 0, output: hasOut ? output : 0, modelId };
+}
+
+function AgentUsageFooter({
+  usage,
+  t,
+}: {
+  usage: { input: number; output: number; modelId: string | null };
+  t: RanchMessages;
+}) {
+  const model = compactModelLabel(usage.modelId);
+  const tokens = t.agentHopUsage(usage.input, usage.output);
+  const text = model ? `${model} · ${tokens}` : tokens;
+  return (
+    <div
+      title={usage.modelId || text}
+      style={{
+        paddingLeft: 4,
+        fontSize: 11,
+        lineHeight: 1.35,
+        color: colors.muted,
+        maxWidth: "100%",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {text}
+    </div>
+  );
 }
 
 function DeliveryStatusFooter({
@@ -3700,6 +3753,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           t={t}
                         />
                       ) : null}
+                      {!isUser
+                        ? (() => {
+                            const usage = hopUsageFromMessage(m);
+                            return usage ? <AgentUsageFooter usage={usage} t={t} /> : null;
+                          })()
+                        : null}
                     </div>
                     </Fragment>
                   );

@@ -44,6 +44,8 @@ export type RanchMessages = {
   modelPricingUnavailable: string;
   /** Soft warn: L2 listing model ≠ runtime/writeback model. */
   pricingMismatch: (listed: string, observed: string) => string;
+  /** Agent bubble footer: this hop's token burn, in/out separately. */
+  agentHopUsage: (input: number, output: number) => string;
   /** Composer chip: current runtime / listing model (M1). */
   composerModelLabel: string;
   composerModelUnknown: string;
@@ -463,6 +465,8 @@ const en: RanchMessages = {
   modelPricingUnavailable: "No platform price for that model yet. Pick another or ask the owner to wait for Host pack coverage.",
   pricingMismatch: (listed, observed) =>
     `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
+  agentHopUsage: (input, output) =>
+    `in ${input.toLocaleString("en-US")} · out ${output.toLocaleString("en-US")}`,
   composerModelLabel: "Model",
   composerModelUnknown: "—",
   composerModelListing: "listing",
@@ -916,6 +920,8 @@ const zh: RanchMessages = {
   modelPricingUnavailable: "平台暂无该模型报价，请换一个；或等 Host 价包录入后再试。",
   pricingMismatch: (listed, observed) =>
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
+  agentHopUsage: (input, output) =>
+    `入 ${input.toLocaleString("zh-CN")} · 出 ${output.toLocaleString("zh-CN")}`,
   composerModelLabel: "模型",
   composerModelUnknown: "—",
   composerModelListing: "挂牌",
