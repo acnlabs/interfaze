@@ -290,6 +290,49 @@ function shortModelLabel(modelId: string | null | undefined): string {
   return slash >= 0 ? s.slice(slash + 1) : s;
 }
 
+/** Case-insensitive; ``provider/name`` equals bare ``name`` (Host settle rule). */
+function sameModelId(left: string | null | undefined, right: string | null | undefined): boolean {
+  const a = (left || "").trim().toLowerCase();
+  const b = (right || "").trim().toLowerCase();
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return a.split("/").pop() === b.split("/").pop();
+}
+
+function pickCanonicalModelId(
+  wanted: string | null | undefined,
+  pool: string[],
+): string | null {
+  if (!wanted) return null;
+  const hit = pool.find((m) => sameModelId(m, wanted));
+  return hit || wanted;
+}
+
+function composerModelStorageKey(chatId: string): string {
+  return `interfaze:composerModel:${chatId}`;
+}
+
+function readComposerModelPick(chatId: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(composerModelStorageKey(chatId));
+    return raw && raw.trim() ? raw.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeComposerModelPick(chatId: string, modelId: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    const key = composerModelStorageKey(chatId);
+    if (!modelId) sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, modelId);
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
 function DeliveryStatusFooter({
   delivery,
   byAgent,
@@ -2568,16 +2611,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
             const pool = supported.length
               ? supported
               : [listed, runtime].filter((m): m is string => !!m && !!m.trim());
-            if (prev && pool.some((m) => m.toLowerCase() === prev.toLowerCase())) {
-              return prev;
+            const stored = readComposerModelPick(active.chat_id);
+            const kept = pickCanonicalModelId(prev || stored, pool);
+            if (kept) {
+              writeComposerModelPick(active.chat_id, kept);
+              return kept;
             }
-            return listed || runtime || pool[0] || null;
+            const fallback = listed || runtime || pool[0] || null;
+            if (fallback) writeComposerModelPick(active.chat_id, fallback);
+            return fallback;
           });
         })
         .catch(() => {
           if (!cancelled) {
             setComposerModel(null);
-            setSelectedModelId(null);
           }
         });
     };
@@ -4103,7 +4150,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             <>
                               <select
                                 value={value}
-                                onChange={(e) => setSelectedModelId(e.target.value || null)}
+                                onChange={(e) => {
+                                  const next = e.target.value || null;
+                                  setSelectedModelId(next);
+                                  if (active?.chat_id) writeComposerModelPick(active.chat_id, next);
+                                }}
                                 style={{
                                   appearance: "none",
                                   WebkitAppearance: "none",
