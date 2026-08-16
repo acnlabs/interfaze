@@ -164,6 +164,12 @@ export type ChatMessage = {
     delivery_by_agent?: Record<string, MessageDelivery | string>;
     delivery_mode?: string;
     delivery_agent_id?: string;
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+      model_id?: string;
+      meter_source?: string;
+    };
     [key: string]: unknown;
   } | null;
 };
