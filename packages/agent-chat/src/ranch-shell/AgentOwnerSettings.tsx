@@ -1210,6 +1210,16 @@ export function AgentOwnerSettings({
 
       <section>
         <h3 style={sectionTitle}>{t.myAgentsSectionPricing}</h3>
+        {(detail.inference_path || "byo") !== "official" ? (
+          <>
+            <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.text, lineHeight: 1.45 }}>
+              {t.myAgentsInferencePathByo}
+            </p>
+            <p style={{ margin: "0 0 10px", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
+              {t.myAgentsInferencePathByoHint}
+            </p>
+          </>
+        ) : null}
         <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
           {t.myAgentsPricingHint}
         </p>

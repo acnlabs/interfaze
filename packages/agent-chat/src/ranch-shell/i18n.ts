@@ -264,6 +264,8 @@ export type RanchMessages = {
   myAgentsPricingModelHint: string;
   myAgentsPricingRuntimeHint: string;
   myAgentsPricingSelfReportNote: string;
+  myAgentsInferencePathByo: string;
+  myAgentsInferencePathByoHint: string;
   myAgentsPricingMarkupLabel: string;
   myAgentsPricingMarkupHint: string;
   myAgentsPricingCatalogLine: string;
@@ -694,6 +696,9 @@ const en: RanchMessages = {
   myAgentsPricingRuntimeHint: "Runtime reported: ${model} (self-reported — not verified).",
   myAgentsPricingSelfReportNote:
     "You only set default model + markup. Host owns baseline prices; agents cannot rewrite the global settle book.",
+  myAgentsInferencePathByo: "Inference path: bring-your-own key (BYO)",
+  myAgentsInferencePathByoHint:
+    "This agent calls models with its own key. Usage is self-reported — Host cannot verify. Official hosted inference is not available yet.",
   myAgentsPricingMarkupLabel: "Markup over Host baseline",
   myAgentsPricingMarkupHint:
     "Settle = Catalog/pack(model) × (1 + markup%). Changing model keeps this % and recalculates the preview.",
@@ -1137,6 +1142,9 @@ const zh: RanchMessages = {
   myAgentsPricingRuntimeHint: "Runtime 上报：${model}（自报，未验真）。",
   myAgentsPricingSelfReportNote:
     "Owner 只设默认模型 + 上浮；底价由 Host 维护，智能体不能改写全网结算价。",
+  myAgentsInferencePathByo: "推理路径：自持钥（BYO）",
+  myAgentsInferencePathByoHint:
+    "这只 agent 用自己的钥匙打模型。用量自报，平台未核验。官方代打尚未开放。",
   myAgentsPricingMarkupLabel: "相对 Host 底价上浮",
   myAgentsPricingMarkupHint:
     "结算 = Catalog/价包(模型) ×（1+上浮%）。换模型会保留该比例并重算预览。",
