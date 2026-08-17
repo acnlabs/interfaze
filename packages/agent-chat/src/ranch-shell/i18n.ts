@@ -690,7 +690,7 @@ const en: RanchMessages = {
   myAgentsProfileFailed: "Couldn’t save profile.",
   myAgentsSectionPricing: "Pricing",
   myAgentsPricingHint:
-    "Set the default model and your markup %. Settle = Host Catalog/pack baseline × (1+markup). Absolute USD fields below are a read-only preview.",
+    "Set the default model and your markup %. Settle = Host Catalog/pack baseline × (1+markup).",
   myAgentsPricingInputLabel: "Settle preview · input USD / 1M",
   myAgentsPricingOutputLabel: "Settle preview · output USD / 1M",
   myAgentsPricingModelLabel: "Default model",
@@ -702,7 +702,7 @@ const en: RanchMessages = {
   myAgentsPricingRuntimeHint: "Runtime reported: ${model} (self-reported — not verified).",
   myAgentsPricingSelfReportNote:
     "You only set default model + markup. Host owns baseline prices; agents cannot rewrite the global settle book.",
-  myAgentsInferencePathByo: "Inference path: bring-your-own key (BYO)",
+  myAgentsInferencePathByo: "BYO",
   myAgentsInferencePathByoHint:
     "This agent calls models with its own key. Usage is self-reported — Host cannot verify. Official hosted inference is not available yet.",
   myAgentsPricingMarkupLabel: "Markup over Host baseline",
@@ -1139,7 +1139,7 @@ const zh: RanchMessages = {
   myAgentsProfileFailed: "保存失败。",
   myAgentsSectionPricing: "定价",
   myAgentsPricingHint:
-    "只需设默认模型与上浮%。结算 = Host Catalog/价包底价 ×（1+上浮%）。下方绝对 USD 为只读预览。",
+    "只需设默认模型与上浮%。结算 = Host Catalog/价包底价 ×（1+上浮%）。",
   myAgentsPricingInputLabel: "结算预览 · 输入 USD / 百万",
   myAgentsPricingOutputLabel: "结算预览 · 输出 USD / 百万",
   myAgentsPricingModelLabel: "默认模型",
@@ -1151,7 +1151,7 @@ const zh: RanchMessages = {
   myAgentsPricingRuntimeHint: "Runtime 上报：${model}（自报，未验真）。",
   myAgentsPricingSelfReportNote:
     "Owner 只设默认模型 + 上浮；底价由 Host 维护，智能体不能改写全网结算价。",
-  myAgentsInferencePathByo: "推理路径：自持钥（BYO）",
+  myAgentsInferencePathByo: "自持钥",
   myAgentsInferencePathByoHint:
     "这只 agent 用自己的钥匙打模型。用量自报，平台未核验。官方代打尚未开放。",
   myAgentsPricingMarkupLabel: "相对 Host 底价上浮",
