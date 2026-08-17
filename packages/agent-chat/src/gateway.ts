@@ -270,6 +270,10 @@ export type MyAgentSummary = {
    * Prefer this for Pricing prefill when unlisted; not verified.
    */
   runtime_model_id?: string | null;
+  /**
+   * Who calls the model. I1 is always ``byo``. Official hops are I2.
+   */
+  inference_path?: "byo" | "official" | string | null;
   /** Present after a successful delivery PATCH when ACN returns follow-up copy. */
   next_step_hint?: string | null;
 };
@@ -315,6 +319,7 @@ export type GatewayClient = {
     agent_id: string;
     listed_model_id?: string | null;
     runtime_model_id?: string | null;
+    inference_path?: "byo" | "official" | string | null;
     mismatched: boolean;
     markup_percent?: number | null;
     supported_models?: string[];
@@ -532,6 +537,7 @@ export function createGatewayClient(
         agent_id: string;
         listed_model_id?: string | null;
         runtime_model_id?: string | null;
+        inference_path?: "byo" | "official" | string | null;
         mismatched: boolean;
         markup_percent?: number | null;
         supported_models?: string[];
