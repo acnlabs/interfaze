@@ -1245,35 +1245,22 @@ export function AgentOwnerSettings({
               {t.myAgentsPricingModelsEmpty}
             </p>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 6 }}>
-              {supportedModels.map((id) => {
-                const checked = modelIdDraft.trim().toLowerCase() === id.toLowerCase();
-                return (
-                  <label
-                    key={id}
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: 8,
-                      fontSize: 12,
-                      color: colors.text,
-                      cursor: busy || savingPricing ? "default" : "pointer",
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name={`default-model-${detail.agent_id}`}
-                      value={id}
-                      checked={checked}
-                      disabled={busy || savingPricing}
-                      onChange={() => setModelIdDraft(id)}
-                      style={{ marginTop: 2 }}
-                    />
-                    <span style={{ wordBreak: "break-all", lineHeight: 1.4 }}>{id}</span>
-                  </label>
-                );
-              })}
-            </div>
+            <select
+              aria-label={t.myAgentsPricingModelLabel}
+              value={
+                supportedModels.find((id) => sameModelId(id, modelIdDraft)) ??
+                supportedModels[0]
+              }
+              onChange={(e) => setModelIdDraft(e.target.value)}
+              disabled={busy || savingPricing}
+              style={{ ...inputStyle, marginBottom: 6 }}
+            >
+              {supportedModels.map((id) => (
+                <option key={id} value={id}>
+                  {id}
+                </option>
+              ))}
+            </select>
           )}
           <div style={{ fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
             {t.myAgentsPricingModelHint}
