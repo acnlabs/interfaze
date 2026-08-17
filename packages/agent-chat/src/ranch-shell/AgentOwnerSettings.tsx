@@ -698,6 +698,8 @@ export function AgentOwnerSettings({
     (!listingPublished ||
       !sameModelId(modelIdTrim, oldModelId) ||
       markupParsed !== oldMarkup);
+  const runtimeId = (detail.runtime_model_id || "").trim();
+  const runtimeMismatch = Boolean(runtimeId && !sameModelId(runtimeId, modelIdTrim));
   const modelOnList =
     supportedModels.length > 0 &&
     supportedModels.some((id) => id.toLowerCase() === modelIdTrim.toLowerCase());
@@ -1143,7 +1145,7 @@ export function AgentOwnerSettings({
     ...btnGhost,
     width: "100%",
     textAlign: "left",
-    padding: "10px 12px",
+    padding: "8px 12px",
     borderColor: active ? "rgba(96,165,250,0.65)" : colors.border,
     background: active ? "rgba(59,130,246,0.12)" : "transparent",
     color: colors.text,
@@ -1165,9 +1167,11 @@ export function AgentOwnerSettings({
             maxLength={100}
             disabled={busy || saving}
           />
-          <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
-            {t.myAgentsNameHint}
-          </div>
+          {nameChanged && !nameOk ? (
+            <div style={{ fontSize: 11, color: colors.danger, marginTop: 4 }}>
+              {t.myAgentsNameHint}
+            </div>
+          ) : null}
         </label>
         <label style={{ display: "block", marginBottom: 10 }}>
           <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
@@ -1180,13 +1184,33 @@ export function AgentOwnerSettings({
             maxLength={500}
             disabled={busy || saving}
           />
-          <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
-            {clearingDesc ? t.myAgentsDescClearHint : t.myAgentsDescHint}
-          </div>
+          {clearingDesc ? (
+            <div style={{ fontSize: 11, color: colors.danger, marginTop: 4 }}>
+              {t.myAgentsDescClearHint}
+            </div>
+          ) : descChanged && !descOk ? (
+            <div style={{ fontSize: 11, color: colors.danger, marginTop: 4 }}>
+              {t.myAgentsDescHint}
+            </div>
+          ) : null}
         </label>
         <label style={{ display: "block", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: colors.muted,
+              marginBottom: 4,
+              display: "flex",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 4,
+            }}
+          >
             {t.myAgentsTagsLabel}
+            <FieldHint text={t.myAgentsTagsHint} />
+            {tagsParsed.length > 0 ? (
+              <span style={{ marginLeft: "auto" }}>{tagsParsed.length}/20</span>
+            ) : null}
           </div>
           <input
             value={tagsDraft}
@@ -1198,10 +1222,6 @@ export function AgentOwnerSettings({
             autoComplete="off"
             spellCheck={false}
           />
-          <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
-            {t.myAgentsTagsHint}
-            {tagsParsed.length > 0 ? ` · ${tagsParsed.length}/20` : ""}
-          </div>
         </label>
         {profileError ? (
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>{profileError}</p>
@@ -1212,31 +1232,43 @@ export function AgentOwnerSettings({
       </section>
 
       <section>
-        <h3 style={sectionTitle}>{t.myAgentsSectionPricing}</h3>
+        <h3 style={{ ...sectionTitle, display: "flex", alignItems: "center" }}>
+          {t.myAgentsSectionPricing}
+          <FieldHint
+            text={`${t.myAgentsPricingHint} ${t.myAgentsPricingSelfReportNote}`}
+          />
+        </h3>
         {(detail.inference_path || "byo") !== "official" ? (
-          <>
-            <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.text, lineHeight: 1.45 }}>
-              {t.myAgentsInferencePathByo}
-            </p>
-            <p style={{ margin: "0 0 10px", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
-              {t.myAgentsInferencePathByoHint}
-            </p>
-          </>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              margin: "0 0 10px",
+              fontSize: 12,
+              color: colors.muted,
+            }}
+          >
+            {t.myAgentsInferencePathByo}
+            <FieldHint text={t.myAgentsInferencePathByoHint} />
+          </div>
         ) : null}
-        <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-          {t.myAgentsPricingHint}
-        </p>
-        <p style={{ margin: "0 0 10px", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
-          {t.myAgentsPricingSelfReportNote}
-        </p>
         {detail.token_pricing == null ? (
           <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
             {t.myAgentsPricingUnlisted}
           </p>
         ) : null}
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 6 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: colors.muted,
+              marginBottom: 6,
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
             {t.myAgentsPricingModelLabel}
+            <FieldHint text={t.myAgentsPricingModelHint} />
           </div>
           {modelsLoading ? (
             <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>…</p>
@@ -1253,7 +1285,7 @@ export function AgentOwnerSettings({
               }
               onChange={(e) => setModelIdDraft(e.target.value)}
               disabled={busy || savingPricing}
-              style={{ ...inputStyle, marginBottom: 6 }}
+              style={inputStyle}
             >
               {supportedModels.map((id) => (
                 <option key={id} value={id}>
@@ -1262,20 +1294,24 @@ export function AgentOwnerSettings({
               ))}
             </select>
           )}
-          <div style={{ fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
-            {t.myAgentsPricingModelHint}
-          </div>
-          {(detail.runtime_model_id || "").trim() ? (
+          {runtimeMismatch ? (
             <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
-              {fillTemplate(t.myAgentsPricingRuntimeHint, {
-                model: (detail.runtime_model_id || "").trim(),
-              })}
+              {fillTemplate(t.myAgentsPricingRuntimeHint, { model: runtimeId })}
             </div>
           ) : null}
         </div>
         <label style={{ display: "block", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: colors.muted,
+              marginBottom: 4,
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
             {t.myAgentsPricingMarkupLabel}
+            <FieldHint text={t.myAgentsPricingMarkupHint} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
@@ -1288,9 +1324,6 @@ export function AgentOwnerSettings({
             />
             <span style={{ fontSize: 13, color: colors.muted }}>%</span>
           </div>
-          <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
-            {t.myAgentsPricingMarkupHint}
-          </div>
         </label>
         {!previewReady && !catalogError ? (
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted }}>…</p>
@@ -1298,65 +1331,40 @@ export function AgentOwnerSettings({
         {catalogError ? (
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>{catalogError}</p>
         ) : null}
-        {previewReady && catalogIn != null && catalogOut != null ? (
-          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-            {fillTemplate(t.myAgentsPricingCatalogLine, {
-              in: fmtUsd(catalogIn),
-              out: fmtUsd(catalogOut),
-            })}
-          </p>
-        ) : null}
-        {previewReady && inputParsed != null && outputParsed != null && catalogIn != null ? (
-          <>
-            <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+        {previewReady &&
+        inputParsed != null &&
+        outputParsed != null &&
+        catalogIn != null &&
+        catalogOut != null ? (
+          <div style={{ margin: "0 0 10px", fontSize: 12, lineHeight: 1.45 }}>
+            <div style={{ color: colors.text }}>
               {fillTemplate(t.myAgentsPricingListingLine, {
                 in: fmtUsd(inputParsed),
                 out: fmtUsd(outputParsed),
               })}
-            </p>
-            <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-              {fillTemplate(t.myAgentsPricingExampleLine, {
-                pay: fmtUsd(inputParsed),
-                cost: fmtUsd(catalogIn),
+            </div>
+            <div style={{ color: colors.muted, marginTop: 4 }}>
+              {fillTemplate(t.myAgentsPricingCatalogLine, {
+                in: fmtUsd(catalogIn),
+                out: fmtUsd(catalogOut),
               })}
-            </p>
-            <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+            </div>
+            <div
+              style={{
+                color: colors.muted,
+                marginTop: 4,
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
               {fillTemplate(t.myAgentsPricingCreditsLine, {
                 in: String(usdToCredits(inputParsed)),
                 out: String(usdToCredits(outputParsed)),
               })}
-            </p>
-            <p style={{ margin: "0 0 10px", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
-              {t.myAgentsPricingCreditsNote}
-            </p>
-          </>
+              <FieldHint text={t.myAgentsPricingCreditsNote} />
+            </div>
+          </div>
         ) : null}
-        <label style={{ display: "block", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
-            {t.myAgentsPricingInputLabel}
-          </div>
-          <input
-            value={inputParsed != null ? fmtUsd(inputParsed) : ""}
-            readOnly
-            style={{ ...inputStyle, opacity: 0.85, cursor: "default" }}
-            inputMode="decimal"
-            tabIndex={-1}
-            aria-readonly="true"
-          />
-        </label>
-        <label style={{ display: "block", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
-            {t.myAgentsPricingOutputLabel}
-          </div>
-          <input
-            value={outputParsed != null ? fmtUsd(outputParsed) : ""}
-            readOnly
-            style={{ ...inputStyle, opacity: 0.85, cursor: "default" }}
-            inputMode="decimal"
-            tabIndex={-1}
-            aria-readonly="true"
-          />
-        </label>
         {pricingError ? (
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>{pricingError}</p>
         ) : null}
@@ -1379,11 +1387,10 @@ export function AgentOwnerSettings({
 
       {showConnectSection ? (
         <section>
-          <h3 style={sectionTitle}>{t.myAgentsSectionConnect}</h3>
-          <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-            {t.myAgentsDeliveryChoose}
+          <h3 style={{ ...sectionTitle, display: "flex", alignItems: "center" }}>
+            {t.myAgentsSectionConnect}
             <FieldHint text={t.myAgentsDeliveryHint} />
-          </p>
+          </h3>
           {!deliveryEditable ? (
             <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
               {t.myAgentsDeliveryLocked}
@@ -1396,28 +1403,28 @@ export function AgentOwnerSettings({
             </p>
           ) : null}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <button
-              type="button"
-              style={optionBtn(deliveryDraft === "relay")}
-              disabled={!deliveryEditable || saving || busy}
-              onClick={() => setDeliveryDraft("relay")}
-            >
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsDeliveryOptionPull}</div>
-              <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
-                {t.myAgentsDeliveryPullHelp}
-              </div>
-            </button>
-            <button
-              type="button"
-              style={optionBtn(deliveryDraft === "direct")}
-              disabled={!deliveryEditable || saving || busy}
-              onClick={() => setDeliveryDraft("direct")}
-            >
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsDeliveryOptionPush}</div>
-              <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
-                {t.myAgentsDeliveryPushHelp}
-              </div>
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button
+                type="button"
+                style={{ ...optionBtn(deliveryDraft === "relay"), flex: 1 }}
+                disabled={!deliveryEditable || saving || busy}
+                onClick={() => setDeliveryDraft("relay")}
+              >
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsDeliveryOptionPull}</div>
+              </button>
+              <FieldHint text={t.myAgentsDeliveryPullHelp} />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button
+                type="button"
+                style={{ ...optionBtn(deliveryDraft === "direct"), flex: 1 }}
+                disabled={!deliveryEditable || saving || busy}
+                onClick={() => setDeliveryDraft("direct")}
+              >
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsDeliveryOptionPush}</div>
+              </button>
+              <FieldHint text={t.myAgentsDeliveryPushHelp} />
+            </div>
           </div>
           {deliveryDraft === "direct" ? (
             <label style={{ display: "block", marginTop: 10 }}>
@@ -1494,50 +1501,49 @@ export function AgentOwnerSettings({
       ) : null}
 
       <section>
-        <h3 style={sectionTitle}>{t.myAgentsSectionAccess}</h3>
-        <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-          {t.myAgentsPolicyChoose}
+        <h3 style={{ ...sectionTitle, display: "flex", alignItems: "center" }}>
+          {t.myAgentsSectionAccess}
           <FieldHint text={t.myAgentsPolicyHint} />
-        </p>
+        </h3>
         {currentPolicy === "manifest" ? (
           <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
             {t.myAgentsPolicyManifestNote}
           </p>
         ) : null}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <button
-            type="button"
-            style={optionBtn(selectedPolicy === "open")}
-            disabled={saving || busy}
-            onClick={() => setPolicyDraft("open")}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyOpen}</div>
-            <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
-              {t.myAgentsPolicyOpenHelp}
-            </div>
-          </button>
-          <button
-            type="button"
-            style={optionBtn(selectedPolicy === "allowlist")}
-            disabled={saving || busy}
-            onClick={() => setPolicyDraft("allowlist")}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyAllowlist}</div>
-            <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
-              {t.myAgentsPolicyAllowlistHelp}
-            </div>
-          </button>
-          <button
-            type="button"
-            style={optionBtn(selectedPolicy === "closed")}
-            disabled={saving || busy}
-            onClick={() => setPolicyDraft("closed")}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyClosed}</div>
-            <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
-              {t.myAgentsPolicyClosedHelp}
-            </div>
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              type="button"
+              style={{ ...optionBtn(selectedPolicy === "open"), flex: 1 }}
+              disabled={saving || busy}
+              onClick={() => setPolicyDraft("open")}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyOpen}</div>
+            </button>
+            <FieldHint text={t.myAgentsPolicyOpenHelp} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              type="button"
+              style={{ ...optionBtn(selectedPolicy === "allowlist"), flex: 1 }}
+              disabled={saving || busy}
+              onClick={() => setPolicyDraft("allowlist")}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyAllowlist}</div>
+            </button>
+            <FieldHint text={t.myAgentsPolicyAllowlistHelp} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              type="button"
+              style={{ ...optionBtn(selectedPolicy === "closed"), flex: 1 }}
+              disabled={saving || busy}
+              onClick={() => setPolicyDraft("closed")}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyClosed}</div>
+            </button>
+            <FieldHint text={t.myAgentsPolicyClosedHelp} />
+          </div>
         </div>
 
         {showAllowlistEditor ? (
