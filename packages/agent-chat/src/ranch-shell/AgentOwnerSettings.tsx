@@ -84,10 +84,33 @@ function resolvePricingModelId(detail: MyAgentSummary): string {
   return FALLBACK_MODEL_ID;
 }
 
+/** 1 Credit = $0.10 — same default as Host ``credit_to_usd_rate``. */
+const CREDIT_TO_USD = 0.1;
+
+function usdToCredits(usd: number): number {
+  if (!Number.isFinite(usd) || usd <= 0) return 0;
+  return Math.max(0, Math.ceil(roundUsdPerMillion(usd) / CREDIT_TO_USD - 1e-12));
+}
+
+function uniqModelIds(...groups: Array<Array<string | null | undefined> | undefined>): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const group of groups) {
+    for (const raw of group || []) {
+      const id = (raw || "").trim();
+      if (!id) continue;
+      const key = id.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(id);
+    }
+  }
+  return out;
+}
+
 function fmtUsd(n: number): string {
   if (!Number.isFinite(n)) return "—";
-  const s = n.toFixed(6).replace(/\.?0+$/, "");
-  return s || "0";
+  return roundUsdPerMillion(n).toFixed(6);
 }
 
 function fillTemplate(
@@ -439,6 +462,10 @@ export function AgentOwnerSettings({
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [modelIdDraft, setModelIdDraft] = useState(() => resolvePricingModelId(detail));
+  const [supportedModels, setSupportedModels] = useState<string[]>(() =>
+    uniqModelIds([resolvePricingModelId(detail)]),
+  );
+  const [modelsLoading, setModelsLoading] = useState(false);
   const [markupDraft, setMarkupDraft] = useState(() => {
     const mu = detail.token_pricing?.markup_percent;
     if (typeof mu === "number" && Number.isFinite(mu) && mu >= 0) return String(mu);
@@ -610,6 +637,36 @@ export function AgentOwnerSettings({
   ]);
 
   useEffect(() => {
+    let cancelled = false;
+    setModelsLoading(true);
+    client
+      .getAgentModelStatus(detail.agent_id)
+      .then((status) => {
+        if (cancelled) return;
+        const ids = uniqModelIds(
+          status.supported_models,
+          [detail.token_pricing?.model_id],
+          [detail.runtime_model_id],
+        );
+        setSupportedModels(ids);
+        const current = resolvePricingModelId(detail);
+        if (ids.length > 0 && !ids.some((id) => id.toLowerCase() === current.toLowerCase())) {
+          setModelIdDraft(ids[0]);
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSupportedModels(uniqModelIds([resolvePricingModelId(detail)]));
+      })
+      .finally(() => {
+        if (!cancelled) setModelsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, detail.agent_id, detail.token_pricing?.model_id, detail.runtime_model_id]);
+
+  useEffect(() => {
     if (catalogIn == null || catalogOut == null) return;
     const mu = Number(markupDraft);
     if (!Number.isFinite(mu) || mu < 0) return;
@@ -694,14 +751,19 @@ export function AgentOwnerSettings({
       modelIdTrim !== oldModelId ||
       oldMarkup == null ||
       markupParsed !== oldMarkup);
+  const modelOnList =
+    supportedModels.length === 0 ||
+    supportedModels.some((id) => id.toLowerCase() === modelIdTrim.toLowerCase());
   const canSavePricing =
     pricingDirty &&
     inputParsed !== null &&
     outputParsed !== null &&
     markupParsed !== null &&
     modelIdTrim.length > 0 &&
+    modelOnList &&
     catalogIn != null &&
     !catalogLoading &&
+    !modelsLoading &&
     !catalogError &&
     !savingPricing &&
     !busy;
@@ -1231,20 +1293,48 @@ export function AgentOwnerSettings({
             {t.myAgentsPricingUnlisted}
           </p>
         ) : null}
-        <label style={{ display: "block", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 6 }}>
             {t.myAgentsPricingModelLabel}
           </div>
-          <input
-            value={modelIdDraft}
-            onChange={(e) => setModelIdDraft(e.target.value)}
-            style={inputStyle}
-            placeholder={FALLBACK_MODEL_ID}
-            disabled={busy || savingPricing}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+          {modelsLoading ? (
+            <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>…</p>
+          ) : supportedModels.length === 0 ? (
+            <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
+              {t.myAgentsPricingModelsEmpty}
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 6 }}>
+              {supportedModels.map((id) => {
+                const checked = modelIdDraft.trim().toLowerCase() === id.toLowerCase();
+                return (
+                  <label
+                    key={id}
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                      fontSize: 12,
+                      color: colors.text,
+                      cursor: busy || savingPricing ? "default" : "pointer",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name={`default-model-${detail.agent_id}`}
+                      value={id}
+                      checked={checked}
+                      disabled={busy || savingPricing}
+                      onChange={() => setModelIdDraft(id)}
+                      style={{ marginTop: 2 }}
+                    />
+                    <span style={{ wordBreak: "break-all", lineHeight: 1.4 }}>{id}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
             {t.myAgentsPricingModelHint}
           </div>
           {(detail.runtime_model_id || "").trim() ? (
@@ -1254,7 +1344,7 @@ export function AgentOwnerSettings({
               })}
             </div>
           ) : null}
-        </label>
+        </div>
         <label style={{ display: "block", marginBottom: 10 }}>
           <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
             {t.myAgentsPricingMarkupLabel}
@@ -1297,13 +1387,22 @@ export function AgentOwnerSettings({
               })}
             </p>
             {catalogIn != null ? (
-              <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+              <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
                 {fillTemplate(t.myAgentsPricingExampleLine, {
                   pay: fmtUsd(inputParsed),
                   cost: fmtUsd(catalogIn),
                 })}
               </p>
             ) : null}
+            <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+              {fillTemplate(t.myAgentsPricingCreditsLine, {
+                in: String(usdToCredits(inputParsed)),
+                out: String(usdToCredits(outputParsed)),
+              })}
+            </p>
+            <p style={{ margin: "0 0 10px", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
+              {t.myAgentsPricingCreditsNote}
+            </p>
           </>
         ) : null}
         <label style={{ display: "block", marginBottom: 10 }}>
@@ -1311,7 +1410,7 @@ export function AgentOwnerSettings({
             {t.myAgentsPricingInputLabel}
           </div>
           <input
-            value={inputPriceDraft}
+            value={inputParsed != null ? fmtUsd(inputParsed) : inputPriceDraft}
             readOnly
             style={{ ...inputStyle, opacity: 0.85, cursor: "default" }}
             inputMode="decimal"
@@ -1324,7 +1423,7 @@ export function AgentOwnerSettings({
             {t.myAgentsPricingOutputLabel}
           </div>
           <input
-            value={outputPriceDraft}
+            value={outputParsed != null ? fmtUsd(outputParsed) : outputPriceDraft}
             readOnly
             style={{ ...inputStyle, opacity: 0.85, cursor: "default" }}
             inputMode="decimal"

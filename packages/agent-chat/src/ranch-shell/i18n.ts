@@ -262,6 +262,9 @@ export type RanchMessages = {
   myAgentsPricingOutputLabel: string;
   myAgentsPricingModelLabel: string;
   myAgentsPricingModelHint: string;
+  myAgentsPricingModelsEmpty: string;
+  myAgentsPricingCreditsLine: string;
+  myAgentsPricingCreditsNote: string;
   myAgentsPricingRuntimeHint: string;
   myAgentsPricingSelfReportNote: string;
   myAgentsInferencePathByo: string;
@@ -692,7 +695,10 @@ const en: RanchMessages = {
   myAgentsPricingOutputLabel: "Settle preview · output USD / 1M",
   myAgentsPricingModelLabel: "Default model",
   myAgentsPricingModelHint:
-    "Default when the user does not pick a model. Runtime can report via `acn heartbeat --model …`.",
+    "Pick the default from models this agent already reports. You cannot add or remove models here.",
+  myAgentsPricingModelsEmpty: "This agent has not reported any models yet.",
+  myAgentsPricingCreditsLine: "Wallet preview (Credits / 1M, rounded up): in ${in} / out ${out}",
+  myAgentsPricingCreditsNote: "1 Credit = $0.10 at the current Host rate. Each hop settles in whole Credits.",
   myAgentsPricingRuntimeHint: "Runtime reported: ${model} (self-reported — not verified).",
   myAgentsPricingSelfReportNote:
     "You only set default model + markup. Host owns baseline prices; agents cannot rewrite the global settle book.",
@@ -1138,7 +1144,10 @@ const zh: RanchMessages = {
   myAgentsPricingOutputLabel: "结算预览 · 输出 USD / 百万",
   myAgentsPricingModelLabel: "默认模型",
   myAgentsPricingModelHint:
-    "用户未选模时使用。Runtime 可用 `acn heartbeat --model …` 上报预填。",
+    "从这只 agent 已自报的模型里选默认。这里不能增删模型。",
+  myAgentsPricingModelsEmpty: "这只 agent 还没有自报任何模型。",
+  myAgentsPricingCreditsLine: "钱包预览（Credits / 百万，向上取整）：入 ${in} / 出 ${out}",
+  myAgentsPricingCreditsNote: "按现网汇率 1 Credit = $0.10。每跳按整数 Credits 结算。",
   myAgentsPricingRuntimeHint: "Runtime 上报：${model}（自报，未验真）。",
   myAgentsPricingSelfReportNote:
     "Owner 只设默认模型 + 上浮；底价由 Host 维护，智能体不能改写全网结算价。",
