@@ -66,11 +66,8 @@ function applyMarkup(catalog: number, markupPercent: number): number {
   return roundUsdPerMillion(catalog * (1 + markupPercent / 100));
 }
 
-function inferMarkupPercent(listed: number, catalog: number): number | null {
-  if (!(catalog > 0) || !(listed >= 0) || !Number.isFinite(listed) || !Number.isFinite(catalog)) {
-    return null;
-  }
-  return Math.round((listed / catalog - 1) * 1000) / 10;
+function sameModelId(left: string, right: string): boolean {
+  return left.trim().toLowerCase() === right.trim().toLowerCase();
 }
 
 function resolvePricingModelId(detail: MyAgentSummary): string {
@@ -469,16 +466,6 @@ export function AgentOwnerSettings({
     if (typeof mu === "number" && Number.isFinite(mu) && mu >= 0) return String(mu);
     return String(DEFAULT_MARKUP_PERCENT);
   });
-  const [inputPriceDraft, setInputPriceDraft] = useState(() =>
-    detail.token_pricing != null
-      ? String(detail.token_pricing.input_price_per_million)
-      : "",
-  );
-  const [outputPriceDraft, setOutputPriceDraft] = useState(() =>
-    detail.token_pricing != null
-      ? String(detail.token_pricing.output_price_per_million)
-      : "",
-  );
   const [catalogIn, setCatalogIn] = useState<number | null>(null);
   const [catalogOut, setCatalogOut] = useState<number | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -545,20 +532,11 @@ export function AgentOwnerSettings({
         ? String(mu)
         : String(DEFAULT_MARKUP_PERCENT),
     );
-    if (detail.token_pricing != null) {
-      setInputPriceDraft(String(detail.token_pricing.input_price_per_million));
-      setOutputPriceDraft(String(detail.token_pricing.output_price_per_million));
-    } else {
-      setInputPriceDraft("");
-      setOutputPriceDraft("");
-    }
     setPricingMsg(null);
     setPricingError(null);
     setCatalogError(null);
   }, [
     detail.agent_id,
-    detail.token_pricing?.input_price_per_million,
-    detail.token_pricing?.output_price_per_million,
     detail.token_pricing?.model_id,
     detail.token_pricing?.markup_percent,
     detail.preferred_model_id,
@@ -577,6 +555,8 @@ export function AgentOwnerSettings({
     }
     let cancelled = false;
     setCatalogLoading(true);
+    setCatalogIn(null);
+    setCatalogOut(null);
     setCatalogError(null);
     const timer = window.setTimeout(() => {
       client
@@ -594,23 +574,6 @@ export function AgentOwnerSettings({
           setCatalogIn(cin);
           setCatalogOut(cout);
           setCatalogError(null);
-          const listed = detail.token_pricing;
-          const storedMu = listed?.markup_percent;
-          if (typeof storedMu === "number" && Number.isFinite(storedMu) && storedMu >= 0) {
-            // Keep owner-saved markup; price effect will apply.
-            setMarkupDraft(String(storedMu));
-            return;
-          }
-          const sameModel =
-            listed != null && (listed.model_id || "").trim() === mid;
-          if (sameModel && listed) {
-            const inferred = inferMarkupPercent(listed.input_price_per_million, cin);
-            if (inferred != null && inferred >= 0) {
-              setMarkupDraft(String(inferred));
-              return;
-            }
-          }
-          // Leave markupDraft as-is (default 50% or user edit); price effect applies.
         })
         .catch(() => {
           if (cancelled) return;
@@ -629,7 +592,6 @@ export function AgentOwnerSettings({
   }, [
     client,
     detail.agent_id,
-    detail.token_pricing,
     modelIdDraft,
     t.myAgentsPricingCatalogMissing,
   ]);
@@ -665,14 +627,6 @@ export function AgentOwnerSettings({
       cancelled = true;
     };
   }, [client, detail.agent_id, detail.token_pricing?.model_id, detail.runtime_model_id]);
-
-  useEffect(() => {
-    if (catalogIn == null || catalogOut == null) return;
-    const mu = Number(markupDraft);
-    if (!Number.isFinite(mu) || mu < 0) return;
-    setInputPriceDraft(String(applyMarkup(catalogIn, mu)));
-    setOutputPriceDraft(String(applyMarkup(catalogOut, mu)));
-  }, [markupDraft, catalogIn, catalogOut]);
 
   useEffect(() => {
     setDeliveryDraft(deliveryFromDetail(detail.delivery));
@@ -720,51 +674,42 @@ export function AgentOwnerSettings({
     !savingProfile &&
     !busy;
 
-  const oldInput = detail.token_pricing?.input_price_per_million;
-  const oldOutput = detail.token_pricing?.output_price_per_million;
   const oldModelId = (detail.token_pricing?.model_id || "").trim();
   const oldMarkup = detail.token_pricing?.markup_percent;
-  const parsePrice = (raw: string): number | null => {
-    const s = raw.trim();
-    if (!s) return null;
-    const n = Number(s);
-    return Number.isFinite(n) && n >= 0 ? n : null;
-  };
-  const inputParsed = parsePrice(inputPriceDraft);
-  const outputParsed = parsePrice(outputPriceDraft);
   const modelIdTrim = modelIdDraft.trim();
   const markupParsed = (() => {
     const n = Number(markupDraft);
     return Number.isFinite(n) && n >= 0 && n <= 1000 ? n : null;
   })();
+  const listingPublished =
+    oldModelId.length > 0 && typeof oldMarkup === "number" && Number.isFinite(oldMarkup);
+  const inputParsed =
+    !catalogLoading && catalogIn != null && !catalogError && markupParsed != null
+      ? applyMarkup(catalogIn, markupParsed)
+      : null;
+  const outputParsed =
+    !catalogLoading && catalogOut != null && !catalogError && markupParsed != null
+      ? applyMarkup(catalogOut, markupParsed)
+      : null;
+  const previewReady = inputParsed != null && outputParsed != null;
   const pricingDirty =
-    inputParsed !== null &&
-    outputParsed !== null &&
     modelIdTrim.length > 0 &&
     markupParsed !== null &&
-    catalogIn != null &&
-    catalogOut != null &&
-    (oldInput == null ||
-      oldOutput == null ||
-      inputParsed !== oldInput ||
-      outputParsed !== oldOutput ||
-      modelIdTrim !== oldModelId ||
-      oldMarkup == null ||
+    (!listingPublished ||
+      !sameModelId(modelIdTrim, oldModelId) ||
       markupParsed !== oldMarkup);
   const modelOnList =
     supportedModels.length > 0 &&
     supportedModels.some((id) => id.toLowerCase() === modelIdTrim.toLowerCase());
   const canSavePricing =
     pricingDirty &&
+    previewReady &&
     inputParsed !== null &&
     outputParsed !== null &&
     markupParsed !== null &&
     modelIdTrim.length > 0 &&
     modelOnList &&
-    catalogIn != null &&
-    !catalogLoading &&
     !modelsLoading &&
-    !catalogError &&
     !savingPricing &&
     !busy;
 
@@ -965,10 +910,6 @@ export function AgentOwnerSettings({
         setModelIdDraft(resolvePricingModelId(row));
         const mu = row.token_pricing?.markup_percent;
         if (typeof mu === "number" && Number.isFinite(mu)) setMarkupDraft(String(mu));
-        if (row.token_pricing) {
-          setInputPriceDraft(String(row.token_pricing.input_price_per_million));
-          setOutputPriceDraft(String(row.token_pricing.output_price_per_million));
-        }
         window.setTimeout(() => setPricingMsg(null), 2000);
         onUpdated?.(row);
         return row;
@@ -1355,7 +1296,7 @@ export function AgentOwnerSettings({
               onChange={(e) => setMarkupDraft(e.target.value)}
               style={{ ...inputStyle, flex: 1 }}
               inputMode="decimal"
-              disabled={busy || savingPricing || catalogLoading}
+              disabled={busy || savingPricing}
               autoComplete="off"
             />
             <span style={{ fontSize: 13, color: colors.muted }}>%</span>
@@ -1364,13 +1305,13 @@ export function AgentOwnerSettings({
             {t.myAgentsPricingMarkupHint}
           </div>
         </label>
-        {catalogLoading ? (
+        {!previewReady && !catalogError ? (
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted }}>…</p>
         ) : null}
         {catalogError ? (
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>{catalogError}</p>
         ) : null}
-        {catalogIn != null && catalogOut != null ? (
+        {previewReady && catalogIn != null && catalogOut != null ? (
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
             {fillTemplate(t.myAgentsPricingCatalogLine, {
               in: fmtUsd(catalogIn),
@@ -1378,7 +1319,7 @@ export function AgentOwnerSettings({
             })}
           </p>
         ) : null}
-        {inputParsed != null && outputParsed != null ? (
+        {previewReady && inputParsed != null && outputParsed != null && catalogIn != null ? (
           <>
             <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
               {fillTemplate(t.myAgentsPricingListingLine, {
@@ -1386,14 +1327,12 @@ export function AgentOwnerSettings({
                 out: fmtUsd(outputParsed),
               })}
             </p>
-            {catalogIn != null ? (
-              <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-                {fillTemplate(t.myAgentsPricingExampleLine, {
-                  pay: fmtUsd(inputParsed),
-                  cost: fmtUsd(catalogIn),
-                })}
-              </p>
-            ) : null}
+            <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+              {fillTemplate(t.myAgentsPricingExampleLine, {
+                pay: fmtUsd(inputParsed),
+                cost: fmtUsd(catalogIn),
+              })}
+            </p>
             <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
               {fillTemplate(t.myAgentsPricingCreditsLine, {
                 in: String(usdToCredits(inputParsed)),
@@ -1410,7 +1349,7 @@ export function AgentOwnerSettings({
             {t.myAgentsPricingInputLabel}
           </div>
           <input
-            value={inputParsed != null ? fmtUsd(inputParsed) : inputPriceDraft}
+            value={inputParsed != null ? fmtUsd(inputParsed) : ""}
             readOnly
             style={{ ...inputStyle, opacity: 0.85, cursor: "default" }}
             inputMode="decimal"
@@ -1423,7 +1362,7 @@ export function AgentOwnerSettings({
             {t.myAgentsPricingOutputLabel}
           </div>
           <input
-            value={outputParsed != null ? fmtUsd(outputParsed) : outputPriceDraft}
+            value={outputParsed != null ? fmtUsd(outputParsed) : ""}
             readOnly
             style={{ ...inputStyle, opacity: 0.85, cursor: "default" }}
             inputMode="decimal"
