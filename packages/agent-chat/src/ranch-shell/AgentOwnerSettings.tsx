@@ -462,10 +462,8 @@ export function AgentOwnerSettings({
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [modelIdDraft, setModelIdDraft] = useState(() => resolvePricingModelId(detail));
-  const [supportedModels, setSupportedModels] = useState<string[]>(() =>
-    uniqModelIds([resolvePricingModelId(detail)]),
-  );
-  const [modelsLoading, setModelsLoading] = useState(false);
+  const [supportedModels, setSupportedModels] = useState<string[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
   const [markupDraft, setMarkupDraft] = useState(() => {
     const mu = detail.token_pricing?.markup_percent;
     if (typeof mu === "number" && Number.isFinite(mu) && mu >= 0) return String(mu);
@@ -656,7 +654,9 @@ export function AgentOwnerSettings({
       })
       .catch(() => {
         if (cancelled) return;
-        setSupportedModels(uniqModelIds([resolvePricingModelId(detail)]));
+        setSupportedModels(
+          uniqModelIds([detail.token_pricing?.model_id], [detail.runtime_model_id]),
+        );
       })
       .finally(() => {
         if (!cancelled) setModelsLoading(false);
@@ -752,7 +752,7 @@ export function AgentOwnerSettings({
       oldMarkup == null ||
       markupParsed !== oldMarkup);
   const modelOnList =
-    supportedModels.length === 0 ||
+    supportedModels.length > 0 &&
     supportedModels.some((id) => id.toLowerCase() === modelIdTrim.toLowerCase());
   const canSavePricing =
     pricingDirty &&
