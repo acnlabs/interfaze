@@ -697,7 +697,7 @@ const en: RanchMessages = {
   myAgentsPricingModelHint:
     "Pick the default from models this agent already reports. You cannot add or remove models here.",
   myAgentsPricingModelsEmpty: "This agent has not reported any models yet.",
-  myAgentsPricingCreditsLine: "Wallet preview (Credits / 1M, rounded up): in ${in} / out ${out}",
+  myAgentsPricingCreditsLine: "${in} / ${out} Credits",
   myAgentsPricingCreditsNote: "1 Credit = $0.10 at the current Host rate. Each hop settles in whole Credits.",
   myAgentsPricingRuntimeHint: "Runtime reported: ${model} (self-reported — not verified).",
   myAgentsPricingSelfReportNote:
@@ -705,11 +705,11 @@ const en: RanchMessages = {
   myAgentsInferencePathByo: "BYO",
   myAgentsInferencePathByoHint:
     "This agent calls models with its own key. Usage is self-reported — Host cannot verify. Official hosted inference is not available yet.",
-  myAgentsPricingMarkupLabel: "Markup over Host baseline",
+  myAgentsPricingMarkupLabel: "Markup",
   myAgentsPricingMarkupHint:
     "Settle = Catalog/pack(model) × (1 + markup%). Changing model keeps this % and recalculates the preview.",
-  myAgentsPricingCatalogLine: "Host baseline (Catalog/pack): in ${in} / out ${out}",
-  myAgentsPricingListingLine: "Settle preview (what others pay): in ${in} / out ${out}",
+  myAgentsPricingCatalogLine: "Host ${in} / ${out}",
+  myAgentsPricingListingLine: "In ${in} · out ${out} / 1M",
   myAgentsPricingExampleLine:
     "Example: 1M input tokens → they pay you ~$${pay}; Host baseline ~$${cost}",
   myAgentsPricingCatalogMissing:
@@ -1146,7 +1146,7 @@ const zh: RanchMessages = {
   myAgentsPricingModelHint:
     "从这只 agent 已自报的模型里选默认。这里不能增删模型。",
   myAgentsPricingModelsEmpty: "这只 agent 还没有自报任何模型。",
-  myAgentsPricingCreditsLine: "钱包预览（Credits / 百万，向上取整）：入 ${in} / 出 ${out}",
+  myAgentsPricingCreditsLine: "${in} / ${out} Credits",
   myAgentsPricingCreditsNote: "按现网汇率 1 Credit = $0.10。每跳按整数 Credits 结算。",
   myAgentsPricingRuntimeHint: "Runtime 上报：${model}（自报，未验真）。",
   myAgentsPricingSelfReportNote:
@@ -1154,11 +1154,11 @@ const zh: RanchMessages = {
   myAgentsInferencePathByo: "自持钥",
   myAgentsInferencePathByoHint:
     "这只 agent 用自己的钥匙打模型。用量自报，平台未核验。官方代打尚未开放。",
-  myAgentsPricingMarkupLabel: "相对 Host 底价上浮",
+  myAgentsPricingMarkupLabel: "上浮",
   myAgentsPricingMarkupHint:
     "结算 = Catalog/价包(模型) ×（1+上浮%）。换模型会保留该比例并重算预览。",
-  myAgentsPricingCatalogLine: "Host 底价（Catalog/价包）：输入 ${in} / 输出 ${out}",
-  myAgentsPricingListingLine: "结算预览（对方付给你）：输入 ${in} / 输出 ${out}",
+  myAgentsPricingCatalogLine: "底价 ${in} / ${out}",
+  myAgentsPricingListingLine: "入 ${in} · 出 ${out} / 百万",
   myAgentsPricingExampleLine:
     "例：100 万 input → 对方约付你 $${pay}；Host 底价约 $${cost}",
   myAgentsPricingCatalogMissing:

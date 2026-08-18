@@ -1232,43 +1232,49 @@ export function AgentOwnerSettings({
       </section>
 
       <section>
-        <h3 style={{ ...sectionTitle, display: "flex", alignItems: "center" }}>
-          {t.myAgentsSectionPricing}
-          <FieldHint
-            text={`${t.myAgentsPricingHint} ${t.myAgentsPricingSelfReportNote}`}
-          />
+        <h3
+          style={{
+            ...sectionTitle,
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
+          <span style={{ display: "inline-flex", alignItems: "center" }}>
+            {t.myAgentsSectionPricing}
+            <FieldHint
+              text={`${t.myAgentsPricingHint} ${t.myAgentsPricingSelfReportNote} ${t.myAgentsPricingModelHint}`}
+            />
+          </span>
+          {(detail.inference_path || "byo") !== "official" ? (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "0 6px",
+                borderRadius: 4,
+                border: `1px solid ${colors.border}`,
+                fontSize: 10,
+                fontWeight: 650,
+                letterSpacing: "0.04em",
+                textTransform: "none",
+                color: colors.muted,
+              }}
+            >
+              {t.myAgentsInferencePathByo}
+              <FieldHint text={t.myAgentsInferencePathByoHint} />
+            </span>
+          ) : null}
         </h3>
-        {(detail.inference_path || "byo") !== "official" ? (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              margin: "0 0 10px",
-              fontSize: 12,
-              color: colors.muted,
-            }}
-          >
-            {t.myAgentsInferencePathByo}
-            <FieldHint text={t.myAgentsInferencePathByoHint} />
-          </div>
-        ) : null}
         {detail.token_pricing == null ? (
           <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
             {t.myAgentsPricingUnlisted}
           </p>
         ) : null}
         <div style={{ marginBottom: 10 }}>
-          <div
-            style={{
-              fontSize: 12,
-              color: colors.muted,
-              marginBottom: 6,
-              display: "flex",
-              alignItems: "center",
-            }}
-          >
+          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 6 }}>
             {t.myAgentsPricingModelLabel}
-            <FieldHint text={t.myAgentsPricingModelHint} />
           </div>
           {modelsLoading ? (
             <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>…</p>
@@ -1301,17 +1307,8 @@ export function AgentOwnerSettings({
           ) : null}
         </div>
         <label style={{ display: "block", marginBottom: 10 }}>
-          <div
-            style={{
-              fontSize: 12,
-              color: colors.muted,
-              marginBottom: 4,
-              display: "flex",
-              alignItems: "center",
-            }}
-          >
+          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
             {t.myAgentsPricingMarkupLabel}
-            <FieldHint text={t.myAgentsPricingMarkupHint} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
@@ -1343,7 +1340,7 @@ export function AgentOwnerSettings({
                 out: fmtUsd(outputParsed),
               })}
             </div>
-            <div style={{ color: colors.muted, marginTop: 4 }}>
+            <div style={{ color: colors.muted, marginTop: 2 }}>
               {fillTemplate(t.myAgentsPricingCatalogLine, {
                 in: fmtUsd(catalogIn),
                 out: fmtUsd(catalogOut),
@@ -1352,7 +1349,7 @@ export function AgentOwnerSettings({
             <div
               style={{
                 color: colors.muted,
-                marginTop: 4,
+                marginTop: 2,
                 display: "flex",
                 alignItems: "center",
               }}
@@ -1387,10 +1384,7 @@ export function AgentOwnerSettings({
 
       {showConnectSection ? (
         <section>
-          <h3 style={{ ...sectionTitle, display: "flex", alignItems: "center" }}>
-            {t.myAgentsSectionConnect}
-            <FieldHint text={t.myAgentsDeliveryHint} />
-          </h3>
+          <h3 style={sectionTitle}>{t.myAgentsSectionConnect}</h3>
           {!deliveryEditable ? (
             <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
               {t.myAgentsDeliveryLocked}
