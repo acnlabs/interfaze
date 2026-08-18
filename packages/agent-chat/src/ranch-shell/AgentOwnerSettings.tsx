@@ -81,8 +81,8 @@ function resolvePricingModelId(detail: MyAgentSummary): string {
   return FALLBACK_MODEL_ID;
 }
 
-/** 1 Credit = $0.10 — same default as Host ``credit_to_usd_rate``. */
-const CREDIT_TO_USD = 0.1;
+/** 1 Credit = $0.01 — $1 = 100 Credits, same as wallet recharge. */
+const CREDIT_TO_USD = 0.01;
 
 function usdToCredits(usd: number): number {
   if (!Number.isFinite(usd) || usd <= 0) return 0;
