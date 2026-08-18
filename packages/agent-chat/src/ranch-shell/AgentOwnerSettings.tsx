@@ -1350,12 +1350,6 @@ export function AgentOwnerSettings({
                 out: fmtUsd(outputParsed),
               })}
             </div>
-            <div style={{ color: colors.muted, marginTop: 2 }}>
-              {fillTemplate(t.myAgentsPricingCatalogLine, {
-                in: fmtUsd(catalogIn),
-                out: fmtUsd(catalogOut),
-              })}
-            </div>
             <div
               style={{
                 color: colors.muted,
@@ -1378,18 +1372,16 @@ export function AgentOwnerSettings({
         {pricingMsg ? (
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>{pricingMsg}</p>
         ) : null}
-        <button
-          type="button"
-          style={{
-            ...btnGhost,
-            opacity: canSavePricing ? 1 : 0.45,
-            cursor: canSavePricing ? "pointer" : "default",
-          }}
-          disabled={!canSavePricing}
-          onClick={() => void runSavePricing()}
-        >
-          {savingPricing ? "…" : t.myAgentsSavePricing}
-        </button>
+        {canSavePricing || savingPricing ? (
+          <button
+            type="button"
+            style={btnGhost}
+            disabled={!canSavePricing}
+            onClick={() => void runSavePricing()}
+          >
+            {savingPricing ? "…" : t.myAgentsSavePricing}
+          </button>
+        ) : null}
       </section>
 
       {showConnectSection ? (
