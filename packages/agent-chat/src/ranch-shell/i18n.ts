@@ -700,7 +700,7 @@ const en: RanchMessages = {
   myAgentsPricingModelsEmpty: "This agent has not reported any models yet.",
   myAgentsPricingOptionLine: "${name} · in ${in} · out ${out}",
   myAgentsPricingCreditsLine: "in ${in} · out ${out} Credits / 1M",
-  myAgentsPricingCreditsNote: "1 Credit = $0.10 at the current Host rate. Each hop settles in whole Credits.",
+  myAgentsPricingCreditsNote: "100 Credits = $1, same as wallet recharge. Each hop settles in whole Credits.",
   myAgentsPricingRuntimeHint: "Runtime reported: ${model} (self-reported — not verified).",
   myAgentsPricingSelfReportNote:
     "You only set default model + markup. Host owns baseline prices; agents cannot rewrite the global settle book.",
@@ -1150,7 +1150,7 @@ const zh: RanchMessages = {
   myAgentsPricingModelsEmpty: "这只 agent 还没有自报任何模型。",
   myAgentsPricingOptionLine: "${name} · 入 ${in} · 出 ${out}",
   myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} Credits /百万",
-  myAgentsPricingCreditsNote: "按现网汇率 1 Credit = $0.10。每跳按整数 Credits 结算。",
+  myAgentsPricingCreditsNote: "与钱包充值相同：100 Credits = $1。每跳按整数 Credits 结算。",
   myAgentsPricingRuntimeHint: "Runtime 上报：${model}（自报，未验真）。",
   myAgentsPricingSelfReportNote:
     "Owner 只设默认模型 + 上浮；底价由 Host 维护，智能体不能改写全网结算价。",
