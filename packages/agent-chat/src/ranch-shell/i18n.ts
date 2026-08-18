@@ -263,6 +263,7 @@ export type RanchMessages = {
   myAgentsPricingModelLabel: string;
   myAgentsPricingModelHint: string;
   myAgentsPricingModelsEmpty: string;
+  myAgentsPricingOptionLine: string;
   myAgentsPricingCreditsLine: string;
   myAgentsPricingCreditsNote: string;
   myAgentsPricingRuntimeHint: string;
@@ -693,11 +694,12 @@ const en: RanchMessages = {
     "Set the default model and your markup %. Settle = Host Catalog/pack baseline × (1+markup).",
   myAgentsPricingInputLabel: "Settle preview · input USD / 1M",
   myAgentsPricingOutputLabel: "Settle preview · output USD / 1M",
-  myAgentsPricingModelLabel: "Default model",
+  myAgentsPricingModelLabel: "Default model · USD / 1M tokens",
   myAgentsPricingModelHint:
     "Pick the default from models this agent already reports. You cannot add or remove models here.",
   myAgentsPricingModelsEmpty: "This agent has not reported any models yet.",
-  myAgentsPricingCreditsLine: "${in} / ${out} Credits",
+  myAgentsPricingOptionLine: "${name} · in ${in} · out ${out}",
+  myAgentsPricingCreditsLine: "in ${in} · out ${out} Credits / 1M",
   myAgentsPricingCreditsNote: "1 Credit = $0.10 at the current Host rate. Each hop settles in whole Credits.",
   myAgentsPricingRuntimeHint: "Runtime reported: ${model} (self-reported — not verified).",
   myAgentsPricingSelfReportNote:
@@ -1142,11 +1144,12 @@ const zh: RanchMessages = {
     "只需设默认模型与上浮%。结算 = Host Catalog/价包底价 ×（1+上浮%）。",
   myAgentsPricingInputLabel: "结算预览 · 输入 USD / 百万",
   myAgentsPricingOutputLabel: "结算预览 · 输出 USD / 百万",
-  myAgentsPricingModelLabel: "默认模型",
+  myAgentsPricingModelLabel: "默认模型 · USD / 百万 token",
   myAgentsPricingModelHint:
     "从这只 agent 已自报的模型里选默认。这里不能增删模型。",
   myAgentsPricingModelsEmpty: "这只 agent 还没有自报任何模型。",
-  myAgentsPricingCreditsLine: "${in} / ${out} Credits",
+  myAgentsPricingOptionLine: "${name} · 入 ${in} · 出 ${out}",
+  myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} Credits /百万",
   myAgentsPricingCreditsNote: "按现网汇率 1 Credit = $0.10。每跳按整数 Credits 结算。",
   myAgentsPricingRuntimeHint: "Runtime 上报：${model}（自报，未验真）。",
   myAgentsPricingSelfReportNote:

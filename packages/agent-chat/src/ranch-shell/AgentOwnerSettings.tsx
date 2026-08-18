@@ -119,10 +119,11 @@ function shortModelLabel(modelId: string): string {
 function catalogOptionLabel(
   id: string,
   pair: { in: number; out: number } | undefined,
+  tmpl: string,
 ): string {
   const name = shortModelLabel(id) || id;
   if (!pair) return name;
-  return `${name} · ${fmtUsd(pair.in)} / ${fmtUsd(pair.out)}`;
+  return fillTemplate(tmpl, { name, in: fmtUsd(pair.in), out: fmtUsd(pair.out) });
 }
 
 function fillTemplate(
@@ -1305,7 +1306,7 @@ export function AgentOwnerSettings({
             >
               {supportedModels.map((id) => (
                 <option key={id} value={id}>
-                  {catalogOptionLabel(id, catalogById[id])}
+                  {catalogOptionLabel(id, catalogById[id], t.myAgentsPricingOptionLine)}
                 </option>
               ))}
             </select>
