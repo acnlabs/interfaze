@@ -110,6 +110,21 @@ function fmtUsd(n: number): string {
   return roundUsdPerMillion(n).toFixed(6);
 }
 
+function shortModelLabel(modelId: string): string {
+  const s = modelId.trim();
+  const slash = s.lastIndexOf("/");
+  return slash >= 0 ? s.slice(slash + 1) : s;
+}
+
+function catalogOptionLabel(
+  id: string,
+  pair: { in: number; out: number } | undefined,
+): string {
+  const name = shortModelLabel(id) || id;
+  if (!pair) return name;
+  return `${name} · ${fmtUsd(pair.in)} / ${fmtUsd(pair.out)}`;
+}
+
 function fillTemplate(
   tmpl: string,
   vars: Record<string, string | number>,
@@ -466,10 +481,10 @@ export function AgentOwnerSettings({
     if (typeof mu === "number" && Number.isFinite(mu) && mu >= 0) return String(mu);
     return String(DEFAULT_MARKUP_PERCENT);
   });
-  const [catalogIn, setCatalogIn] = useState<number | null>(null);
-  const [catalogOut, setCatalogOut] = useState<number | null>(null);
-  const [catalogLoading, setCatalogLoading] = useState(false);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogById, setCatalogById] = useState<
+    Record<string, { in: number; out: number }>
+  >({});
+  const [catalogReadyKey, setCatalogReadyKey] = useState("");
   const [savingPricing, setSavingPricing] = useState(false);
   const [pricingMsg, setPricingMsg] = useState<string | null>(null);
   const [pricingError, setPricingError] = useState<string | null>(null);
@@ -534,66 +549,12 @@ export function AgentOwnerSettings({
     );
     setPricingMsg(null);
     setPricingError(null);
-    setCatalogError(null);
   }, [
     detail.agent_id,
     detail.token_pricing?.model_id,
     detail.token_pricing?.markup_percent,
     detail.preferred_model_id,
     detail.runtime_model_id,
-  ]);
-
-  // Pull L1 catalog for the declared model; settle preview = catalog × (1+markup%).
-  useEffect(() => {
-    const mid = modelIdDraft.trim();
-    if (!mid) {
-      setCatalogIn(null);
-      setCatalogOut(null);
-      setCatalogError(null);
-      setCatalogLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setCatalogLoading(true);
-    setCatalogIn(null);
-    setCatalogOut(null);
-    setCatalogError(null);
-    const timer = window.setTimeout(() => {
-      client
-        .getModelCatalogItem(mid)
-        .then((row) => {
-          if (cancelled) return;
-          const cin = Number(row.input_price_per_million);
-          const cout = Number(row.output_price_per_million);
-          if (!Number.isFinite(cin) || !Number.isFinite(cout)) {
-            setCatalogIn(null);
-            setCatalogOut(null);
-            setCatalogError(t.myAgentsPricingCatalogMissing);
-            return;
-          }
-          setCatalogIn(cin);
-          setCatalogOut(cout);
-          setCatalogError(null);
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setCatalogIn(null);
-          setCatalogOut(null);
-          setCatalogError(t.myAgentsPricingCatalogMissing);
-        })
-        .finally(() => {
-          if (!cancelled) setCatalogLoading(false);
-        });
-    }, 350);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [
-    client,
-    detail.agent_id,
-    modelIdDraft,
-    t.myAgentsPricingCatalogMissing,
   ]);
 
   useEffect(() => {
@@ -627,6 +588,41 @@ export function AgentOwnerSettings({
       cancelled = true;
     };
   }, [client, detail.agent_id, detail.token_pricing?.model_id, detail.runtime_model_id]);
+
+  const supportedKey = supportedModels.join("\u0001");
+  useEffect(() => {
+    if (supportedModels.length === 0) {
+      setCatalogById({});
+      setCatalogReadyKey("");
+      return;
+    }
+    let cancelled = false;
+    const key = supportedKey;
+    void Promise.all(
+      supportedModels.map((id) =>
+        client.getModelCatalogItem(id).then(
+          (row) => {
+            const cin = Number(row.input_price_per_million);
+            const cout = Number(row.output_price_per_million);
+            if (!Number.isFinite(cin) || !Number.isFinite(cout)) return [id, null] as const;
+            return [id, { in: cin, out: cout }] as const;
+          },
+          () => [id, null] as const,
+        ),
+      ),
+    ).then((rows) => {
+      if (cancelled) return;
+      const next: Record<string, { in: number; out: number }> = {};
+      for (const [id, pair] of rows) {
+        if (pair) next[id] = pair;
+      }
+      setCatalogById(next);
+      setCatalogReadyKey(key);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, supportedKey]);
 
   useEffect(() => {
     setDeliveryDraft(deliveryFromDetail(detail.delivery));
@@ -683,6 +679,20 @@ export function AgentOwnerSettings({
   })();
   const listingPublished =
     oldModelId.length > 0 && typeof oldMarkup === "number" && Number.isFinite(oldMarkup);
+  const selectedCatalog =
+    catalogById[modelIdTrim] ??
+    Object.entries(catalogById).find(([id]) => sameModelId(id, modelIdTrim))?.[1] ??
+    null;
+  const catalogIn = selectedCatalog?.in ?? null;
+  const catalogOut = selectedCatalog?.out ?? null;
+  const catalogLoading = supportedModels.length > 0 && catalogReadyKey !== supportedKey;
+  const catalogError =
+    !catalogLoading &&
+    supportedModels.length > 0 &&
+    modelIdTrim.length > 0 &&
+    selectedCatalog == null
+      ? t.myAgentsPricingCatalogMissing
+      : null;
   const inputParsed =
     !catalogLoading && catalogIn != null && !catalogError && markupParsed != null
       ? applyMarkup(catalogIn, markupParsed)
@@ -1295,7 +1305,7 @@ export function AgentOwnerSettings({
             >
               {supportedModels.map((id) => (
                 <option key={id} value={id}>
-                  {id}
+                  {catalogOptionLabel(id, catalogById[id])}
                 </option>
               ))}
             </select>
