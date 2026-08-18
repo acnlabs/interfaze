@@ -484,7 +484,7 @@ export function AgentOwnerSettings({
   const [catalogById, setCatalogById] = useState<
     Record<string, { in: number; out: number }>
   >({});
-  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogReadyKey, setCatalogReadyKey] = useState("");
   const [savingPricing, setSavingPricing] = useState(false);
   const [pricingMsg, setPricingMsg] = useState<string | null>(null);
   const [pricingError, setPricingError] = useState<string | null>(null);
@@ -593,11 +593,11 @@ export function AgentOwnerSettings({
   useEffect(() => {
     if (supportedModels.length === 0) {
       setCatalogById({});
-      setCatalogLoading(false);
+      setCatalogReadyKey("");
       return;
     }
     let cancelled = false;
-    setCatalogLoading(true);
+    const key = supportedKey;
     void Promise.all(
       supportedModels.map((id) =>
         client.getModelCatalogItem(id).then(
@@ -617,7 +617,7 @@ export function AgentOwnerSettings({
         if (pair) next[id] = pair;
       }
       setCatalogById(next);
-      setCatalogLoading(false);
+      setCatalogReadyKey(key);
     });
     return () => {
       cancelled = true;
@@ -685,8 +685,8 @@ export function AgentOwnerSettings({
     null;
   const catalogIn = selectedCatalog?.in ?? null;
   const catalogOut = selectedCatalog?.out ?? null;
+  const catalogLoading = supportedModels.length > 0 && catalogReadyKey !== supportedKey;
   const catalogError =
-    !modelsLoading &&
     !catalogLoading &&
     supportedModels.length > 0 &&
     modelIdTrim.length > 0 &&
