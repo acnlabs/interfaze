@@ -70,6 +70,17 @@ function sameModelId(left: string, right: string): boolean {
   return left.trim().toLowerCase() === right.trim().toLowerCase();
 }
 
+function officialSetsEqual(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  const a = left.map((s) => s.trim().toLowerCase()).sort();
+  const b = right.map((s) => s.trim().toLowerCase()).sort();
+  return a.every((id, i) => id === b[i]);
+}
+
+function modelIsOfficial(id: string, official: string[]): boolean {
+  return official.some((item) => sameModelId(item, id));
+}
+
 function resolvePricingModelId(detail: MyAgentSummary): string {
   // Saved listing wins; else runtime heartbeat report; else catalog default.
   const listed = (detail.token_pricing?.model_id || "").trim();
@@ -477,6 +488,16 @@ export function AgentOwnerSettings({
   const [modelIdDraft, setModelIdDraft] = useState(() => resolvePricingModelId(detail));
   const [supportedModels, setSupportedModels] = useState<string[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
+  const [hostReady, setHostReady] = useState(Boolean(detail.host_inference_ready));
+  const [officialSaved, setOfficialSaved] = useState<string[]>(
+    () => detail.official_models ?? [],
+  );
+  const [officialDraft, setOfficialDraft] = useState<string[]>(
+    () => detail.official_models ?? [],
+  );
+  const [savingOfficial, setSavingOfficial] = useState(false);
+  const [officialMsg, setOfficialMsg] = useState<string | null>(null);
+  const [officialError, setOfficialError] = useState<string | null>(null);
   const [markupDraft, setMarkupDraft] = useState(() => {
     const mu = detail.token_pricing?.markup_percent;
     if (typeof mu === "number" && Number.isFinite(mu) && mu >= 0) return String(mu);
@@ -550,12 +571,20 @@ export function AgentOwnerSettings({
     );
     setPricingMsg(null);
     setPricingError(null);
+    setHostReady(Boolean(detail.host_inference_ready));
+    const official = detail.official_models ?? [];
+    setOfficialSaved(official);
+    setOfficialDraft(official);
+    setOfficialMsg(null);
+    setOfficialError(null);
   }, [
     detail.agent_id,
     detail.token_pricing?.model_id,
     detail.token_pricing?.markup_percent,
     detail.preferred_model_id,
     detail.runtime_model_id,
+    detail.host_inference_ready,
+    (detail.official_models ?? []).join("\u0001"),
   ]);
 
   useEffect(() => {
@@ -571,6 +600,13 @@ export function AgentOwnerSettings({
           [detail.runtime_model_id],
         );
         setSupportedModels(ids);
+        if (typeof status.host_inference_ready === "boolean") {
+          setHostReady(status.host_inference_ready);
+        }
+        if (Array.isArray(status.official_models)) {
+          setOfficialSaved(status.official_models);
+          setOfficialDraft(status.official_models);
+        }
         const current = resolvePricingModelId(detail);
         if (ids.length > 0 && !ids.some((id) => id.toLowerCase() === current.toLowerCase())) {
           setModelIdDraft(ids[0]);
@@ -725,6 +761,10 @@ export function AgentOwnerSettings({
     !modelsLoading &&
     !savingPricing &&
     !busy;
+  const providerModels = uniqModelIds(supportedModels, officialDraft, officialSaved);
+  const officialDirty = hostReady && !officialSetsEqual(officialDraft, officialSaved);
+  const canSaveOfficial =
+    officialDirty && !savingOfficial && !busy && !modelsLoading;
 
   const policyMode = (detail.policy_mode || "").toLowerCase();
   const currentPolicy = policyFromDetail(detail.policy_mode);
@@ -936,6 +976,37 @@ export function AgentOwnerSettings({
         return null;
       })
       .finally(() => setSavingPricing(false));
+  };
+
+  const runSaveOfficial = (): Promise<boolean> => {
+    if (!canSaveOfficial) return Promise.resolve(false);
+    setSavingOfficial(true);
+    setOfficialError(null);
+    setOfficialMsg(null);
+    return client
+      .updateMyAgentOfficialModels(detail.agent_id, officialDraft)
+      .then((row) => {
+        setOfficialSaved(row.model_ids);
+        setOfficialDraft(row.model_ids);
+        setHostReady(Boolean(row.host_inference_ready));
+        setOfficialMsg(t.myAgentsProvidersSaved);
+        window.setTimeout(() => setOfficialMsg(null), 2000);
+        onUpdated?.({
+          ...detail,
+          official_models: row.model_ids,
+          host_inference_ready: row.host_inference_ready,
+        });
+        return true;
+      })
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof ChatGatewayError && err.message.trim()
+            ? err.message.trim()
+            : t.myAgentsProvidersFailed;
+        setOfficialError(msg);
+        return false;
+      })
+      .finally(() => setSavingOfficial(false));
   };
 
   const runSaveDelivery = (): Promise<MyAgentSummary | null> => {
@@ -1274,7 +1345,13 @@ export function AgentOwnerSettings({
               }}
             >
               {t.myAgentsInferencePathByo}
-              <FieldHint text={t.myAgentsInferencePathByoHint} />
+              <FieldHint
+                text={
+                  hostReady
+                    ? t.myAgentsInferencePathByoHintReady
+                    : t.myAgentsInferencePathByoHint
+                }
+              />
             </span>
           ) : null}
         </h3>
@@ -1382,6 +1459,95 @@ export function AgentOwnerSettings({
           >
             {savingPricing ? "…" : t.myAgentsSavePricing}
           </button>
+        ) : null}
+        {hostReady ? (
+          <div style={{ marginTop: 16 }}>
+            <div
+              style={{
+                fontSize: 12,
+                color: colors.muted,
+                marginBottom: 6,
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              {t.myAgentsProviderLabel}
+              <FieldHint text={t.myAgentsProviderHint} />
+            </div>
+            {modelsLoading ? (
+              <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>…</p>
+            ) : providerModels.length === 0 ? (
+              <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
+                {t.myAgentsPricingModelsEmpty}
+              </p>
+            ) : (
+              providerModels.map((id) => {
+                const listed = supportedModels.some((item) => sameModelId(item, id));
+                const official = modelIsOfficial(id, officialDraft);
+                return (
+                  <div
+                    key={id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, color: colors.text }}>
+                        {shortModelLabel(id)}
+                      </div>
+                      {!listed ? (
+                        <div style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>
+                          {t.myAgentsProviderUnlisted}
+                        </div>
+                      ) : null}
+                    </div>
+                    <select
+                      aria-label={`${shortModelLabel(id)} ${t.myAgentsProviderLabel}`}
+                      value={official ? "official" : "byo"}
+                      disabled={busy || savingOfficial}
+                      onChange={(e) => {
+                        const nextOfficial = e.target.value === "official";
+                        setOfficialDraft((prev) => {
+                          if (nextOfficial) {
+                            if (modelIsOfficial(id, prev)) return prev;
+                            return [...prev, id];
+                          }
+                          return prev.filter((item) => !sameModelId(item, id));
+                        });
+                      }}
+                      style={{ ...inputStyle, width: 132, flex: "0 0 132px" }}
+                    >
+                      <option value="byo">{t.myAgentsProviderByo}</option>
+                      <option value="official">{t.myAgentsProviderOfficial}</option>
+                    </select>
+                  </div>
+                );
+              })
+            )}
+            {officialError ? (
+              <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>
+                {officialError}
+              </p>
+            ) : null}
+            {officialMsg ? (
+              <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>
+                {officialMsg}
+              </p>
+            ) : null}
+            {canSaveOfficial || savingOfficial ? (
+              <button
+                type="button"
+                style={btnGhost}
+                disabled={!canSaveOfficial}
+                onClick={() => void runSaveOfficial()}
+              >
+                {savingOfficial ? "…" : t.myAgentsSaveProviders}
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </section>
 

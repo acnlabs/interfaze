@@ -271,9 +271,13 @@ export type MyAgentSummary = {
    */
   runtime_model_id?: string | null;
   /**
-   * Who calls the model. I1 is always ``byo``. Official hops are I2.
+   * Agent-level path stays ``byo``. Official is per model (I2).
    */
   inference_path?: "byo" | "official" | string | null;
+  /** Host holds its own inference key. Official provider is hidden until true. */
+  host_inference_ready?: boolean | null;
+  /** Owner-authorized official model ids (Host table). */
+  official_models?: string[] | null;
   /** Present after a successful delivery PATCH when ACN returns follow-up copy. */
   next_step_hint?: string | null;
 };
@@ -320,6 +324,8 @@ export type GatewayClient = {
     listed_model_id?: string | null;
     runtime_model_id?: string | null;
     inference_path?: "byo" | "official" | string | null;
+    host_inference_ready?: boolean;
+    official_models?: string[];
     mismatched: boolean;
     markup_percent?: number | null;
     supported_models?: string[];
@@ -327,12 +333,22 @@ export type GatewayClient = {
       model_id: string;
       is_listing?: boolean;
       is_runtime?: boolean;
+      inference_path?: "byo" | "official" | string | null;
       input_price_per_million?: number;
       output_price_per_million?: number;
       pricing_source?: string;
       free?: boolean;
       priceable?: boolean;
     }>;
+  }>;
+  /** Replace Owner-authorized official models. Empty = all hops BYO. */
+  updateMyAgentOfficialModels: (
+    agentId: string,
+    modelIds: string[],
+  ) => Promise<{
+    agent_id: string;
+    model_ids: string[];
+    host_inference_ready: boolean;
   }>;
   /** Rotate ACN API key; plaintext returned once — do not log. */
   rotateMyAgentKey: (agentId: string) => Promise<{
@@ -538,6 +554,8 @@ export function createGatewayClient(
         listed_model_id?: string | null;
         runtime_model_id?: string | null;
         inference_path?: "byo" | "official" | string | null;
+        host_inference_ready?: boolean;
+        official_models?: string[];
         mismatched: boolean;
         markup_percent?: number | null;
         supported_models?: string[];
@@ -545,6 +563,7 @@ export function createGatewayClient(
           model_id: string;
           is_listing?: boolean;
           is_runtime?: boolean;
+          inference_path?: "byo" | "official" | string | null;
           input_price_per_million?: number;
           output_price_per_million?: number;
           pricing_source?: string;
@@ -552,6 +571,15 @@ export function createGatewayClient(
           priceable?: boolean;
         }>;
       }>(`/api/chat/agents/${encodeURIComponent(agentId)}/model-status`),
+    updateMyAgentOfficialModels: (agentId, modelIds) =>
+      request<{
+        agent_id: string;
+        model_ids: string[];
+        host_inference_ready: boolean;
+      }>(`/api/chat/my-agents/${encodeURIComponent(agentId)}/official-models`, {
+        method: "PUT",
+        body: JSON.stringify({ model_ids: modelIds }),
+      }),
     rotateMyAgentKey: (agentId) =>
       request<{
         success: boolean;
