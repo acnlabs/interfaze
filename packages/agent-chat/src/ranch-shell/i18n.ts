@@ -31,6 +31,7 @@ export type RanchMessages = {
   noAgentsTitle: string;
   noAgentsBody: string;
   copyPromptForAgent: string;
+  connectExisting: string;
   promptCopied: string;
   viewConnectGuide: string;
   pasteAgentId: string;
@@ -249,6 +250,23 @@ export type RanchMessages = {
   myAgentsSectionOverview: string;
   myAgentsSectionConnect: string;
   myAgentsSectionAccess: string;
+  myAgentsSectionAgents: string;
+  myAgentsHumansHint: string;
+  myAgentsHumansPublic: string;
+  myAgentsHumansPublicHelp: string;
+  myAgentsHumansInviteOnly: string;
+  myAgentsHumansInviteOnlyHelp: string;
+  myAgentsHumansListTitle: string;
+  myAgentsHumansEmpty: string;
+  myAgentsHumansAdd: string;
+  myAgentsHumansRemove: string;
+  myAgentsHumansPlaceholder: string;
+  myAgentsHumansLoadFailed: string;
+  myAgentsHumansSaveFailed: string;
+  myAgentsHumansSaved: string;
+  myAgentsHumansInvalidId: string;
+  myAgentsHumansFull: string;
+  myAgentsHumansCount: (n: string) => string;
   myAgentsNameLabel: string;
   myAgentsDescLabel: string;
   myAgentsTagsLabel: string;
@@ -262,8 +280,13 @@ export type RanchMessages = {
   myAgentsPricingOutputLabel: string;
   myAgentsPricingModelLabel: string;
   myAgentsPricingModelHint: string;
+  myAgentsPricingModelsEmpty: string;
+  myAgentsPricingCreditsLine: string;
+  myAgentsPricingCreditsNote: string;
   myAgentsPricingRuntimeHint: string;
   myAgentsPricingSelfReportNote: string;
+  myAgentsInferencePathByo: string;
+  myAgentsInferencePathByoHint: string;
   myAgentsPricingMarkupLabel: string;
   myAgentsPricingMarkupHint: string;
   myAgentsPricingCatalogLine: string;
@@ -455,6 +478,7 @@ const en: RanchMessages = {
   noAgentsBody:
     "Registering on ACN is not enough. Copy the prompt below, paste it to your agent, and let it finish setup (installs ACN skill if needed).",
   copyPromptForAgent: "Copy prompt for agent",
+  connectExisting: "Connect an existing agent",
   promptCopied: "Copied",
   viewConnectGuide: "Full guide",
   pasteAgentId: "Paste an agent id",
@@ -669,13 +693,33 @@ const en: RanchMessages = {
   myAgentsTitle: "My agents",
   myAgentsEmptyTitle: "No agents claimed yet",
   myAgentsEmptyBody:
-    "Copy the connect prompt, paste it into your runtime, and finish ACN claim. Registering alone is not enough.",
+    "Connect an existing agent with a prompt, link, or QR code. Claiming happens on Interfaze — do not share a claim token.",
   myAgentsOfflineHint:
     "This agent is registered but offline — start the process that keeps it alive, or check message receiving.",
   myAgentsSectionIdentity: "Profile",
   myAgentsSectionOverview: "Overview",
   myAgentsSectionConnect: "Receiving messages",
-  myAgentsSectionAccess: "Who can chat",
+  myAgentsSectionAccess: "Who can chat or invoke",
+  myAgentsSectionAgents: "Which agents can reach me",
+  myAgentsHumansHint:
+    "People who may chat or invoke this agent. Same list for both. Stored on AgentPlanet — not the ACN agent graph. Default is invitees only; ACN open does not publish you to people.",
+  myAgentsHumansPublic: "Anyone signed in",
+  myAgentsHumansPublicHelp:
+    "Any signed-in person on this region may chat or invoke. Other agents still follow the section below.",
+  myAgentsHumansInviteOnly: "Invitees only",
+  myAgentsHumansInviteOnlyHelp:
+    "Only people on this list (and you as owner) may chat or invoke.",
+  myAgentsHumansListTitle: "Invitees",
+  myAgentsHumansEmpty: "No people on the list yet.",
+  myAgentsHumansAdd: "Add",
+  myAgentsHumansRemove: "Remove",
+  myAgentsHumansPlaceholder: "Paste a user id (e.g. wechat|…)",
+  myAgentsHumansLoadFailed: "Couldn’t load who can chat.",
+  myAgentsHumansSaveFailed: "Couldn’t update who can chat.",
+  myAgentsHumansSaved: "Who-can-chat updated",
+  myAgentsHumansInvalidId: "Enter a valid user id.",
+  myAgentsHumansFull: "Invitee list is full (max 50).",
+  myAgentsHumansCount: (n) => `${n} on list`,
   myAgentsNameLabel: "Display name",
   myAgentsDescLabel: "Description",
   myAgentsTagsLabel: "Tags",
@@ -685,15 +729,21 @@ const en: RanchMessages = {
   myAgentsProfileFailed: "Couldn’t save profile.",
   myAgentsSectionPricing: "Pricing",
   myAgentsPricingHint:
-    "Set the default model and your markup %. Settle = Host Catalog/pack baseline × (1+markup). Absolute USD fields below are a read-only preview.",
+    "Set the default model and your markup %. Settle = Host Catalog/pack baseline × (1+markup).",
   myAgentsPricingInputLabel: "Settle preview · input USD / 1M",
   myAgentsPricingOutputLabel: "Settle preview · output USD / 1M",
   myAgentsPricingModelLabel: "Default model",
   myAgentsPricingModelHint:
-    "Default when the user does not pick a model. Runtime can report via `acn heartbeat --model …`.",
+    "Pick the default from models this agent already reports. You cannot add or remove models here.",
+  myAgentsPricingModelsEmpty: "This agent has not reported any models yet.",
+  myAgentsPricingCreditsLine: "Wallet preview (Credits / 1M, rounded up): in ${in} / out ${out}",
+  myAgentsPricingCreditsNote: "1 Credit = $0.10 at the current Host rate. Each hop settles in whole Credits.",
   myAgentsPricingRuntimeHint: "Runtime reported: ${model} (self-reported — not verified).",
   myAgentsPricingSelfReportNote:
     "You only set default model + markup. Host owns baseline prices; agents cannot rewrite the global settle book.",
+  myAgentsInferencePathByo: "BYO",
+  myAgentsInferencePathByoHint:
+    "This agent calls models with its own key. Usage is self-reported — Host cannot verify. Official hosted inference is not available yet.",
   myAgentsPricingMarkupLabel: "Markup over Host baseline",
   myAgentsPricingMarkupHint:
     "Settle = Catalog/pack(model) × (1 + markup%). Changing model keeps this % and recalculates the preview.",
@@ -910,6 +960,7 @@ const zh: RanchMessages = {
   noAgentsBody:
     "注册还不够。复制下面的提示词发给你的 agent，让它自己接完（没有 ACN skill 时会先安装）。",
   copyPromptForAgent: "复制给 agent 的提示词",
+  connectExisting: "接入已有 agent",
   promptCopied: "已复制",
   viewConnectGuide: "完整说明",
   pasteAgentId: "粘贴 agent id 试试",
@@ -1112,13 +1163,32 @@ const zh: RanchMessages = {
   myAgentsTitle: "我的 Agents",
   myAgentsEmptyTitle: "还没有认领的 agent",
   myAgentsEmptyBody:
-    "复制接入提示词粘贴到你的运行程序，完成 ACN 注册与认领。只注册还不够。",
+    "用提示词、链接或二维码接入已有 agent。认领在 Interfaze 完成，不要分享认领 token。",
   myAgentsOfflineHint:
     "此 agent 已注册但离线——请启动保持在线的进程，或检查收信方式是否已配置。",
   myAgentsSectionIdentity: "资料",
   myAgentsSectionOverview: "概览",
   myAgentsSectionConnect: "收信方式",
-  myAgentsSectionAccess: "谁可以聊",
+  myAgentsSectionAccess: "谁可以聊 / 调",
+  myAgentsSectionAgents: "哪些 agent 可以找我",
+  myAgentsHumansHint:
+    "哪些人可以和这个 agent 聊天或调用。聊天与 invoke 共用这份名单，记在 AgentPlanet，不进 ACN 的 agent 图。默认仅名单；ACN open 不会自动对人公开。",
+  myAgentsHumansPublic: "登录即可",
+  myAgentsHumansPublicHelp:
+    "本区已登录的人都可以聊或调。其他 agent 仍看下一区。",
+  myAgentsHumansInviteOnly: "仅名单",
+  myAgentsHumansInviteOnlyHelp: "只有名单上的人（以及你作为主人）可以聊或调。",
+  myAgentsHumansListTitle: "邀请名单",
+  myAgentsHumansEmpty: "名单还是空的。",
+  myAgentsHumansAdd: "添加",
+  myAgentsHumansRemove: "移除",
+  myAgentsHumansPlaceholder: "粘贴人 id（如 wechat|…）",
+  myAgentsHumansLoadFailed: "无法加载谁可以聊。",
+  myAgentsHumansSaveFailed: "无法更新谁可以聊。",
+  myAgentsHumansSaved: "「谁可以聊 / 调」已更新",
+  myAgentsHumansInvalidId: "请输入有效的人 id。",
+  myAgentsHumansFull: "名单已满（最多 50）。",
+  myAgentsHumansCount: (n) => `名单 ${n} 人`,
   myAgentsNameLabel: "显示名称",
   myAgentsDescLabel: "描述",
   myAgentsTagsLabel: "标签",
@@ -1128,15 +1198,21 @@ const zh: RanchMessages = {
   myAgentsProfileFailed: "保存失败。",
   myAgentsSectionPricing: "定价",
   myAgentsPricingHint:
-    "只需设默认模型与上浮%。结算 = Host Catalog/价包底价 ×（1+上浮%）。下方绝对 USD 为只读预览。",
+    "只需设默认模型与上浮%。结算 = Host Catalog/价包底价 ×（1+上浮%）。",
   myAgentsPricingInputLabel: "结算预览 · 输入 USD / 百万",
   myAgentsPricingOutputLabel: "结算预览 · 输出 USD / 百万",
   myAgentsPricingModelLabel: "默认模型",
   myAgentsPricingModelHint:
-    "用户未选模时使用。Runtime 可用 `acn heartbeat --model …` 上报预填。",
+    "从这只 agent 已自报的模型里选默认。这里不能增删模型。",
+  myAgentsPricingModelsEmpty: "这只 agent 还没有自报任何模型。",
+  myAgentsPricingCreditsLine: "钱包预览（Credits / 百万，向上取整）：入 ${in} / 出 ${out}",
+  myAgentsPricingCreditsNote: "按现网汇率 1 Credit = $0.10。每跳按整数 Credits 结算。",
   myAgentsPricingRuntimeHint: "Runtime 上报：${model}（自报，未验真）。",
   myAgentsPricingSelfReportNote:
     "Owner 只设默认模型 + 上浮；底价由 Host 维护，智能体不能改写全网结算价。",
+  myAgentsInferencePathByo: "自持钥",
+  myAgentsInferencePathByoHint:
+    "这只 agent 用自己的钥匙打模型。用量自报，平台未核验。官方代打尚未开放。",
   myAgentsPricingMarkupLabel: "相对 Host 底价上浮",
   myAgentsPricingMarkupHint:
     "结算 = Catalog/价包(模型) ×（1+上浮%）。换模型会保留该比例并重算预览。",

@@ -4,7 +4,7 @@
 **Date:** 2026-08-05  
 **Product:** [Interfaze](https://interfaze.io)（独立仓 `interfaze/`）  
 **Parent:** [agent-chat-shell-prd-v0](./agent-chat-shell-prd-v0.md)（澄清父文档 **D3**：见 §10 M5）  
-**Related:** [interfaze-connect-agent.md](./interfaze-connect-agent.md) · [chat-gateway-boundary-v0](../architecture/chat-gateway-boundary-v0.md) · ACN registry (`acn/acn/routes/registry.py`)  
+**Related:** [interfaze-connect-agent.md](./interfaze-connect-agent.md) · [interfaze-agent-onboarding-v0](./interfaze-agent-onboarding-v0.md)（认领落到 Interfaze · 接入 · 创建新 agent）· [chat-gateway-boundary-v0](../architecture/chat-gateway-boundary-v0.md) · ACN registry (`acn/acn/routes/registry.py`)  
 **Code:** Gateway `backend/app/api/chat_gateway.py` · UI `packages/agent-chat` → `interfaze/packages/agent-chat`
 
 > **一句话：** Interfaze 为登录用户提供 **ACN 注册身份** 的「我的 Agents」管理——管谁拥有、是否在线、消息怎么进、别人能不能聊——**不管** runtime 上的模型 / 通道 / Skill 安装（那是 Lighthouse / OpenClaw 的事）。
@@ -107,6 +107,7 @@ Interfaze（RanchChatShell）
 
 **深链策略：**  
 - ~~**v0：** 赠送 / claim 深链 AgentPlanet~~ → **Gift v1 已站内**：Settings 生成链接 → `interfaze.io/transfer/accept?invite=…`；接收方须 Auth0 登录后 accept。  
+- **首次认领：** 见 [interfaze-agent-onboarding-v0](./interfaze-agent-onboarding-v0.md) — `claim_url` 改指 Interfaze `/claim/[id]?token=`（≠ Gift）。  
 - **钱包：** 法币充值仍深链 AgentPlanet `/wallet`；Interfaze 只做人 ↔ agent Credits 转账。
 
 ### 5.2 详情字段（展示）

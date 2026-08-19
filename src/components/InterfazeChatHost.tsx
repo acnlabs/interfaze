@@ -64,11 +64,33 @@ function useAccountDeepLink() {
   return initialAccountPanel;
 }
 
+function useClaimedAgentDeepLink() {
+  const [agentId, setAgentId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const raw = (sp.get("agent") || "").trim();
+    if (!raw) return;
+    setAgentId(raw);
+    sp.delete("agent");
+    const q = sp.toString();
+    window.history.replaceState(
+      null,
+      "",
+      q ? `${window.location.pathname}?${q}` : window.location.pathname,
+    );
+  }, []);
+
+  return agentId;
+}
+
 function CnChatHost() {
   const gatewayBaseUrl = getGatewayBaseUrl();
   const [directoryAgents, setDirectoryAgents] = useState<AgentDirectoryItem[]>([]);
   const [sessionUser, setSessionUser] = useState(() => getCnSessionUser());
   const initialAccountPanel = useAccountDeepLink();
+  const initialOpenAgentId = useClaimedAgentDeepLink();
   const reauthStarted = useRef(false);
 
   const tokenGetter = useCallback(async () => getCnSessionToken(), []);
@@ -156,6 +178,7 @@ function CnChatHost() {
           : null
       }
       initialAccountPanel={initialAccountPanel}
+      initialOpenAgentId={initialOpenAgentId}
       onLogout={handleLogout}
       onReauth={() => handleReauth({ forceLogin: true })}
       onOwnedAgentUpdated={(agent) => {
@@ -190,6 +213,7 @@ function GlobalChatHost() {
   const gatewayBaseUrl = getGatewayBaseUrl();
   const [directoryAgents, setDirectoryAgents] = useState<AgentDirectoryItem[]>([]);
   const initialAccountPanel = useAccountDeepLink();
+  const initialOpenAgentId = useClaimedAgentDeepLink();
   const reauthStarted = useRef(false);
 
   useEffect(() => {
@@ -342,6 +366,7 @@ function GlobalChatHost() {
           : null
       }
       initialAccountPanel={initialAccountPanel}
+      initialOpenAgentId={initialOpenAgentId}
       onLogout={isAuthenticated ? handleLogout : undefined}
       onReauth={
         isAuthenticated

@@ -8,7 +8,7 @@ import {
   deliveryLabel,
 } from "./AgentOwnerSettings";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
-import { CONNECT_PROMPTS, copyText } from "./connectPrompt";
+import { copyConnectPromptWithInvite, openJoinLanding } from "./connectPrompt";
 import type { RanchLocale, RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors } from "./styles";
 
@@ -114,7 +114,11 @@ export function MyAgentsPanel({
   }, [selectedId, client, t.myAgentsLoadFailed]);
 
   const copyPrompt = () => {
-    void copyText(CONNECT_PROMPTS[locale]).then((ok) => {
+    void copyConnectPromptWithInvite(
+      locale,
+      () => client.createJoinInvite(),
+      interfazeBaseUrl,
+    ).then((ok) => {
       if (!ok) return;
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
@@ -159,7 +163,19 @@ export function MyAgentsPanel({
         <strong style={{ fontSize: 14, flex: 1 }}>
           {selectedId ? detail?.name || shortId(selectedId) : t.myAgentsTitle}
         </strong>
-        <span style={{ width: 40 }} />
+        {!selectedId ? (
+          <button
+            type="button"
+            style={btnGhost}
+            onClick={() => {
+              void openJoinLanding(interfazeBaseUrl, () => client.createJoinInvite());
+            }}
+          >
+            {t.connectExisting}
+          </button>
+        ) : (
+          <span style={{ width: 40 }} />
+        )}
       </div>
 
       <div style={{ flex: 1, overflow: "auto", padding: selectedId ? 16 : 0 }}>
@@ -257,7 +273,16 @@ export function MyAgentsPanel({
             </p>
             <p style={{ margin: "0 0 16px", fontSize: 12, lineHeight: 1.55 }}>{t.myAgentsEmptyBody}</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
-              <button type="button" style={btnPrimary} onClick={copyPrompt}>
+              <button
+                type="button"
+                style={btnPrimary}
+                onClick={() => {
+                  void openJoinLanding(interfazeBaseUrl, () => client.createJoinInvite());
+                }}
+              >
+                {t.connectExisting}
+              </button>
+              <button type="button" style={btnGhost} onClick={copyPrompt}>
                 {copied ? t.promptCopied : t.copyPromptForAgent}
               </button>
               {connectGuideUrl ? (
