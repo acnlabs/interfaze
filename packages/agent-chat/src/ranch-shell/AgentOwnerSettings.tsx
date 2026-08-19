@@ -1474,6 +1474,31 @@ export function AgentOwnerSettings({
               {t.myAgentsProviderLabel}
               <FieldHint text={t.myAgentsProviderHint} />
             </div>
+            <div style={{ fontSize: 13, fontWeight: 650, color: colors.text, margin: "10px 0 4px" }}>
+              {t.myAgentsProviderMine}
+            </div>
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+              {t.myAgentsMineSectionHint}
+            </p>
+            {modelsLoading ? (
+              <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted }}>…</p>
+            ) : supportedModels.length === 0 ? (
+              <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted }}>
+                {t.myAgentsPricingModelsEmpty}
+              </p>
+            ) : (
+              supportedModels.map((id) => (
+                <div key={`mine-${id}`} style={{ fontSize: 13, color: colors.text, marginBottom: 6 }}>
+                  {shortModelLabel(id)}
+                </div>
+              ))
+            )}
+            <div style={{ fontSize: 13, fontWeight: 650, color: colors.text, margin: "14px 0 4px" }}>
+              {t.myAgentsProviderOfficialOpenRouter}
+            </div>
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+              {t.myAgentsOfficialSectionHint}
+            </p>
             {modelsLoading ? (
               <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>…</p>
             ) : providerModels.length === 0 ? (
@@ -1485,15 +1510,33 @@ export function AgentOwnerSettings({
                 const listed = supportedModels.some((item) => sameModelId(item, id));
                 const official = modelIsOfficial(id, officialDraft);
                 return (
-                  <div
-                    key={id}
+                  <label
+                    key={`official-${id}`}
                     style={{
                       display: "flex",
-                      alignItems: "center",
+                      alignItems: "flex-start",
                       gap: 8,
                       marginBottom: 8,
+                      cursor: busy || savingOfficial ? "default" : "pointer",
                     }}
                   >
+                    <input
+                      type="checkbox"
+                      aria-label={`${t.myAgentsProviderOfficialOpenRouter}: ${shortModelLabel(id)}`}
+                      checked={official}
+                      disabled={busy || savingOfficial}
+                      onChange={(e) => {
+                        const nextOfficial = e.target.checked;
+                        setOfficialDraft((prev) => {
+                          if (nextOfficial) {
+                            if (modelIsOfficial(id, prev)) return prev;
+                            return [...prev, id];
+                          }
+                          return prev.filter((item) => !sameModelId(item, id));
+                        });
+                      }}
+                      style={{ marginTop: 3 }}
+                    />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, color: colors.text }}>
                         {shortModelLabel(id)}
@@ -1504,26 +1547,7 @@ export function AgentOwnerSettings({
                         </div>
                       ) : null}
                     </div>
-                    <select
-                      aria-label={`${shortModelLabel(id)} ${t.myAgentsProviderLabel}`}
-                      value={official ? "official" : "byo"}
-                      disabled={busy || savingOfficial}
-                      onChange={(e) => {
-                        const nextOfficial = e.target.value === "official";
-                        setOfficialDraft((prev) => {
-                          if (nextOfficial) {
-                            if (modelIsOfficial(id, prev)) return prev;
-                            return [...prev, id];
-                          }
-                          return prev.filter((item) => !sameModelId(item, id));
-                        });
-                      }}
-                      style={{ ...inputStyle, width: 132, flex: "0 0 132px" }}
-                    >
-                      <option value="byo">{t.myAgentsProviderByo}</option>
-                      <option value="official">{t.myAgentsProviderOfficial}</option>
-                    </select>
-                  </div>
+                  </label>
                 );
               })
             )}
