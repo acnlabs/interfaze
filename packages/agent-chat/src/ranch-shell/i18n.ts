@@ -283,6 +283,8 @@ export type RanchMessages = {
   myAgentsPricingModelLabel: string;
   myAgentsPricingModelHint: string;
   myAgentsPricingModelsEmpty: string;
+  myAgentsPricingModelSearch: string;
+  myAgentsPricingOfficialEmpty: string;
   myAgentsPricingOptionLine: string;
   myAgentsPricingCreditsLine: string;
   myAgentsPricingCreditsNote: string;
@@ -756,6 +758,8 @@ const en: RanchMessages = {
   myAgentsPricingModelHint:
     "Pick the default from models this agent already reports. You cannot add or remove models here.",
   myAgentsPricingModelsEmpty: "This agent has not reported any models yet.",
+  myAgentsPricingModelSearch: "Filter Official · OpenRouter models",
+  myAgentsPricingOfficialEmpty: "No matching Official · OpenRouter models in Host Catalog.",
   myAgentsPricingOptionLine: "${name} · in ${in} · out ${out}",
   myAgentsPricingCreditsLine: "in ${in} · out ${out} Credits / 1M",
   myAgentsPricingCreditsNote: "100 Credits = $1, same as wallet recharge. Each hop settles in whole Credits.",
@@ -769,7 +773,7 @@ const en: RanchMessages = {
     "Chat picks a model. Save with Official · OpenRouter to run that default model on Interfaze’s key — not the agent’s own OpenRouter.",
   myAgentsProviderLabel: "Provider",
   myAgentsProviderHint:
-    "Suppliers from this agent’s self-reported model ids (the vendor/ prefix). Official · OpenRouter uses the same models on Interfaze’s key, not the agent’s.",
+    "BYO suppliers come from this agent’s self-reported model ids (the vendor/ prefix). Official · OpenRouter lists Host Catalog models OpenRouter actually serves.",
   myAgentsProviderByo: "Mine",
   myAgentsProviderOfficial: "Official · OpenRouter",
   myAgentsProviderMine: "Mine",
@@ -1247,6 +1251,8 @@ const zh: RanchMessages = {
   myAgentsPricingModelHint:
     "从这只 agent 已自报的模型里选默认。这里不能增删模型。",
   myAgentsPricingModelsEmpty: "这只 agent 还没有自报任何模型。",
+  myAgentsPricingModelSearch: "筛选官方 · OpenRouter 模型",
+  myAgentsPricingOfficialEmpty: "Host Catalog 里没有匹配的官方 · OpenRouter 模型。",
   myAgentsPricingOptionLine: "${name} · 入 ${in} · 出 ${out}",
   myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} Credits /百万",
   myAgentsPricingCreditsNote: "与钱包充值相同：100 Credits = $1。每跳按整数 Credits 结算。",
@@ -1260,7 +1266,7 @@ const zh: RanchMessages = {
     "聊天只选模型。用官方 · OpenRouter 保存后，默认模型走 Interfaze 的钥匙，不是 agent 自己的 OpenRouter。",
   myAgentsProviderLabel: "供应商",
   myAgentsProviderHint:
-    "来自这只 agent 自报模型 id 的厂家（斜杠前的 vendor）。官方 · OpenRouter 用同一份模型，走 Interfaze 的钥匙，不是 agent 自己的。",
+    "自家厂家来自这只 agent 自报模型 id（斜杠前的 vendor）。官方 · OpenRouter 列出 Host Catalog 里 OpenRouter 真正在卖的型号。",
   myAgentsProviderByo: "我的",
   myAgentsProviderOfficial: "官方 · OpenRouter",
   myAgentsProviderMine: "我的",
