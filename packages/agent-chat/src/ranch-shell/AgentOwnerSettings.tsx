@@ -1846,8 +1846,37 @@ export function AgentOwnerSettings({
           )}
         </div>
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 6 }}>
-            {t.myAgentsPricingModelLabel}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              marginBottom: 6,
+            }}
+          >
+            <span style={{ fontSize: 12, color: colors.muted }}>
+              {t.myAgentsPricingModelLabel}
+            </span>
+            {catalogSourceUrl ? (
+              <span style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+                <a
+                  href={catalogSourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    fontSize: 12,
+                    color: colors.muted,
+                    textDecoration: "underline",
+                  }}
+                >
+                  {catalogSource === "openrouter"
+                    ? t.myAgentsPricingSourceOpenRouter
+                    : t.myAgentsPricingSourceTokenHub}
+                </a>
+                <FieldHint text={t.myAgentsPricingSourceHint} align="right" />
+              </span>
+            ) : null}
           </div>
           {modelsBusy ? (
             <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>…</p>
@@ -1948,27 +1977,6 @@ export function AgentOwnerSettings({
               })}
               <FieldHint text={t.myAgentsPricingCreditsNote} />
             </div>
-            {catalogSourceUrl ? (
-              <div
-                style={{
-                  marginTop: 4,
-                  display: "flex",
-                  alignItems: "center",
-                }}
-              >
-                <a
-                  href={catalogSourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: colors.muted, textDecoration: "underline" }}
-                >
-                  {catalogSource === "openrouter"
-                    ? t.myAgentsPricingSourceOpenRouter
-                    : t.myAgentsPricingSourceTokenHub}
-                </a>
-                <FieldHint text={t.myAgentsPricingSourceHint} />
-              </div>
-            ) : null}
           </div>
         ) : null}
         {pricingError || officialError ? (
