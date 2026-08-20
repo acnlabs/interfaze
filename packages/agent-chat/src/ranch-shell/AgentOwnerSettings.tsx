@@ -152,6 +152,24 @@ function shortModelLabel(modelId: string): string {
   return slash >= 0 ? s.slice(slash + 1) : s;
 }
 
+type CatalogPair = { in: number; out: number; source?: string };
+
+const TOKENHUB_PRICE_URL = "https://cloud.tencent.com/document/product/1823/130055";
+
+function catalogSourceHref(
+  source: string | null | undefined,
+  modelId: string,
+): string | null {
+  const src = (source || "").trim().toLowerCase();
+  if (src === "openrouter") {
+    const parts = modelId.trim().replace(/^\/+/, "").split("/").filter(Boolean);
+    if (parts.length === 0) return null;
+    return `https://openrouter.ai/${parts.map(encodeURIComponent).join("/")}`;
+  }
+  if (src === "host_pack") return TOKENHUB_PRICE_URL;
+  return null;
+}
+
 const OFFICIAL_OPENROUTER = "official_openrouter";
 const OTHER_VENDOR = "__other__";
 
@@ -803,7 +821,7 @@ export function AgentOwnerSettings({
   const [officialMsg, setOfficialMsg] = useState<string | null>(null);
   const [officialError, setOfficialError] = useState<string | null>(null);
   const [officialCatalog, setOfficialCatalog] = useState<
-    Array<{ id: string; in: number; out: number }>
+    Array<{ id: string } & CatalogPair>
   >([]);
   const [officialCatalogLoading, setOfficialCatalogLoading] = useState(false);
   const [settingsProvider, setSettingsProvider] = useState<string>("");
@@ -812,9 +830,7 @@ export function AgentOwnerSettings({
     if (typeof mu === "number" && Number.isFinite(mu) && mu >= 0) return String(mu);
     return String(DEFAULT_MARKUP_PERCENT);
   });
-  const [catalogById, setCatalogById] = useState<
-    Record<string, { in: number; out: number }>
-  >({});
+  const [catalogById, setCatalogById] = useState<Record<string, CatalogPair>>({});
   const [catalogReadyKey, setCatalogReadyKey] = useState("");
   const [savingPricing, setSavingPricing] = useState(false);
   const [pricingMsg, setPricingMsg] = useState<string | null>(null);
@@ -961,7 +977,8 @@ export function AgentOwnerSettings({
             const cin = Number(row.input_price_per_million);
             const cout = Number(row.output_price_per_million);
             if (!Number.isFinite(cin) || !Number.isFinite(cout)) return [id, null] as const;
-            return [id, { in: cin, out: cout }] as const;
+            const source = (row.source || "").trim() || undefined;
+            return [id, { in: cin, out: cout, source }] as const;
           },
           () => [id, null] as const,
         ),
@@ -992,7 +1009,7 @@ export function AgentOwnerSettings({
     setOfficialCatalogLoading(true);
     void (async () => {
       const page = 500;
-      const acc: Array<{ id: string; in: number; out: number }> = [];
+      const acc: Array<{ id: string } & CatalogPair> = [];
       let offset = 0;
       let total = Number.POSITIVE_INFINITY;
       try {
@@ -1013,7 +1030,7 @@ export function AgentOwnerSettings({
             const id = (row.model_id || "").trim();
             if (!id) continue;
             if (acc.some((item) => sameModelId(item.id, id))) continue;
-            acc.push({ id, in: cin, out: cout });
+            acc.push({ id, in: cin, out: cout, source: "openrouter" });
           }
           if (!data.items.length) break;
           offset += data.items.length;
@@ -1022,7 +1039,7 @@ export function AgentOwnerSettings({
         setOfficialCatalog(acc);
         setCatalogById((prev) => {
           const next = { ...prev };
-          for (const row of acc) next[row.id] = { in: row.in, out: row.out };
+          for (const row of acc) next[row.id] = { in: row.in, out: row.out, source: row.source };
           return next;
         });
       } catch {
@@ -1115,13 +1132,27 @@ export function AgentOwnerSettings({
   );
   const selectedCatalog = officialSelected
     ? officialRow
-      ? { in: officialRow.in, out: officialRow.out }
+      ? {
+          in: officialRow.in,
+          out: officialRow.out,
+          source: officialRow.source || "openrouter",
+        }
       : null
     : catalogById[displayedModelId] ??
       Object.entries(catalogById).find(([id]) => sameModelId(id, displayedModelId))?.[1] ??
       null;
   const catalogIn = selectedCatalog?.in ?? null;
   const catalogOut = selectedCatalog?.out ?? null;
+  const catalogSource = (() => {
+    const fromRow = (selectedCatalog?.source || "").trim().toLowerCase();
+    if (fromRow) return fromRow;
+    if (officialSelected) return "openrouter";
+    if (modelVendorId(displayedModelId).toLowerCase() === "tencenttokenplan") {
+      return "host_pack";
+    }
+    return "";
+  })();
+  const catalogSourceUrl = catalogSourceHref(catalogSource, displayedModelId);
   const catalogLoading = officialSelected
     ? officialCatalogLoading
     : supportedModels.length > 0 && catalogReadyKey !== supportedKey;
@@ -1917,6 +1948,27 @@ export function AgentOwnerSettings({
               })}
               <FieldHint text={t.myAgentsPricingCreditsNote} />
             </div>
+            {catalogSourceUrl ? (
+              <div
+                style={{
+                  marginTop: 4,
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
+                <a
+                  href={catalogSourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: colors.muted, textDecoration: "underline" }}
+                >
+                  {catalogSource === "openrouter"
+                    ? t.myAgentsPricingSourceOpenRouter
+                    : t.myAgentsPricingSourceTokenHub}
+                </a>
+                <FieldHint text={t.myAgentsPricingSourceHint} />
+              </div>
+            ) : null}
           </div>
         ) : null}
         {pricingError || officialError ? (
