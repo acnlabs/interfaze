@@ -95,9 +95,10 @@ export async function copyConnectPromptWithInvite(
 ): Promise<boolean> {
   try {
     const { code } = await createInvite();
+    if (!(code || "").trim()) return false;
     return copyText(connectPromptForInvite(locale, code, origin));
   } catch {
-    return copyText(connectPromptForInvite(locale, undefined, origin));
+    return false;
   }
 }
 
