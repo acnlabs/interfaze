@@ -271,7 +271,7 @@ export type MyAgentSummary = {
    */
   runtime_model_id?: string | null;
   /**
-   * Agent-level path stays ``byo``. Official is per model (I2).
+   * Agent-level path stays ``byo``. Chat picks provider first (I2).
    */
   inference_path?: "byo" | "official" | string | null;
   /** Host holds its own inference key. Official provider is hidden until true. */
@@ -306,7 +306,7 @@ export type GatewayClient = {
     content: string,
     mentions?: string[],
     threadId?: string | null,
-    opts?: { requested_model?: string | null },
+    opts?: { requested_model?: string | null; requested_provider?: string | null },
   ) => Promise<ChatMessage>;
   listThreads: (chatId: string) => Promise<ThreadSummary[]>;
   createThread: (
@@ -326,6 +326,11 @@ export type GatewayClient = {
     inference_path?: "byo" | "official" | string | null;
     host_inference_ready?: boolean;
     official_models?: string[];
+    providers?: Array<{
+      id: string;
+      kind: "byo" | "official" | string;
+      brand?: string;
+    }>;
     mismatched: boolean;
     markup_percent?: number | null;
     supported_models?: string[];
@@ -556,6 +561,11 @@ export function createGatewayClient(
         inference_path?: "byo" | "official" | string | null;
         host_inference_ready?: boolean;
         official_models?: string[];
+        providers?: Array<{
+          id: string;
+          kind: "byo" | "official" | string;
+          brand?: string;
+        }>;
         mismatched: boolean;
         markup_percent?: number | null;
         supported_models?: string[];
@@ -814,6 +824,9 @@ export function createGatewayClient(
           thread_id: threadId || null,
           ...(opts?.requested_model
             ? { requested_model: opts.requested_model }
+            : {}),
+          ...(opts?.requested_provider
+            ? { requested_provider: opts.requested_provider }
             : {}),
         }),
       }),

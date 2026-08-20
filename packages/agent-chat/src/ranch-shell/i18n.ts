@@ -41,12 +41,14 @@ export type RanchMessages = {
   rateLimited: string;
   billingUnavailable: string;
   unsupportedModel: string;
+  officialNotAuthorized: string;
   modelPricingUnavailable: string;
   /** Soft warn: L2 listing model ≠ runtime/writeback model. */
   pricingMismatch: (listed: string, observed: string) => string;
   /** Agent bubble footer: this hop's token burn, in/out separately. */
   agentHopUsage: (input: number, output: number) => string;
   /** Composer chip: current runtime / listing model (M1). */
+  composerProviderLabel: string;
   composerModelLabel: string;
   composerModelUnknown: string;
   composerModelListing: string;
@@ -275,6 +277,10 @@ export type RanchMessages = {
   myAgentsProviderHint: string;
   myAgentsProviderByo: string;
   myAgentsProviderOfficial: string;
+  myAgentsProviderMine: string;
+  myAgentsProviderOfficialOpenRouter: string;
+  myAgentsOfficialSectionHint: string;
+  myAgentsMineSectionHint: string;
   myAgentsProviderUnlisted: string;
   myAgentsSaveProviders: string;
   myAgentsProvidersSaved: string;
@@ -477,11 +483,13 @@ const en: RanchMessages = {
   rateLimited: "Not enough credits to send. Top up in Wallet or check Plan & Usage.",
   billingUnavailable: "Billing check unavailable. Try again in a moment.",
   unsupportedModel: "This agent does not support that model.",
+  officialNotAuthorized: "Official · OpenRouter is not authorized for this model. Pick Mine, or ask the owner to enable it.",
   modelPricingUnavailable: "No platform price for that model yet. Pick another or ask the owner to wait for Host pack coverage.",
   pricingMismatch: (listed, observed) =>
     `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
   agentHopUsage: (input, output) =>
     `in ${input.toLocaleString("en-US")} · out ${output.toLocaleString("en-US")}`,
+  composerProviderLabel: "Provider",
   composerModelLabel: "Model",
   composerModelUnknown: "—",
   composerModelListing: "listing",
@@ -717,12 +725,18 @@ const en: RanchMessages = {
   myAgentsInferencePathByoHint:
     "This agent calls models with its own key. Usage is self-reported — Host cannot verify. Official hosted inference is not available yet.",
   myAgentsInferencePathByoHintReady:
-    "Default is this agent’s own key. Official is per model below — Host never takes the agent’s key.",
+    "Chat picks a provider first. Mine uses the agent’s key. Official · OpenRouter uses Interfaze’s key — not the agent’s own OpenRouter.",
   myAgentsProviderLabel: "Provider",
   myAgentsProviderHint:
-    "BYO uses the agent’s key. Official uses Interfaze’s key for that model only. Chat still picks a model, not a provider.",
-  myAgentsProviderByo: "BYO",
-  myAgentsProviderOfficial: "Official",
+    "Pick the supplier first, then which models it may serve. Official · OpenRouter is Host’s OpenRouter, not the agent’s own OpenRouter key.",
+  myAgentsProviderByo: "Mine",
+  myAgentsProviderOfficial: "Official · OpenRouter",
+  myAgentsProviderMine: "Mine",
+  myAgentsProviderOfficialOpenRouter: "Official · OpenRouter",
+  myAgentsOfficialSectionHint:
+    "Check models this agent already reports. Chat can then pick Official · OpenRouter and one of these models.",
+  myAgentsMineSectionHint:
+    "Chat pick Mine uses the agent’s own key. These models stay on that key.",
   myAgentsProviderUnlisted: "Authorized, not in this agent’s self-report yet — won’t appear in chat until it reports the model.",
   myAgentsSaveProviders: "Save providers",
   myAgentsProvidersSaved: "Providers saved",
@@ -950,11 +964,13 @@ const zh: RanchMessages = {
   rateLimited: "余额不足，无法发送。请先去钱包充值，或查看套餐与用量。",
   billingUnavailable: "计费服务暂时不可用，请稍后再试。",
   unsupportedModel: "该智能体不支持所选模型。",
+  officialNotAuthorized: "官方 · OpenRouter 尚未授权该模型。请改选「我的」，或让 Owner 勾选后保存。",
   modelPricingUnavailable: "平台暂无该模型报价，请换一个；或等 Host 价包录入后再试。",
   pricingMismatch: (listed, observed) =>
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
   agentHopUsage: (input, output) =>
     `入 ${input.toLocaleString("zh-CN")} · 出 ${output.toLocaleString("zh-CN")}`,
+  composerProviderLabel: "供应商",
   composerModelLabel: "模型",
   composerModelUnknown: "—",
   composerModelListing: "挂牌",
@@ -1178,12 +1194,18 @@ const zh: RanchMessages = {
   myAgentsInferencePathByoHint:
     "这只 agent 用自己的钥匙打模型。用量自报，平台未核验。官方代打尚未开放。",
   myAgentsInferencePathByoHintReady:
-    "默认仍是这只 agent 自己的钥匙。官方按下面每个模型切换——Host 不收走它的 key。",
+    "聊天先选供应商。我的 = agent 自己的钥匙。官方 · OpenRouter = Interfaze 的钥匙，不是 agent 自己的 OpenRouter。",
   myAgentsProviderLabel: "供应商",
   myAgentsProviderHint:
-    "自持钥用 agent 自己的钥匙。官方只用 Interfaze 的钥匙打这一只模型。聊天里仍然只选模型，不选供应商。",
-  myAgentsProviderByo: "自持钥",
-  myAgentsProviderOfficial: "官方",
+    "先选供应商，再勾这家能提供的模型。官方 · OpenRouter 是 Host 的 OpenRouter，不是 agent 自己的 OpenRouter key。",
+  myAgentsProviderByo: "我的",
+  myAgentsProviderOfficial: "官方 · OpenRouter",
+  myAgentsProviderMine: "我的",
+  myAgentsProviderOfficialOpenRouter: "官方 · OpenRouter",
+  myAgentsOfficialSectionHint:
+    "勾选这只 agent 已自报的模型。聊天里即可先选官方 · OpenRouter，再选这些模型。",
+  myAgentsMineSectionHint:
+    "聊天选「我的」时走 agent 自己的钥匙。下列模型留在那把钥匙上。",
   myAgentsProviderUnlisted: "已授权，但 agent 尚未自报——写进自报之前不会出现在聊天下拉。",
   myAgentsSaveProviders: "保存供应商",
   myAgentsProvidersSaved: "供应商已保存",
