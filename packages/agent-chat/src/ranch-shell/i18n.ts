@@ -766,10 +766,10 @@ const en: RanchMessages = {
   myAgentsInferencePathByoHint:
     "This agent calls models with its own key. Usage is self-reported — Host cannot verify. Official hosted inference is not available yet.",
   myAgentsInferencePathByoHintReady:
-    "Chat picks a model. Checked Official · OpenRouter models use Interfaze’s key — not the agent’s own OpenRouter.",
+    "Chat picks a model. Save with Official · OpenRouter to run that default model on Interfaze’s key — not the agent’s own OpenRouter.",
   myAgentsProviderLabel: "Provider",
   myAgentsProviderHint:
-    "Suppliers from this agent’s self-reported model ids (the vendor/ prefix). Official · OpenRouter is Interfaze’s key, not the agent’s.",
+    "Suppliers from this agent’s self-reported model ids (the vendor/ prefix). Official · OpenRouter uses the same models on Interfaze’s key, not the agent’s.",
   myAgentsProviderByo: "Mine",
   myAgentsProviderOfficial: "Official · OpenRouter",
   myAgentsProviderMine: "Mine",
@@ -777,7 +777,7 @@ const en: RanchMessages = {
   myAgentsProviderOther: "Other",
   myAgentsProviderOfficialOpenRouter: "Official · OpenRouter",
   myAgentsOfficialSectionHint:
-    "Checked models use Official · OpenRouter in chat. Unchecked stay on this agent’s key.",
+    "Save with Official · OpenRouter to run the default model on Interfaze’s key. Other models stay on this agent’s key.",
   myAgentsMineSectionHint:
     "Chat pick Mine uses the agent’s own key. These models stay on that key.",
   myAgentsProviderUnlisted: "Authorized, not in this agent’s self-report yet — won’t appear in chat until it reports the model.",
@@ -1257,10 +1257,10 @@ const zh: RanchMessages = {
   myAgentsInferencePathByoHint:
     "这只 agent 用自己的钥匙打模型。用量自报，平台未核验。官方代打尚未开放。",
   myAgentsInferencePathByoHintReady:
-    "聊天只选模型。勾选的官方 · OpenRouter 模型走 Interfaze 的钥匙，不是 agent 自己的 OpenRouter。",
+    "聊天只选模型。用官方 · OpenRouter 保存后，默认模型走 Interfaze 的钥匙，不是 agent 自己的 OpenRouter。",
   myAgentsProviderLabel: "供应商",
   myAgentsProviderHint:
-    "来自这只 agent 自报模型 id 的厂家（斜杠前的 vendor）。官方 · OpenRouter 是 Interfaze 的钥匙，不是 agent 自己的。",
+    "来自这只 agent 自报模型 id 的厂家（斜杠前的 vendor）。官方 · OpenRouter 用同一份模型，走 Interfaze 的钥匙，不是 agent 自己的。",
   myAgentsProviderByo: "我的",
   myAgentsProviderOfficial: "官方 · OpenRouter",
   myAgentsProviderMine: "我的",
@@ -1268,7 +1268,7 @@ const zh: RanchMessages = {
   myAgentsProviderOther: "其他",
   myAgentsProviderOfficialOpenRouter: "官方 · OpenRouter",
   myAgentsOfficialSectionHint:
-    "勾选的模型在聊天里走官方 · OpenRouter；未勾选仍走本 agent 的钥匙。",
+    "用官方 · OpenRouter 保存后，默认模型走 Interfaze 的钥匙；其余模型仍走本 agent 的钥匙。",
   myAgentsMineSectionHint:
     "聊天选「我的」时走 agent 自己的钥匙。下列模型留在那把钥匙上。",
   myAgentsProviderUnlisted: "已授权，但 agent 尚未自报——写进自报之前不会出现在聊天下拉。",

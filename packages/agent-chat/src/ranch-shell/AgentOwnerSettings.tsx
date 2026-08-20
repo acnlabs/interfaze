@@ -81,6 +81,31 @@ function modelIsOfficial(id: string, official: string[]): boolean {
   return official.some((item) => sameModelId(item, id));
 }
 
+function providerIdForModel(
+  modelId: string,
+  official: string[],
+  hostReady: boolean,
+): string {
+  if (hostReady && modelIsOfficial(modelId, official)) return OFFICIAL_OPENROUTER;
+  return modelVendorId(modelId);
+}
+
+/** Saving under Official adds the default model; saving under a BYO vendor removes it. */
+function nextOfficialModels(
+  saved: string[],
+  modelId: string,
+  useOfficial: boolean,
+): string[] {
+  const id = modelId.trim();
+  if (!id) return saved;
+  if (useOfficial) {
+    return modelIsOfficial(id, saved) ? saved : [...saved, id];
+  }
+  return modelIsOfficial(id, saved)
+    ? saved.filter((item) => !sameModelId(item, id))
+    : saved;
+}
+
 function resolvePricingModelId(detail: MyAgentSummary): string {
   // Saved listing wins; else runtime heartbeat report; else catalog default.
   const listed = (detail.token_pricing?.model_id || "").trim();
@@ -156,6 +181,13 @@ function modelsForVendor(ids: string[], vendor: string): string[] {
   const key = vendor.trim().toLowerCase();
   if (!key) return ids.filter((id) => !modelVendorId(id));
   return ids.filter((id) => modelVendorId(id).toLowerCase() === key);
+}
+
+function modelsForProvider(ids: string[], provider: string): string[] {
+  if (!provider) return [];
+  if (provider === OFFICIAL_OPENROUTER) return ids;
+  if (provider === OTHER_VENDOR) return modelsForVendor(ids, "");
+  return modelsForVendor(ids, provider);
 }
 
 function catalogOptionLabel(
@@ -523,9 +555,6 @@ export function AgentOwnerSettings({
   const [officialSaved, setOfficialSaved] = useState<string[]>(
     () => detail.official_models ?? [],
   );
-  const [officialDraft, setOfficialDraft] = useState<string[]>(
-    () => detail.official_models ?? [],
-  );
   const [savingOfficial, setSavingOfficial] = useState(false);
   const [officialMsg, setOfficialMsg] = useState<string | null>(null);
   const [officialError, setOfficialError] = useState<string | null>(null);
@@ -606,10 +635,15 @@ export function AgentOwnerSettings({
     setHostReady(Boolean(detail.host_inference_ready));
     const official = detail.official_models ?? [];
     setOfficialSaved(official);
-    setOfficialDraft(official);
     setOfficialMsg(null);
     setOfficialError(null);
-    setSettingsProvider(modelVendorId(resolvePricingModelId(detail)));
+    setSettingsProvider(
+      providerIdForModel(
+        resolvePricingModelId(detail),
+        official,
+        Boolean(detail.host_inference_ready),
+      ),
+    );
   }, [
     detail.agent_id,
     detail.token_pricing?.model_id,
@@ -638,7 +672,12 @@ export function AgentOwnerSettings({
         }
         if (Array.isArray(status.official_models)) {
           setOfficialSaved(status.official_models);
-          setOfficialDraft(status.official_models);
+          const listed = resolvePricingModelId(detail);
+          const ready =
+            typeof status.host_inference_ready === "boolean"
+              ? status.host_inference_ready
+              : Boolean(detail.host_inference_ready);
+          setSettingsProvider(providerIdForModel(listed, status.official_models, ready));
         }
         const current = resolvePricingModelId(detail);
         if (ids.length > 0 && !ids.some((id) => id.toLowerCase() === current.toLowerCase())) {
@@ -794,10 +833,6 @@ export function AgentOwnerSettings({
     !modelsLoading &&
     !savingPricing &&
     !busy;
-  const providerModels = uniqModelIds(supportedModels, officialDraft, officialSaved);
-  const officialDirty = hostReady && !officialSetsEqual(officialDraft, officialSaved);
-  const canSaveOfficial =
-    officialDirty && !savingOfficial && !busy && !modelsLoading;
   const byoVendors = vendorsFromModels(supportedModels);
   const hasBareModels = supportedModels.some((id) => !modelVendorId(id));
   const providerOptions: Array<{ id: string; label: string }> = [
@@ -811,12 +846,18 @@ export function AgentOwnerSettings({
     (settingsProvider && providerOptions.some((p) => p.id === settingsProvider)
       ? settingsProvider
       : providerOptions[0]?.id) || "";
-  const vendorModels =
-    activeProvider === OFFICIAL_OPENROUTER || !activeProvider
-      ? []
-      : activeProvider === OTHER_VENDOR
-        ? modelsForVendor(supportedModels, "")
-        : modelsForVendor(supportedModels, activeProvider);
+  const vendorModels = modelsForProvider(supportedModels, activeProvider);
+  const nextOfficial = nextOfficialModels(
+    officialSaved,
+    modelIdTrim,
+    activeProvider === OFFICIAL_OPENROUTER,
+  );
+  const officialDirty =
+    hostReady &&
+    modelIdTrim.length > 0 &&
+    !officialSetsEqual(nextOfficial, officialSaved);
+  const canSaveOfficial =
+    officialDirty && !savingOfficial && !busy && !modelsLoading && hostReady;
 
   const policyMode = (detail.policy_mode || "").toLowerCase();
   const currentPolicy = policyFromDetail(detail.policy_mode);
@@ -1043,10 +1084,9 @@ export function AgentOwnerSettings({
     setOfficialError(null);
     setOfficialMsg(null);
     return client
-      .updateMyAgentOfficialModels(detail.agent_id, officialDraft)
+      .updateMyAgentOfficialModels(detail.agent_id, nextOfficial)
       .then((row) => {
         setOfficialSaved(row.model_ids);
-        setOfficialDraft(row.model_ids);
         setHostReady(Boolean(row.host_inference_ready));
         setOfficialMsg(t.myAgentsProvidersSaved);
         window.setTimeout(() => setOfficialMsg(null), 2000);
@@ -1431,11 +1471,7 @@ export function AgentOwnerSettings({
               onChange={(e) => {
                 const next = e.target.value;
                 setSettingsProvider(next);
-                if (next === OFFICIAL_OPENROUTER) return;
-                const list =
-                  next === OTHER_VENDOR
-                    ? modelsForVendor(supportedModels, "")
-                    : modelsForVendor(supportedModels, next);
+                const list = modelsForProvider(supportedModels, next);
                 if (list.length > 0 && !list.some((id) => sameModelId(id, modelIdDraft))) {
                   setModelIdDraft(list[0]);
                 }
@@ -1451,76 +1487,6 @@ export function AgentOwnerSettings({
             </select>
           )}
         </div>
-        {activeProvider === OFFICIAL_OPENROUTER ? (
-          <div style={{ marginBottom: 10 }}>
-            <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-              {t.myAgentsOfficialSectionHint}
-            </p>
-            {modelsLoading ? (
-              <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>…</p>
-            ) : providerModels.length === 0 ? (
-              <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
-                {t.myAgentsPricingModelsEmpty}
-              </p>
-            ) : (
-              providerModels.map((id) => {
-                const listed = supportedModels.some((item) => sameModelId(item, id));
-                const official = modelIsOfficial(id, officialDraft);
-                return (
-                  <label
-                    key={`official-${id}`}
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: 8,
-                      marginBottom: 8,
-                      cursor: busy || savingOfficial ? "default" : "pointer",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      aria-label={`${t.myAgentsProviderOfficialOpenRouter}: ${shortModelLabel(id)}`}
-                      checked={official}
-                      disabled={busy || savingOfficial}
-                      onChange={(e) => {
-                        const nextOfficial = e.target.checked;
-                        setOfficialDraft((prev) => {
-                          if (nextOfficial) {
-                            if (modelIsOfficial(id, prev)) return prev;
-                            return [...prev, id];
-                          }
-                          return prev.filter((item) => !sameModelId(item, id));
-                        });
-                      }}
-                      style={{ marginTop: 3 }}
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, color: colors.text }}>
-                        {shortModelLabel(id)}
-                      </div>
-                      {!listed ? (
-                        <div style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>
-                          {t.myAgentsProviderUnlisted}
-                        </div>
-                      ) : null}
-                    </div>
-                  </label>
-                );
-              })
-            )}
-            {officialError ? (
-              <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>
-                {officialError}
-              </p>
-            ) : null}
-            {officialMsg ? (
-              <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>
-                {officialMsg}
-              </p>
-            ) : null}
-          </div>
-        ) : (
-        <>
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 12, color: colors.muted, marginBottom: 6 }}>
             {t.myAgentsPricingModelLabel}
@@ -1605,14 +1571,16 @@ export function AgentOwnerSettings({
             </div>
           </div>
         ) : null}
-        {pricingError ? (
-          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>{pricingError}</p>
+        {pricingError || officialError ? (
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>
+            {pricingError || officialError}
+          </p>
         ) : null}
-        {pricingMsg ? (
-          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>{pricingMsg}</p>
+        {pricingMsg || officialMsg ? (
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>
+            {pricingMsg || officialMsg}
+          </p>
         ) : null}
-        </>
-        )}
       </section>
 
       {showConnectSection ? (
