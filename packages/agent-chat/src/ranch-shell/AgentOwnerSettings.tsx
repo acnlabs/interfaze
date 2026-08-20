@@ -498,6 +498,9 @@ export function AgentOwnerSettings({
   const [savingOfficial, setSavingOfficial] = useState(false);
   const [officialMsg, setOfficialMsg] = useState<string | null>(null);
   const [officialError, setOfficialError] = useState<string | null>(null);
+  const [settingsProvider, setSettingsProvider] = useState<"agent" | "official_openrouter">(
+    "agent",
+  );
   const [markupDraft, setMarkupDraft] = useState(() => {
     const mu = detail.token_pricing?.markup_percent;
     if (typeof mu === "number" && Number.isFinite(mu) && mu >= 0) return String(mu);
@@ -577,6 +580,7 @@ export function AgentOwnerSettings({
     setOfficialDraft(official);
     setOfficialMsg(null);
     setOfficialError(null);
+    setSettingsProvider("agent");
   }, [
     detail.agent_id,
     detail.token_pricing?.model_id,
@@ -1336,6 +1340,122 @@ export function AgentOwnerSettings({
           </p>
         ) : null}
         <div style={{ marginBottom: 10 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: colors.muted,
+              marginBottom: 6,
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            {t.myAgentsProviderLabel}
+            <FieldHint text={t.myAgentsProviderHint} />
+          </div>
+          {hostReady ? (
+            <select
+              aria-label={t.myAgentsProviderLabel}
+              value={settingsProvider}
+              onChange={(e) =>
+                setSettingsProvider(
+                  e.target.value === "official_openrouter" ? "official_openrouter" : "agent",
+                )
+              }
+              disabled={busy}
+              style={inputStyle}
+            >
+              <option value="agent">
+                {(detail.name || "").trim() || t.myAgentsProviderAgent}
+              </option>
+              <option value="official_openrouter">{t.myAgentsProviderOfficialOpenRouter}</option>
+            </select>
+          ) : (
+            <div style={{ fontSize: 13, color: colors.text }}>
+              {(detail.name || "").trim() || t.myAgentsProviderAgent}
+            </div>
+          )}
+        </div>
+        {hostReady && settingsProvider === "official_openrouter" ? (
+          <div style={{ marginBottom: 10 }}>
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+              {t.myAgentsOfficialSectionHint}
+            </p>
+            {modelsLoading ? (
+              <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>…</p>
+            ) : providerModels.length === 0 ? (
+              <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
+                {t.myAgentsPricingModelsEmpty}
+              </p>
+            ) : (
+              providerModels.map((id) => {
+                const listed = supportedModels.some((item) => sameModelId(item, id));
+                const official = modelIsOfficial(id, officialDraft);
+                return (
+                  <label
+                    key={`official-${id}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                      marginBottom: 8,
+                      cursor: busy || savingOfficial ? "default" : "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label={`${t.myAgentsProviderOfficialOpenRouter}: ${shortModelLabel(id)}`}
+                      checked={official}
+                      disabled={busy || savingOfficial}
+                      onChange={(e) => {
+                        const nextOfficial = e.target.checked;
+                        setOfficialDraft((prev) => {
+                          if (nextOfficial) {
+                            if (modelIsOfficial(id, prev)) return prev;
+                            return [...prev, id];
+                          }
+                          return prev.filter((item) => !sameModelId(item, id));
+                        });
+                      }}
+                      style={{ marginTop: 3 }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, color: colors.text }}>
+                        {shortModelLabel(id)}
+                      </div>
+                      {!listed ? (
+                        <div style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>
+                          {t.myAgentsProviderUnlisted}
+                        </div>
+                      ) : null}
+                    </div>
+                  </label>
+                );
+              })
+            )}
+            {officialError ? (
+              <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>
+                {officialError}
+              </p>
+            ) : null}
+            {officialMsg ? (
+              <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>
+                {officialMsg}
+              </p>
+            ) : null}
+            {canSaveOfficial || savingOfficial ? (
+              <button
+                type="button"
+                style={btnGhost}
+                disabled={!canSaveOfficial}
+                onClick={() => void runSaveOfficial()}
+              >
+                {savingOfficial ? "…" : t.myAgentsSaveProviders}
+              </button>
+            ) : null}
+          </div>
+        ) : (
+        <>
+        <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 12, color: colors.muted, marginBottom: 6 }}>
             {t.myAgentsPricingModelLabel}
           </div>
@@ -1435,100 +1555,8 @@ export function AgentOwnerSettings({
             {savingPricing ? "…" : t.myAgentsSavePricing}
           </button>
         ) : null}
-        {hostReady ? (
-          <div style={{ marginTop: 16 }}>
-            <div
-              style={{
-                fontSize: 12,
-                color: colors.muted,
-                marginBottom: 6,
-                display: "flex",
-                alignItems: "center",
-              }}
-            >
-              {t.myAgentsProviderLabel}
-              <FieldHint text={t.myAgentsProviderHint} />
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 650, color: colors.text, margin: "10px 0 4px" }}>
-              {t.myAgentsProviderOfficialOpenRouter}
-            </div>
-            <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-              {t.myAgentsOfficialSectionHint}
-            </p>
-            {modelsLoading ? (
-              <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>…</p>
-            ) : providerModels.length === 0 ? (
-              <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
-                {t.myAgentsPricingModelsEmpty}
-              </p>
-            ) : (
-              providerModels.map((id) => {
-                const listed = supportedModels.some((item) => sameModelId(item, id));
-                const official = modelIsOfficial(id, officialDraft);
-                return (
-                  <label
-                    key={`official-${id}`}
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: 8,
-                      marginBottom: 8,
-                      cursor: busy || savingOfficial ? "default" : "pointer",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      aria-label={`${t.myAgentsProviderOfficialOpenRouter}: ${shortModelLabel(id)}`}
-                      checked={official}
-                      disabled={busy || savingOfficial}
-                      onChange={(e) => {
-                        const nextOfficial = e.target.checked;
-                        setOfficialDraft((prev) => {
-                          if (nextOfficial) {
-                            if (modelIsOfficial(id, prev)) return prev;
-                            return [...prev, id];
-                          }
-                          return prev.filter((item) => !sameModelId(item, id));
-                        });
-                      }}
-                      style={{ marginTop: 3 }}
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, color: colors.text }}>
-                        {shortModelLabel(id)}
-                      </div>
-                      {!listed ? (
-                        <div style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>
-                          {t.myAgentsProviderUnlisted}
-                        </div>
-                      ) : null}
-                    </div>
-                  </label>
-                );
-              })
-            )}
-            {officialError ? (
-              <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>
-                {officialError}
-              </p>
-            ) : null}
-            {officialMsg ? (
-              <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>
-                {officialMsg}
-              </p>
-            ) : null}
-            {canSaveOfficial || savingOfficial ? (
-              <button
-                type="button"
-                style={btnGhost}
-                disabled={!canSaveOfficial}
-                onClick={() => void runSaveOfficial()}
-              >
-                {savingOfficial ? "…" : t.myAgentsSaveProviders}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
+        </>
+        )}
       </section>
 
       {showConnectSection ? (
