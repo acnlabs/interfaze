@@ -271,7 +271,7 @@ export type MyAgentSummary = {
    */
   runtime_model_id?: string | null;
   /**
-   * Agent-level path stays ``byo``. Chat picks provider first (I2).
+   * Agent-level path stays ``byo``. Chat picks a model; official is Settings (I2).
    */
   inference_path?: "byo" | "official" | string | null;
   /** Host holds its own inference key. Official provider is hidden until true. */
