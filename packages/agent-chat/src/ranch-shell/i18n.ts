@@ -310,6 +310,9 @@ export type RanchMessages = {
   myAgentsPricingMarkupLabel: string;
   myAgentsPricingMarkupHint: string;
   myAgentsPricingCatalogLine: string;
+  myAgentsPricingSourceOpenRouter: string;
+  myAgentsPricingSourceTokenHub: string;
+  myAgentsPricingSourceHint: string;
   myAgentsPricingListingLine: string;
   myAgentsPricingExampleLine: string;
   myAgentsPricingCatalogMissing: string;
@@ -792,6 +795,10 @@ const en: RanchMessages = {
   myAgentsPricingMarkupHint:
     "Settle = Catalog/pack(model) × (1 + markup%). Changing model keeps this % and recalculates the preview.",
   myAgentsPricingCatalogLine: "Host ${in} / ${out}",
+  myAgentsPricingSourceOpenRouter: "Reference · OpenRouter",
+  myAgentsPricingSourceTokenHub: "Reference · TokenHub",
+  myAgentsPricingSourceHint:
+    "Public list the Host Catalog row was taken from. Settle still uses the Catalog number, including FX for TokenHub.",
   myAgentsPricingListingLine: "In ${in} · out ${out} / 1M",
   myAgentsPricingExampleLine:
     "Example: 1M input tokens → they pay you ~$${pay}; Host baseline ~$${cost}",
@@ -1285,6 +1292,10 @@ const zh: RanchMessages = {
   myAgentsPricingMarkupHint:
     "结算 = Catalog/价包(模型) ×（1+上浮%）。换模型会保留该比例并重算预览。",
   myAgentsPricingCatalogLine: "底价 ${in} / ${out}",
+  myAgentsPricingSourceOpenRouter: "参考底价 · OpenRouter",
+  myAgentsPricingSourceTokenHub: "参考底价 · TokenHub",
+  myAgentsPricingSourceHint:
+    "Host Catalog 取自该公示价目。结算仍用 Catalog 数字（TokenHub 含汇率）。",
   myAgentsPricingListingLine: "入 ${in} · 出 ${out} / 百万",
   myAgentsPricingExampleLine:
     "例：100 万 input → 对方约付你 $${pay}；Host 底价约 $${cost}",
