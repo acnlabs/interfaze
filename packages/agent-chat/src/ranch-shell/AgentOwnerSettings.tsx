@@ -185,9 +185,41 @@ function modelsForVendor(ids: string[], vendor: string): string[] {
 
 function modelsForProvider(ids: string[], provider: string): string[] {
   if (!provider) return [];
-  if (provider === OFFICIAL_OPENROUTER) return ids;
+  if (provider === OFFICIAL_OPENROUTER) return [];
   if (provider === OTHER_VENDOR) return modelsForVendor(ids, "");
   return modelsForVendor(ids, provider);
+}
+
+function findOfficialEquivalent(fromId: string, officialIds: string[]): string | null {
+  const needle = fromId.trim();
+  if (!needle || officialIds.length === 0) return null;
+  const hit = officialIds.find((id) => sameModelId(id, needle));
+  if (hit) return hit;
+  const short = shortModelLabel(needle).toLowerCase();
+  if (!short) return null;
+  const matches = officialIds.filter(
+    (id) => shortModelLabel(id).toLowerCase() === short,
+  );
+  return matches[0] ?? null;
+}
+
+function filterModelIds(ids: string[], query: string, keepId: string): string[] {
+  const q = query.trim().toLowerCase();
+  const filtered = !q
+    ? ids
+    : ids.filter((id) => {
+        const short = shortModelLabel(id).toLowerCase();
+        return id.toLowerCase().includes(q) || short.includes(q);
+      });
+  if (
+    keepId.trim() &&
+    ids.some((id) => sameModelId(id, keepId)) &&
+    !filtered.some((id) => sameModelId(id, keepId))
+  ) {
+    const kept = ids.find((id) => sameModelId(id, keepId));
+    if (kept) return [kept, ...filtered];
+  }
+  return filtered;
 }
 
 function catalogOptionLabel(
@@ -558,6 +590,11 @@ export function AgentOwnerSettings({
   const [savingOfficial, setSavingOfficial] = useState(false);
   const [officialMsg, setOfficialMsg] = useState<string | null>(null);
   const [officialError, setOfficialError] = useState<string | null>(null);
+  const [officialCatalog, setOfficialCatalog] = useState<
+    Array<{ id: string; in: number; out: number }>
+  >([]);
+  const [officialCatalogLoading, setOfficialCatalogLoading] = useState(false);
+  const [officialQuery, setOfficialQuery] = useState("");
   const [settingsProvider, setSettingsProvider] = useState<string>("");
   const [markupDraft, setMarkupDraft] = useState(() => {
     const mu = detail.token_pricing?.markup_percent;
@@ -701,7 +738,6 @@ export function AgentOwnerSettings({
   const supportedKey = supportedModels.join("\u0001");
   useEffect(() => {
     if (supportedModels.length === 0) {
-      setCatalogById({});
       setCatalogReadyKey("");
       return;
     }
@@ -721,17 +757,73 @@ export function AgentOwnerSettings({
       ),
     ).then((rows) => {
       if (cancelled) return;
-      const next: Record<string, { in: number; out: number }> = {};
-      for (const [id, pair] of rows) {
-        if (pair) next[id] = pair;
-      }
-      setCatalogById(next);
+      setCatalogById((prev) => {
+        const next = { ...prev };
+        for (const [id, pair] of rows) {
+          if (pair) next[id] = pair;
+        }
+        return next;
+      });
       setCatalogReadyKey(key);
     });
     return () => {
       cancelled = true;
     };
   }, [client, supportedKey]);
+
+  useEffect(() => {
+    if (!hostReady) {
+      setOfficialCatalog([]);
+      setOfficialCatalogLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setOfficialCatalogLoading(true);
+    void (async () => {
+      const page = 500;
+      const acc: Array<{ id: string; in: number; out: number }> = [];
+      let offset = 0;
+      let total = Number.POSITIVE_INFINITY;
+      try {
+        while (!cancelled && offset < total && offset < 8000) {
+          const data = await client.listModelCatalog({
+            source: "openrouter",
+            active_only: true,
+            limit: page,
+            offset,
+          });
+          total = Number.isFinite(data.total) ? data.total : offset + data.items.length;
+          for (const row of data.items) {
+            const src = (row.source || "openrouter").toLowerCase();
+            if (src && src !== "openrouter") continue;
+            const cin = Number(row.input_price_per_million);
+            const cout = Number(row.output_price_per_million);
+            if (!Number.isFinite(cin) || !Number.isFinite(cout)) continue;
+            const id = (row.model_id || "").trim();
+            if (!id) continue;
+            if (acc.some((item) => sameModelId(item.id, id))) continue;
+            acc.push({ id, in: cin, out: cout });
+          }
+          if (!data.items.length) break;
+          offset += data.items.length;
+        }
+        if (cancelled) return;
+        setOfficialCatalog(acc);
+        setCatalogById((prev) => {
+          const next = { ...prev };
+          for (const row of acc) next[row.id] = { in: row.in, out: row.out };
+          return next;
+        });
+      } catch {
+        if (!cancelled) setOfficialCatalog([]);
+      } finally {
+        if (!cancelled) setOfficialCatalogLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [client, hostReady]);
 
   useEffect(() => {
     setDeliveryDraft(deliveryFromDetail(detail.delivery));
@@ -788,18 +880,26 @@ export function AgentOwnerSettings({
   })();
   const listingPublished =
     oldModelId.length > 0 && typeof oldMarkup === "number" && Number.isFinite(oldMarkup);
-  const selectedCatalog =
-    catalogById[modelIdTrim] ??
-    Object.entries(catalogById).find(([id]) => sameModelId(id, modelIdTrim))?.[1] ??
-    null;
+  const officialIds = officialCatalog.map((row) => row.id);
+  const officialSelected = hostReady && settingsProvider === OFFICIAL_OPENROUTER;
+  const officialRow = officialCatalog.find((row) => sameModelId(row.id, modelIdTrim));
+  const selectedCatalog = officialSelected
+    ? officialRow
+      ? { in: officialRow.in, out: officialRow.out }
+      : null
+    : catalogById[modelIdTrim] ??
+      Object.entries(catalogById).find(([id]) => sameModelId(id, modelIdTrim))?.[1] ??
+      null;
   const catalogIn = selectedCatalog?.in ?? null;
   const catalogOut = selectedCatalog?.out ?? null;
-  const catalogLoading = supportedModels.length > 0 && catalogReadyKey !== supportedKey;
+  const catalogLoading = officialSelected
+    ? officialCatalogLoading
+    : supportedModels.length > 0 && catalogReadyKey !== supportedKey;
   const catalogError =
     !catalogLoading &&
-    supportedModels.length > 0 &&
     modelIdTrim.length > 0 &&
-    selectedCatalog == null
+    selectedCatalog == null &&
+    (officialSelected ? officialCatalog.length > 0 : supportedModels.length > 0)
       ? t.myAgentsPricingCatalogMissing
       : null;
   const inputParsed =
@@ -819,9 +919,11 @@ export function AgentOwnerSettings({
       markupParsed !== oldMarkup);
   const runtimeId = (detail.runtime_model_id || "").trim();
   const runtimeMismatch = Boolean(runtimeId && !sameModelId(runtimeId, modelIdTrim));
-  const modelOnList =
-    supportedModels.length > 0 &&
-    supportedModels.some((id) => id.toLowerCase() === modelIdTrim.toLowerCase());
+  const modelOnList = officialSelected
+    ? officialIds.some((id) => sameModelId(id, modelIdTrim))
+    : supportedModels.length > 0 &&
+      supportedModels.some((id) => id.toLowerCase() === modelIdTrim.toLowerCase());
+  const modelsBusy = officialSelected ? officialCatalogLoading : modelsLoading;
   const canSavePricing =
     pricingDirty &&
     previewReady &&
@@ -830,7 +932,7 @@ export function AgentOwnerSettings({
     markupParsed !== null &&
     modelIdTrim.length > 0 &&
     modelOnList &&
-    !modelsLoading &&
+    !modelsBusy &&
     !savingPricing &&
     !busy;
   const byoVendors = vendorsFromModels(supportedModels);
@@ -846,7 +948,19 @@ export function AgentOwnerSettings({
     (settingsProvider && providerOptions.some((p) => p.id === settingsProvider)
       ? settingsProvider
       : providerOptions[0]?.id) || "";
-  const vendorModels = modelsForProvider(supportedModels, activeProvider);
+  const vendorModels =
+    activeProvider === OFFICIAL_OPENROUTER
+      ? filterModelIds(officialIds, officialQuery, modelIdDraft)
+      : modelsForProvider(supportedModels, activeProvider);
+  const officialIdsKey = officialIds.join("\u0001");
+  useEffect(() => {
+    if (activeProvider !== OFFICIAL_OPENROUTER) return;
+    if (officialCatalogLoading) return;
+    if (officialIds.length === 0) return;
+    if (officialIds.some((id) => sameModelId(id, modelIdDraft))) return;
+    const equiv = findOfficialEquivalent(modelIdDraft, officialIds);
+    setModelIdDraft(equiv || officialIds[0]);
+  }, [activeProvider, officialCatalogLoading, officialIdsKey, modelIdDraft]);
   const nextOfficial = nextOfficialModels(
     officialSaved,
     modelIdTrim,
@@ -857,7 +971,7 @@ export function AgentOwnerSettings({
     modelIdTrim.length > 0 &&
     !officialSetsEqual(nextOfficial, officialSaved);
   const canSaveOfficial =
-    officialDirty && !savingOfficial && !busy && !modelsLoading && hostReady;
+    officialDirty && !savingOfficial && !busy && !modelsBusy && hostReady;
 
   const policyMode = (detail.policy_mode || "").toLowerCase();
   const currentPolicy = policyFromDetail(detail.policy_mode);
@@ -1471,6 +1585,8 @@ export function AgentOwnerSettings({
               onChange={(e) => {
                 const next = e.target.value;
                 setSettingsProvider(next);
+                setOfficialQuery("");
+                if (next === OFFICIAL_OPENROUTER) return;
                 const list = modelsForProvider(supportedModels, next);
                 if (list.length > 0 && !list.some((id) => sameModelId(id, modelIdDraft))) {
                   setModelIdDraft(list[0]);
@@ -1491,11 +1607,24 @@ export function AgentOwnerSettings({
           <div style={{ fontSize: 12, color: colors.muted, marginBottom: 6 }}>
             {t.myAgentsPricingModelLabel}
           </div>
-          {modelsLoading ? (
+          {activeProvider === OFFICIAL_OPENROUTER ? (
+            <input
+              value={officialQuery}
+              onChange={(e) => setOfficialQuery(e.target.value)}
+              placeholder={t.myAgentsPricingModelSearch}
+              aria-label={t.myAgentsPricingModelSearch}
+              style={{ ...inputStyle, marginBottom: 6 }}
+              disabled={busy || officialCatalogLoading}
+              autoComplete="off"
+            />
+          ) : null}
+          {modelsBusy ? (
             <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>…</p>
           ) : vendorModels.length === 0 ? (
             <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
-              {t.myAgentsPricingModelsEmpty}
+              {activeProvider === OFFICIAL_OPENROUTER
+                ? t.myAgentsPricingOfficialEmpty
+                : t.myAgentsPricingModelsEmpty}
             </p>
           ) : (
             <select
@@ -1510,7 +1639,12 @@ export function AgentOwnerSettings({
             >
               {vendorModels.map((id) => (
                 <option key={id} value={id}>
-                  {catalogOptionLabel(id, catalogById[id], t.myAgentsPricingOptionLine)}
+                  {catalogOptionLabel(
+                    id,
+                    catalogById[id] ??
+                      officialCatalog.find((row) => sameModelId(row.id, id)),
+                    t.myAgentsPricingOptionLine,
+                  )}
                 </option>
               ))}
             </select>

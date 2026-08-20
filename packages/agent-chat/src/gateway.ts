@@ -294,6 +294,14 @@ export type ModelCatalogItem = {
   input_price_per_million: number;
   output_price_per_million: number;
   currency?: string;
+  source?: string | null;
+};
+
+export type ModelCatalogList = {
+  items: ModelCatalogItem[];
+  total: number;
+  limit: number;
+  offset: number;
 };
 
 export type GatewayClient = {
@@ -391,6 +399,14 @@ export type GatewayClient = {
   ) => Promise<MyAgentSummary>;
   /** Public Host Model Catalog (L1) row for a model id. */
   getModelCatalogItem: (modelId: string) => Promise<ModelCatalogItem>;
+  /** Public Host Model Catalog list (OpenRouter + host_pack). */
+  listModelCatalog: (opts?: {
+    q?: string;
+    source?: string;
+    active_only?: boolean;
+    limit?: number;
+    offset?: number;
+  }) => Promise<ModelCatalogList>;
   /** Switch receive mode: push-to-URL (direct) or agent-pull (relay). */
   updateMyAgentDelivery: (
     agentId: string,
@@ -650,6 +666,15 @@ export function createGatewayClient(
         .map((p) => encodeURIComponent(p))
         .join("/");
       return request<ModelCatalogItem>(`/api/model-catalog/${path}`);
+    },
+    listModelCatalog: (opts) => {
+      const params = new URLSearchParams();
+      if (opts?.q?.trim()) params.set("q", opts.q.trim());
+      if (opts?.source?.trim()) params.set("source", opts.source.trim());
+      if (opts?.active_only === false) params.set("active_only", "false");
+      params.set("limit", String(opts?.limit ?? 100));
+      params.set("offset", String(opts?.offset ?? 0));
+      return request<ModelCatalogList>(`/api/model-catalog?${params.toString()}`);
     },
     updateMyAgentDelivery: (agentId, patch) =>
       request<MyAgentSummary>(
