@@ -203,6 +203,13 @@ function findOfficialEquivalent(fromId: string, officialIds: string[]): string |
   return matches[0] ?? null;
 }
 
+/** Id actually shown in the provider’s model control (not a leftover from the other provider). */
+function pickListedId(ids: string[], draft: string): string {
+  const needle = draft.trim();
+  if (ids.length === 0) return needle;
+  return findOfficialEquivalent(needle, ids) || ids[0];
+}
+
 function filterModelIds(ids: string[], query: string, keepId: string): string[] {
   const q = query.trim().toLowerCase();
   const filtered = !q
@@ -1085,14 +1092,33 @@ export function AgentOwnerSettings({
   const listingPublished =
     oldModelId.length > 0 && typeof oldMarkup === "number" && Number.isFinite(oldMarkup);
   const officialIds = officialCatalog.map((row) => row.id);
-  const officialSelected = hostReady && settingsProvider === OFFICIAL_OPENROUTER;
-  const officialRow = officialCatalog.find((row) => sameModelId(row.id, modelIdTrim));
+  const byoVendors = vendorsFromModels(supportedModels);
+  const hasBareModels = supportedModels.some((id) => !modelVendorId(id));
+  const providerOptions: Array<{ id: string; label: string }> = [
+    ...byoVendors.map((id) => ({ id, label: id })),
+    ...(hasBareModels ? [{ id: OTHER_VENDOR, label: t.myAgentsProviderOther }] : []),
+    ...(hostReady
+      ? [{ id: OFFICIAL_OPENROUTER, label: t.myAgentsProviderOfficialOpenRouter }]
+      : []),
+  ];
+  const activeProvider =
+    (settingsProvider && providerOptions.some((p) => p.id === settingsProvider)
+      ? settingsProvider
+      : providerOptions[0]?.id) || "";
+  const officialSelected = activeProvider === OFFICIAL_OPENROUTER;
+  const vendorModels = officialSelected
+    ? officialIds
+    : modelsForProvider(supportedModels, activeProvider);
+  const displayedModelId = pickListedId(vendorModels, modelIdTrim);
+  const officialRow = officialCatalog.find((row) =>
+    sameModelId(row.id, displayedModelId),
+  );
   const selectedCatalog = officialSelected
     ? officialRow
       ? { in: officialRow.in, out: officialRow.out }
       : null
-    : catalogById[modelIdTrim] ??
-      Object.entries(catalogById).find(([id]) => sameModelId(id, modelIdTrim))?.[1] ??
+    : catalogById[displayedModelId] ??
+      Object.entries(catalogById).find(([id]) => sameModelId(id, displayedModelId))?.[1] ??
       null;
   const catalogIn = selectedCatalog?.in ?? null;
   const catalogOut = selectedCatalog?.out ?? null;
@@ -1101,7 +1127,7 @@ export function AgentOwnerSettings({
     : supportedModels.length > 0 && catalogReadyKey !== supportedKey;
   const catalogError =
     !catalogLoading &&
-    modelIdTrim.length > 0 &&
+    displayedModelId.length > 0 &&
     selectedCatalog == null &&
     (officialSelected ? officialCatalog.length > 0 : supportedModels.length > 0)
       ? t.myAgentsPricingCatalogMissing
@@ -1116,17 +1142,18 @@ export function AgentOwnerSettings({
       : null;
   const previewReady = inputParsed != null && outputParsed != null;
   const pricingDirty =
-    modelIdTrim.length > 0 &&
+    displayedModelId.length > 0 &&
     markupParsed !== null &&
     (!listingPublished ||
-      !sameModelId(modelIdTrim, oldModelId) ||
+      !sameModelId(displayedModelId, oldModelId) ||
       markupParsed !== oldMarkup);
   const runtimeId = (detail.runtime_model_id || "").trim();
-  const runtimeMismatch = Boolean(runtimeId && !sameModelId(runtimeId, modelIdTrim));
-  const modelOnList = officialSelected
-    ? officialIds.some((id) => sameModelId(id, modelIdTrim))
-    : supportedModels.length > 0 &&
-      supportedModels.some((id) => id.toLowerCase() === modelIdTrim.toLowerCase());
+  const runtimeMismatch = Boolean(
+    runtimeId && !sameModelId(runtimeId, displayedModelId),
+  );
+  const modelOnList =
+    vendorModels.length > 0 &&
+    vendorModels.some((id) => sameModelId(id, displayedModelId));
   const modelsBusy = officialSelected ? officialCatalogLoading : modelsLoading;
   const canSavePricing =
     pricingDirty &&
@@ -1134,45 +1161,26 @@ export function AgentOwnerSettings({
     inputParsed !== null &&
     outputParsed !== null &&
     markupParsed !== null &&
-    modelIdTrim.length > 0 &&
+    displayedModelId.length > 0 &&
     modelOnList &&
     !modelsBusy &&
     !savingPricing &&
     !busy;
-  const byoVendors = vendorsFromModels(supportedModels);
-  const hasBareModels = supportedModels.some((id) => !modelVendorId(id));
-  const providerOptions: Array<{ id: string; label: string }> = [
-    ...byoVendors.map((id) => ({ id, label: id })),
-    ...(hasBareModels ? [{ id: OTHER_VENDOR, label: t.myAgentsProviderOther }] : []),
-    ...(hostReady
-      ? [{ id: OFFICIAL_OPENROUTER, label: t.myAgentsProviderOfficialOpenRouter }]
-      : []),
-  ];
-  const activeProvider =
-    (settingsProvider && providerOptions.some((p) => p.id === settingsProvider)
-      ? settingsProvider
-      : providerOptions[0]?.id) || "";
-  const vendorModels =
-    activeProvider === OFFICIAL_OPENROUTER
-      ? officialIds
-      : modelsForProvider(supportedModels, activeProvider);
-  const officialIdsKey = officialIds.join("\u0001");
+  const vendorModelsKey = vendorModels.join("\u0001");
   useEffect(() => {
-    if (activeProvider !== OFFICIAL_OPENROUTER) return;
-    if (officialCatalogLoading) return;
-    if (officialIds.length === 0) return;
-    if (officialIds.some((id) => sameModelId(id, modelIdDraft))) return;
-    const equiv = findOfficialEquivalent(modelIdDraft, officialIds);
-    setModelIdDraft(equiv || officialIds[0]);
-  }, [activeProvider, officialCatalogLoading, officialIdsKey, modelIdDraft]);
+    if (modelsBusy) return;
+    if (vendorModels.length === 0) return;
+    if (vendorModels.some((id) => sameModelId(id, modelIdDraft))) return;
+    setModelIdDraft(pickListedId(vendorModels, modelIdDraft));
+  }, [activeProvider, modelsBusy, vendorModelsKey, modelIdDraft]);
   const nextOfficial = nextOfficialModels(
     officialSaved,
-    modelIdTrim,
-    activeProvider === OFFICIAL_OPENROUTER,
+    displayedModelId,
+    officialSelected,
   );
   const officialDirty =
     hostReady &&
-    modelIdTrim.length > 0 &&
+    displayedModelId.length > 0 &&
     !officialSetsEqual(nextOfficial, officialSaved);
   const canSaveOfficial =
     officialDirty && !savingOfficial && !busy && !modelsBusy && hostReady;
@@ -1359,7 +1367,7 @@ export function AgentOwnerSettings({
       inputParsed === null ||
       outputParsed === null ||
       markupParsed === null ||
-      !modelIdTrim
+      !displayedModelId
     ) {
       return Promise.resolve(null);
     }
@@ -1370,7 +1378,7 @@ export function AgentOwnerSettings({
       .updateMyAgentTokenPricing(detail.agent_id, {
         input_price_per_million: inputParsed,
         output_price_per_million: outputParsed,
-        model_id: modelIdTrim,
+        model_id: displayedModelId,
         markup_percent: markupParsed,
       })
       .then((row) => {
@@ -1820,7 +1828,7 @@ export function AgentOwnerSettings({
             ) : (
               <OfficialModelPicker
                 ids={officialIds}
-                value={modelIdDraft}
+                value={displayedModelId}
                 disabled={busy || savingPricing}
                 ariaLabel={t.myAgentsPricingModelLabel}
                 searchPlaceholder={t.myAgentsPricingModelSearch}
@@ -1843,10 +1851,7 @@ export function AgentOwnerSettings({
           ) : (
             <select
               aria-label={t.myAgentsPricingModelLabel}
-              value={
-                vendorModels.find((id) => sameModelId(id, modelIdDraft)) ??
-                vendorModels[0]
-              }
+              value={displayedModelId}
               onChange={(e) => setModelIdDraft(e.target.value)}
               disabled={busy || savingPricing}
               style={inputStyle}
