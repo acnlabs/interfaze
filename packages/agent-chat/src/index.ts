@@ -19,6 +19,10 @@ export {
 } from "./gateway";
 export { connectChatSocket, type ChatSocket, type ChatWsEvent } from "./ws";
 export {
+  connectPromptForInvite,
+  joinLandingUrl,
+} from "./ranch-shell/connectPrompt";
+export {
   CHAT_OPEN_EVENT,
   type AgentChatMode,
   type AgentChatVariant,
