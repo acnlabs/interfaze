@@ -1329,31 +1329,6 @@ export function AgentOwnerSettings({
               text={`${t.myAgentsPricingHint} ${t.myAgentsPricingSelfReportNote} ${t.myAgentsPricingModelHint}`}
             />
           </span>
-          {(detail.inference_path || "byo") !== "official" ? (
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                padding: "0 6px",
-                borderRadius: 4,
-                border: `1px solid ${colors.border}`,
-                fontSize: 10,
-                fontWeight: 650,
-                letterSpacing: "0.04em",
-                textTransform: "none",
-                color: colors.muted,
-              }}
-            >
-              {t.myAgentsInferencePathByo}
-              <FieldHint
-                text={
-                  hostReady
-                    ? t.myAgentsInferencePathByoHintReady
-                    : t.myAgentsInferencePathByoHint
-                }
-              />
-            </span>
-          ) : null}
         </h3>
         {detail.token_pricing == null ? (
           <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
@@ -1475,25 +1450,6 @@ export function AgentOwnerSettings({
               <FieldHint text={t.myAgentsProviderHint} />
             </div>
             <div style={{ fontSize: 13, fontWeight: 650, color: colors.text, margin: "10px 0 4px" }}>
-              {t.myAgentsProviderMine}
-            </div>
-            <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-              {t.myAgentsMineSectionHint}
-            </p>
-            {modelsLoading ? (
-              <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted }}>…</p>
-            ) : supportedModels.length === 0 ? (
-              <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted }}>
-                {t.myAgentsPricingModelsEmpty}
-              </p>
-            ) : (
-              supportedModels.map((id) => (
-                <div key={`mine-${id}`} style={{ fontSize: 13, color: colors.text, marginBottom: 6 }}>
-                  {shortModelLabel(id)}
-                </div>
-              ))
-            )}
-            <div style={{ fontSize: 13, fontWeight: 650, color: colors.text, margin: "14px 0 4px" }}>
               {t.myAgentsProviderOfficialOpenRouter}
             </div>
             <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>

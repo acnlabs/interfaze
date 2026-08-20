@@ -315,50 +315,38 @@ function pickCanonicalModelId(
   return hit || wanted;
 }
 
-const PROVIDER_BYO = "byo";
-const PROVIDER_OFFICIAL_OPENROUTER = "official_openrouter";
-
-type ComposerPick = { provider: string; model: string | null };
-
 function composerModelStorageKey(chatId: string): string {
   return `interfaze:composerModel:${chatId}`;
 }
 
-function readComposerPick(chatId: string): ComposerPick | null {
+function readComposerModelPick(chatId: string): string | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(composerModelStorageKey(chatId));
     if (!raw || !raw.trim()) return null;
     try {
-      const parsed = JSON.parse(raw) as { provider?: unknown; model?: unknown };
-      if (parsed && typeof parsed === "object" && typeof parsed.provider === "string") {
-        return {
-          provider: parsed.provider,
-          model: typeof parsed.model === "string" && parsed.model.trim() ? parsed.model.trim() : null,
-        };
+      const parsed = JSON.parse(raw) as { model?: unknown };
+      if (parsed && typeof parsed === "object" && typeof parsed.model === "string" && parsed.model.trim()) {
+        return parsed.model.trim();
       }
     } catch {
-      /* old format: plain model id */
+      /* plain model id */
     }
-    return { provider: PROVIDER_BYO, model: raw.trim() };
+    return raw.trim();
   } catch {
     return null;
   }
 }
 
-function writeComposerPick(chatId: string, pick: ComposerPick | null): void {
+function writeComposerModelPick(chatId: string, modelId: string | null): void {
   if (typeof window === "undefined") return;
   try {
     const key = composerModelStorageKey(chatId);
-    if (!pick || (!pick.model && pick.provider === PROVIDER_BYO)) sessionStorage.removeItem(key);
-    else sessionStorage.setItem(key, JSON.stringify(pick));
+    if (!modelId) sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, modelId);
   } catch {
     /* ignore quota / private mode */
   }
-}
-
-function officialPoolForChat(supported: string[], official: string[]): string[] {
-  return supported.filter((id) => official.some((item) => sameModelId(id, item)));
 }
 
 function hopUsageFromMessage(m: ChatMessage): {
@@ -1566,8 +1554,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
     runtime_model_id?: string | null;
     mismatched: boolean;
     supported_models: string[];
-    official_models: string[];
-    host_inference_ready: boolean;
     model_options: Array<{
       model_id: string;
       is_listing?: boolean;
@@ -1579,7 +1565,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
     }>;
   } | null>(null);
   /** User pick for this hop (S1). Sticky per chat until changed. */
-  const [selectedProvider, setSelectedProvider] = useState<string>(PROVIDER_BYO);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [ownedAgentLoading, setOwnedAgentLoading] = useState(false);
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
@@ -2327,7 +2312,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
           : (activeTopic?.id ?? composerTopic?.id ?? null);
       await client.sendMessage(chatId, text, mentions, sendThreadId, {
         requested_model: selectedModelId,
-        requested_provider: selectedProvider,
       });
       if (group && mentions) {
         if (mentions.length === 1) {
@@ -2490,7 +2474,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           text,
           mentions,
           activeTopic?.id ?? composerTopic?.id ?? null,
-          { requested_model: selectedModelId, requested_provider: selectedProvider },
+          { requested_model: selectedModelId },
         );
         if (group && mentions) {
           if (mentions.length === 1) {
@@ -2661,14 +2645,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
   useEffect(() => {
     if (!active || isGroupChat(active) || !active.agent_id) {
       setComposerModel(null);
-      setSelectedProvider(PROVIDER_BYO);
       setSelectedModelId(null);
       return;
     }
     const bare = active.agent_id.replace(/^acn:/i, "").trim();
     if (!bare || bare.startsWith("sys:")) {
       setComposerModel(null);
-      setSelectedProvider(PROVIDER_BYO);
       setSelectedModelId(null);
       return;
     }
@@ -2684,43 +2666,22 @@ export function RanchChatShell(props: RanchChatShellProps) {
           const options = Array.isArray(row.model_options) ? row.model_options : [];
           const listed = row.listed_model_id ?? null;
           const runtime = row.runtime_model_id ?? null;
-          const official = Array.isArray(row.official_models)
-            ? row.official_models.filter((m): m is string => typeof m === "string" && !!m.trim())
-            : [];
-          const hostReady = Boolean(row.host_inference_ready);
           setComposerModel({
             listed_model_id: listed,
             runtime_model_id: runtime,
             mismatched: !!row.mismatched,
             supported_models: supported,
-            official_models: official,
-            host_inference_ready: hostReady,
             model_options: options,
           });
-          const minePool = supported.length
+          const pool = supported.length
             ? supported
             : [listed, runtime].filter((m): m is string => !!m && !!m.trim());
-          const officialPool = officialPoolForChat(minePool, official);
-          const canOfficial = hostReady && officialPool.length > 0;
-          const stored = readComposerPick(active.chat_id);
-          let provider =
-            stored?.provider === PROVIDER_OFFICIAL_OPENROUTER
-              ? PROVIDER_OFFICIAL_OPENROUTER
-              : PROVIDER_BYO;
-          if (provider === PROVIDER_OFFICIAL_OPENROUTER && !canOfficial) {
-            provider = PROVIDER_BYO;
-          }
-          const pool = provider === PROVIDER_OFFICIAL_OPENROUTER ? officialPool : minePool;
-          const wanted = stored?.model || selectedModelId;
+          const stored = readComposerModelPick(active.chat_id);
+          const wanted = stored || selectedModelId;
           const kept = pool.find((m) => sameModelId(m, wanted)) || null;
-          const fallback =
-            provider === PROVIDER_OFFICIAL_OPENROUTER
-              ? officialPool[0] || null
-              : listed || runtime || minePool[0] || null;
-          const nextModel = kept || fallback;
-          setSelectedProvider(provider);
+          const nextModel = kept || listed || runtime || pool[0] || null;
           setSelectedModelId(nextModel);
-          writeComposerPick(active.chat_id, { provider, model: nextModel });
+          writeComposerModelPick(active.chat_id, nextModel);
         })
         .catch(() => {
           if (!cancelled) {
@@ -4201,7 +4162,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     {(() => {
                       const runtime = (composerModel.runtime_model_id || "").trim();
                       const listed = (composerModel.listed_model_id || "").trim();
-                      const minePool = (() => {
+                      const options = (() => {
                         const fromApi = composerModel.supported_models.length
                           ? composerModel.supported_models
                           : [listed, runtime].filter(Boolean);
@@ -4213,36 +4174,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           seen.add(k);
                           out.push(id);
                         }
+                        if (selectedModelId && !seen.has(selectedModelId.toLowerCase())) {
+                          out.unshift(selectedModelId);
+                        }
                         return out;
                       })();
-                      const officialPool = officialPoolForChat(
-                        minePool,
-                        composerModel.official_models,
-                      );
-                      const canOfficial =
-                        composerModel.host_inference_ready && officialPool.length > 0;
-                      const provider =
-                        canOfficial && selectedProvider === PROVIDER_OFFICIAL_OPENROUTER
-                          ? PROVIDER_OFFICIAL_OPENROUTER
-                          : PROVIDER_BYO;
-                      const options =
-                        provider === PROVIDER_OFFICIAL_OPENROUTER ? officialPool : minePool;
-                      const value =
-                        options.find((id) => sameModelId(id, selectedModelId)) ||
-                        options[0] ||
-                        listed ||
-                        runtime ||
-                        "";
-                      const persist = (nextProvider: string, nextModel: string | null) => {
-                        setSelectedProvider(nextProvider);
-                        setSelectedModelId(nextModel);
-                        if (active?.chat_id) {
-                          writeComposerPick(active.chat_id, {
-                            provider: nextProvider,
-                            model: nextModel,
-                          });
-                        }
-                      };
+                      const value = selectedModelId || listed || runtime || "";
                       const valueTitle =
                         composerModel.model_options.find(
                           (o) => o.model_id.toLowerCase() === value.toLowerCase(),
@@ -4257,141 +4194,89 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               : t.composerModelNoPrice
                         : "";
                       const canPick = options.length > 1;
-                      const providerLabel =
-                        provider === PROVIDER_OFFICIAL_OPENROUTER
-                          ? t.myAgentsProviderOfficialOpenRouter
-                          : t.myAgentsProviderMine;
-                      const chipStyle = (interactive: boolean): CSSProperties => ({
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 6,
-                        padding: interactive ? "2px 6px 2px 10px" : "4px 10px",
-                        borderRadius: 999,
-                        border: `1px solid ${colors.border}`,
-                        background: colors.panel,
-                        fontSize: 12,
-                        color: colors.text,
-                        maxWidth: "100%",
-                        cursor: interactive ? "pointer" : "default",
-                      });
-                      const selectStyle: CSSProperties = {
-                        appearance: "none",
-                        WebkitAppearance: "none",
-                        border: "none",
-                        background: "transparent",
-                        color: colors.text,
-                        fontWeight: 600,
-                        fontSize: 12,
-                        maxWidth: 180,
-                        padding: "2px 0",
-                        cursor: "pointer",
-                        outline: "none",
-                      };
                       return (
-                        <>
-                          <label
-                            title={providerLabel}
-                            aria-label={`${t.composerProviderLabel}: ${providerLabel}`}
-                            style={chipStyle(canOfficial)}
-                          >
-                            <span style={{ color: colors.muted }}>{t.composerProviderLabel}</span>
-                            {canOfficial ? (
-                              <>
-                                <select
-                                  value={provider}
-                                  onChange={(e) => {
-                                    const nextProvider = e.target.value || PROVIDER_BYO;
-                                    const nextPool =
-                                      nextProvider === PROVIDER_OFFICIAL_OPENROUTER
-                                        ? officialPool
-                                        : minePool;
-                                    const kept =
-                                      nextPool.find((id) => sameModelId(id, value)) ||
-                                      nextPool[0] ||
-                                      null;
-                                    persist(nextProvider, kept);
-                                  }}
-                                  style={selectStyle}
-                                >
-                                  <option value={PROVIDER_BYO}>{t.myAgentsProviderMine}</option>
-                                  <option value={PROVIDER_OFFICIAL_OPENROUTER}>
-                                    {t.myAgentsProviderOfficialOpenRouter}
-                                  </option>
-                                </select>
-                                <span
-                                  aria-hidden
-                                  style={{
-                                    color: colors.muted,
-                                    fontSize: 10,
-                                    lineHeight: 1,
-                                    marginLeft: -2,
-                                    marginRight: 2,
-                                  }}
-                                >
-                                  ▾
-                                </span>
-                              </>
-                            ) : (
-                              <span style={{ fontWeight: 600 }}>{providerLabel}</span>
-                            )}
-                          </label>
-                          <label
-                            title={value || t.composerModelUnknown}
-                            aria-label={`${t.composerModelLabel}: ${value || t.composerModelUnknown}`}
-                            style={chipStyle(canPick)}
-                          >
-                            <span style={{ color: colors.muted }}>{t.composerModelLabel}</span>
-                            {canPick ? (
-                              <>
-                                <select
-                                  value={value}
-                                  onChange={(e) => {
-                                    persist(provider, e.target.value || null);
-                                  }}
-                                  style={{ ...selectStyle, maxWidth: 160 }}
-                                >
-                                  {options.map((id) => (
-                                    <option key={id} value={id}>
-                                      {shortModelLabel(id) || id}
-                                    </option>
-                                  ))}
-                                </select>
-                                <span
-                                  aria-hidden
-                                  style={{
-                                    color: colors.muted,
-                                    fontSize: 10,
-                                    lineHeight: 1,
-                                    marginLeft: -2,
-                                    marginRight: 2,
-                                  }}
-                                >
-                                  ▾
-                                </span>
-                              </>
-                            ) : (
-                              <span
+                        <label
+                          title={value || t.composerModelUnknown}
+                          aria-label={`${t.composerModelLabel}: ${value || t.composerModelUnknown}`}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: canPick ? "2px 6px 2px 10px" : "4px 10px",
+                            borderRadius: 999,
+                            border: `1px solid ${colors.border}`,
+                            background: colors.panel,
+                            fontSize: 12,
+                            color: colors.text,
+                            maxWidth: "100%",
+                            cursor: canPick ? "pointer" : "default",
+                          }}
+                        >
+                          <span style={{ color: colors.muted }}>{t.composerModelLabel}</span>
+                          {canPick ? (
+                            <>
+                              <select
+                                value={value}
+                                onChange={(e) => {
+                                  const next = e.target.value || null;
+                                  setSelectedModelId(next);
+                                  if (active?.chat_id) writeComposerModelPick(active.chat_id, next);
+                                }}
                                 style={{
+                                  appearance: "none",
+                                  WebkitAppearance: "none",
+                                  border: "none",
+                                  background: "transparent",
+                                  color: colors.text,
                                   fontWeight: 600,
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
+                                  fontSize: 12,
                                   maxWidth: 160,
+                                  padding: "2px 0",
+                                  cursor: "pointer",
+                                  outline: "none",
                                 }}
                               >
-                                {shortModelLabel(value) || t.composerModelUnknown}
+                                {options.map((id) => (
+                                  <option key={id} value={id}>
+                                    {shortModelLabel(id) || id}
+                                  </option>
+                                ))}
+                              </select>
+                              <span
+                                aria-hidden
+                                style={{
+                                  color: colors.muted,
+                                  fontSize: 10,
+                                  lineHeight: 1,
+                                  marginLeft: -2,
+                                  marginRight: 2,
+                                }}
+                              >
+                                ▾
                               </span>
-                            )}
-                            {!runtime && listed && value.toLowerCase() === listed.toLowerCase() ? (
-                              <span style={{ color: colors.muted, fontSize: 11 }}>
-                                ({t.composerModelListing})
-                              </span>
-                            ) : null}
-                            {priceHint ? (
-                              <span style={{ color: colors.muted, fontSize: 11 }}>{priceHint}</span>
-                            ) : null}
-                          </label>
-                        </>
+                            </>
+                          ) : (
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                maxWidth: 160,
+                              }}
+                            >
+                              {shortModelLabel(value) || t.composerModelUnknown}
+                            </span>
+                          )}
+                          {!runtime && listed && value.toLowerCase() === listed.toLowerCase() ? (
+                            <span style={{ color: colors.muted, fontSize: 11 }}>
+                              ({t.composerModelListing})
+                            </span>
+                          ) : null}
+                          {priceHint ? (
+                            <span style={{ color: colors.muted, fontSize: 11 }}>{priceHint}</span>
+                          ) : null}
+                        </label>
                       );
                     })()}
                     {composerModel.mismatched &&
