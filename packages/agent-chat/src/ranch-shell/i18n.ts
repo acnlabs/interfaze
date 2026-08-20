@@ -758,7 +758,7 @@ const en: RanchMessages = {
   myAgentsPricingModelHint:
     "Pick the default from models this agent already reports. You cannot add or remove models here.",
   myAgentsPricingModelsEmpty: "This agent has not reported any models yet.",
-  myAgentsPricingModelSearch: "Filter Official · OpenRouter models",
+  myAgentsPricingModelSearch: "Search",
   myAgentsPricingOfficialEmpty: "No matching Official · OpenRouter models in Host Catalog.",
   myAgentsPricingOptionLine: "${name} · in ${in} · out ${out}",
   myAgentsPricingCreditsLine: "in ${in} · out ${out} Credits / 1M",
@@ -1251,7 +1251,7 @@ const zh: RanchMessages = {
   myAgentsPricingModelHint:
     "从这只 agent 已自报的模型里选默认。这里不能增删模型。",
   myAgentsPricingModelsEmpty: "这只 agent 还没有自报任何模型。",
-  myAgentsPricingModelSearch: "筛选官方 · OpenRouter 模型",
+  myAgentsPricingModelSearch: "搜索",
   myAgentsPricingOfficialEmpty: "Host Catalog 里没有匹配的官方 · OpenRouter 模型。",
   myAgentsPricingOptionLine: "${name} · 入 ${in} · 出 ${out}",
   myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} Credits /百万",
