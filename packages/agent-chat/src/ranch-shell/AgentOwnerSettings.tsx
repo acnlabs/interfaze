@@ -127,6 +127,37 @@ function shortModelLabel(modelId: string): string {
   return slash >= 0 ? s.slice(slash + 1) : s;
 }
 
+const OFFICIAL_OPENROUTER = "official_openrouter";
+const OTHER_VENDOR = "__other__";
+
+/** OpenRouter-style ``vendor/model``; empty if the agent reported a bare id. */
+function modelVendorId(modelId: string): string {
+  const s = modelId.trim();
+  const slash = s.indexOf("/");
+  if (slash <= 0) return "";
+  return s.slice(0, slash);
+}
+
+function vendorsFromModels(ids: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of ids) {
+    const vendor = modelVendorId(id);
+    if (!vendor) continue;
+    const key = vendor.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(vendor);
+  }
+  return out;
+}
+
+function modelsForVendor(ids: string[], vendor: string): string[] {
+  const key = vendor.trim().toLowerCase();
+  if (!key) return ids.filter((id) => !modelVendorId(id));
+  return ids.filter((id) => modelVendorId(id).toLowerCase() === key);
+}
+
 function catalogOptionLabel(
   id: string,
   pair: { in: number; out: number } | undefined,
@@ -498,9 +529,7 @@ export function AgentOwnerSettings({
   const [savingOfficial, setSavingOfficial] = useState(false);
   const [officialMsg, setOfficialMsg] = useState<string | null>(null);
   const [officialError, setOfficialError] = useState<string | null>(null);
-  const [settingsProvider, setSettingsProvider] = useState<"agent" | "official_openrouter">(
-    "agent",
-  );
+  const [settingsProvider, setSettingsProvider] = useState<string>("");
   const [markupDraft, setMarkupDraft] = useState(() => {
     const mu = detail.token_pricing?.markup_percent;
     if (typeof mu === "number" && Number.isFinite(mu) && mu >= 0) return String(mu);
@@ -580,7 +609,7 @@ export function AgentOwnerSettings({
     setOfficialDraft(official);
     setOfficialMsg(null);
     setOfficialError(null);
-    setSettingsProvider("agent");
+    setSettingsProvider(modelVendorId(resolvePricingModelId(detail)));
   }, [
     detail.agent_id,
     detail.token_pricing?.model_id,
@@ -769,6 +798,25 @@ export function AgentOwnerSettings({
   const officialDirty = hostReady && !officialSetsEqual(officialDraft, officialSaved);
   const canSaveOfficial =
     officialDirty && !savingOfficial && !busy && !modelsLoading;
+  const byoVendors = vendorsFromModels(supportedModels);
+  const hasBareModels = supportedModels.some((id) => !modelVendorId(id));
+  const providerOptions: Array<{ id: string; label: string }> = [
+    ...byoVendors.map((id) => ({ id, label: id })),
+    ...(hasBareModels ? [{ id: OTHER_VENDOR, label: t.myAgentsProviderOther }] : []),
+    ...(hostReady
+      ? [{ id: OFFICIAL_OPENROUTER, label: t.myAgentsProviderOfficialOpenRouter }]
+      : []),
+  ];
+  const activeProvider =
+    (settingsProvider && providerOptions.some((p) => p.id === settingsProvider)
+      ? settingsProvider
+      : providerOptions[0]?.id) || "";
+  const vendorModels =
+    activeProvider === OFFICIAL_OPENROUTER || !activeProvider
+      ? []
+      : activeProvider === OTHER_VENDOR
+        ? modelsForVendor(supportedModels, "")
+        : modelsForVendor(supportedModels, activeProvider);
 
   const policyMode = (detail.policy_mode || "").toLowerCase();
   const currentPolicy = policyFromDetail(detail.policy_mode);
@@ -1352,30 +1400,38 @@ export function AgentOwnerSettings({
             {t.myAgentsProviderLabel}
             <FieldHint text={t.myAgentsProviderHint} />
           </div>
-          {hostReady ? (
+          {providerOptions.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>
+              {t.myAgentsPricingModelsEmpty}
+            </p>
+          ) : (
             <select
               aria-label={t.myAgentsProviderLabel}
-              value={settingsProvider}
-              onChange={(e) =>
-                setSettingsProvider(
-                  e.target.value === "official_openrouter" ? "official_openrouter" : "agent",
-                )
-              }
-              disabled={busy}
+              value={activeProvider}
+              onChange={(e) => {
+                const next = e.target.value;
+                setSettingsProvider(next);
+                if (next === OFFICIAL_OPENROUTER) return;
+                const list =
+                  next === OTHER_VENDOR
+                    ? modelsForVendor(supportedModels, "")
+                    : modelsForVendor(supportedModels, next);
+                if (list.length > 0 && !list.some((id) => sameModelId(id, modelIdDraft))) {
+                  setModelIdDraft(list[0]);
+                }
+              }}
+              disabled={busy || modelsLoading}
               style={inputStyle}
             >
-              <option value="agent">
-                {(detail.name || "").trim() || t.myAgentsProviderAgent}
-              </option>
-              <option value="official_openrouter">{t.myAgentsProviderOfficialOpenRouter}</option>
+              {providerOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
             </select>
-          ) : (
-            <div style={{ fontSize: 13, color: colors.text }}>
-              {(detail.name || "").trim() || t.myAgentsProviderAgent}
-            </div>
           )}
         </div>
-        {hostReady && settingsProvider === "official_openrouter" ? (
+        {activeProvider === OFFICIAL_OPENROUTER ? (
           <div style={{ marginBottom: 10 }}>
             <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
               {t.myAgentsOfficialSectionHint}
@@ -1461,7 +1517,7 @@ export function AgentOwnerSettings({
           </div>
           {modelsLoading ? (
             <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>…</p>
-          ) : supportedModels.length === 0 ? (
+          ) : vendorModels.length === 0 ? (
             <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
               {t.myAgentsPricingModelsEmpty}
             </p>
@@ -1469,14 +1525,14 @@ export function AgentOwnerSettings({
             <select
               aria-label={t.myAgentsPricingModelLabel}
               value={
-                supportedModels.find((id) => sameModelId(id, modelIdDraft)) ??
-                supportedModels[0]
+                vendorModels.find((id) => sameModelId(id, modelIdDraft)) ??
+                vendorModels[0]
               }
               onChange={(e) => setModelIdDraft(e.target.value)}
               disabled={busy || savingPricing}
               style={inputStyle}
             >
-              {supportedModels.map((id) => (
+              {vendorModels.map((id) => (
                 <option key={id} value={id}>
                   {catalogOptionLabel(id, catalogById[id], t.myAgentsPricingOptionLine)}
                 </option>

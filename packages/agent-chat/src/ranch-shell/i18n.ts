@@ -297,6 +297,7 @@ export type RanchMessages = {
   myAgentsProviderOfficial: string;
   myAgentsProviderMine: string;
   myAgentsProviderAgent: string;
+  myAgentsProviderOther: string;
   myAgentsProviderOfficialOpenRouter: string;
   myAgentsOfficialSectionHint: string;
   myAgentsMineSectionHint: string;
@@ -768,11 +769,12 @@ const en: RanchMessages = {
     "Chat picks a model. Checked Official · OpenRouter models use Interfaze’s key — not the agent’s own OpenRouter.",
   myAgentsProviderLabel: "Provider",
   myAgentsProviderHint:
-    "Pick a supplier, then its models. This agent sets the chat default. Official · OpenRouter: check models Interfaze’s key may serve.",
+    "Suppliers from this agent’s self-reported model ids (the vendor/ prefix). Official · OpenRouter is Interfaze’s key, not the agent’s.",
   myAgentsProviderByo: "Mine",
   myAgentsProviderOfficial: "Official · OpenRouter",
   myAgentsProviderMine: "Mine",
   myAgentsProviderAgent: "This agent",
+  myAgentsProviderOther: "Other",
   myAgentsProviderOfficialOpenRouter: "Official · OpenRouter",
   myAgentsOfficialSectionHint:
     "Checked models use Official · OpenRouter in chat. Unchecked stay on this agent’s key.",
@@ -1258,11 +1260,12 @@ const zh: RanchMessages = {
     "聊天只选模型。勾选的官方 · OpenRouter 模型走 Interfaze 的钥匙，不是 agent 自己的 OpenRouter。",
   myAgentsProviderLabel: "供应商",
   myAgentsProviderHint:
-    "先选供应商，再看这家的模型。本 agent 用来设聊天默认模型。官方 · OpenRouter：勾选后由 Interfaze 的钥匙代打。",
+    "来自这只 agent 自报模型 id 的厂家（斜杠前的 vendor）。官方 · OpenRouter 是 Interfaze 的钥匙，不是 agent 自己的。",
   myAgentsProviderByo: "我的",
   myAgentsProviderOfficial: "官方 · OpenRouter",
   myAgentsProviderMine: "我的",
   myAgentsProviderAgent: "本 agent",
+  myAgentsProviderOther: "其他",
   myAgentsProviderOfficialOpenRouter: "官方 · OpenRouter",
   myAgentsOfficialSectionHint:
     "勾选的模型在聊天里走官方 · OpenRouter；未勾选仍走本 agent 的钥匙。",
