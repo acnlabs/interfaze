@@ -235,6 +235,12 @@ export type MyAgentAllowlistAction = {
   changed: boolean;
 };
 
+export type MyAgentHumanAccess = {
+  agent_id: string;
+  invitees: string[];
+  visibility: "public" | "invite_only" | string;
+};
+
 /** Owned ACN agent row from GET /api/chat/my-agents (management + directory mine). */
 export type MyAgentSummary = {
   agent_id: string;
@@ -470,7 +476,20 @@ export type GatewayClient = {
     agentId: string,
     targetId: string,
   ) => Promise<MyAgentAllowlistAction>;
+  getMyAgentHumanAccess: (agentId: string) => Promise<MyAgentHumanAccess>;
+  replaceMyAgentHumanAccess: (
+    agentId: string,
+    patch: {
+      invitees: string[];
+      visibility?: "public" | "invite_only";
+    },
+  ) => Promise<MyAgentHumanAccess>;
   /** Create (or return pending) gift invite; share_url is relative. */
+  createJoinInvite: () => Promise<{
+    code: string;
+    expires_at: string;
+    share_url: string;
+  }>;
   createMyAgentTransferInvite: (agentId: string) => Promise<{
     invite_token: string;
     expires_at: string;
@@ -796,6 +815,23 @@ export function createGatewayClient(
       request<MyAgentAllowlistAction>(
         `/api/chat/my-agents/${encodeURIComponent(agentId)}/allowlist/${encodeURIComponent(targetId)}`,
         { method: "DELETE" },
+      ),
+    getMyAgentHumanAccess: (agentId) =>
+      request<MyAgentHumanAccess>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/human-access`,
+      ),
+    replaceMyAgentHumanAccess: (agentId, patch) =>
+      request<MyAgentHumanAccess>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/human-access`,
+        {
+          method: "PUT",
+          body: JSON.stringify(patch),
+        },
+      ),
+    createJoinInvite: () =>
+      request<{ code: string; expires_at: string; share_url: string }>(
+        "/api/chat/join-invites",
+        { method: "POST", body: "{}" },
       ),
     createMyAgentTransferInvite: (agentId) =>
       request<{

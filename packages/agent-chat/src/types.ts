@@ -141,6 +141,11 @@ export type RanchChatShellProps = {
    * Host typically sets this from `?account=plan`.
    */
   initialAccountPanel?: "plan" | "wallet" | "manage" | "profile" | null;
+  /**
+   * After first-claim, open or create the 1:1 with this ACN agent id
+   * (from Interfaze ``/?agent=``).
+   */
+  initialOpenAgentId?: string | null;
 };
 
 /** Outbound delivery on user messages (Chat Gateway → ACN). */

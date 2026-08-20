@@ -9,7 +9,12 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { ChatGatewayError, createGatewayClient, type MyAgentSummary } from "../gateway";
+import {
+  ChatGatewayError,
+  createGatewayClient,
+  type GatewayClient,
+  type MyAgentSummary,
+} from "../gateway";
 import type {
   AgentDirectoryItem,
   ChatMessage,
@@ -35,7 +40,7 @@ import {
 } from "./AccountPanels";
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
-import { CONNECT_PROMPTS, copyText } from "./connectPrompt";
+import { copyConnectPromptWithInvite, openJoinLanding } from "./connectPrompt";
 import {
   RANCH_LOCALE_OPTIONS,
   ranchMessages,
@@ -591,12 +596,16 @@ function AgentReplyTimeoutBubble({
 }
 
 function NoAgentsEmpty({
+  client,
   connectGuideUrl,
+  interfazeBaseUrl,
   locale,
   onNewChat,
   t,
 }: {
+  client: GatewayClient;
   connectGuideUrl?: string;
+  interfazeBaseUrl?: string;
   locale: RanchLocale;
   onNewChat: () => void;
   t: RanchMessages;
@@ -613,7 +622,24 @@ function NoAgentsEmpty({
           type="button"
           style={btnPrimary}
           onClick={() => {
-            void copyText(CONNECT_PROMPTS[locale]).then((ok) => {
+            const origin =
+              (interfazeBaseUrl || "").replace(/\/+$/, "") ||
+              (typeof window !== "undefined" ? window.location.origin : "");
+            void openJoinLanding(origin, () => client.createJoinInvite());
+          }}
+        >
+          {t.connectExisting}
+        </button>
+        <button
+          type="button"
+          style={btnGhost}
+          onClick={() => {
+            void copyConnectPromptWithInvite(
+              locale,
+              () => client.createJoinInvite(),
+              interfazeBaseUrl ||
+                (typeof window !== "undefined" ? window.location.origin : ""),
+            ).then((ok) => {
               if (!ok) return;
               setCopied(true);
               window.setTimeout(() => setCopied(false), 2000);
@@ -1421,6 +1447,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     onOwnedAgentUpdated,
     onOwnedAgentRemoved,
     initialAccountPanel = null,
+    initialOpenAgentId = null,
   } = props;
 
   const [uiLocale, setUiLocale] = useState<RanchLocale>(() => resolveRanchLocale(localeProp));
@@ -1994,6 +2021,35 @@ export function RanchChatShell(props: RanchChatShellProps) {
     },
     [client, clearReplySlot, directoryAgents, resolveAfterDeliveryIssue],
   );
+
+  const openedInitialAgentRef = useRef(false);
+  useEffect(() => {
+    const want = (initialOpenAgentId || "").replace(/^acn:/i, "").trim().toLowerCase();
+    if (!open || !want || openedInitialAgentRef.current) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const list = await client.listChats();
+        if (cancelled) return;
+        let found = list.find(
+          (c) =>
+            !isGroupChat(c) &&
+            (c.agent_id || "").replace(/^acn:/i, "").trim().toLowerCase() === want,
+        );
+        if (!found) {
+          found = await client.createOrGetDirectChat(initialOpenAgentId as string);
+        }
+        if (cancelled || !found) return;
+        openedInitialAgentRef.current = true;
+        await openConversation(found);
+      } catch {
+        /* claim landing still works — user can open from the list */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, initialOpenAgentId, client, openConversation]);
 
   const loadTopics = useCallback(
     async (chatId: string) => {
@@ -3116,7 +3172,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
               </div>
             ) : (
               <NoAgentsEmpty
+                client={client}
                 connectGuideUrl={connectGuideUrl}
+                interfazeBaseUrl={interfazeBaseUrl}
                 locale={uiLocale}
                 onNewChat={() => setShowPicker(true)}
                 t={t}
@@ -3321,6 +3379,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
             onClose={() => setShowPicker(false)}
             onOpenDirect={(id) => void startDirect(id)}
             onCreateGroup={(titleText, ids) => void startGroup(titleText, ids)}
+            createJoinInvite={() => client.createJoinInvite()}
+            interfazeBaseUrl={interfazeBaseUrl}
           />
         )}
 
@@ -3448,7 +3508,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   }}
                 >
                   <NoAgentsEmpty
+                    client={client}
                     connectGuideUrl={connectGuideUrl}
+                    interfazeBaseUrl={interfazeBaseUrl}
                     locale={uiLocale}
                     onNewChat={() => setShowPicker(true)}
                     t={t}

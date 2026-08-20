@@ -31,6 +31,7 @@ export type RanchMessages = {
   noAgentsTitle: string;
   noAgentsBody: string;
   copyPromptForAgent: string;
+  connectExisting: string;
   promptCopied: string;
   viewConnectGuide: string;
   pasteAgentId: string;
@@ -251,6 +252,23 @@ export type RanchMessages = {
   myAgentsSectionOverview: string;
   myAgentsSectionConnect: string;
   myAgentsSectionAccess: string;
+  myAgentsSectionAgents: string;
+  myAgentsHumansHint: string;
+  myAgentsHumansPublic: string;
+  myAgentsHumansPublicHelp: string;
+  myAgentsHumansInviteOnly: string;
+  myAgentsHumansInviteOnlyHelp: string;
+  myAgentsHumansListTitle: string;
+  myAgentsHumansEmpty: string;
+  myAgentsHumansAdd: string;
+  myAgentsHumansRemove: string;
+  myAgentsHumansPlaceholder: string;
+  myAgentsHumansLoadFailed: string;
+  myAgentsHumansSaveFailed: string;
+  myAgentsHumansSaved: string;
+  myAgentsHumansInvalidId: string;
+  myAgentsHumansFull: string;
+  myAgentsHumansCount: (n: string) => string;
   myAgentsNameLabel: string;
   myAgentsDescLabel: string;
   myAgentsTagsLabel: string;
@@ -476,6 +494,7 @@ const en: RanchMessages = {
   noAgentsBody:
     "Registering on ACN is not enough. Copy the prompt below, paste it to your agent, and let it finish setup (installs ACN skill if needed).",
   copyPromptForAgent: "Copy prompt for agent",
+  connectExisting: "Connect an existing agent",
   promptCopied: "Copied",
   viewConnectGuide: "Full guide",
   pasteAgentId: "Paste an agent id",
@@ -692,13 +711,33 @@ const en: RanchMessages = {
   myAgentsTitle: "My agents",
   myAgentsEmptyTitle: "No agents claimed yet",
   myAgentsEmptyBody:
-    "Copy the connect prompt, paste it into your runtime, and finish ACN claim. Registering alone is not enough.",
+    "Connect an existing agent with a prompt, link, or QR code. Claiming happens on Interfaze — do not share a claim token.",
   myAgentsOfflineHint:
     "This agent is registered but offline — start the process that keeps it alive, or check message receiving.",
   myAgentsSectionIdentity: "Profile",
   myAgentsSectionOverview: "Overview",
   myAgentsSectionConnect: "Receiving messages",
-  myAgentsSectionAccess: "Who can chat",
+  myAgentsSectionAccess: "Who can chat or invoke",
+  myAgentsSectionAgents: "Which agents can reach me",
+  myAgentsHumansHint:
+    "People who may chat or invoke this agent. Same list for both. Stored on AgentPlanet — not the ACN agent graph. Default is invitees only; ACN open does not publish you to people.",
+  myAgentsHumansPublic: "Anyone signed in",
+  myAgentsHumansPublicHelp:
+    "Any signed-in person on this region may chat or invoke. Other agents still follow the section below.",
+  myAgentsHumansInviteOnly: "Invitees only",
+  myAgentsHumansInviteOnlyHelp:
+    "Only people on this list (and you as owner) may chat or invoke.",
+  myAgentsHumansListTitle: "Invitees",
+  myAgentsHumansEmpty: "No people on the list yet.",
+  myAgentsHumansAdd: "Add",
+  myAgentsHumansRemove: "Remove",
+  myAgentsHumansPlaceholder: "Paste a user id (e.g. wechat|…)",
+  myAgentsHumansLoadFailed: "Couldn’t load who can chat.",
+  myAgentsHumansSaveFailed: "Couldn’t update who can chat.",
+  myAgentsHumansSaved: "Who-can-chat updated",
+  myAgentsHumansInvalidId: "Enter a valid user id.",
+  myAgentsHumansFull: "Invitee list is full (max 50).",
+  myAgentsHumansCount: (n) => `${n} on list`,
   myAgentsNameLabel: "Display name",
   myAgentsDescLabel: "Description",
   myAgentsTagsLabel: "Tags",
@@ -957,6 +996,7 @@ const zh: RanchMessages = {
   noAgentsBody:
     "注册还不够。复制下面的提示词发给你的 agent，让它自己接完（没有 ACN skill 时会先安装）。",
   copyPromptForAgent: "复制给 agent 的提示词",
+  connectExisting: "接入已有 agent",
   promptCopied: "已复制",
   viewConnectGuide: "完整说明",
   pasteAgentId: "粘贴 agent id 试试",
@@ -1161,13 +1201,32 @@ const zh: RanchMessages = {
   myAgentsTitle: "我的 Agents",
   myAgentsEmptyTitle: "还没有认领的 agent",
   myAgentsEmptyBody:
-    "复制接入提示词粘贴到你的运行程序，完成 ACN 注册与认领。只注册还不够。",
+    "用提示词、链接或二维码接入已有 agent。认领在 Interfaze 完成，不要分享认领 token。",
   myAgentsOfflineHint:
     "此 agent 已注册但离线——请启动保持在线的进程，或检查收信方式是否已配置。",
   myAgentsSectionIdentity: "资料",
   myAgentsSectionOverview: "概览",
   myAgentsSectionConnect: "收信方式",
-  myAgentsSectionAccess: "谁可以聊",
+  myAgentsSectionAccess: "谁可以聊 / 调",
+  myAgentsSectionAgents: "哪些 agent 可以找我",
+  myAgentsHumansHint:
+    "哪些人可以和这个 agent 聊天或调用。聊天与 invoke 共用这份名单，记在 AgentPlanet，不进 ACN 的 agent 图。默认仅名单；ACN open 不会自动对人公开。",
+  myAgentsHumansPublic: "登录即可",
+  myAgentsHumansPublicHelp:
+    "本区已登录的人都可以聊或调。其他 agent 仍看下一区。",
+  myAgentsHumansInviteOnly: "仅名单",
+  myAgentsHumansInviteOnlyHelp: "只有名单上的人（以及你作为主人）可以聊或调。",
+  myAgentsHumansListTitle: "邀请名单",
+  myAgentsHumansEmpty: "名单还是空的。",
+  myAgentsHumansAdd: "添加",
+  myAgentsHumansRemove: "移除",
+  myAgentsHumansPlaceholder: "粘贴人 id（如 wechat|…）",
+  myAgentsHumansLoadFailed: "无法加载谁可以聊。",
+  myAgentsHumansSaveFailed: "无法更新谁可以聊。",
+  myAgentsHumansSaved: "「谁可以聊 / 调」已更新",
+  myAgentsHumansInvalidId: "请输入有效的人 id。",
+  myAgentsHumansFull: "名单已满（最多 50）。",
+  myAgentsHumansCount: (n) => `名单 ${n} 人`,
   myAgentsNameLabel: "显示名称",
   myAgentsDescLabel: "描述",
   myAgentsTagsLabel: "标签",

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import type { AgentDirectoryItem } from "../types";
-import { CONNECT_PROMPTS, copyText } from "./connectPrompt";
+import { copyConnectPromptWithInvite } from "./connectPrompt";
 import type { RanchLocale, RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 
@@ -18,6 +18,8 @@ type Props = {
   onClose: () => void;
   onOpenDirect: (agentId: string) => void;
   onCreateGroup: (title: string, agentIds: string[]) => void;
+  createJoinInvite?: () => Promise<{ code: string }>;
+  interfazeBaseUrl?: string;
 };
 
 export function NewChatPicker({
@@ -31,6 +33,8 @@ export function NewChatPicker({
   onClose,
   onOpenDirect,
   onCreateGroup,
+  createJoinInvite,
+  interfazeBaseUrl,
 }: Props) {
   const [mode, setMode] = useState<"direct" | "group">("direct");
   const [selected, setSelected] = useState<string[]>([]);
@@ -182,11 +186,16 @@ export function NewChatPicker({
             {mineRows.length === 0 ? (
               <div style={{ color: colors.muted, fontSize: 12 }}>
                 <p style={{ margin: "0 0 8px" }}>{t.noMineAgents}</p>
+                {createJoinInvite ? (
                 <button
                   type="button"
                   style={{ ...btnPrimary, fontSize: 12, padding: "6px 10px" }}
                   onClick={() => {
-                    void copyText(CONNECT_PROMPTS[locale]).then((ok) => {
+                    void copyConnectPromptWithInvite(
+                      locale,
+                      createJoinInvite,
+                      interfazeBaseUrl,
+                    ).then((ok) => {
                       if (!ok) return;
                       setCopied(true);
                       window.setTimeout(() => setCopied(false), 2000);
@@ -195,6 +204,7 @@ export function NewChatPicker({
                 >
                   {copied ? t.promptCopied : t.copyPromptForAgent}
                 </button>
+                ) : null}
                 {connectGuideUrl ? (
                   <div style={{ marginTop: 8 }}>
                     <a
