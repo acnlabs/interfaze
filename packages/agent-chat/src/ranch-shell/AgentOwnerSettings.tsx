@@ -949,13 +949,17 @@ export function AgentOwnerSettings({
     }
   };
 
-  const saving = savingProfile || savingDelivery || savingPolicy || savingPricing;
-  const hasEdits = profileDirty || deliveryDirty || policyDirty || pricingDirty;
+  const saving =
+    savingProfile || savingDelivery || savingPolicy || savingPricing || savingOfficial;
+  const hasEdits =
+    profileDirty || deliveryDirty || policyDirty || pricingDirty || officialDirty;
   const canSaveAny =
-    (canSaveProfile || canSaveDelivery || canSavePolicy) &&
-    !savingProfile &&
-    !savingDelivery &&
-    !savingPolicy &&
+    (canSaveProfile ||
+      canSaveDelivery ||
+      canSavePolicy ||
+      canSavePricing ||
+      canSaveOfficial) &&
+    !saving &&
     !busy;
 
   const runSaveProfile = (): Promise<MyAgentSummary | null> => {
@@ -1030,8 +1034,11 @@ export function AgentOwnerSettings({
       .finally(() => setSavingPricing(false));
   };
 
-  const runSaveOfficial = (): Promise<boolean> => {
-    if (!canSaveOfficial) return Promise.resolve(false);
+  const runSaveOfficial = (): Promise<{
+    model_ids: string[];
+    host_inference_ready: boolean;
+  } | null> => {
+    if (!canSaveOfficial) return Promise.resolve(null);
     setSavingOfficial(true);
     setOfficialError(null);
     setOfficialMsg(null);
@@ -1048,7 +1055,7 @@ export function AgentOwnerSettings({
           official_models: row.model_ids,
           host_inference_ready: row.host_inference_ready,
         });
-        return true;
+        return row;
       })
       .catch((err: unknown) => {
         const msg =
@@ -1056,7 +1063,7 @@ export function AgentOwnerSettings({
             ? err.message.trim()
             : t.myAgentsProvidersFailed;
         setOfficialError(msg);
-        return false;
+        return null;
       })
       .finally(() => setSavingOfficial(false));
   };
@@ -1123,6 +1130,8 @@ export function AgentOwnerSettings({
     const doProfile = canSaveProfile;
     const doDelivery = canSaveDelivery;
     const doPolicy = canSavePolicy;
+    const doPricing = canSavePricing;
+    const doOfficial = canSaveOfficial;
     // Opening policy before delivery so push/pull can succeed; closing after.
     const openingPolicy = doPolicy && policyDraft === "open";
     const otherPolicy = doPolicy && policyDraft !== "open";
@@ -1132,6 +1141,17 @@ export function AgentOwnerSettings({
       if (openingPolicy) latest = (await runSavePolicy()) ?? latest;
       if (doDelivery) latest = (await runSaveDelivery()) ?? latest;
       if (otherPolicy) latest = (await runSavePolicy()) ?? latest;
+      if (doPricing) latest = (await runSavePricing()) ?? latest;
+      if (doOfficial) {
+        const officialRow = await runSaveOfficial();
+        if (officialRow && latest) {
+          latest = {
+            ...latest,
+            official_models: officialRow.model_ids,
+            host_inference_ready: officialRow.host_inference_ready,
+          };
+        }
+      }
       if (latest) onUpdated?.(latest);
     })();
   };
@@ -1498,16 +1518,6 @@ export function AgentOwnerSettings({
                 {officialMsg}
               </p>
             ) : null}
-            {canSaveOfficial || savingOfficial ? (
-              <button
-                type="button"
-                style={btnGhost}
-                disabled={!canSaveOfficial}
-                onClick={() => void runSaveOfficial()}
-              >
-                {savingOfficial ? "…" : t.myAgentsSaveProviders}
-              </button>
-            ) : null}
           </div>
         ) : (
         <>
@@ -1600,16 +1610,6 @@ export function AgentOwnerSettings({
         ) : null}
         {pricingMsg ? (
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>{pricingMsg}</p>
-        ) : null}
-        {canSavePricing || savingPricing ? (
-          <button
-            type="button"
-            style={btnGhost}
-            disabled={!canSavePricing}
-            onClick={() => void runSavePricing()}
-          >
-            {savingPricing ? "…" : t.myAgentsSavePricing}
-          </button>
         ) : null}
         </>
         )}
@@ -1973,14 +1973,14 @@ export function AgentOwnerSettings({
             {rotateError || dangerError}
           </p>
         ) : null}
-        {profileError || deliveryError || policyError ? (
+        {profileError || deliveryError || policyError || pricingError || officialError ? (
           <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>
-            {profileError || deliveryError || policyError}
+            {profileError || deliveryError || policyError || pricingError || officialError}
           </p>
         ) : null}
-        {profileMsg || deliveryMsg || policyMsg ? (
+        {profileMsg || deliveryMsg || policyMsg || pricingMsg || officialMsg ? (
           <p style={{ margin: 0, fontSize: 12, color: colors.recommended }}>
-            {profileMsg || deliveryMsg || policyMsg}
+            {profileMsg || deliveryMsg || policyMsg || pricingMsg || officialMsg}
           </p>
         ) : null}
         {hasEdits || saving ? (
