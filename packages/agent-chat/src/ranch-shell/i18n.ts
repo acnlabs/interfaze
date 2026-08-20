@@ -747,9 +747,9 @@ const en: RanchMessages = {
   myAgentsSaveProfile: "Save profile",
   myAgentsProfileSaved: "Saved",
   myAgentsProfileFailed: "Couldn’t save profile.",
-  myAgentsSectionPricing: "Pricing",
+  myAgentsSectionPricing: "Agent pricing",
   myAgentsPricingHint:
-    "Set the default model and your markup %. Settle = Host Catalog/pack baseline × (1+markup).",
+    "This agent’s call fee for others: Host Catalog/pack baseline × (1+markup%). Default model is which listing that fee uses.",
   myAgentsPricingInputLabel: "Settle preview · input USD / 1M",
   myAgentsPricingOutputLabel: "Settle preview · output USD / 1M",
   myAgentsPricingModelLabel: "Default model · USD / 1M tokens",
@@ -1238,9 +1238,9 @@ const zh: RanchMessages = {
   myAgentsSaveProfile: "保存资料",
   myAgentsProfileSaved: "已保存",
   myAgentsProfileFailed: "保存失败。",
-  myAgentsSectionPricing: "定价",
+  myAgentsSectionPricing: "Agent 定价",
   myAgentsPricingHint:
-    "只需设默认模型与上浮%。结算 = Host Catalog/价包底价 ×（1+上浮%）。",
+    "这是 agent 对外的调用费：Host Catalog/价包底价 ×（1+上浮%）。默认模型决定用哪一档底价。",
   myAgentsPricingInputLabel: "结算预览 · 输入 USD / 百万",
   myAgentsPricingOutputLabel: "结算预览 · 输出 USD / 百万",
   myAgentsPricingModelLabel: "默认模型 · USD / 百万 token",
