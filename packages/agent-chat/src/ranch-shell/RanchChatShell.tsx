@@ -302,12 +302,15 @@ function compactModelLabel(modelId: string | null | undefined, max = 16): string
   return `${bare.slice(0, Math.max(1, max - 1))}…`;
 }
 
-/** Case-insensitive; ``provider/name`` equals bare ``name`` (Host settle rule). */
+/** Case-insensitive; ``provider/name`` equals bare ``name``. Different vendors stay distinct SKUs. */
 function sameModelId(left: string | null | undefined, right: string | null | undefined): boolean {
   const a = (left || "").trim().toLowerCase();
   const b = (right || "").trim().toLowerCase();
   if (!a || !b) return false;
   if (a === b) return true;
+  const aSlash = a.includes("/");
+  const bSlash = b.includes("/");
+  if (aSlash && bSlash) return false;
   return a.split("/").pop() === b.split("/").pop();
 }
 
@@ -2719,6 +2722,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
           const supported = Array.isArray(row.supported_models)
             ? row.supported_models.filter((m): m is string => typeof m === "string" && !!m.trim())
             : [];
+          const official = Array.isArray(row.official_models)
+            ? row.official_models.filter((m): m is string => typeof m === "string" && !!m.trim())
+            : [];
+          const seen = new Set<string>();
+          const pool: string[] = [];
+          for (const id of [...supported, ...official]) {
+            const k = id.toLowerCase();
+            if (seen.has(k)) continue;
+            seen.add(k);
+            pool.push(id);
+          }
           const options = Array.isArray(row.model_options) ? row.model_options : [];
           const listed = row.listed_model_id ?? null;
           const runtime = row.runtime_model_id ?? null;
@@ -2726,16 +2740,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
             listed_model_id: listed,
             runtime_model_id: runtime,
             mismatched: !!row.mismatched,
-            supported_models: supported,
+            supported_models: pool.length ? pool : supported,
             model_options: options,
           });
-          const pool = supported.length
-            ? supported
+          const fallback = pool.length
+            ? pool
             : [listed, runtime].filter((m): m is string => !!m && !!m.trim());
           const stored = readComposerModelPick(active.chat_id);
           const wanted = stored || selectedModelId;
-          const kept = pool.find((m) => sameModelId(m, wanted)) || null;
-          const nextModel = kept || listed || runtime || pool[0] || null;
+          const kept = fallback.find((m) => sameModelId(m, wanted)) || null;
+          const nextModel = kept || listed || runtime || fallback[0] || null;
           setSelectedModelId(nextModel);
           writeComposerModelPick(active.chat_id, nextModel);
         })
