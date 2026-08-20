@@ -278,6 +278,7 @@ export type RanchMessages = {
   myAgentsProviderByo: string;
   myAgentsProviderOfficial: string;
   myAgentsProviderMine: string;
+  myAgentsProviderAgent: string;
   myAgentsProviderOfficialOpenRouter: string;
   myAgentsOfficialSectionHint: string;
   myAgentsMineSectionHint: string;
@@ -728,13 +729,14 @@ const en: RanchMessages = {
     "Chat picks a model. Checked Official · OpenRouter models use Interfaze’s key — not the agent’s own OpenRouter.",
   myAgentsProviderLabel: "Provider",
   myAgentsProviderHint:
-    "Chat only picks a model. Check Official · OpenRouter to serve that model with Interfaze’s key. Unchecked models use the agent’s own key.",
+    "Pick a supplier, then its models. This agent sets the chat default. Official · OpenRouter: check models Interfaze’s key may serve.",
   myAgentsProviderByo: "Mine",
   myAgentsProviderOfficial: "Official · OpenRouter",
   myAgentsProviderMine: "Mine",
+  myAgentsProviderAgent: "This agent",
   myAgentsProviderOfficialOpenRouter: "Official · OpenRouter",
   myAgentsOfficialSectionHint:
-    "Checked models appear in chat on Official · OpenRouter. Unchecked stay on the agent’s key.",
+    "Checked models use Official · OpenRouter in chat. Unchecked stay on this agent’s key.",
   myAgentsMineSectionHint:
     "Chat pick Mine uses the agent’s own key. These models stay on that key.",
   myAgentsProviderUnlisted: "Authorized, not in this agent’s self-report yet — won’t appear in chat until it reports the model.",
@@ -1197,13 +1199,14 @@ const zh: RanchMessages = {
     "聊天只选模型。勾选的官方 · OpenRouter 模型走 Interfaze 的钥匙，不是 agent 自己的 OpenRouter。",
   myAgentsProviderLabel: "供应商",
   myAgentsProviderHint:
-    "聊天只选模型。勾选官方 · OpenRouter 的模型由 Interfaze 的钥匙代打；未勾选走 agent 自己的钥匙。",
+    "先选供应商，再看这家的模型。本 agent 用来设聊天默认模型。官方 · OpenRouter：勾选后由 Interfaze 的钥匙代打。",
   myAgentsProviderByo: "我的",
   myAgentsProviderOfficial: "官方 · OpenRouter",
   myAgentsProviderMine: "我的",
+  myAgentsProviderAgent: "本 agent",
   myAgentsProviderOfficialOpenRouter: "官方 · OpenRouter",
   myAgentsOfficialSectionHint:
-    "勾选的模型在聊天里走官方 · OpenRouter；未勾选仍走 agent 自己的钥匙。",
+    "勾选的模型在聊天里走官方 · OpenRouter；未勾选仍走本 agent 的钥匙。",
   myAgentsMineSectionHint:
     "聊天选「我的」时走 agent 自己的钥匙。下列模型留在那把钥匙上。",
   myAgentsProviderUnlisted: "已授权，但 agent 尚未自报——写进自报之前不会出现在聊天下拉。",
