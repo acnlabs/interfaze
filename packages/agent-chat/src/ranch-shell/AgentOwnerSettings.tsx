@@ -222,6 +222,211 @@ function filterModelIds(ids: string[], query: string, keepId: string): string[] 
   return filtered;
 }
 
+const OFFICIAL_LIST_MAX_PX = 240;
+
+function OfficialModelPicker({
+  ids,
+  value,
+  disabled,
+  optionLabel,
+  searchPlaceholder,
+  emptyText,
+  ariaLabel,
+  onChange,
+}: {
+  ids: string[];
+  value: string;
+  disabled?: boolean;
+  optionLabel: (id: string) => string;
+  searchPlaceholder: string;
+  emptyText: string;
+  ariaLabel: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [panel, setPanel] = useState<{ top: number; left: number; width: number } | null>(
+    null,
+  );
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
+  const selected = ids.find((id) => sameModelId(id, value)) ?? ids[0] ?? "";
+  const filtered = filterModelIds(ids, query, "");
+
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) {
+      setPanel(null);
+      return;
+    }
+    const place = () => {
+      const r = btnRef.current!.getBoundingClientRect();
+      const panelH = 44 + OFFICIAL_LIST_MAX_PX;
+      let top = r.bottom + 4;
+      if (top + panelH > window.innerHeight - 8) {
+        top = Math.max(8, r.top - panelH - 4);
+      }
+      setPanel({ top, left: r.left, width: r.width });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, filtered.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    searchRef.current?.focus();
+    const onDoc = (e: MouseEvent) => {
+      const node = e.target as Node;
+      if (btnRef.current?.contains(node) || panelRef.current?.contains(node)) return;
+      close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, close]);
+
+  return (
+    <div>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-label={ariaLabel}
+        disabled={disabled || ids.length === 0}
+        onClick={() => (open ? close() : setOpen(true))}
+        style={{
+          ...inputStyle,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+          textAlign: "left",
+          cursor: disabled ? "default" : "pointer",
+        }}
+      >
+        <span
+          style={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            minWidth: 0,
+          }}
+        >
+          {selected ? optionLabel(selected) : emptyText}
+        </span>
+        <span style={{ color: colors.muted, flexShrink: 0, fontSize: 11 }} aria-hidden>
+          {open ? "▴" : "▾"}
+        </span>
+      </button>
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={panelRef}
+              style={{
+                position: "fixed",
+                top: panel?.top ?? -9999,
+                left: panel?.left ?? 0,
+                width: panel?.width ?? 0,
+                zIndex: 10040,
+                background: colors.panel,
+                border: `1px solid ${colors.border}`,
+                borderRadius: 8,
+                boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ padding: 8, borderBottom: `1px solid ${colors.border}` }}>
+                <input
+                  ref={searchRef}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={searchPlaceholder}
+                  aria-label={searchPlaceholder}
+                  autoComplete="off"
+                  style={inputStyle}
+                />
+              </div>
+              <div
+                id={listId}
+                role="listbox"
+                style={{ maxHeight: OFFICIAL_LIST_MAX_PX, overflowY: "auto" }}
+              >
+                {filtered.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "10px 12px",
+                      fontSize: 12,
+                      color: colors.muted,
+                    }}
+                  >
+                    {emptyText}
+                  </div>
+                ) : (
+                  filtered.map((id) => {
+                    const active = sameModelId(id, selected);
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        onClick={() => {
+                          onChange(id);
+                          close();
+                        }}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          textAlign: "left",
+                          border: "none",
+                          background: active ? colors.accentSoft : "transparent",
+                          color: colors.text,
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          cursor: "pointer",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!active) e.currentTarget.style.background = colors.hover;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = active
+                            ? colors.accentSoft
+                            : "transparent";
+                        }}
+                      >
+                        {optionLabel(id)}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+}
+
 function catalogOptionLabel(
   id: string,
   pair: { in: number; out: number } | undefined,
@@ -594,7 +799,6 @@ export function AgentOwnerSettings({
     Array<{ id: string; in: number; out: number }>
   >([]);
   const [officialCatalogLoading, setOfficialCatalogLoading] = useState(false);
-  const [officialQuery, setOfficialQuery] = useState("");
   const [settingsProvider, setSettingsProvider] = useState<string>("");
   const [markupDraft, setMarkupDraft] = useState(() => {
     const mu = detail.token_pricing?.markup_percent;
@@ -950,7 +1154,7 @@ export function AgentOwnerSettings({
       : providerOptions[0]?.id) || "";
   const vendorModels =
     activeProvider === OFFICIAL_OPENROUTER
-      ? filterModelIds(officialIds, officialQuery, modelIdDraft)
+      ? officialIds
       : modelsForProvider(supportedModels, activeProvider);
   const officialIdsKey = officialIds.join("\u0001");
   useEffect(() => {
@@ -1585,7 +1789,6 @@ export function AgentOwnerSettings({
               onChange={(e) => {
                 const next = e.target.value;
                 setSettingsProvider(next);
-                setOfficialQuery("");
                 if (next === OFFICIAL_OPENROUTER) return;
                 const list = modelsForProvider(supportedModels, next);
                 if (list.length > 0 && !list.some((id) => sameModelId(id, modelIdDraft))) {
@@ -1607,24 +1810,35 @@ export function AgentOwnerSettings({
           <div style={{ fontSize: 12, color: colors.muted, marginBottom: 6 }}>
             {t.myAgentsPricingModelLabel}
           </div>
-          {activeProvider === OFFICIAL_OPENROUTER ? (
-            <input
-              value={officialQuery}
-              onChange={(e) => setOfficialQuery(e.target.value)}
-              placeholder={t.myAgentsPricingModelSearch}
-              aria-label={t.myAgentsPricingModelSearch}
-              style={{ ...inputStyle, marginBottom: 6 }}
-              disabled={busy || officialCatalogLoading}
-              autoComplete="off"
-            />
-          ) : null}
           {modelsBusy ? (
             <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>…</p>
+          ) : activeProvider === OFFICIAL_OPENROUTER ? (
+            officialIds.length === 0 ? (
+              <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
+                {t.myAgentsPricingOfficialEmpty}
+              </p>
+            ) : (
+              <OfficialModelPicker
+                ids={officialIds}
+                value={modelIdDraft}
+                disabled={busy || savingPricing}
+                ariaLabel={t.myAgentsPricingModelLabel}
+                searchPlaceholder={t.myAgentsPricingModelSearch}
+                emptyText={t.myAgentsPricingOfficialEmpty}
+                optionLabel={(id) =>
+                  catalogOptionLabel(
+                    id,
+                    catalogById[id] ??
+                      officialCatalog.find((row) => sameModelId(row.id, id)),
+                    t.myAgentsPricingOptionLine,
+                  )
+                }
+                onChange={setModelIdDraft}
+              />
+            )
           ) : vendorModels.length === 0 ? (
             <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
-              {activeProvider === OFFICIAL_OPENROUTER
-                ? t.myAgentsPricingOfficialEmpty
-                : t.myAgentsPricingModelsEmpty}
+              {t.myAgentsPricingModelsEmpty}
             </p>
           ) : (
             <select
@@ -1639,12 +1853,7 @@ export function AgentOwnerSettings({
             >
               {vendorModels.map((id) => (
                 <option key={id} value={id}>
-                  {catalogOptionLabel(
-                    id,
-                    catalogById[id] ??
-                      officialCatalog.find((row) => sameModelId(row.id, id)),
-                    t.myAgentsPricingOptionLine,
-                  )}
+                  {catalogOptionLabel(id, catalogById[id], t.myAgentsPricingOptionLine)}
                 </option>
               ))}
             </select>
