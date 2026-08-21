@@ -41,7 +41,8 @@ import {
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
 import { NewComposeMenu } from "./NewComposeMenu";
-import { copyConnectPromptWithInvite, openJoinLanding } from "./connectPrompt";
+import { ConnectAgentModal } from "./ConnectAgentModal";
+import { copyConnectPromptWithInvite } from "./connectPrompt";
 import {
   RANCH_LOCALE_OPTIONS,
   ranchMessages,
@@ -592,6 +593,7 @@ function NoAgentsEmpty({
   connectGuideUrl,
   interfazeBaseUrl,
   locale,
+  onConnectExisting,
   onNewChat,
   t,
 }: {
@@ -599,6 +601,7 @@ function NoAgentsEmpty({
   connectGuideUrl?: string;
   interfazeBaseUrl?: string;
   locale: RanchLocale;
+  onConnectExisting: () => void;
   onNewChat: () => void;
   t: RanchMessages;
 }) {
@@ -613,12 +616,7 @@ function NoAgentsEmpty({
         <button
           type="button"
           style={btnPrimary}
-          onClick={() => {
-            const origin =
-              (interfazeBaseUrl || "").replace(/\/+$/, "") ||
-              (typeof window !== "undefined" ? window.location.origin : "");
-            void openJoinLanding(origin, () => client.createJoinInvite());
-          }}
+          onClick={onConnectExisting}
         >
           {t.connectExisting}
         </button>
@@ -1508,6 +1506,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   const [view, setView] = useState<"list" | "conversation">("list");
   const [pickerMode, setPickerMode] = useState<"direct" | "group" | null>(null);
+  const [showConnect, setShowConnect] = useState(false);
   const [search, setSearch] = useState("");
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [loadingChats, setLoadingChats] = useState(true);
@@ -3127,12 +3126,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           <NewComposeMenu
             allowGroupChat={allowGroupChat}
             messages={t}
-            onConnectExisting={() => {
-              const origin =
-                (interfazeBaseUrl || "").replace(/\/+$/, "") ||
-                (typeof window !== "undefined" ? window.location.origin : "");
-              void openJoinLanding(origin, () => client.createJoinInvite());
-            }}
+            onConnectExisting={() => setShowConnect(true)}
             onDirect={() => setPickerMode("direct")}
             onGroup={() => setPickerMode("group")}
           />
@@ -3161,6 +3155,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 connectGuideUrl={connectGuideUrl}
                 interfazeBaseUrl={interfazeBaseUrl}
                 locale={uiLocale}
+                onConnectExisting={() => setShowConnect(true)}
                 onNewChat={() => setPickerMode("direct")}
                 t={t}
               />
@@ -3404,6 +3399,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               setShowMyAgents(false);
               setShowAccountManage(true);
             }}
+            onConnectExisting={() => setShowConnect(true)}
             onOpenChat={(id) => {
               setShowMyAgents(false);
               setShowAccountManage(false);
@@ -3480,6 +3476,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     connectGuideUrl={connectGuideUrl}
                     interfazeBaseUrl={interfazeBaseUrl}
                     locale={uiLocale}
+                    onConnectExisting={() => setShowConnect(true)}
                     onNewChat={() => setPickerMode("direct")}
                     t={t}
                   />
@@ -5464,6 +5461,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
           interfazeBaseUrl={interfazeBaseUrl}
           initialMode={pickerMode}
           lockMode
+        />
+      ) : null}
+
+      {showConnect ? (
+        <ConnectAgentModal
+          locale={uiLocale}
+          messages={t}
+          interfazeBaseUrl={interfazeBaseUrl}
+          createJoinInvite={() => client.createJoinInvite()}
+          onClose={() => setShowConnect(false)}
         />
       ) : null}
 

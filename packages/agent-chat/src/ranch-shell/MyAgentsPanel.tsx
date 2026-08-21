@@ -8,7 +8,7 @@ import {
   deliveryLabel,
 } from "./AgentOwnerSettings";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
-import { copyConnectPromptWithInvite, openJoinLanding } from "./connectPrompt";
+import { copyConnectPromptWithInvite } from "./connectPrompt";
 import type { RanchLocale, RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors } from "./styles";
 
@@ -23,6 +23,7 @@ type Props = {
   messages: RanchMessages;
   busy?: boolean;
   onClose: () => void;
+  onConnectExisting?: () => void;
   onOpenChat: (agentId: string) => void;
   /** Notify shell/host after a successful profile save (for chat title / directory). */
   onAgentUpdated?: (agent: MyAgentSummary, previousName?: string | null) => void;
@@ -53,6 +54,7 @@ export function MyAgentsPanel({
   messages: t,
   busy,
   onClose,
+  onConnectExisting,
   onOpenChat,
   onAgentUpdated,
   onAgentRemoved,
@@ -167,9 +169,7 @@ export function MyAgentsPanel({
           <button
             type="button"
             style={btnGhost}
-            onClick={() => {
-              void openJoinLanding(interfazeBaseUrl, () => client.createJoinInvite());
-            }}
+            onClick={() => onConnectExisting?.()}
           >
             {t.connectExisting}
           </button>
@@ -276,9 +276,7 @@ export function MyAgentsPanel({
               <button
                 type="button"
                 style={btnPrimary}
-                onClick={() => {
-                  void openJoinLanding(interfazeBaseUrl, () => client.createJoinInvite());
-                }}
+                onClick={() => onConnectExisting?.()}
               >
                 {t.connectExisting}
               </button>
