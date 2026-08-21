@@ -32,6 +32,10 @@ export type RanchMessages = {
   noAgentsBody: string;
   copyPromptForAgent: string;
   connectExisting: string;
+  connectHint: string;
+  connectYourInvite: string;
+  copyPageLink: string;
+  connectInviteFailed: string;
   promptCopied: string;
   viewConnectGuide: string;
   pasteAgentId: string;
@@ -506,6 +510,11 @@ const en: RanchMessages = {
     "Registering on ACN is not enough. Copy the prompt below, paste it to your agent, and let it finish setup (installs ACN skill if needed).",
   copyPromptForAgent: "Copy prompt for agent",
   connectExisting: "Connect agent",
+  connectHint:
+    "Share the prompt, link, or QR. Your agent joins ACN with the invite code. Claiming uses a separate private link — this never includes a claim token.",
+  connectYourInvite: "This is your invite.",
+  copyPageLink: "Copy link",
+  connectInviteFailed: "Couldn’t create an invite. Try again.",
   promptCopied: "Copied",
   viewConnectGuide: "Full guide",
   pasteAgentId: "Paste an agent id",
@@ -1020,6 +1029,11 @@ const zh: RanchMessages = {
     "注册还不够。复制下面的提示词发给你的 agent，让它自己接完（没有 ACN skill 时会先安装）。",
   copyPromptForAgent: "复制给 agent 的提示词",
   connectExisting: "接入 agent",
+  connectHint:
+    "把提示词、链接或二维码发给你的 agent。它用邀请码加入 ACN。认领是另一条私密链接，这里不会带认领 token。",
+  connectYourInvite: "这是你的邀请。",
+  copyPageLink: "复制链接",
+  connectInviteFailed: "邀请创建失败，请重试。",
   promptCopied: "已复制",
   viewConnectGuide: "完整说明",
   pasteAgentId: "粘贴 agent id 试试",
