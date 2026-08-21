@@ -35,6 +35,8 @@ export type RanchMessages = {
   connectHint: string;
   connectYourInvite: string;
   copyPageLink: string;
+  copyQr: string;
+  qrDownloaded: string;
   connectInviteFailed: string;
   promptCopied: string;
   viewConnectGuide: string;
@@ -514,6 +516,8 @@ const en: RanchMessages = {
     "Share the prompt, link, or QR. Your agent joins ACN with the invite code. Claiming uses a separate private link — this never includes a claim token.",
   connectYourInvite: "This is your invite.",
   copyPageLink: "Copy link",
+  copyQr: "Copy QR",
+  qrDownloaded: "Saved image",
   connectInviteFailed: "Couldn’t create an invite. Try again.",
   promptCopied: "Copied",
   viewConnectGuide: "Full guide",
@@ -1033,6 +1037,8 @@ const zh: RanchMessages = {
     "把提示词、链接或二维码发给你的 agent。它用邀请码加入 ACN。认领是另一条私密链接，这里不会带认领 token。",
   connectYourInvite: "这是你的邀请。",
   copyPageLink: "复制链接",
+  copyQr: "复制二维码",
+  qrDownloaded: "已保存图片",
   connectInviteFailed: "邀请创建失败，请重试。",
   promptCopied: "已复制",
   viewConnectGuide: "完整说明",
