@@ -337,13 +337,78 @@ function sameModelId(left: string | null | undefined, right: string | null | und
   return a.split("/").pop() === b.split("/").pop();
 }
 
-function pickCanonicalModelId(
-  wanted: string | null | undefined,
-  pool: string[],
-): string | null {
-  if (!wanted) return null;
-  const hit = pool.find((m) => sameModelId(m, wanted));
-  return hit || wanted;
+/** OpenRouter-style ``vendor/model``; empty if the id is bare. */
+function modelVendorId(modelId: string | null | undefined): string {
+  const s = (modelId || "").trim();
+  const slash = s.indexOf("/");
+  return slash > 0 ? s.slice(0, slash) : "";
+}
+
+/**
+ * Settings path is SoT. Keep a session pin only when it belongs to the
+ * current family (Official · OpenRouter vs BYO vendor). Switching providers
+ * drops the other family's pin.
+ */
+function isByoVendor(vendor: string, runtimeVendor: string): boolean {
+  if (!vendor) return false;
+  if (vendor === "tencenttokenplan") return true;
+  return !!runtimeVendor && vendor === runtimeVendor;
+}
+
+function modelFitsComposerPath(
+  id: string | null | undefined,
+  args: {
+    official: boolean;
+    byoVendor: string;
+    officialIds: string[];
+    catalogIds: string[];
+    fallback: string[];
+    listed: string | null;
+  },
+): boolean {
+  const mid = (id || "").trim();
+  if (!mid) return false;
+  const vendor = modelVendorId(mid).toLowerCase();
+  if (args.official) {
+    if (isByoVendor(vendor, args.byoVendor)) return false;
+    if (args.officialIds.some((item) => sameModelId(item, mid))) return true;
+    if (args.catalogIds.some((item) => sameModelId(item, mid))) return true;
+    return !!vendor;
+  }
+  if (vendor && !isByoVendor(vendor, args.byoVendor)) return false;
+  return (
+    args.fallback.some((item) => sameModelId(item, mid)) ||
+    sameModelId(mid, args.listed)
+  );
+}
+
+function pickComposerModelForPath(args: {
+  official: boolean;
+  wanted: string | null;
+  listed: string | null;
+  runtime: string | null;
+  fallback: string[];
+  officialIds: string[];
+  catalogIds: string[];
+}): string | null {
+  const byoVendor = modelVendorId(args.runtime).toLowerCase();
+  const path = {
+    official: args.official,
+    byoVendor,
+    officialIds: args.officialIds,
+    catalogIds: args.catalogIds,
+    fallback: args.fallback,
+    listed: args.listed,
+  };
+  if (args.wanted && modelFitsComposerPath(args.wanted, path)) {
+    return (
+      args.fallback.find((item) => sameModelId(item, args.wanted)) ||
+      args.catalogIds.find((item) => sameModelId(item, args.wanted)) ||
+      args.wanted
+    );
+  }
+  if (args.listed && modelFitsComposerPath(args.listed, path)) return args.listed;
+  return args.fallback.find((item) => modelFitsComposerPath(item, path)) || args.listed || null;
 }
 
 function composerModelStorageKey(chatId: string): string {
@@ -1605,6 +1670,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     runtime_model_id?: string | null;
     mismatched: boolean;
     official_channel: boolean;
+    official_models: string[];
     markup_percent?: number | null;
     supported_models: string[];
     model_options: Array<{
@@ -2773,6 +2839,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             runtime_model_id: runtime,
             mismatched: !!row.mismatched,
             official_channel: listedOfficial,
+            official_models: officialIds,
             markup_percent:
               typeof row.markup_percent === "number" ? row.markup_percent : null,
             supported_models: supported,
@@ -2782,14 +2849,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
             ? supported
             : [listed].filter((m): m is string => !!m && !!m.trim());
           const stored = readComposerModelPick(active.chat_id);
-          const wanted = stored || selectedModelId;
-          const kept = fallback.find((m) => sameModelId(m, wanted)) || null;
-          const nextModel =
-            kept ||
-            (listedOfficial && wanted && wanted.includes("/") ? wanted : null) ||
-            listed ||
-            fallback[0] ||
-            null;
+          const nextModel = pickComposerModelForPath({
+            official: listedOfficial,
+            wanted: stored,
+            listed,
+            runtime,
+            fallback,
+            officialIds,
+            catalogIds: [],
+          });
           setSelectedModelId(nextModel);
           writeComposerModelPick(active.chat_id, nextModel);
         })
@@ -2805,7 +2873,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [active?.chat_id, active?.agent_id, active?.type, client]);
+  }, [
+    active?.chat_id,
+    active?.agent_id,
+    active?.type,
+    client,
+    ownedAgentDetail?.token_pricing?.model_id,
+    (ownedAgentDetail?.official_models ?? []).join("\u0001"),
+  ]);
 
   useEffect(() => {
     setComposerMenuOpen(false);
@@ -4352,8 +4427,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             : [listed].filter(Boolean);
                         const seen = new Set<string>();
                         const out: string[] = [];
+                        const byoVendor = modelVendorId(composerModel.runtime_model_id).toLowerCase();
                         const extras = [listed, selectedModelId].filter(
-                          (id): id is string => !!id && !!id.trim(),
+                          (id): id is string =>
+                            !!id &&
+                            !!id.trim() &&
+                            modelFitsComposerPath(id, {
+                              official,
+                              byoVendor,
+                              officialIds: composerModel.official_models,
+                              catalogIds: composerCatalog.map((row) => row.id),
+                              fallback: fromApi,
+                              listed: listed || null,
+                            }),
                         );
                         for (const id of [...extras, ...fromApi]) {
                           const k = id.toLowerCase();
