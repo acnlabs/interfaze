@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import {
   connectPromptForInvite,
@@ -18,6 +18,8 @@ type Props = {
   onClose: () => void;
 };
 
+type CopiedKind = "prompt" | "link" | "qr" | "qrFile";
+
 export function ConnectAgentModal({
   locale,
   messages: t,
@@ -28,7 +30,8 @@ export function ConnectAgentModal({
   const [code, setCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
-  const [copied, setCopied] = useState<"prompt" | "link" | null>(null);
+  const [copied, setCopied] = useState<CopiedKind | null>(null);
+  const qrRef = useRef<HTMLDivElement>(null);
 
   const origin = useMemo(() => {
     const fromProp = (interfazeBaseUrl || "").replace(/\/+$/, "");
@@ -73,10 +76,25 @@ export function ConnectAgentModal({
   const prompt = connectPromptForInvite(locale, code, origin);
   const pageUrl = joinLandingUrl(origin, code);
 
-  const markCopied = (kind: "prompt" | "link") => {
+  const markCopied = (kind: CopiedKind) => {
     setCopied(kind);
     window.setTimeout(() => setCopied(null), 2000);
   };
+
+  const copyQr = () => {
+    const svg = qrRef.current?.querySelector("svg");
+    if (!svg) return;
+    void pngFromSvg(svg).then((blob) => {
+      if (!blob) return;
+      return copyPngOrDownload(blob, "interfaze-join.png").then((result) => {
+        if (result === "copied") markCopied("qr");
+        if (result === "downloaded") markCopied("qrFile");
+      });
+    });
+  };
+
+  const qrButtonLabel =
+    copied === "qr" ? t.promptCopied : copied === "qrFile" ? t.qrDownloaded : t.copyQr;
 
   return (
     <div
@@ -129,15 +147,79 @@ export function ConnectAgentModal({
               >
                 {copied === "link" ? t.promptCopied : t.copyPageLink}
               </button>
-              <div style={qrWrap}>
+              <button
+                type="button"
+                ref={qrRef}
+                style={qrWrap}
+                onClick={copyQr}
+                aria-label={t.copyQr}
+              >
                 <QRCodeSVG value={pageUrl} size={160} marginSize={0} />
-              </div>
+              </button>
+              <button type="button" style={{ ...btnGhost, width: "100%" }} onClick={copyQr}>
+                {qrButtonLabel}
+              </button>
             </>
           )}
         </div>
       </div>
     </div>
   );
+}
+
+async function pngFromSvg(svg: SVGSVGElement): Promise<Blob | null> {
+  const xml = new XMLSerializer().serializeToString(svg);
+  const href = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}`;
+  const img = new Image();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("svg"));
+      img.src = href;
+    });
+  } catch {
+    return null;
+  }
+  const pad = 16;
+  const canvas = document.createElement("canvas");
+  canvas.width = (img.naturalWidth || 160) + pad * 2;
+  canvas.height = (img.naturalHeight || 160) + pad * 2;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, pad, pad);
+  return await new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), "image/png");
+  });
+}
+
+async function copyPngOrDownload(
+  blob: Blob,
+  filename: string,
+): Promise<"copied" | "downloaded" | false> {
+  try {
+    if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      return "copied";
+    }
+  } catch {
+    // Some browsers (WeChat, older Safari) block image clipboard.
+  }
+  try {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return "downloaded";
+  } catch {
+    return false;
+  }
 }
 
 const overlay: CSSProperties = {
@@ -196,4 +278,7 @@ const qrWrap: CSSProperties = {
   padding: 10,
   background: "#fff",
   borderRadius: 12,
+  border: "none",
+  cursor: "pointer",
+  lineHeight: 0,
 };
