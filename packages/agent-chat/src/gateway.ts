@@ -348,6 +348,7 @@ export type GatewayClient = {
     mismatched: boolean;
     markup_percent?: number | null;
     supported_models?: string[];
+    self_reported_models?: string[];
     model_options?: Array<{
       model_id: string;
       is_listing?: boolean;
@@ -604,6 +605,7 @@ export function createGatewayClient(
         mismatched: boolean;
         markup_percent?: number | null;
         supported_models?: string[];
+        self_reported_models?: string[];
         model_options?: Array<{
           model_id: string;
           is_listing?: boolean;
