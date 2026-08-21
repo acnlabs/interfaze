@@ -316,6 +316,23 @@ function composerProviderCaption(
   return modelVendorId(modelId);
 }
 
+function filterComposerModels(ids: string[], query: string): string[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return ids;
+  return ids.filter((id) => {
+    const short = shortModelLabel(id).toLowerCase();
+    return id.toLowerCase().includes(q) || short.includes(q);
+  });
+}
+
+function applyMarkupUsd(base: number, markupPercent: number | null | undefined): number {
+  const markup =
+    typeof markupPercent === "number" && Number.isFinite(markupPercent) && markupPercent >= 0
+      ? markupPercent
+      : 0;
+  return base * (1 + markup / 100);
+}
+
 /** Bubble footer: drop provider prefix, then cap length so in/out stay visible. */
 function compactModelLabel(modelId: string | null | undefined, max = 16): string {
   const bare = shortModelLabel(modelId);
@@ -1602,6 +1619,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     listed_model_id?: string | null;
     runtime_model_id?: string | null;
     mismatched: boolean;
+    official_channel: boolean;
+    markup_percent?: number | null;
     supported_models: string[];
     model_options: Array<{
       model_id: string;
@@ -1617,6 +1636,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
   /** User pick for this hop (S1). Sticky per chat until changed. */
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
+  const [composerMenuQuery, setComposerMenuQuery] = useState("");
+  const [composerCatalog, setComposerCatalog] = useState<Array<{ id: string; in: number; out: number }>>(
+    [],
+  );
+  const [composerCatalogLoading, setComposerCatalogLoading] = useState(false);
   const composerMenuRef = useRef<HTMLDivElement | null>(null);
   const [ownedAgentLoading, setOwnedAgentLoading] = useState(false);
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
@@ -2747,10 +2771,25 @@ export function RanchChatShell(props: RanchChatShellProps) {
           const options = Array.isArray(row.model_options) ? row.model_options : [];
           const listed = row.listed_model_id ?? null;
           const runtime = row.runtime_model_id ?? null;
+          const officialIds = Array.isArray(row.official_models)
+            ? row.official_models.filter((m): m is string => typeof m === "string" && !!m.trim())
+            : [];
+          const listedOfficial = Boolean(
+            listed &&
+              (options.some(
+                (o) =>
+                  (o.inference_path || "").toLowerCase() === "official" &&
+                  sameModelId(o.model_id, listed),
+              ) ||
+                officialIds.some((id) => sameModelId(id, listed))),
+          );
           setComposerModel({
             listed_model_id: listed,
             runtime_model_id: runtime,
             mismatched: !!row.mismatched,
+            official_channel: listedOfficial,
+            markup_percent:
+              typeof row.markup_percent === "number" ? row.markup_percent : null,
             supported_models: supported,
             model_options: options,
           });
@@ -2760,7 +2799,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
           const stored = readComposerModelPick(active.chat_id);
           const wanted = stored || selectedModelId;
           const kept = fallback.find((m) => sameModelId(m, wanted)) || null;
-          const nextModel = kept || listed || fallback[0] || null;
+          const nextModel =
+            kept ||
+            (listedOfficial && wanted && wanted.includes("/") ? wanted : null) ||
+            listed ||
+            fallback[0] ||
+            null;
           setSelectedModelId(nextModel);
           writeComposerModelPick(active.chat_id, nextModel);
         })
@@ -2780,7 +2824,60 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   useEffect(() => {
     setComposerMenuOpen(false);
+    setComposerMenuQuery("");
   }, [active?.chat_id]);
+
+  useEffect(() => {
+    if (!composerMenuOpen) setComposerMenuQuery("");
+  }, [composerMenuOpen]);
+
+  useEffect(() => {
+    if (!composerModel?.official_channel) {
+      setComposerCatalog([]);
+      setComposerCatalogLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setComposerCatalogLoading(true);
+    void (async () => {
+      const page = 500;
+      const acc: Array<{ id: string; in: number; out: number }> = [];
+      let offset = 0;
+      let total = Number.POSITIVE_INFINITY;
+      try {
+        while (!cancelled && offset < total && offset < 8000) {
+          const data = await client.listModelCatalog({
+            source: "openrouter",
+            active_only: true,
+            limit: page,
+            offset,
+          });
+          total = Number.isFinite(data.total) ? data.total : offset + data.items.length;
+          for (const row of data.items) {
+            const src = (row.source || "openrouter").toLowerCase();
+            if (src && src !== "openrouter") continue;
+            const cin = Number(row.input_price_per_million);
+            const cout = Number(row.output_price_per_million);
+            if (!Number.isFinite(cin) || !Number.isFinite(cout)) continue;
+            const id = (row.model_id || "").trim();
+            if (!id) continue;
+            if (acc.some((item) => sameModelId(item.id, id))) continue;
+            acc.push({ id, in: cin, out: cout });
+          }
+          if (!data.items.length) break;
+          offset += data.items.length;
+        }
+        if (!cancelled) setComposerCatalog(acc);
+      } catch {
+        if (!cancelled) setComposerCatalog([]);
+      } finally {
+        if (!cancelled) setComposerCatalogLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [client, composerModel?.official_channel]);
 
   useEffect(() => {
     if (!composerMenuOpen) return;
@@ -4261,13 +4358,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   >
                     {(() => {
                       const listed = (composerModel.listed_model_id || "").trim();
+                      const official = composerModel.official_channel;
                       const options = (() => {
-                        const fromApi = composerModel.supported_models.length
-                          ? composerModel.supported_models
-                          : [listed].filter(Boolean);
+                        const fromApi = official && composerCatalog.length
+                          ? composerCatalog.map((row) => row.id)
+                          : composerModel.supported_models.length
+                            ? composerModel.supported_models
+                            : [listed].filter(Boolean);
                         const seen = new Set<string>();
                         const out: string[] = [];
-                        for (const id of fromApi) {
+                        const extras = [listed, selectedModelId].filter(
+                          (id): id is string => !!id && !!id.trim(),
+                        );
+                        for (const id of [...extras, ...fromApi]) {
                           const k = id.toLowerCase();
                           if (seen.has(k)) continue;
                           seen.add(k);
@@ -4275,34 +4378,47 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         }
                         return out;
                       })();
+                      const visible = filterComposerModels(options, composerMenuQuery);
                       const value =
                         options.find((id) => sameModelId(id, selectedModelId)) ||
                         options.find((id) => sameModelId(id, listed)) ||
                         options[0] ||
                         "";
-                      const valueTitle =
-                        composerModel.model_options.find((o) =>
-                          sameModelId(o.model_id, value),
-                        ) || null;
-                      const priceHint = (() => {
-                        if (!valueTitle) return "";
-                        if (valueTitle.priceable === false) return t.composerModelNoPrice;
-                        if (valueTitle.free) return "free";
-                        const inn = valueTitle.input_price_per_million;
-                        const out = valueTitle.output_price_per_million;
-                        if (typeof inn === "number" && typeof out === "number") {
+                      const priceFor = (id: string) => {
+                        const priced = composerModel.model_options.find((o) =>
+                          sameModelId(o.model_id, id),
+                        );
+                        if (priced) {
+                          if (priced.priceable === false) return t.composerModelNoPrice;
+                          if (priced.free) return "free";
+                          const inn = priced.input_price_per_million;
+                          const out = priced.output_price_per_million;
+                          if (typeof inn === "number" && typeof out === "number") {
+                            return t.composerModelPrice(
+                              formatUsdPerMillion(inn),
+                              formatUsdPerMillion(out),
+                            );
+                          }
+                          if (typeof inn === "number") {
+                            return `${formatUsdPerMillion(inn)} in`;
+                          }
+                        }
+                        const cat = composerCatalog.find((row) => sameModelId(row.id, id));
+                        if (cat) {
                           return t.composerModelPrice(
-                            formatUsdPerMillion(inn),
-                            formatUsdPerMillion(out),
+                            formatUsdPerMillion(
+                              applyMarkupUsd(cat.in, composerModel.markup_percent),
+                            ),
+                            formatUsdPerMillion(
+                              applyMarkupUsd(cat.out, composerModel.markup_percent),
+                            ),
                           );
                         }
-                        if (typeof inn === "number") {
-                          return `${formatUsdPerMillion(inn)} in`;
-                        }
                         return t.composerModelNoPrice;
-                      })();
+                      };
+                      const priceHint = value ? priceFor(value) : "";
                       const displayName = shortModelLabel(value) || t.composerModelUnknown;
-                      const canPick = options.length > 0;
+                      const canPick = options.length > 0 || official;
                       return (
                         <>
                           <button
@@ -4377,85 +4493,117 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             ) : null}
                           </button>
                           {composerMenuOpen && canPick ? (
-                            <ul
-                              role="listbox"
+                            <div
                               style={{
                                 position: "absolute",
                                 left: 0,
                                 bottom: "calc(100% + 6px)",
-                                margin: 0,
-                                padding: 4,
-                                listStyle: "none",
-                                minWidth: 220,
-                                maxWidth: 320,
-                                maxHeight: 240,
-                                overflowY: "auto",
+                                minWidth: 260,
+                                maxWidth: 360,
                                 borderRadius: 10,
                                 border: `1px solid ${colors.border}`,
                                 background: colors.panel,
                                 zIndex: 20,
                               }}
                             >
-                              {options.map((id) => {
-                                const opt =
-                                  composerModel.model_options.find((row) =>
-                                    sameModelId(row.model_id, id),
-                                  ) || null;
-                                const selected = sameModelId(id, value);
-                                const provider = composerProviderCaption(
-                                  id,
-                                  opt?.inference_path,
-                                  t.myAgentsProviderOfficialOpenRouter,
-                                );
-                                return (
-                                  <li key={id} role="none">
-                                    <button
-                                      type="button"
-                                      role="option"
-                                      aria-selected={selected}
-                                      onClick={() => {
-                                        setSelectedModelId(id);
-                                        if (active?.chat_id) {
-                                          writeComposerModelPick(active.chat_id, id);
-                                        }
-                                        setComposerMenuOpen(false);
-                                      }}
-                                      style={{
-                                        display: "flex",
-                                        alignItems: "baseline",
-                                        justifyContent: "space-between",
-                                        gap: 12,
-                                        width: "100%",
-                                        padding: "6px 8px",
-                                        border: "none",
-                                        borderRadius: 8,
-                                        background: selected
-                                          ? colors.hover
-                                          : "transparent",
-                                        color: colors.text,
-                                        cursor: "pointer",
-                                        textAlign: "left",
-                                      }}
-                                    >
-                                      <span style={{ fontWeight: 600, fontSize: 13 }}>
-                                        {shortModelLabel(id) || id}
-                                      </span>
-                                      {provider ? (
-                                        <span
+                              <input
+                                value={composerMenuQuery}
+                                onChange={(e) => setComposerMenuQuery(e.target.value)}
+                                placeholder={t.myAgentsPricingModelSearch}
+                                aria-label={t.myAgentsPricingModelSearch}
+                                style={{
+                                  ...inputStyle,
+                                  width: "100%",
+                                  boxSizing: "border-box",
+                                  border: "none",
+                                  borderBottom: `1px solid ${colors.border}`,
+                                  borderRadius: "10px 10px 0 0",
+                                  fontSize: 12,
+                                }}
+                              />
+                              <ul
+                                role="listbox"
+                                style={{
+                                  margin: 0,
+                                  padding: 4,
+                                  listStyle: "none",
+                                  maxHeight: 240,
+                                  overflowY: "auto",
+                                }}
+                              >
+                                {composerCatalogLoading && official && options.length <= 1 ? (
+                                  <li style={{ padding: "8px", fontSize: 12, color: colors.muted }}>
+                                    …
+                                  </li>
+                                ) : visible.length === 0 ? (
+                                  <li style={{ padding: "8px", fontSize: 12, color: colors.muted }}>
+                                    {t.myAgentsPricingOfficialEmpty}
+                                  </li>
+                                ) : (
+                                  visible.map((id) => {
+                                    const opt =
+                                      composerModel.model_options.find((row) =>
+                                        sameModelId(row.model_id, id),
+                                      ) || null;
+                                    const selected = sameModelId(id, value);
+                                    const provider = official
+                                      ? t.myAgentsProviderOfficialOpenRouter
+                                      : composerProviderCaption(
+                                          id,
+                                          opt?.inference_path,
+                                          t.myAgentsProviderOfficialOpenRouter,
+                                        );
+                                    return (
+                                      <li key={id} role="none">
+                                        <button
+                                          type="button"
+                                          role="option"
+                                          aria-selected={selected}
+                                          onClick={() => {
+                                            setSelectedModelId(id);
+                                            if (active?.chat_id) {
+                                              writeComposerModelPick(active.chat_id, id);
+                                            }
+                                            setComposerMenuOpen(false);
+                                          }}
                                           style={{
-                                            color: colors.muted,
-                                            fontSize: 11,
-                                            whiteSpace: "nowrap",
+                                            display: "flex",
+                                            alignItems: "baseline",
+                                            justifyContent: "space-between",
+                                            gap: 12,
+                                            width: "100%",
+                                            padding: "6px 8px",
+                                            border: "none",
+                                            borderRadius: 8,
+                                            background: selected
+                                              ? colors.hover
+                                              : "transparent",
+                                            color: colors.text,
+                                            cursor: "pointer",
+                                            textAlign: "left",
                                           }}
                                         >
-                                          {provider}
-                                        </span>
-                                      ) : null}
-                                    </button>
-                                  </li>
-                                );
-                              })}
-                            </ul>
+                                          <span style={{ fontWeight: 600, fontSize: 13 }}>
+                                            {shortModelLabel(id) || id}
+                                          </span>
+                                          {provider ? (
+                                            <span
+                                              style={{
+                                                color: colors.muted,
+                                                fontSize: 11,
+                                                whiteSpace: "nowrap",
+                                              }}
+                                            >
+                                              {provider}
+                                            </span>
+                                          ) : null}
+                                        </button>
+                                      </li>
+                                    );
+                                  })
+                                )}
+                              </ul>
+                            </div>
                           ) : null}
                         </>
                       );
