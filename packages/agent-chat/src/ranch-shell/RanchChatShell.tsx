@@ -40,6 +40,7 @@ import {
 } from "./AccountPanels";
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
+import { NewComposeMenu } from "./NewComposeMenu";
 import { copyConnectPromptWithInvite, openJoinLanding } from "./connectPrompt";
 import {
   RANCH_LOCALE_OPTIONS,
@@ -1506,7 +1507,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   );
 
   const [view, setView] = useState<"list" | "conversation">("list");
-  const [showPicker, setShowPicker] = useState(false);
+  const [pickerMode, setPickerMode] = useState<"direct" | "group" | null>(null);
   const [search, setSearch] = useState("");
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [loadingChats, setLoadingChats] = useState(true);
@@ -2270,7 +2271,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setError(null);
     try {
       const c = await client.createOrGetDirectChat(agentId);
-      setShowPicker(false);
+      setPickerMode(null);
       await refreshChats();
       await openConversation(c);
     } catch (e) {
@@ -2291,7 +2292,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setError(null);
     try {
       const c = await client.createGroupChat(groupTitle, agentIds);
-      setShowPicker(false);
+      setPickerMode(null);
       await refreshChats();
       await openConversation(c);
     } catch (e) {
@@ -3123,9 +3124,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
             placeholder={t.searchChats}
             style={{ ...inputStyle, flex: 1 }}
           />
-          <button type="button" style={btnPrimary} onClick={() => setShowPicker(true)}>
-            + {t.newChat}
-          </button>
+          <NewComposeMenu
+            allowGroupChat={allowGroupChat}
+            messages={t}
+            onConnectExisting={() => {
+              const origin =
+                (interfazeBaseUrl || "").replace(/\/+$/, "") ||
+                (typeof window !== "undefined" ? window.location.origin : "");
+              void openJoinLanding(origin, () => client.createJoinInvite());
+            }}
+            onDirect={() => setPickerMode("direct")}
+            onGroup={() => setPickerMode("group")}
+          />
         </div>
 
         {healthOk === false && (
@@ -3141,7 +3151,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             hasMineAgents ? (
               <div style={{ textAlign: "center", padding: 32, color: colors.muted }}>
                 <p style={{ margin: "0 0 12px" }}>{t.noChatsYet}</p>
-                <button type="button" style={btnPrimary} onClick={() => setShowPicker(true)}>
+                <button type="button" style={btnPrimary} onClick={() => setPickerMode("direct")}>
                   {t.startChat}
                 </button>
               </div>
@@ -3151,7 +3161,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 connectGuideUrl={connectGuideUrl}
                 interfazeBaseUrl={interfazeBaseUrl}
                 locale={uiLocale}
-                onNewChat={() => setShowPicker(true)}
+                onNewChat={() => setPickerMode("direct")}
                 t={t}
               />
             )
@@ -3315,49 +3325,32 @@ export function RanchChatShell(props: RanchChatShellProps) {
             account={account}
             onLogout={onLogout}
             onProfile={() => {
-              setShowPicker(false);
+              setPickerMode(null);
               closeAccountSurfaces();
               setShowAccountProfile(true);
             }}
             onManage={() => {
-              setShowPicker(false);
+              setPickerMode(null);
               closeAccountSurfaces();
               setShowAccountManage(true);
             }}
             onWallet={() => {
-              setShowPicker(false);
+              setPickerMode(null);
               closeAccountSurfaces();
               setShowAccountWallet(true);
             }}
             onPlanUsage={() => {
-              setShowPicker(false);
+              setPickerMode(null);
               closeAccountSurfaces();
               setShowAccountPlan(true);
             }}
             onDiscoverAgents={() => {
               closeAccountSurfaces();
-              setShowPicker(true);
+              setPickerMode("direct");
             }}
             t={t}
           />
         ) : null}
-
-        {showPicker && (
-          <NewChatPicker
-            directoryAgents={directoryAgents}
-            allowGroupChat={allowGroupChat}
-            busy={busy}
-            connectGuideUrl={connectGuideUrl}
-            locale={uiLocale}
-            messages={t}
-            onSearchDiscover={searchDiscover}
-            onClose={() => setShowPicker(false)}
-            onOpenDirect={(id) => void startDirect(id)}
-            onCreateGroup={(titleText, ids) => void startGroup(titleText, ids)}
-            createJoinInvite={() => client.createJoinInvite()}
-            interfazeBaseUrl={interfazeBaseUrl}
-          />
-        )}
 
         {showAccountProfile && account ? (
           <AccountProfilePanel
@@ -3469,7 +3462,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   }}
                 >
                   <p style={{ margin: 0 }}>{t.selectOrStart}</p>
-                  <button type="button" style={btnPrimary} onClick={() => setShowPicker(true)}>
+                  <button type="button" style={btnPrimary} onClick={() => setPickerMode("direct")}>
                     {t.startChat}
                   </button>
                 </div>
@@ -3487,7 +3480,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     connectGuideUrl={connectGuideUrl}
                     interfazeBaseUrl={interfazeBaseUrl}
                     locale={uiLocale}
-                    onNewChat={() => setShowPicker(true)}
+                    onNewChat={() => setPickerMode("direct")}
                     t={t}
                   />
                 </div>
@@ -5453,6 +5446,26 @@ export function RanchChatShell(props: RanchChatShellProps) {
           )}
         </div>
       )}
+
+      {pickerMode ? (
+        <NewChatPicker
+          key={pickerMode}
+          directoryAgents={directoryAgents}
+          allowGroupChat={allowGroupChat}
+          busy={busy}
+          connectGuideUrl={connectGuideUrl}
+          locale={uiLocale}
+          messages={t}
+          onSearchDiscover={searchDiscover}
+          onClose={() => setPickerMode(null)}
+          onOpenDirect={(id) => void startDirect(id)}
+          onCreateGroup={(titleText, ids) => void startGroup(titleText, ids)}
+          createJoinInvite={() => client.createJoinInvite()}
+          interfazeBaseUrl={interfazeBaseUrl}
+          initialMode={pickerMode}
+          lockMode
+        />
+      ) : null}
 
       {confirmDialog ? (
         <div
