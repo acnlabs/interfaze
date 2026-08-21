@@ -2723,17 +2723,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
           const supported = Array.isArray(row.supported_models)
             ? row.supported_models.filter((m): m is string => typeof m === "string" && !!m.trim())
             : [];
-          const official = Array.isArray(row.official_models)
-            ? row.official_models.filter((m): m is string => typeof m === "string" && !!m.trim())
-            : [];
-          const seen = new Set<string>();
-          const pool: string[] = [];
-          for (const id of [...supported, ...official]) {
-            const k = id.toLowerCase();
-            if (seen.has(k)) continue;
-            seen.add(k);
-            pool.push(id);
-          }
           const options = Array.isArray(row.model_options) ? row.model_options : [];
           const listed = row.listed_model_id ?? null;
           const runtime = row.runtime_model_id ?? null;
@@ -2741,16 +2730,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
             listed_model_id: listed,
             runtime_model_id: runtime,
             mismatched: !!row.mismatched,
-            supported_models: pool.length ? pool : supported,
+            supported_models: supported,
             model_options: options,
           });
-          const fallback = pool.length
-            ? pool
-            : [listed, runtime].filter((m): m is string => !!m && !!m.trim());
+          const fallback = supported.length
+            ? supported
+            : [listed].filter((m): m is string => !!m && !!m.trim());
           const stored = readComposerModelPick(active.chat_id);
           const wanted = stored || selectedModelId;
           const kept = fallback.find((m) => sameModelId(m, wanted)) || null;
-          const nextModel = kept || listed || runtime || fallback[0] || null;
+          const nextModel = kept || listed || fallback[0] || null;
           setSelectedModelId(nextModel);
           writeComposerModelPick(active.chat_id, nextModel);
         })
@@ -4234,7 +4223,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       const options = (() => {
                         const fromApi = composerModel.supported_models.length
                           ? composerModel.supported_models
-                          : [listed, runtime].filter(Boolean);
+                          : [listed].filter(Boolean);
                         const seen = new Set<string>();
                         const out: string[] = [];
                         for (const id of fromApi) {
@@ -4242,9 +4231,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           if (seen.has(k)) continue;
                           seen.add(k);
                           out.push(id);
-                        }
-                        if (selectedModelId && !seen.has(selectedModelId.toLowerCase())) {
-                          out.unshift(selectedModelId);
                         }
                         return out;
                       })();

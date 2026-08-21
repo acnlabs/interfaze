@@ -925,11 +925,12 @@ export function AgentOwnerSettings({
       .getAgentModelStatus(detail.agent_id)
       .then((status) => {
         if (cancelled) return;
-        const ids = uniqModelIds(
-          status.supported_models,
-          [detail.token_pricing?.model_id],
-          [detail.runtime_model_id],
-        );
+        const reported = uniqModelIds(status.self_reported_models);
+        const ids = reported.length
+          ? reported
+          : uniqModelIds(status.supported_models).filter(
+              (id) => !status.official_models?.some((official) => sameModelId(official, id)),
+            );
         setSupportedModels(ids);
         if (typeof status.host_inference_ready === "boolean") {
           setHostReady(status.host_inference_ready);
@@ -944,14 +945,27 @@ export function AgentOwnerSettings({
           setSettingsProvider(providerIdForModel(listed, status.official_models, ready));
         }
         const current = resolvePricingModelId(detail);
-        if (ids.length > 0 && !ids.some((id) => id.toLowerCase() === current.toLowerCase())) {
+        const ready =
+          typeof status.host_inference_ready === "boolean"
+            ? status.host_inference_ready
+            : Boolean(detail.host_inference_ready);
+        const listedOfficial =
+          ready && modelIsOfficial(current, status.official_models ?? []);
+        if (
+          !listedOfficial &&
+          ids.length > 0 &&
+          !ids.some((id) => id.toLowerCase() === current.toLowerCase())
+        ) {
           setModelIdDraft(ids[0]);
         }
       })
       .catch(() => {
         if (cancelled) return;
+        const official = detail.official_models ?? [];
         setSupportedModels(
-          uniqModelIds([detail.token_pricing?.model_id], [detail.runtime_model_id]),
+          uniqModelIds([detail.runtime_model_id]).filter(
+            (id) => !modelIsOfficial(id, official),
+          ),
         );
       })
       .finally(() => {
