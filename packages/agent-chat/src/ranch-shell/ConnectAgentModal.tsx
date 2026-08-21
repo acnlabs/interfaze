@@ -31,7 +31,7 @@ export function ConnectAgentModal({
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [copied, setCopied] = useState<CopiedKind | null>(null);
-  const qrRef = useRef<HTMLDivElement>(null);
+  const qrRef = useRef<HTMLButtonElement>(null);
 
   const origin = useMemo(() => {
     const fromProp = (interfazeBaseUrl || "").replace(/\/+$/, "");
