@@ -307,6 +307,15 @@ function formatUsdPerMillion(n: number): string {
   return `$${Number(n.toPrecision(6))}`;
 }
 
+function composerProviderCaption(
+  modelId: string,
+  inferencePath: string | null | undefined,
+  officialLabel: string,
+): string {
+  if ((inferencePath || "").trim().toLowerCase() === "official") return officialLabel;
+  return modelVendorId(modelId);
+}
+
 /** Bubble footer: drop provider prefix, then cap length so in/out stay visible. */
 function compactModelLabel(modelId: string | null | undefined, max = 16): string {
   const bare = shortModelLabel(modelId);
@@ -1598,6 +1607,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       model_id: string;
       is_listing?: boolean;
       is_runtime?: boolean;
+      inference_path?: "byo" | "official" | string | null;
       input_price_per_million?: number;
       output_price_per_million?: number;
       free?: boolean;
@@ -1606,6 +1616,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   } | null>(null);
   /** User pick for this hop (S1). Sticky per chat until changed. */
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [composerMenuOpen, setComposerMenuOpen] = useState(false);
+  const composerMenuRef = useRef<HTMLDivElement | null>(null);
   const [ownedAgentLoading, setOwnedAgentLoading] = useState(false);
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [activeTopic, setActiveTopic] = useState<ThreadSummary | null>(null);
@@ -2765,6 +2777,29 @@ export function RanchChatShell(props: RanchChatShellProps) {
       window.clearInterval(timer);
     };
   }, [active?.chat_id, active?.agent_id, active?.type, client]);
+
+  useEffect(() => {
+    setComposerMenuOpen(false);
+  }, [active?.chat_id]);
+
+  useEffect(() => {
+    if (!composerMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const el = composerMenuRef.current;
+      if (el && e.target instanceof Node && !el.contains(e.target)) {
+        setComposerMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setComposerMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [composerMenuOpen]);
 
   /** After owner renames an agent: refresh detail, chat titles, @ labels, host directory. */
   const applyOwnedAgentProfileUpdate = (
@@ -4216,14 +4251,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 ) : null}
                 {composerModel && active && !isGroupChat(active) ? (
                   <div
+                    ref={composerMenuRef}
                     style={{
+                      position: "relative",
                       display: "flex",
                       alignItems: "center",
                       maxWidth: "100%",
                     }}
                   >
                     {(() => {
-                      const runtime = (composerModel.runtime_model_id || "").trim();
                       const listed = (composerModel.listed_model_id || "").trim();
                       const options = (() => {
                         const fromApi = composerModel.supported_models.length
@@ -4265,82 +4301,57 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         }
                         return t.composerModelNoPrice;
                       })();
-                      const listedVendor = modelVendorId(listed);
-                      const runtimeVendor = modelVendorId(runtime);
-                      const sameVendorDrift = Boolean(
-                        listed &&
-                          runtime &&
-                          listed.toLowerCase() !== runtime.toLowerCase() &&
-                          listedVendor &&
-                          listedVendor.toLowerCase() === runtimeVendor.toLowerCase(),
-                      );
-                      const chipTitle = [
-                        value || t.composerModelUnknown,
-                        sameVendorDrift
-                          ? t.composerModelMismatch(listed, runtime)
-                          : "",
-                      ]
-                        .filter(Boolean)
-                        .join("\n");
+                      const displayName = shortModelLabel(value) || t.composerModelUnknown;
                       const canPick = options.length > 0;
                       return (
-                        <label
-                          title={chipTitle}
-                          aria-label={value || t.composerModelUnknown}
-                          style={{
-                            display: "inline-flex",
-                            flexDirection: "column",
-                            alignItems: "flex-start",
-                            gap: 1,
-                            padding: "4px 8px 5px 10px",
-                            borderRadius: 10,
-                            border: `1px solid ${colors.border}`,
-                            background: colors.panel,
-                            color: colors.text,
-                            maxWidth: "100%",
-                            cursor: canPick ? "pointer" : "default",
-                          }}
-                        >
-                          <span
+                        <>
+                          <button
+                            type="button"
+                            disabled={!canPick}
+                            aria-haspopup="listbox"
+                            aria-expanded={composerMenuOpen}
+                            aria-label={displayName}
+                            onClick={() => {
+                              if (!canPick) return;
+                              setComposerMenuOpen((open) => !open);
+                            }}
                             style={{
                               display: "inline-flex",
-                              alignItems: "center",
-                              gap: 4,
-                              minWidth: 0,
+                              flexDirection: "column",
+                              alignItems: "flex-start",
+                              gap: 1,
+                              padding: "4px 8px 5px 10px",
+                              borderRadius: 10,
+                              border: `1px solid ${colors.border}`,
+                              background: colors.panel,
+                              color: colors.text,
                               maxWidth: "100%",
+                              cursor: canPick ? "pointer" : "default",
+                              textAlign: "left",
                             }}
                           >
-                            {canPick ? (
-                              <>
-                                <select
-                                  value={value}
-                                  onChange={(e) => {
-                                    const next = e.target.value || null;
-                                    setSelectedModelId(next);
-                                    if (active?.chat_id) {
-                                      writeComposerModelPick(active.chat_id, next);
-                                    }
-                                  }}
-                                  style={{
-                                    appearance: "none",
-                                    WebkitAppearance: "none",
-                                    border: "none",
-                                    background: "transparent",
-                                    color: colors.text,
-                                    fontWeight: 600,
-                                    fontSize: 13,
-                                    maxWidth: 180,
-                                    padding: 0,
-                                    cursor: "pointer",
-                                    outline: "none",
-                                  }}
-                                >
-                                  {options.map((id) => (
-                                    <option key={id} value={id}>
-                                      {shortModelLabel(id) || id}
-                                    </option>
-                                  ))}
-                                </select>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                minWidth: 0,
+                                maxWidth: "100%",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontWeight: 600,
+                                  fontSize: 13,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                  maxWidth: 180,
+                                }}
+                              >
+                                {displayName}
+                              </span>
+                              {canPick ? (
                                 <span
                                   aria-hidden
                                   style={{
@@ -4351,30 +4362,102 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 >
                                   ▾
                                 </span>
-                              </>
-                            ) : (
+                              ) : null}
+                            </span>
+                            {priceHint ? (
                               <span
                                 style={{
-                                  fontWeight: 600,
-                                  fontSize: 13,
+                                  color: colors.muted,
+                                  fontSize: 10,
+                                  lineHeight: 1.25,
                                 }}
                               >
-                                {t.composerModelUnknown}
+                                {priceHint}
                               </span>
-                            )}
-                          </span>
-                          {priceHint ? (
-                            <span
+                            ) : null}
+                          </button>
+                          {composerMenuOpen && canPick ? (
+                            <ul
+                              role="listbox"
                               style={{
-                                color: colors.muted,
-                                fontSize: 10,
-                                lineHeight: 1.25,
+                                position: "absolute",
+                                left: 0,
+                                bottom: "calc(100% + 6px)",
+                                margin: 0,
+                                padding: 4,
+                                listStyle: "none",
+                                minWidth: 220,
+                                maxWidth: 320,
+                                maxHeight: 240,
+                                overflowY: "auto",
+                                borderRadius: 10,
+                                border: `1px solid ${colors.border}`,
+                                background: colors.panel,
+                                zIndex: 20,
                               }}
                             >
-                              {priceHint}
-                            </span>
+                              {options.map((id) => {
+                                const opt =
+                                  composerModel.model_options.find((row) =>
+                                    sameModelId(row.model_id, id),
+                                  ) || null;
+                                const selected = sameModelId(id, value);
+                                const provider = composerProviderCaption(
+                                  id,
+                                  opt?.inference_path,
+                                  t.myAgentsProviderOfficialOpenRouter,
+                                );
+                                return (
+                                  <li key={id} role="none">
+                                    <button
+                                      type="button"
+                                      role="option"
+                                      aria-selected={selected}
+                                      onClick={() => {
+                                        setSelectedModelId(id);
+                                        if (active?.chat_id) {
+                                          writeComposerModelPick(active.chat_id, id);
+                                        }
+                                        setComposerMenuOpen(false);
+                                      }}
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "baseline",
+                                        justifyContent: "space-between",
+                                        gap: 12,
+                                        width: "100%",
+                                        padding: "6px 8px",
+                                        border: "none",
+                                        borderRadius: 8,
+                                        background: selected
+                                          ? colors.hover
+                                          : "transparent",
+                                        color: colors.text,
+                                        cursor: "pointer",
+                                        textAlign: "left",
+                                      }}
+                                    >
+                                      <span style={{ fontWeight: 600, fontSize: 13 }}>
+                                        {shortModelLabel(id) || id}
+                                      </span>
+                                      {provider ? (
+                                        <span
+                                          style={{
+                                            color: colors.muted,
+                                            fontSize: 11,
+                                            whiteSpace: "nowrap",
+                                          }}
+                                        >
+                                          {provider}
+                                        </span>
+                                      ) : null}
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
                           ) : null}
-                        </label>
+                        </>
                       );
                     })()}
                   </div>
