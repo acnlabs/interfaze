@@ -61,6 +61,7 @@ export type RanchMessages = {
   composerModelListing: string;
   /** Catalog miss / unpriced — still shown in picker. */
   composerModelNoPrice: string;
+  composerModelPrice: (input: string, output: string) => string;
   composerModelMismatch: (listed: string, runtime: string) => string;
   sendFailed: string;
   expand: string;
@@ -537,6 +538,7 @@ const en: RanchMessages = {
   composerModelUnknown: "—",
   composerModelListing: "listing",
   composerModelNoPrice: "—",
+  composerModelPrice: (input, output) => `${input} in · ${output} out`,
   composerModelMismatch: (listed, runtime) =>
     `Listing ${listed} ≠ runtime ${runtime} (still billed at listing price)`,
   sendFailed: "Send failed",
@@ -1058,6 +1060,7 @@ const zh: RanchMessages = {
   composerModelUnknown: "—",
   composerModelListing: "挂牌",
   composerModelNoPrice: "—",
+  composerModelPrice: (input, output) => `${input} 入 · ${output} 出`,
   composerModelMismatch: (listed, runtime) =>
     `挂牌 ${listed} ≠ 运行 ${runtime}（仍按挂牌价结算）`,
   sendFailed: "发送失败",
