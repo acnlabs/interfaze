@@ -297,23 +297,8 @@ function shortModelLabel(modelId: string | null | undefined): string {
   return slash >= 0 ? s.slice(slash + 1) : s;
 }
 
-function modelVendorId(modelId: string | null | undefined): string {
-  const s = (modelId || "").trim();
-  const slash = s.indexOf("/");
-  return slash > 0 ? s.slice(0, slash) : "";
-}
-
 function formatUsdPerMillion(n: number): string {
   return `$${Number(n.toPrecision(6))}`;
-}
-
-function composerProviderCaption(
-  modelId: string,
-  inferencePath: string | null | undefined,
-  officialLabel: string,
-): string {
-  if ((inferencePath || "").trim().toLowerCase() === "official") return officialLabel;
-  return modelVendorId(modelId);
 }
 
 function filterComposerModels(ids: string[], query: string): string[] {
@@ -4498,7 +4483,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 position: "absolute",
                                 left: 0,
                                 bottom: "calc(100% + 6px)",
-                                minWidth: 260,
+                                minWidth: 300,
                                 maxWidth: 360,
                                 borderRadius: 10,
                                 border: `1px solid ${colors.border}`,
@@ -4541,18 +4526,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   </li>
                                 ) : (
                                   visible.map((id) => {
-                                    const opt =
-                                      composerModel.model_options.find((row) =>
-                                        sameModelId(row.model_id, id),
-                                      ) || null;
                                     const selected = sameModelId(id, value);
-                                    const provider = official
-                                      ? t.myAgentsProviderOfficialOpenRouter
-                                      : composerProviderCaption(
-                                          id,
-                                          opt?.inference_path,
-                                          t.myAgentsProviderOfficialOpenRouter,
-                                        );
+                                    const rowPrice = priceFor(id);
                                     return (
                                       <li key={id} role="none">
                                         <button
@@ -4586,7 +4561,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                           <span style={{ fontWeight: 600, fontSize: 13 }}>
                                             {shortModelLabel(id) || id}
                                           </span>
-                                          {provider ? (
+                                          {rowPrice ? (
                                             <span
                                               style={{
                                                 color: colors.muted,
@@ -4594,7 +4569,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                                 whiteSpace: "nowrap",
                                               }}
                                             >
-                                              {provider}
+                                              {rowPrice}
                                             </span>
                                           ) : null}
                                         </button>
