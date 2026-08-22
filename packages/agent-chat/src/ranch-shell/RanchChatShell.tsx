@@ -1693,6 +1693,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   );
   const [composerCatalogLoading, setComposerCatalogLoading] = useState(false);
   const composerMenuRef = useRef<HTMLDivElement | null>(null);
+  /** Last Settings listing seen in this chat; change drops the composer pin. */
+  const composerListedRef = useRef<{ chatId: string; listed: string } | null>(null);
   const [ownedAgentLoading, setOwnedAgentLoading] = useState(false);
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [activeTopic, setActiveTopic] = useState<ThreadSummary | null>(null);
@@ -2849,9 +2851,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
             ? supported
             : [listed].filter((m): m is string => !!m && !!m.trim());
           const stored = readComposerModelPick(active.chat_id);
+          const prevListed = composerListedRef.current;
+          const listedChanged = Boolean(
+            listed &&
+              prevListed?.chatId === active.chat_id &&
+              !sameModelId(prevListed.listed, listed),
+          );
+          composerListedRef.current = listed
+            ? { chatId: active.chat_id, listed }
+            : null;
           const nextModel = pickComposerModelForPath({
             official: listedOfficial,
-            wanted: stored,
+            wanted: listedChanged ? listed : stored,
             listed,
             runtime,
             fallback,
