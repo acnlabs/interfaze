@@ -18,6 +18,7 @@ import {
   type MyAgentSummary,
 } from "../gateway";
 import { copyText } from "./connectPrompt";
+import { officialV0SupportsModel } from "./officialV0";
 import type { RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 
@@ -1043,7 +1044,7 @@ export function AgentOwnerSettings({
             if (!Number.isFinite(cin) || !Number.isFinite(cout)) continue;
             const id = (row.model_id || "").trim();
             if (!id) continue;
-            if (id.toLowerCase().includes("-think") || id.toLowerCase().includes(":thinking") || id.toLowerCase().includes("reasoning")) continue;
+            if (!officialV0SupportsModel(id)) continue;
             if (acc.some((item) => sameModelId(item.id, id))) continue;
             acc.push({ id, in: cin, out: cout, source: "openrouter" });
           }

@@ -43,6 +43,7 @@ import { NewChatPicker } from "./NewChatPicker";
 import { NewComposeMenu } from "./NewComposeMenu";
 import { ConnectAgentModal } from "./ConnectAgentModal";
 import { copyConnectPromptWithInvite } from "./connectPrompt";
+import { officialV0SupportsModel } from "./officialV0";
 import {
   RANCH_LOCALE_OPTIONS,
   ranchMessages,
@@ -299,14 +300,6 @@ function shortModelLabel(modelId: string | null | undefined): string {
 
 function formatUsdPerMillion(n: number): string {
   return `$${Number(n.toPrecision(6))}`;
-}
-
-/** Official v0 is one non-stream completion; thinking SKUs hang or return empty. */
-function officialV0SupportsModel(modelId: string | null | undefined): boolean {
-  const id = (modelId || "").toLowerCase();
-  if (!id) return true;
-  if (id.includes("-think") || id.includes(":thinking")) return false;
-  return !id.includes("reasoning");
 }
 
 function filterComposerModels(ids: string[], query: string): string[] {
@@ -606,6 +599,10 @@ function AgentReplyPendingBubble({ t }: { t: RanchMessages }) {
     </div>
   );
 }
+
+/** 40s window. Official CLI complete defaults to 28s so the error bubble lands first. */
+const REPLY_POLL_MS = 2000;
+const REPLY_POLL_ATTEMPTS = 20;
 
 type ReplyTimeoutReason = "offline" | "undeliverable" | "timeout" | "no_reply";
 
@@ -2493,8 +2490,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
       // Mode B writeback is async (~5–30s). WS message.new can be missed; poll DB.
       void (async () => {
         const baseline = awaitingSinceRef.current;
-        for (let i = 0; i < 20; i++) {
-          await new Promise((r) => setTimeout(r, 2000));
+        for (let i = 0; i < REPLY_POLL_ATTEMPTS; i++) {
+          await new Promise((r) => setTimeout(r, REPLY_POLL_MS));
           if (replyPollGenRef.current !== pollGen) return;
           if (activeChatIdRef.current !== chatId) return;
           if (seq !== loadSeqRef.current) return;
@@ -2657,8 +2654,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
         await refreshChats();
         void (async () => {
           const baseline = awaitingSinceRef.current;
-          for (let i = 0; i < 20; i++) {
-            await new Promise((r) => setTimeout(r, 2000));
+          for (let i = 0; i < REPLY_POLL_ATTEMPTS; i++) {
+            await new Promise((r) => setTimeout(r, REPLY_POLL_MS));
             if (replyPollGenRef.current !== pollGen) return;
             if (activeChatIdRef.current !== chatId) return;
             if (seq !== loadSeqRef.current) return;
