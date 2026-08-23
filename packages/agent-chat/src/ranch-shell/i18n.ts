@@ -49,6 +49,7 @@ export type RanchMessages = {
   billingUnavailable: string;
   unsupportedModel: string;
   officialNotAuthorized: string;
+  officialModelUnsupported: string;
   modelPricingUnavailable: string;
   /** Soft warn: L2 listing model ≠ runtime/writeback model. */
   pricingMismatch: (listed: string, observed: string) => string;
@@ -528,6 +529,8 @@ const en: RanchMessages = {
   billingUnavailable: "Billing check unavailable. Try again in a moment.",
   unsupportedModel: "This agent does not support that model.",
   officialNotAuthorized: "Official · OpenRouter is not authorized for this model. Pick Mine, or ask the owner to enable it.",
+  officialModelUnsupported:
+    "Official v0 is a single completion and cannot run thinking/reasoning models. Pick kimi or another chat model.",
   modelPricingUnavailable: "No platform price for that model yet. Pick another or ask the owner to wait for Host pack coverage.",
   pricingMismatch: (listed, observed) =>
     `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
@@ -1050,6 +1053,7 @@ const zh: RanchMessages = {
   billingUnavailable: "计费服务暂时不可用，请稍后再试。",
   unsupportedModel: "该智能体不支持所选模型。",
   officialNotAuthorized: "官方 · OpenRouter 尚未授权该模型。请改选「我的」，或让 Owner 勾选后保存。",
+  officialModelUnsupported: "官方 v0 是单次补全，思考/推理模跑不了。请改选 kimi 或其他对话模。",
   modelPricingUnavailable: "平台暂无该模型报价，请换一个；或等 Host 价包录入后再试。",
   pricingMismatch: (listed, observed) =>
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,

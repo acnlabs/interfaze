@@ -43,6 +43,7 @@ import { NewChatPicker } from "./NewChatPicker";
 import { NewComposeMenu } from "./NewComposeMenu";
 import { ConnectAgentModal } from "./ConnectAgentModal";
 import { copyConnectPromptWithInvite } from "./connectPrompt";
+import { officialV0SupportsModel } from "./officialV0";
 import {
   RANCH_LOCALE_OPTIONS,
   ranchMessages,
@@ -598,6 +599,10 @@ function AgentReplyPendingBubble({ t }: { t: RanchMessages }) {
     </div>
   );
 }
+
+/** 40s window. Official CLI complete defaults to 28s so the error bubble lands first. */
+const REPLY_POLL_MS = 2000;
+const REPLY_POLL_ATTEMPTS = 20;
 
 type ReplyTimeoutReason = "offline" | "undeliverable" | "timeout" | "no_reply";
 
@@ -2485,8 +2490,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
       // Mode B writeback is async (~5–30s). WS message.new can be missed; poll DB.
       void (async () => {
         const baseline = awaitingSinceRef.current;
-        for (let i = 0; i < 20; i++) {
-          await new Promise((r) => setTimeout(r, 2000));
+        for (let i = 0; i < REPLY_POLL_ATTEMPTS; i++) {
+          await new Promise((r) => setTimeout(r, REPLY_POLL_MS));
           if (replyPollGenRef.current !== pollGen) return;
           if (activeChatIdRef.current !== chatId) return;
           if (seq !== loadSeqRef.current) return;
@@ -2576,6 +2581,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   ? t.unsupportedModel
                   : e.code === "official_not_authorized"
                     ? t.officialNotAuthorized
+                    : e.code === "official_model_unsupported"
+                      ? t.officialModelUnsupported
                     : e.code === "model_pricing_unavailable"
                       ? t.modelPricingUnavailable
                       : e.message
@@ -2647,8 +2654,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
         await refreshChats();
         void (async () => {
           const baseline = awaitingSinceRef.current;
-          for (let i = 0; i < 20; i++) {
-            await new Promise((r) => setTimeout(r, 2000));
+          for (let i = 0; i < REPLY_POLL_ATTEMPTS; i++) {
+            await new Promise((r) => setTimeout(r, REPLY_POLL_MS));
             if (replyPollGenRef.current !== pollGen) return;
             if (activeChatIdRef.current !== chatId) return;
             if (seq !== loadSeqRef.current) return;
@@ -2730,6 +2737,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     ? t.unsupportedModel
                     : e.code === "official_not_authorized"
                       ? t.officialNotAuthorized
+                      : e.code === "official_model_unsupported"
+                        ? t.officialModelUnsupported
                       : e.code === "model_pricing_unavailable"
                         ? t.modelPricingUnavailable
                         : e.message
@@ -2932,6 +2941,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             if (!Number.isFinite(cin) || !Number.isFinite(cout)) continue;
             const id = (row.model_id || "").trim();
             if (!id) continue;
+            if (!officialV0SupportsModel(id)) continue;
             if (acc.some((item) => sameModelId(item.id, id))) continue;
             acc.push({ id, in: cin, out: cout });
           }
@@ -2949,6 +2959,24 @@ export function RanchChatShell(props: RanchChatShellProps) {
       cancelled = true;
     };
   }, [client, composerModel?.official_channel]);
+
+  useEffect(() => {
+    if (!composerModel?.official_channel) return;
+    if (officialV0SupportsModel(selectedModelId)) return;
+    const next =
+      composerCatalog.find((row) => officialV0SupportsModel(row.id))?.id ||
+      composerModel.listed_model_id ||
+      null;
+    if (!next || sameModelId(next, selectedModelId)) return;
+    setSelectedModelId(next);
+    if (active?.chat_id) writeComposerModelPick(active.chat_id, next);
+  }, [
+    active?.chat_id,
+    composerCatalog,
+    composerModel?.listed_model_id,
+    composerModel?.official_channel,
+    selectedModelId,
+  ]);
 
   useEffect(() => {
     if (!composerMenuOpen) return;
@@ -4443,6 +4471,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           (id): id is string =>
                             !!id &&
                             !!id.trim() &&
+                            (!official || officialV0SupportsModel(id)) &&
                             modelFitsComposerPath(id, {
                               official,
                               byoVendor,
