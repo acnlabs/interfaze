@@ -301,6 +301,14 @@ function formatUsdPerMillion(n: number): string {
   return `$${Number(n.toPrecision(6))}`;
 }
 
+/** Official v0 is one non-stream completion; thinking SKUs hang or return empty. */
+function officialV0SupportsModel(modelId: string | null | undefined): boolean {
+  const id = (modelId || "").toLowerCase();
+  if (!id) return true;
+  if (id.includes("-think") || id.includes(":thinking")) return false;
+  return !id.includes("reasoning");
+}
+
 function filterComposerModels(ids: string[], query: string): string[] {
   const q = query.trim().toLowerCase();
   if (!q) return ids;
@@ -2576,6 +2584,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   ? t.unsupportedModel
                   : e.code === "official_not_authorized"
                     ? t.officialNotAuthorized
+                    : e.code === "official_model_unsupported"
+                      ? t.officialModelUnsupported
                     : e.code === "model_pricing_unavailable"
                       ? t.modelPricingUnavailable
                       : e.message
@@ -2730,6 +2740,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     ? t.unsupportedModel
                     : e.code === "official_not_authorized"
                       ? t.officialNotAuthorized
+                      : e.code === "official_model_unsupported"
+                        ? t.officialModelUnsupported
                       : e.code === "model_pricing_unavailable"
                         ? t.modelPricingUnavailable
                         : e.message
@@ -2932,6 +2944,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             if (!Number.isFinite(cin) || !Number.isFinite(cout)) continue;
             const id = (row.model_id || "").trim();
             if (!id) continue;
+            if (!officialV0SupportsModel(id)) continue;
             if (acc.some((item) => sameModelId(item.id, id))) continue;
             acc.push({ id, in: cin, out: cout });
           }
@@ -2949,6 +2962,24 @@ export function RanchChatShell(props: RanchChatShellProps) {
       cancelled = true;
     };
   }, [client, composerModel?.official_channel]);
+
+  useEffect(() => {
+    if (!composerModel?.official_channel) return;
+    if (officialV0SupportsModel(selectedModelId)) return;
+    const next =
+      composerCatalog.find((row) => officialV0SupportsModel(row.id))?.id ||
+      composerModel.listed_model_id ||
+      null;
+    if (!next || sameModelId(next, selectedModelId)) return;
+    setSelectedModelId(next);
+    if (active?.chat_id) writeComposerModelPick(active.chat_id, next);
+  }, [
+    active?.chat_id,
+    composerCatalog,
+    composerModel?.listed_model_id,
+    composerModel?.official_channel,
+    selectedModelId,
+  ]);
 
   useEffect(() => {
     if (!composerMenuOpen) return;
@@ -4443,6 +4474,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           (id): id is string =>
                             !!id &&
                             !!id.trim() &&
+                            (!official || officialV0SupportsModel(id)) &&
                             modelFitsComposerPath(id, {
                               official,
                               byoVendor,

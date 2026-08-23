@@ -1043,6 +1043,7 @@ export function AgentOwnerSettings({
             if (!Number.isFinite(cin) || !Number.isFinite(cout)) continue;
             const id = (row.model_id || "").trim();
             if (!id) continue;
+            if (id.toLowerCase().includes("-think") || id.toLowerCase().includes(":thinking") || id.toLowerCase().includes("reasoning")) continue;
             if (acc.some((item) => sameModelId(item.id, id))) continue;
             acc.push({ id, in: cin, out: cout, source: "openrouter" });
           }
