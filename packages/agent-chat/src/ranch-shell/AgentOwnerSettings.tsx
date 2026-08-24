@@ -12,6 +12,7 @@ import {
 import { createPortal } from "react-dom";
 import {
   ChatGatewayError,
+  officialCatalogRates,
   type ChatAgentSearchHit,
   type GatewayClient,
   type MyAgentAllowlistEntry,
@@ -1039,25 +1040,24 @@ export function AgentOwnerSettings({
           for (const row of data.items) {
             const src = (row.source || "openrouter").toLowerCase();
             if (src && src !== "openrouter") continue;
-            const cin = Number(row.input_price_per_million);
-            const cout = Number(row.output_price_per_million);
-            if (!Number.isFinite(cin) || !Number.isFinite(cout)) continue;
+            const quote = officialCatalogRates(row);
+            if (!quote) continue;
             const id = (row.model_id || "").trim();
             if (!id) continue;
             if (!officialV0SupportsModel(id)) continue;
             if (acc.some((item) => sameModelId(item.id, id))) continue;
-            acc.push({ id, in: cin, out: cout, source: "openrouter" });
+            acc.push({
+              id,
+              in: quote.input,
+              out: quote.output,
+              source: "openrouter",
+            });
           }
           if (!data.items.length) break;
           offset += data.items.length;
         }
         if (cancelled) return;
         setOfficialCatalog(acc);
-        setCatalogById((prev) => {
-          const next = { ...prev };
-          for (const row of acc) next[row.id] = { in: row.in, out: row.out, source: row.source };
-          return next;
-        });
       } catch {
         if (!cancelled) setOfficialCatalog([]);
       } finally {
@@ -1912,8 +1912,7 @@ export function AgentOwnerSettings({
                 optionLabel={(id) =>
                   catalogOptionLabel(
                     id,
-                    catalogById[id] ??
-                      officialCatalog.find((row) => sameModelId(row.id, id)),
+                    officialCatalog.find((row) => sameModelId(row.id, id)),
                     t.myAgentsPricingOptionLine,
                   )
                 }
