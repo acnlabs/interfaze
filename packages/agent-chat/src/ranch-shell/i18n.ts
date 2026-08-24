@@ -780,7 +780,7 @@ const en: RanchMessages = {
   myAgentsProfileFailed: "Couldn’t save profile.",
   myAgentsSectionPricing: "Agent pricing",
   myAgentsPricingHint:
-    "This agent’s call fee for others: Host Catalog/pack baseline × (1+markup%). Default model is which listing that fee uses.",
+    "This agent’s call fee for others: hop baseline × (1+markup%). Official baseline is Catalog × 1.15; BYO stays Catalog/pack.",
   myAgentsPricingInputLabel: "Settle preview · input USD / 1M",
   myAgentsPricingOutputLabel: "Settle preview · output USD / 1M",
   myAgentsPricingModelLabel: "Default model · USD / 1M tokens",
@@ -819,12 +819,12 @@ const en: RanchMessages = {
   myAgentsProvidersFailed: "Couldn’t save providers.",
   myAgentsPricingMarkupLabel: "Markup",
   myAgentsPricingMarkupHint:
-    "Settle = Catalog/pack(model) × (1 + markup%). Changing model keeps this % and recalculates the preview.",
+    "Settle = hop baseline × (1 + markup%). Official uses Catalog × 1.15; BYO uses Catalog/pack. Changing model keeps this %.",
   myAgentsPricingCatalogLine: "Host ${in} / ${out}",
   myAgentsPricingSourceOpenRouter: "Reference · OpenRouter",
   myAgentsPricingSourceTokenHub: "Reference · TokenHub",
   myAgentsPricingSourceHint:
-    "Public list the Host Catalog row was taken from. Settle still uses the Catalog number, including FX for TokenHub.",
+    "Public list the Host Catalog row was taken from. Official settle uses published Catalog (sync × 1.15), not the list price. TokenHub still includes FX.",
   myAgentsPricingListingLine: "In ${in} · out ${out} / 1M",
   myAgentsPricingExampleLine:
     "Example: 1M input tokens → they pay you ~$${pay}; Host baseline ~$${cost}",
@@ -1290,7 +1290,7 @@ const zh: RanchMessages = {
   myAgentsProfileFailed: "保存失败。",
   myAgentsSectionPricing: "Agent 定价",
   myAgentsPricingHint:
-    "这是 agent 对外的调用费：Host Catalog/价包底价 ×（1+上浮%）。默认模型决定用哪一档底价。",
+    "这是 agent 对外的调用费：该跳底价 ×（1+上浮%）。官方底价 = 同步价 × 1.15；自持钥仍是 Catalog/价包。",
   myAgentsPricingInputLabel: "结算预览 · 输入 USD / 百万",
   myAgentsPricingOutputLabel: "结算预览 · 输出 USD / 百万",
   myAgentsPricingModelLabel: "默认模型 · USD / 百万 token",
@@ -1329,12 +1329,12 @@ const zh: RanchMessages = {
   myAgentsProvidersFailed: "保存供应商失败。",
   myAgentsPricingMarkupLabel: "上浮",
   myAgentsPricingMarkupHint:
-    "结算 = Catalog/价包(模型) ×（1+上浮%）。换模型会保留该比例并重算预览。",
+    "结算 = 该跳底价 ×（1+上浮%）。官方用对外 Catalog（同步价 × 1.15），自持钥用 Catalog/价包。换模型保留该比例。",
   myAgentsPricingCatalogLine: "底价 ${in} / ${out}",
   myAgentsPricingSourceOpenRouter: "参考底价 · OpenRouter",
   myAgentsPricingSourceTokenHub: "参考底价 · TokenHub",
   myAgentsPricingSourceHint:
-    "Host Catalog 取自该公示价目。结算仍用 Catalog 数字（TokenHub 含汇率）。",
+    "Host Catalog 取自该公示价目。官方结算用对外 Catalog（同步价 × 1.15），不是公示牌价。TokenHub 仍含汇率。",
   myAgentsPricingListingLine: "入 ${in} · 出 ${out} / 百万",
   myAgentsPricingExampleLine:
     "例：100 万 input → 对方约付你 $${pay}；Host 底价约 $${cost}",

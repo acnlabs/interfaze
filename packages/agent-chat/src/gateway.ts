@@ -293,9 +293,36 @@ export type ModelCatalogItem = {
   display_name?: string | null;
   input_price_per_million: number;
   output_price_per_million: number;
+  /** Official Catalog = Host sync × 1.15. Absent on older Hosts. */
+  published_input_price_per_million?: number | null;
+  published_output_price_per_million?: number | null;
   currency?: string;
   source?: string | null;
 };
+
+export const OFFICIAL_PUBLISH_FACTOR = 1.15;
+
+export function officialCatalogRates(row: {
+  input_price_per_million: number;
+  output_price_per_million: number;
+  published_input_price_per_million?: number | null;
+  published_output_price_per_million?: number | null;
+}): { input: number; output: number } | null {
+  const syncIn = Number(row.input_price_per_million);
+  const syncOut = Number(row.output_price_per_million);
+  if (!Number.isFinite(syncIn) || !Number.isFinite(syncOut)) return null;
+  const publishedIn = Number(row.published_input_price_per_million);
+  const publishedOut = Number(row.published_output_price_per_million);
+  const round = (n: number) => Math.round(n * 1e6) / 1e6;
+  return {
+    input: Number.isFinite(publishedIn)
+      ? publishedIn
+      : round(syncIn * OFFICIAL_PUBLISH_FACTOR),
+    output: Number.isFinite(publishedOut)
+      ? publishedOut
+      : round(syncOut * OFFICIAL_PUBLISH_FACTOR),
+  };
+}
 
 export type ModelCatalogList = {
   items: ModelCatalogItem[];

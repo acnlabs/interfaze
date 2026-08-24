@@ -12,6 +12,7 @@ import {
 import {
   ChatGatewayError,
   createGatewayClient,
+  officialCatalogRates,
   type GatewayClient,
   type MyAgentSummary,
 } from "../gateway";
@@ -2936,14 +2937,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
           for (const row of data.items) {
             const src = (row.source || "openrouter").toLowerCase();
             if (src && src !== "openrouter") continue;
-            const cin = Number(row.input_price_per_million);
-            const cout = Number(row.output_price_per_million);
-            if (!Number.isFinite(cin) || !Number.isFinite(cout)) continue;
+            const quote = officialCatalogRates(row);
+            if (!quote) continue;
             const id = (row.model_id || "").trim();
             if (!id) continue;
             if (!officialV0SupportsModel(id)) continue;
             if (acc.some((item) => sameModelId(item.id, id))) continue;
-            acc.push({ id, in: cin, out: cout });
+            acc.push({ id, in: quote.input, out: quote.output });
           }
           if (!data.items.length) break;
           offset += data.items.length;
