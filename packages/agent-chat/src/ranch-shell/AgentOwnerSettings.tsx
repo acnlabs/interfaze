@@ -121,6 +121,25 @@ function runtimeIsOpenRouter(runtime: string, supported: string[]): boolean {
   return !isKnownByoVendor(vendor, supported);
 }
 
+/** Leftover OpenRouter shelf id while heartbeat is still a BYO vendor (e.g. TokenHub). */
+function listingNeedsRuntimeHeal(
+  listed: string,
+  runtime: string,
+  supported: string[],
+): boolean {
+  const ls = listed.trim();
+  const rt = runtime.trim();
+  if (!ls || !rt) return false;
+  if (sameModelId(ls, rt)) return false;
+  const rtVendor = modelVendorId(rt);
+  const lsVendor = modelVendorId(ls);
+  if (!rtVendor || !lsVendor) return false;
+  if (!isKnownByoVendor(rtVendor, supported)) return false;
+  if (lsVendor.toLowerCase() === rtVendor.toLowerCase()) return false;
+  if (isKnownByoVendor(lsVendor, supported)) return false;
+  return true;
+}
+
 /** Saving under Official adds the default model; saving under a BYO vendor removes it. */
 function nextOfficialModels(
   saved: string[],
@@ -870,6 +889,10 @@ export function AgentOwnerSettings({
   const [savingPricing, setSavingPricing] = useState(false);
   const [pricingMsg, setPricingMsg] = useState<string | null>(null);
   const [pricingError, setPricingError] = useState<string | null>(null);
+  const [refreshingRuntime, setRefreshingRuntime] = useState(false);
+  const listingHealRef = useRef("");
+  const onUpdatedRef = useRef(onUpdated);
+  onUpdatedRef.current = onUpdated;
   type DeliveryChoice = "direct" | "relay" | "none";
   const deliveryFromDetail = (d: string | null | undefined): DeliveryChoice => {
     if (d === "direct") return "direct";
@@ -997,6 +1020,71 @@ export function AgentOwnerSettings({
       cancelled = true;
     };
   }, [client, detail.agent_id, detail.token_pricing?.model_id, detail.runtime_model_id]);
+
+  useEffect(() => {
+    if (modelsLoading) return;
+    const listed = (detail.token_pricing?.model_id || "").trim();
+    const runtime = (detail.runtime_model_id || "").trim();
+    if (!listingNeedsRuntimeHeal(listed, runtime, supportedModels)) return;
+    const key = `${detail.agent_id}:${listed}:${runtime}`;
+    if (listingHealRef.current === key) return;
+    listingHealRef.current = key;
+    const markup =
+      typeof detail.token_pricing?.markup_percent === "number" &&
+      Number.isFinite(detail.token_pricing.markup_percent) &&
+      detail.token_pricing.markup_percent >= 0
+        ? detail.token_pricing.markup_percent
+        : DEFAULT_MARKUP_PERCENT;
+    let cancelled = false;
+    setSavingPricing(true);
+    void (async () => {
+      try {
+        const row = await client.getModelCatalogItem(runtime);
+        const cin = Number(row.input_price_per_million);
+        const cout = Number(row.output_price_per_million);
+        if (!Number.isFinite(cin) || !Number.isFinite(cout)) {
+          listingHealRef.current = "";
+          return;
+        }
+        if (cancelled) {
+          listingHealRef.current = "";
+          return;
+        }
+        const updated = await client.updateMyAgentTokenPricing(detail.agent_id, {
+          model_id: runtime,
+          input_price_per_million: applyMarkup(cin, markup),
+          output_price_per_million: applyMarkup(cout, markup),
+          markup_percent: markup,
+        });
+        if (cancelled) {
+          listingHealRef.current = "";
+          return;
+        }
+        setModelIdDraft(resolvePricingModelId(updated));
+        const mu = updated.token_pricing?.markup_percent;
+        if (typeof mu === "number" && Number.isFinite(mu)) setMarkupDraft(String(mu));
+        setPricingMsg(t.myAgentsPricingHealed);
+        window.setTimeout(() => setPricingMsg(null), 2500);
+        onUpdatedRef.current?.(updated);
+      } catch {
+        listingHealRef.current = "";
+      } finally {
+        if (!cancelled) setSavingPricing(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    client,
+    detail.agent_id,
+    detail.runtime_model_id,
+    detail.token_pricing?.markup_percent,
+    detail.token_pricing?.model_id,
+    modelsLoading,
+    supportedModels,
+    t.myAgentsPricingHealed,
+  ]);
 
   useEffect(() => {
     if (officialSaved.length === 0) return;
@@ -1594,6 +1682,42 @@ export function AgentOwnerSettings({
       .finally(() => setSavingPolicy(false));
   };
 
+  const refreshRuntimeStatus = () => {
+    if (refreshingRuntime || modelsLoading || busy) return;
+    setRefreshingRuntime(true);
+    void client
+      .getAgentModelStatus(detail.agent_id)
+      .then((status) => {
+        const reported = uniqModelIds(status.self_reported_models);
+        const ids = reported.length
+          ? reported
+          : uniqModelIds(status.supported_models).filter(
+              (id) => !status.official_models?.some((official) => sameModelId(official, id)),
+            );
+        setSupportedModels(ids);
+        if (typeof status.host_inference_ready === "boolean") {
+          setHostReady(status.host_inference_ready);
+        }
+        if (Array.isArray(status.official_models)) {
+          setOfficialSaved(status.official_models);
+        }
+        const runtime = status.runtime_model_id || detail.runtime_model_id || "";
+        setSettingsProvider(
+          providerIdFromRuntime(runtime, resolvePricingModelId(detail), ids),
+        );
+        onUpdated?.({
+          ...detail,
+          runtime_model_id: status.runtime_model_id ?? detail.runtime_model_id,
+          official_models: status.official_models ?? detail.official_models,
+          host_inference_ready:
+            typeof status.host_inference_ready === "boolean"
+              ? status.host_inference_ready
+              : detail.host_inference_ready,
+        });
+      })
+      .finally(() => setRefreshingRuntime(false));
+  };
+
   const runSaveAll = () => {
     const doProfile = canSaveProfile;
     const doDelivery = canSaveDelivery;
@@ -1883,10 +2007,25 @@ export function AgentOwnerSettings({
               marginBottom: 6,
               display: "flex",
               alignItems: "center",
+              gap: 8,
             }}
           >
             {t.myAgentsProviderLabel}
             <FieldHint text={t.myAgentsProviderHint} />
+            <button
+              type="button"
+              onClick={refreshRuntimeStatus}
+              disabled={busy || modelsLoading || refreshingRuntime}
+              style={{
+                ...btnGhost,
+                marginLeft: "auto",
+                padding: "4px 8px",
+                fontSize: 11,
+                opacity: busy || modelsLoading || refreshingRuntime ? 0.55 : 1,
+              }}
+            >
+              {refreshingRuntime ? "…" : t.myAgentsRefreshRuntime}
+            </button>
           </div>
           {providerOptions.length === 0 ? (
             <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>
