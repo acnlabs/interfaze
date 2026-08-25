@@ -869,7 +869,7 @@ const en: RanchMessages = {
     "Chat picks a model. OpenRouter here is a Store key on the agent — not Interfaze’s official hop.",
   myAgentsProviderLabel: "Provider",
   myAgentsProviderHint:
-    "Self-reported vendors come from this agent’s model ids (the vendor/ prefix). OpenRouter is always listed: it uses a Store key on the agent, not Interfaze’s official hop.",
+    "Only vendors this agent has reported, plus OpenRouter (Store key on the agent — not official hop). Catalog prefixes in a model id are not providers.",
   myAgentsProviderByo: "Mine",
   myAgentsProviderOfficial: "Official · OpenRouter",
   myAgentsProviderMine: "Mine",
@@ -1416,7 +1416,7 @@ const zh: RanchMessages = {
     "聊天只选模型。这里的 OpenRouter 是写在 agent 上的 Store 钥匙，不是 Interfaze 官方代打。",
   myAgentsProviderLabel: "供应商",
   myAgentsProviderHint:
-    "自报厂家来自这只 agent 的模型 id（斜杠前的 vendor）。OpenRouter 始终可选：走 agent 上的 Store 钥匙，不是官方代打。",
+    "只列出这只 agent 已自报的厂家，外加 OpenRouter（Store 钥匙，不是官方代打）。型号 id 里的货架前缀不是供应商。",
   myAgentsProviderByo: "我的",
   myAgentsProviderOfficial: "官方 · OpenRouter",
   myAgentsProviderMine: "我的",
