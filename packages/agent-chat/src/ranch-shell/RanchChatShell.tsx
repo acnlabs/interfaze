@@ -733,19 +733,25 @@ function AgentReplyTimeoutBubble({
   reason,
   onRetry,
   t,
+  offerStoreKey,
+  storeUrl,
 }: {
   reason: ReplyTimeoutReason;
   onRetry: () => void;
   t: RanchMessages;
+  offerStoreKey?: boolean;
+  storeUrl?: string;
 }) {
   const message =
     reason === "offline"
       ? t.timeoutOffline
       : reason === "undeliverable"
         ? t.timeoutUndeliverable
-        : reason === "no_reply"
-          ? t.timeoutNoReply
-          : t.timeoutGeneric;
+        : reason === "no_reply" && offerStoreKey
+          ? t.needOpenRouterKey
+          : reason === "no_reply"
+            ? t.timeoutNoReply
+            : t.timeoutGeneric;
   return (
     <div
       style={{
@@ -779,23 +785,48 @@ function AgentReplyTimeoutBubble({
           </svg>
           <span>{message}</span>
         </span>
-        <button
-          type="button"
-          onClick={onRetry}
+        <span
           style={{
-            alignSelf: "flex-start",
-            margin: 0,
-            padding: "4px 10px",
-            borderRadius: 6,
-            border: `1px solid ${colors.danger}`,
-            background: "transparent",
-            color: colors.danger,
-            fontSize: 12,
-            cursor: "pointer",
+            display: "inline-flex",
+            flexWrap: "wrap",
+            gap: 8,
+            alignItems: "center",
           }}
         >
-          {t.retry}
-        </button>
+          <button
+            type="button"
+            onClick={onRetry}
+            style={{
+              margin: 0,
+              padding: "4px 10px",
+              borderRadius: 6,
+              border: `1px solid ${colors.danger}`,
+              background: "transparent",
+              color: colors.danger,
+              fontSize: 12,
+              cursor: "pointer",
+            }}
+          >
+            {t.retry}
+          </button>
+          {offerStoreKey && storeUrl ? (
+            <a
+              href={storeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: "4px 10px",
+                borderRadius: 6,
+                border: `1px solid ${colors.border}`,
+                color: colors.text,
+                fontSize: 12,
+                textDecoration: "none",
+              }}
+            >
+              {t.buyOpenRouterCredits}
+            </a>
+          ) : null}
+        </span>
       </div>
     </div>
   );
@@ -4259,6 +4290,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     reason={replyTimeoutReason}
                     onRetry={retryLastUserMessage}
                     t={t}
+                    offerStoreKey={
+                      replyTimeoutReason === "no_reply" &&
+                      isOpenRouterByoListed(
+                        composerModel?.listed_model_id,
+                        composerModel?.runtime_model_id,
+                      )
+                    }
+                    storeUrl={storeOpenRouterUrl(agentPlanetBaseUrl)}
                   />
                 ) : null}
               </div>

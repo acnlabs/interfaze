@@ -569,7 +569,7 @@ const en: RanchMessages = {
   unsupportedModel: "This agent does not support that model.",
   officialNotAuthorized: "Official · OpenRouter is not authorized for this model. Pick Mine, or ask the owner to enable it.",
   needOpenRouterKey:
-    "This agent doesn’t have an OpenRouter key, or the key is empty. Buy Store credits so the owner can write a key into the agent.",
+    "OpenRouter is BYO: the key lives on the agent, not on Interfaze. Put a key in its runtime, or buy Store credits for the owner to write one in.",
   buyOpenRouterCredits: "Buy OpenRouter credits",
   officialModelUnsupported:
     "Official v0 is a single completion and cannot run thinking/reasoning models. Pick kimi or another chat model.",
@@ -1135,7 +1135,7 @@ const zh: RanchMessages = {
   unsupportedModel: "该智能体不支持所选模型。",
   officialNotAuthorized: "官方 · OpenRouter 尚未授权该模型。请改选「我的」，或让 Owner 勾选后保存。",
   needOpenRouterKey:
-    "这只 agent 还没有 OpenRouter 钥匙，或额度已用尽。去 Store 购买额度，写入 runtime 后即可继续聊。",
+    "OpenRouter 是自备钥匙：钥匙在 agent 运行时里，Interfaze 不会代收。请写进它的 OpenClaw / runtime，或去 Store 买额度让 Owner 写入。",
   buyOpenRouterCredits: "去 Store 买 OpenRouter 额度",
   officialModelUnsupported: "官方 v0 是单次补全，思考/推理模跑不了。请改选 kimi 或其他对话模。",
   modelPricingUnavailable: "平台暂无该模型报价，请换一个；或等 Host 价包录入后再试。",
