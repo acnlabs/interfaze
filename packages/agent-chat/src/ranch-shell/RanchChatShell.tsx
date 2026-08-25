@@ -2619,6 +2619,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           : (activeTopic?.id ?? composerTopic?.id ?? null);
       await client.sendMessage(chatId, text, mentions, sendThreadId, {
         requested_model: selectedModelId,
+        requested_provider: "byo",
       });
       if (group && mentions) {
         if (mentions.length === 1) {
@@ -2767,7 +2768,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           text,
           mentions,
           activeTopic?.id ?? composerTopic?.id ?? null,
-          { requested_model: selectedModelId },
+          { requested_model: selectedModelId, requested_provider: "byo" },
         );
         if (group && mentions) {
           if (mentions.length === 1) {
@@ -2970,15 +2971,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
           const officialIds = Array.isArray(row.official_models)
             ? row.official_models.filter((m): m is string => typeof m === "string" && !!m.trim())
             : [];
-          const listedOfficial = Boolean(
-            listed &&
-              (options.some(
-                (o) =>
-                  (o.inference_path || "").toLowerCase() === "official" &&
-                  sameModelId(o.model_id, listed),
-              ) ||
-                officialIds.some((id) => sameModelId(id, listed))),
-          );
+          // Official hop is frozen (P7). Leftover official_models must not
+          // switch the composer or send path back to Host-held keys.
+          const listedOfficial = false;
           setComposerModel({
             listed_model_id: listed,
             runtime_model_id: runtime,
