@@ -125,6 +125,8 @@ export function CreateAgentDialog({
     } catch (e) {
       if (e instanceof ChatGatewayError && e.status === 402) {
         setError(t.createAgentNeedCredits);
+      } else if (e instanceof ChatGatewayError && e.status === 410) {
+        setError(t.createAgentOrderExpired);
       } else {
         setError(t.createAgentFailed);
       }
@@ -254,6 +256,17 @@ export function CreateAgentDialog({
                 </a>
                 <button type="button" style={btnGhost} disabled={acting} onClick={() => void retryPay()}>
                   {t.createAgentRetryPay}
+                </button>
+                <button
+                  type="button"
+                  style={btnGhost}
+                  disabled={acting}
+                  onClick={() => {
+                    setJob(null);
+                    setError(null);
+                  }}
+                >
+                  {t.createAgentStartOver}
                 </button>
               </div>
             ) : job?.status === "failed" ? (

@@ -1725,6 +1725,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   /** Ranch-style: tap header → members panel. */
   const [showMembersPanel, setShowMembersPanel] = useState(false);
   const [showMyAgents, setShowMyAgents] = useState(false);
+  const [openCreateOnAgents, setOpenCreateOnAgents] = useState(false);
+  const [createMenuAvailable, setCreateMenuAvailable] = useState(false);
   const [showAccountProfile, setShowAccountProfile] = useState(false);
   const [showAccountManage, setShowAccountManage] = useState(false);
   const [showAccountWallet, setShowAccountWallet] = useState(false);
@@ -1736,6 +1738,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setShowAccountWallet(false);
     setShowAccountPlan(false);
     setShowMyAgents(false);
+    setOpenCreateOnAgents(false);
   };
 
   // Deep-link back from plan checkout (PayPal full-page return).
@@ -1751,8 +1754,24 @@ export function RanchChatShell(props: RanchChatShellProps) {
   useEffect(() => {
     if (!initialCreateAgent) return;
     closeAccountSurfaces();
+    setOpenCreateOnAgents(true);
     setShowMyAgents(true);
   }, [initialCreateAgent]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void client
+      .getAgentCreateAvailability()
+      .then((row) => {
+        if (!cancelled) setCreateMenuAvailable(row.available === true);
+      })
+      .catch(() => {
+        if (!cancelled) setCreateMenuAvailable(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
   const [showAddMember, setShowAddMember] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -3471,6 +3490,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
           <NewComposeMenu
             allowGroupChat={allowGroupChat}
             messages={t}
+            showCreateHosted={createMenuAvailable}
+            onCreateHosted={() => {
+              closeAccountSurfaces();
+              setOpenCreateOnAgents(true);
+              setShowMyAgents(true);
+            }}
             onConnectExisting={() => setShowConnect(true)}
             onDirect={() => setPickerMode("direct")}
             onGroup={() => setPickerMode("group")}
@@ -3761,15 +3786,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
             busy={busy}
             onClose={() => {
               setShowMyAgents(false);
+              setOpenCreateOnAgents(false);
               setShowAccountManage(true);
             }}
             onConnectExisting={() => setShowConnect(true)}
             onOpenChat={(id) => {
               setShowMyAgents(false);
+              setOpenCreateOnAgents(false);
               setShowAccountManage(false);
               void startDirect(id);
             }}
-            initialShowCreate={initialCreateAgent}
+            initialShowCreate={initialCreateAgent || openCreateOnAgents}
             onAgentUpdated={(row, previousName) => {
               applyOwnedAgentProfileUpdate(row, previousName);
             }}

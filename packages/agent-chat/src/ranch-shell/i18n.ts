@@ -286,6 +286,8 @@ export type RanchMessages = {
   createAgentNeedCredits: string;
   createAgentRecharge: string;
   createAgentRetryPay: string;
+  createAgentStartOver: string;
+  createAgentOrderExpired: string;
   createAgentRetryBind: string;
   createAgentUnavailable: string;
   createAgentFailed: string;
@@ -808,6 +810,8 @@ const en: RanchMessages = {
   createAgentNeedCredits: "Not enough credits. Recharge, then retry pay.",
   createAgentRecharge: "Recharge wallet",
   createAgentRetryPay: "Retry pay",
+  createAgentStartOver: "Start a new create",
+  createAgentOrderExpired: "That checkout expired. Start a new create.",
   createAgentRetryBind: "Retry bind",
   createAgentUnavailable: "Create is not available in this region yet.",
   createAgentFailed: "Could not create this agent.",
@@ -1356,6 +1360,8 @@ const zh: RanchMessages = {
   createAgentNeedCredits: "余额不足。充值后再点重试支付。",
   createAgentRecharge: "去充值",
   createAgentRetryPay: "重试支付",
+  createAgentStartOver: "重新创建",
+  createAgentOrderExpired: "这张结账单过期了。请重新创建。",
   createAgentRetryBind: "重试绑定",
   createAgentUnavailable: "这个区域还不能创建。",
   createAgentFailed: "创建失败。",

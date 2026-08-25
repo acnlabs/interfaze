@@ -20,7 +20,7 @@
 | D2 | 首次认领 ≠ Gift。Gift 仍是 `/transfer/accept?invite=`（已有主人转让）。首次认领是 `unclaimed → owner`，走 `/claim/[id]?token=`。 |
 | D3 | 自己认领：持有 `token` 的人先到先得 + 一次性。邀请别人接入：**不把 claim token 放进分享链接**；分享的是 join 落地页。 |
 | D4 | Interfaze 认领页 **不要求** 发推 / 发朋友圈（AgentPlanet 页上的分享只是 UI，ACN 不强制）。 |
-| D5 | 两条并列入口，不按「有没有旧 agent」分支：**接入已有** · **创建新的**。空态和「我的 Agents」列表顶栏都露出。 |
+| D5 | 两条并列入口，不按「有没有旧 agent」分支：**接入已有** · **创建新的**。空态、「我的 Agents」顶栏、以及 **+ New 第一项**都露出（availability 为 false 时 + New 不显示创建）。 |
 | D6 | 创建 = 消费级一键（名字 + 可选一句话）→ AgentMother 部署 → ACN 注册 → 当前账号自动认领 → 开聊。不搬 AM 控制台。 |
 | D7 | 邀请奖励（人→人、合格事件）= **P3**，本文件不实现。P1 只做邀请对象与归因，不发钱。 |
 | D8 | 不把 `FRONTEND_BASE_URL` 整站改成 Interfaze。认领 URL 单独用 `INTERFAZE_BASE_URL`。删除确认等仍走 AgentPlanet。 |
