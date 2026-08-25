@@ -334,8 +334,11 @@ export type ModelCatalogList = {
 export type GatewayClient = {
   health: () => Promise<{ status: string; gateway?: string; ok: boolean; error?: string }>;
   listChats: () => Promise<ChatSummary[]>;
-  createDirect: (agentId: string) => Promise<ChatSummary>;
-  /** Alias used by Shell — same as createDirect (server upserts). */
+  createDirect: (
+    agentId: string,
+    opts?: { context?: string | null },
+  ) => Promise<ChatSummary>;
+  /** Alias used by Shell — omit context to upsert the global 1:1. */
   createOrGetDirectChat: (agentId: string) => Promise<ChatSummary>;
   createGroup: (title: string, agentIds: string[]) => Promise<ChatSummary>;
   /** Alias used by Shell. */
@@ -569,10 +572,13 @@ export function createGatewayClient(
     return (await res.json()) as T;
   }
 
-  const createDirect = (agentId: string) =>
+  const createDirect = (agentId: string, opts?: { context?: string | null }) =>
     request<ChatSummary>("/api/chats/direct", {
       method: "POST",
-      body: JSON.stringify({ agent_id: agentId }),
+      body: JSON.stringify({
+        agent_id: agentId,
+        ...(opts?.context ? { context: opts.context } : {}),
+      }),
     });
 
   const createGroup = (title: string, agentIds: string[]) =>
@@ -590,7 +596,7 @@ export function createGatewayClient(
       return { ...h, ok: h.status === "ok" };
     },
     listChats: async () => {
-      const data = await request<{ chats: ChatSummary[] }>("/api/chats?page=1&page_size=50");
+      const data = await request<{ chats: ChatSummary[] }>("/api/chats?page=1&page_size=200");
       return data.chats ?? [];
     },
     createDirect,

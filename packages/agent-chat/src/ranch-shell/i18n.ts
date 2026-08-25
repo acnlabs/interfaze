@@ -99,6 +99,9 @@ export type RanchMessages = {
   groupInfo: string;
   agentInfo: string;
   topics: string;
+  chatsTab: string;
+  startNewChat: string;
+  noAgentChatsHint: string;
   newTopic: string;
   createTopic: string;
   topicTitle: string;
@@ -581,6 +584,9 @@ const en: RanchMessages = {
   groupInfo: "Group info",
   agentInfo: "Agent info",
   topics: "Topics",
+  chatsTab: "Chats",
+  startNewChat: "New chat",
+  noAgentChatsHint: "Each chat is a separate conversation with this agent.",
   newTopic: "New Topic",
   createTopic: "Create",
   topicTitle: "Topic title",
@@ -1101,6 +1107,9 @@ const zh: RanchMessages = {
   groupInfo: "群资料",
   agentInfo: "Agent 资料",
   topics: "话题",
+  chatsTab: "对话",
+  startNewChat: "新对话",
+  noAgentChatsHint: "和这个 agent 的每一场对话都是独立的。",
   newTopic: "新建话题",
   createTopic: "创建",
   topicTitle: "话题标题",
