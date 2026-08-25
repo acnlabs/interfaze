@@ -296,10 +296,10 @@ export function CreateAgentDialog({
 }
 
 const overlay: CSSProperties = {
-  position: "absolute",
+  position: "fixed",
   inset: 0,
   background: "rgba(0,0,0,0.45)",
-  zIndex: 2,
+  zIndex: 80,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",

@@ -39,6 +39,7 @@ import {
   AccountWalletPanel,
   ChatCollabBudgetSection,
 } from "./AccountPanels";
+import { CreateAgentDialog } from "./CreateAgentDialog";
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
 import { NewComposeMenu } from "./NewComposeMenu";
@@ -1725,7 +1726,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   /** Ranch-style: tap header → members panel. */
   const [showMembersPanel, setShowMembersPanel] = useState(false);
   const [showMyAgents, setShowMyAgents] = useState(false);
-  const [openCreateOnAgents, setOpenCreateOnAgents] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createMenuAvailable, setCreateMenuAvailable] = useState(false);
   const [showAccountProfile, setShowAccountProfile] = useState(false);
   const [showAccountManage, setShowAccountManage] = useState(false);
@@ -1738,7 +1739,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setShowAccountWallet(false);
     setShowAccountPlan(false);
     setShowMyAgents(false);
-    setOpenCreateOnAgents(false);
   };
 
   // Deep-link back from plan checkout (PayPal full-page return).
@@ -1753,9 +1753,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   useEffect(() => {
     if (!initialCreateAgent) return;
-    closeAccountSurfaces();
-    setOpenCreateOnAgents(true);
-    setShowMyAgents(true);
+    setShowCreateDialog(true);
   }, [initialCreateAgent]);
 
   useEffect(() => {
@@ -3491,11 +3489,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             allowGroupChat={allowGroupChat}
             messages={t}
             showCreateHosted={createMenuAvailable}
-            onCreateHosted={() => {
-              closeAccountSurfaces();
-              setOpenCreateOnAgents(true);
-              setShowMyAgents(true);
-            }}
+            onCreateHosted={() => setShowCreateDialog(true)}
             onConnectExisting={() => setShowConnect(true)}
             onDirect={() => setPickerMode("direct")}
             onGroup={() => setPickerMode("group")}
@@ -3786,17 +3780,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
             busy={busy}
             onClose={() => {
               setShowMyAgents(false);
-              setOpenCreateOnAgents(false);
               setShowAccountManage(true);
             }}
             onConnectExisting={() => setShowConnect(true)}
+            onCreateHosted={() => setShowCreateDialog(true)}
             onOpenChat={(id) => {
               setShowMyAgents(false);
-              setOpenCreateOnAgents(false);
               setShowAccountManage(false);
               void startDirect(id);
             }}
-            initialShowCreate={initialCreateAgent || openCreateOnAgents}
             onAgentUpdated={(row, previousName) => {
               applyOwnedAgentProfileUpdate(row, previousName);
             }}
@@ -5973,6 +5965,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
             </div>
           </div>
         </div>
+      ) : null}
+      {showCreateDialog ? (
+        <CreateAgentDialog
+          client={client}
+          messages={t}
+          agentPlanetBaseUrl={agentPlanetBaseUrl ?? "https://agentplanet.org"}
+          busy={busy}
+          onClose={() => setShowCreateDialog(false)}
+          onReady={(agentId) => {
+            setShowCreateDialog(false);
+            void startDirect(agentId);
+          }}
+        />
       ) : null}
     </div>
   );

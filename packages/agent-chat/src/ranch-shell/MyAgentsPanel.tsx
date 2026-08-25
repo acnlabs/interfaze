@@ -9,7 +9,6 @@ import {
 } from "./AgentOwnerSettings";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import { copyConnectPromptWithInvite } from "./connectPrompt";
-import { CreateAgentDialog } from "./CreateAgentDialog";
 import type { RanchLocale, RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors } from "./styles";
 
@@ -25,13 +24,13 @@ type Props = {
   busy?: boolean;
   onClose: () => void;
   onConnectExisting?: () => void;
+  /** Open hosted-agent create on the current shell, not this panel. */
+  onCreateHosted?: () => void;
   onOpenChat: (agentId: string) => void;
   /** Notify shell/host after a successful profile save (for chat title / directory). */
   onAgentUpdated?: (agent: MyAgentSummary, previousName?: string | null) => void;
   /** After permanent delete — leave detail and refresh list. */
   onAgentRemoved?: (agentId: string) => void;
-  /** Open the create dialog after availability is confirmed. */
-  initialShowCreate?: boolean;
 };
 
 function shortId(id: string): string {
@@ -58,10 +57,10 @@ export function MyAgentsPanel({
   busy,
   onClose,
   onConnectExisting,
+  onCreateHosted,
   onOpenChat,
   onAgentUpdated,
   onAgentRemoved,
-  initialShowCreate,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +70,6 @@ export function MyAgentsPanel({
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
   const [createAvailable, setCreateAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -108,10 +106,6 @@ export function MyAgentsPanel({
       cancelled = true;
     };
   }, [client]);
-
-  useEffect(() => {
-    if (initialShowCreate && createAvailable) setShowCreate(true);
-  }, [initialShowCreate, createAvailable]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -193,7 +187,7 @@ export function MyAgentsPanel({
         {!selectedId ? (
           <div style={{ display: "flex", gap: 6 }}>
             {createAvailable ? (
-              <button type="button" style={btnPrimary} onClick={() => setShowCreate(true)}>
+              <button type="button" style={btnPrimary} onClick={() => onCreateHosted?.()}>
                 {t.createAgent}
               </button>
             ) : null}
@@ -306,7 +300,7 @@ export function MyAgentsPanel({
             <p style={{ margin: "0 0 16px", fontSize: 12, lineHeight: 1.55 }}>{t.myAgentsEmptyBody}</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
               {createAvailable ? (
-                <button type="button" style={btnPrimary} onClick={() => setShowCreate(true)}>
+                <button type="button" style={btnPrimary} onClick={() => onCreateHosted?.()}>
                   {t.createAgent}
                 </button>
               ) : null}
@@ -391,20 +385,6 @@ export function MyAgentsPanel({
           </ul>
         )}
       </div>
-      {showCreate ? (
-        <CreateAgentDialog
-          client={client}
-          messages={t}
-          agentPlanetBaseUrl={agentPlanetBaseUrl}
-          busy={busy}
-          onClose={() => setShowCreate(false)}
-          onReady={(agentId) => {
-            setShowCreate(false);
-            void client.listMyAgents(50).then(setAgents).catch(() => undefined);
-            onOpenChat(agentId);
-          }}
-        />
-      ) : null}
     </div>
   );
 }
