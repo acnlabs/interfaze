@@ -182,23 +182,33 @@ function chatActivityTs(c: ChatSummary): number {
   return Number.isNaN(ts) ? 0 : ts;
 }
 
-function normalizeOrigin(origin: string): string {
-  return origin.replace(/\/+$/, "").toLowerCase();
+function isGlobalDirect(c: ChatSummary): boolean {
+  return !c.embed?.context;
 }
 
-/** Interfaze inbox: global 1:1 + this host's keyed chats. Hide Studio/Play threads. */
-function isHostVisibleDirect(c: ChatSummary, hostOrigins: string[]): boolean {
-  if (isGroupChat(c)) return true;
-  const context = c.embed?.context;
-  if (!context) return true;
-  const origin = normalizeOrigin(c.embed?.origin || "");
-  const allowed = new Set(hostOrigins.map(normalizeOrigin).filter(Boolean));
-  return allowed.has(origin);
+function contextFallbackLabel(context?: string | null): string {
+  const raw = (context || "").trim();
+  if (!raw || raw.startsWith("new:")) return "";
+  if (raw.startsWith("work:") || raw.startsWith("plot:")) return raw.slice(raw.indexOf(":") + 1);
+  return raw;
+}
+
+function hostCaption(origin?: string | null): string {
+  const raw = (origin || "").trim();
+  if (!raw) return "";
+  try {
+    return new URL(raw).host;
+  } catch {
+    return raw.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  }
 }
 
 function conversationLabel(c: ChatSummary, t: RanchMessages): string {
   const headline = (c.embed?.headline || "").trim();
   if (headline) return headline;
+  const fromContext = contextFallbackLabel(c.embed?.context);
+  if (fromContext) return fromContext;
+  if (!c.embed?.context) return t.mainChat;
   return c.last_message_at || c.created_at ? t.untitledChat : t.startNewChat;
 }
 
@@ -2174,20 +2184,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
       try {
         const list = await client.listChats();
         if (cancelled) return;
-        const hostOrigins = [
-          interfazeBaseUrl || "",
-          "https://interfaze.io",
-          typeof window !== "undefined" ? window.location.origin : "",
-        ];
         const siblings = list
           .filter(
             (c) =>
-              isHostVisibleDirect(c, hostOrigins) &&
               !isGroupChat(c) &&
               (c.agent_id || "").replace(/^acn:/i, "").trim().toLowerCase() === want,
           )
           .sort((a, b) => chatActivityTs(b) - chatActivityTs(a));
-        let found = siblings[0];
+        let found = siblings.find(isGlobalDirect) ?? siblings[0];
         if (!found) {
           found = await client.createOrGetDirectChat(initialOpenAgentId as string);
         }
@@ -2201,7 +2205,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     return () => {
       cancelled = true;
     };
-  }, [open, initialOpenAgentId, client, openConversation, interfazeBaseUrl]);
+  }, [open, initialOpenAgentId, client, openConversation]);
 
   const loadTopics = useCallback(
     async (chatId: string) => {
@@ -2441,20 +2445,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setError(null);
     try {
       const key = agentIdKey(agentId);
-      const hostOrigins = [
-        interfazeBaseUrl || "",
-        "https://interfaze.io",
-        typeof window !== "undefined" ? window.location.origin : "",
-      ];
-      const latest = chats
-        .filter(
-          (c) =>
-            isHostVisibleDirect(c, hostOrigins) &&
-            !isGroupChat(c) &&
-            agentIdKey(c.agent_id) === key,
-        )
-        .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))[0];
-      const c = latest ?? (await client.createOrGetDirectChat(agentId));
+      const global = chats.find(
+        (c) => !isGroupChat(c) && agentIdKey(c.agent_id) === key && isGlobalDirect(c),
+      );
+      const c = global ?? (await client.createOrGetDirectChat(agentId));
       setPickerMode(null);
       await refreshChats();
       await openConversation(c);
@@ -2833,19 +2827,22 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   if (!open) return null;
 
-  const hostOrigins = [
-    interfazeBaseUrl || "",
-    "https://interfaze.io",
-    typeof window !== "undefined" ? window.location.origin : "",
-  ];
-  const inboxChats = chats.filter((c) => isHostVisibleDirect(c, hostOrigins));
+  const inboxChats = chats;
   const filtered = collapseDirectChatsByAgent(
     inboxChats.filter((c) => {
       // Legacy platform sys:* assistants are retired from Interfaze surfaces.
       if ((c.agent_id || "").startsWith("sys:")) return false;
       const q = search.trim().toLowerCase();
       if (!q) return true;
-      return chatTitle(c).toLowerCase().includes(q) || (c.agent_id ?? "").toLowerCase().includes(q);
+      const hay = [
+        chatTitle(c),
+        conversationLabel(c, t),
+        c.agent_id ?? "",
+        c.embed?.context ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
     }),
   );
   const siblingChats =
@@ -5169,6 +5166,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   >
                                     {conversationLabel(c, t)}
                                   </div>
+                                  {hostCaption(c.embed?.origin) ? (
+                                    <div
+                                      style={{
+                                        fontSize: 11,
+                                        color: colors.muted,
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      {hostCaption(c.embed?.origin)}
+                                    </div>
+                                  ) : null}
                                 </div>
                                 <span style={{ fontSize: 10, color: colors.muted, flexShrink: 0 }}>
                                   {formatRelativeTime(c.last_message_at || c.created_at, t)}
