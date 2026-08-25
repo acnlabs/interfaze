@@ -12,7 +12,7 @@ import {
 import {
   ChatGatewayError,
   createGatewayClient,
-  officialCatalogRates,
+  syncCatalogRates,
   type GatewayClient,
   type MyAgentSummary,
 } from "../gateway";
@@ -459,10 +459,21 @@ function isByoVendor(vendor: string, runtimeVendor: string): boolean {
   return !!runtimeVendor && vendor === runtimeVendor;
 }
 
+/** Listed SKU is OpenRouter (not the agent's self-reported vendor). */
+function isOpenRouterByoListed(
+  listed: string | null | undefined,
+  runtime: string | null | undefined,
+): boolean {
+  const vendor = modelVendorId(listed).toLowerCase();
+  if (!vendor) return false;
+  return !isByoVendor(vendor, modelVendorId(runtime).toLowerCase());
+}
+
 function modelFitsComposerPath(
   id: string | null | undefined,
   args: {
     official: boolean;
+    openRouterByo: boolean;
     byoVendor: string;
     officialIds: string[];
     catalogIds: string[];
@@ -479,6 +490,12 @@ function modelFitsComposerPath(
     if (args.catalogIds.some((item) => sameModelId(item, mid))) return true;
     return !!vendor;
   }
+  if (args.openRouterByo) {
+    if (sameModelId(mid, args.listed)) return true;
+    if (args.catalogIds.some((item) => sameModelId(item, mid))) return true;
+    if (args.fallback.some((item) => sameModelId(item, mid))) return true;
+    return !!vendor;
+  }
   if (vendor && !isByoVendor(vendor, args.byoVendor)) return false;
   return (
     args.fallback.some((item) => sameModelId(item, mid)) ||
@@ -488,6 +505,7 @@ function modelFitsComposerPath(
 
 function pickComposerModelForPath(args: {
   official: boolean;
+  openRouterByo: boolean;
   wanted: string | null;
   listed: string | null;
   runtime: string | null;
@@ -498,6 +516,7 @@ function pickComposerModelForPath(args: {
   const byoVendor = modelVendorId(args.runtime).toLowerCase();
   const path = {
     official: args.official,
+    openRouterByo: args.openRouterByo,
     byoVendor,
     officialIds: args.officialIds,
     catalogIds: args.catalogIds,
@@ -3000,6 +3019,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             : null;
           const nextModel = pickComposerModelForPath({
             official: listedOfficial,
+            openRouterByo: isOpenRouterByoListed(listed, runtime),
             wanted: listedChanged ? listed : stored,
             listed,
             runtime,
@@ -3041,7 +3061,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, [composerMenuOpen]);
 
   useEffect(() => {
-    if (!composerModel?.official_channel) {
+    const openRouterByo = isOpenRouterByoListed(
+      composerModel?.listed_model_id,
+      composerModel?.runtime_model_id,
+    );
+    if (composerModel?.official_channel || !openRouterByo) {
       setComposerCatalog([]);
       setComposerCatalogLoading(false);
       return;
@@ -3065,11 +3089,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
           for (const row of data.items) {
             const src = (row.source || "openrouter").toLowerCase();
             if (src && src !== "openrouter") continue;
-            const quote = officialCatalogRates(row);
+            const quote = syncCatalogRates(row);
             if (!quote) continue;
             const id = (row.model_id || "").trim();
             if (!id) continue;
-            if (!officialV0SupportsModel(id)) continue;
             if (acc.some((item) => sameModelId(item.id, id))) continue;
             acc.push({ id, in: quote.input, out: quote.output });
           }
@@ -3086,7 +3109,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
     return () => {
       cancelled = true;
     };
-  }, [client, composerModel?.official_channel]);
+  }, [
+    client,
+    composerModel?.official_channel,
+    composerModel?.listed_model_id,
+    composerModel?.runtime_model_id,
+  ]);
 
   useEffect(() => {
     if (!composerModel?.official_channel) return;
@@ -4612,12 +4640,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     {(() => {
                       const listed = (composerModel.listed_model_id || "").trim();
                       const official = composerModel.official_channel;
+                      const openRouterByo = isOpenRouterByoListed(
+                        composerModel.listed_model_id,
+                        composerModel.runtime_model_id,
+                      );
                       const options = (() => {
-                        const fromApi = official && composerCatalog.length
-                          ? composerCatalog.map((row) => row.id)
-                          : composerModel.supported_models.length
-                            ? composerModel.supported_models
-                            : [listed].filter(Boolean);
+                        const fromApi =
+                          (official || openRouterByo) && composerCatalog.length
+                            ? composerCatalog.map((row) => row.id)
+                            : composerModel.supported_models.length
+                              ? composerModel.supported_models
+                              : [listed].filter(Boolean);
                         const seen = new Set<string>();
                         const out: string[] = [];
                         const byoVendor = modelVendorId(composerModel.runtime_model_id).toLowerCase();
@@ -4628,6 +4661,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             (!official || officialV0SupportsModel(id)) &&
                             modelFitsComposerPath(id, {
                               official,
+                              openRouterByo,
                               byoVendor,
                               officialIds: composerModel.official_models,
                               catalogIds: composerCatalog.map((row) => row.id),
@@ -4683,7 +4717,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       };
                       const priceHint = value ? priceFor(value) : "";
                       const displayName = shortModelLabel(value) || t.composerModelUnknown;
-                      const canPick = options.length > 0 || official;
+                      const canPick = options.length > 0 || official || openRouterByo;
                       return (
                         <>
                           <button
@@ -4796,7 +4830,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   overflowY: "auto",
                                 }}
                               >
-                                {composerCatalogLoading && official && options.length <= 1 ? (
+                                {composerCatalogLoading && (official || openRouterByo) && options.length <= 1 ? (
                                   <li style={{ padding: "8px", fontSize: 12, color: colors.muted }}>
                                     …
                                   </li>
