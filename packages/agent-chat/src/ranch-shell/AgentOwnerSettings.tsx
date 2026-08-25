@@ -958,6 +958,28 @@ export function AgentOwnerSettings({
     };
   }, [client, detail.agent_id, detail.token_pricing?.model_id, detail.runtime_model_id]);
 
+  useEffect(() => {
+    if (officialSaved.length === 0) return;
+    let cancelled = false;
+    void client
+      .updateMyAgentOfficialModels(detail.agent_id, [])
+      .then((row) => {
+        if (cancelled) return;
+        setOfficialSaved(row.model_ids);
+        onUpdated?.({
+          ...detail,
+          official_models: row.model_ids,
+          host_inference_ready: row.host_inference_ready,
+        });
+      })
+      .catch(() => {
+        // Host may not expose official-models yet; send path still forces byo.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, detail.agent_id, officialSaved.join("\u0001")]);
+
   const supportedKey = supportedModels.join("\u0001");
   useEffect(() => {
     if (supportedModels.length === 0) {
@@ -1398,11 +1420,29 @@ export function AgentOwnerSettings({
         model_id: displayedModelId,
         markup_percent: markupParsed,
       })
-      .then((row) => {
+      .then(async (row) => {
         setPricingMsg(t.myAgentsPricingSaved);
         setModelIdDraft(resolvePricingModelId(row));
         const mu = row.token_pricing?.markup_percent;
         if (typeof mu === "number" && Number.isFinite(mu)) setMarkupDraft(String(mu));
+        // Official is frozen. Saving OpenRouter / vendor pricing must drop
+        // leftover Host official authorization so listen stops injecting hops.
+        if (officialSaved.length > 0) {
+          try {
+            const cleared = await client.updateMyAgentOfficialModels(
+              detail.agent_id,
+              [],
+            );
+            setOfficialSaved(cleared.model_ids);
+            row = {
+              ...row,
+              official_models: cleared.model_ids,
+              host_inference_ready: cleared.host_inference_ready,
+            };
+          } catch {
+            // Pricing saved; leftover official_models stay until Host accepts [].
+          }
+        }
         window.setTimeout(() => setPricingMsg(null), 2000);
         onUpdated?.(row);
         return row;
