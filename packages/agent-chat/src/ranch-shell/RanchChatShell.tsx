@@ -475,6 +475,32 @@ function isOpenRouterByoListed(
   return true;
 }
 
+function isKnownByoVendor(vendor: string, supported: string[]): boolean {
+  const v = vendor.trim().toLowerCase();
+  if (!v) return false;
+  if (v === "tencenttokenplan") return true;
+  return supported.some((id) => modelVendorId(id).toLowerCase() === v);
+}
+
+/** Leftover OpenRouter shelf id while heartbeat is still a BYO vendor. */
+function listingNeedsRuntimeHeal(
+  listed: string | null | undefined,
+  runtime: string | null | undefined,
+  supported: string[] = [],
+): boolean {
+  const ls = (listed || "").trim();
+  const rt = (runtime || "").trim();
+  if (!ls || !rt) return false;
+  if (ls.toLowerCase() === rt.toLowerCase()) return false;
+  const rtVendor = modelVendorId(rt);
+  const lsVendor = modelVendorId(ls);
+  if (!rtVendor || !lsVendor) return false;
+  if (!isKnownByoVendor(rtVendor, supported)) return false;
+  if (lsVendor.toLowerCase() === rtVendor.toLowerCase()) return false;
+  if (isKnownByoVendor(lsVendor, supported)) return false;
+  return true;
+}
+
 function modelFitsComposerPath(
   id: string | null | undefined,
   args: {
@@ -1882,6 +1908,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const composerMenuRef = useRef<HTMLDivElement | null>(null);
   /** Last Settings listing seen in this chat; change drops the composer pin. */
   const composerListedRef = useRef<{ chatId: string; listed: string } | null>(null);
+  /** Owner-only: heal leftover OpenRouter listing vs BYO runtime once per pair. */
+  const listingHealRef = useRef("");
   const [ownedAgentLoading, setOwnedAgentLoading] = useState(false);
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [activeTopic, setActiveTopic] = useState<ThreadSummary | null>(null);
@@ -3086,6 +3114,74 @@ export function RanchChatShell(props: RanchChatShellProps) {
     client,
     ownedAgentDetail?.token_pricing?.model_id,
     (ownedAgentDetail?.official_models ?? []).join("\u0001"),
+  ]);
+
+  useEffect(() => {
+    if (!activeIsOwned || !active?.agent_id || !composerModel) return;
+    const listed = composerModel.listed_model_id;
+    const runtime = composerModel.runtime_model_id;
+    const supported = composerModel.supported_models ?? [];
+    if (!listingNeedsRuntimeHeal(listed, runtime, supported)) return;
+    const bare = active.agent_id.replace(/^acn:/i, "").trim();
+    const key = `${agentIdKey(bare)}:${(listed || "").trim()}:${(runtime || "").trim()}`;
+    if (listingHealRef.current === key) return;
+    listingHealRef.current = key;
+    const markup =
+      typeof composerModel.markup_percent === "number" &&
+      Number.isFinite(composerModel.markup_percent) &&
+      composerModel.markup_percent >= 0
+        ? composerModel.markup_percent
+        : 50;
+    const runtimeId = (runtime || "").trim();
+    let cancelled = false;
+    void (async () => {
+      try {
+        const row = await client.getModelCatalogItem(runtimeId);
+        const quote = syncCatalogRates(row);
+        if (!quote) {
+          listingHealRef.current = "";
+          return;
+        }
+        if (cancelled) {
+          listingHealRef.current = "";
+          return;
+        }
+        const round = (n: number) => Math.round(n * 1e6) / 1e6;
+        const updated = await client.updateMyAgentTokenPricing(bare, {
+          model_id: runtimeId,
+          input_price_per_million: round(quote.input * (1 + markup / 100)),
+          output_price_per_million: round(quote.output * (1 + markup / 100)),
+          markup_percent: markup,
+        });
+        if (cancelled) {
+          listingHealRef.current = "";
+          return;
+        }
+        setOwnedAgentDetail((prev) =>
+          prev && agentIdKey(prev.agent_id) === agentIdKey(bare) ? updated : prev,
+        );
+        setComposerModel((prev) =>
+          prev
+            ? { ...prev, listed_model_id: runtimeId, mismatched: false }
+            : prev,
+        );
+        composerListedRef.current = { chatId: active.chat_id, listed: runtimeId };
+      } catch {
+        listingHealRef.current = "";
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    active?.agent_id,
+    active?.chat_id,
+    activeIsOwned,
+    client,
+    composerModel?.listed_model_id,
+    composerModel?.markup_percent,
+    composerModel?.runtime_model_id,
+    (composerModel?.supported_models ?? []).join("\u0001"),
   ]);
 
   useEffect(() => {

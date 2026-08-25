@@ -353,6 +353,8 @@ export type RanchMessages = {
   myAgentsNeedStoreKey: string;
   myAgentsOpenRouterRuntimeRequired: string;
   myAgentsBuyStoreKey: string;
+  myAgentsRefreshRuntime: string;
+  myAgentsPricingHealed: string;
   myAgentsOfficialSectionHint: string;
   myAgentsMineSectionHint: string;
   myAgentsProviderUnlisted: string;
@@ -568,12 +570,13 @@ const en: RanchMessages = {
   rateLimited: "Not enough credits to send. Top up in Wallet or check Plan & Usage.",
   billingUnavailable: "Billing check unavailable. Try again in a moment.",
   unsupportedModel: "This agent does not support that model.",
-  officialNotAuthorized: "Official · OpenRouter is not authorized for this model. Pick Mine, or ask the owner to enable it.",
+  officialNotAuthorized:
+    "Official hosted inference is not available. Use this agent’s own key, or write a Store OpenRouter key into its runtime.",
   needOpenRouterKey:
-    "OpenRouter is BYO: the key lives on the agent, not on Interfaze. Put a key in its runtime, or buy Store credits for the owner to write one in.",
+    "OpenRouter is BYO: the key lives on the agent, not on Interfaze. Host cannot see the key — we only read the heartbeat model. Put a key in its runtime, or buy Store credits for the owner to write one in.",
   buyOpenRouterCredits: "Buy OpenRouter credits",
   officialModelUnsupported:
-    "Official v0 is a single completion and cannot run thinking/reasoning models. Pick kimi or another chat model.",
+    "Official hosted inference is frozen and cannot run thinking/reasoning models. Use the agent’s key, or pick a chat model after writing a Store key.",
   modelPricingUnavailable: "No platform price for that model yet. Pick another or ask the owner to wait for Host pack coverage.",
   pricingMismatch: (listed, observed) =>
     `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
@@ -870,7 +873,8 @@ const en: RanchMessages = {
   myAgentsPricingOptionLine: "${name} · in ${in} · out ${out}",
   myAgentsPricingCreditsLine: "in ${in} · out ${out} Credits / 1M",
   myAgentsPricingCreditsNote: "100 Credits = $1, same as wallet recharge. Each hop settles in whole Credits.",
-  myAgentsPricingRuntimeHint: "Runtime reported: ${model} (self-reported — not verified).",
+  myAgentsPricingRuntimeHint:
+    "Runtime reported: ${model} (heartbeat model only — Host cannot verify the key).",
   myAgentsPricingSelfReportNote:
     "You only set default model + markup. Host owns baseline prices; agents cannot rewrite the global settle book.",
   myAgentsInferencePathByo: "BYO",
@@ -880,7 +884,7 @@ const en: RanchMessages = {
     "Chat picks a model. OpenRouter here is a Store key on the agent — not Interfaze’s official hop.",
   myAgentsProviderLabel: "Provider",
   myAgentsProviderHint:
-    "Provider follows the agent runtime. OpenRouter can be saved only after the agent reports an OpenRouter model (Store key written into its runtime). Catalog prefixes are not providers.",
+    "Provider follows the agent runtime. Host cannot see the key — only the heartbeat model. OpenRouter can be saved only after the agent reports an OpenRouter model (write a Store key, then Refresh status). Catalog prefixes are not providers.",
   myAgentsProviderByo: "Mine",
   myAgentsProviderOfficial: "Official · OpenRouter",
   myAgentsProviderMine: "Mine",
@@ -889,14 +893,16 @@ const en: RanchMessages = {
   myAgentsProviderOfficialOpenRouter: "Official · OpenRouter",
   myAgentsProviderOpenRouter: "OpenRouter",
   myAgentsNeedStoreKey:
-    "OpenRouter needs a key on this agent. If it doesn’t have one yet, buy Store credits and write the key into the runtime.",
+    "OpenRouter needs a key on this agent. Host cannot see the key — we only read the heartbeat model. If it doesn’t have one yet, buy Store credits, write the key into the runtime, then Refresh status.",
   myAgentsOpenRouterRuntimeRequired:
-    "Runtime is still this agent’s own vendor. OpenRouter cannot be saved until the agent reports an OpenRouter model — write a Store key into the runtime first.",
+    "Runtime is still this agent’s own vendor. Host cannot see whether an OpenRouter key is installed. Write a Store key into the runtime, then Refresh status. OpenRouter can be saved only after the agent reports an OpenRouter model.",
   myAgentsBuyStoreKey: "Buy in Store",
+  myAgentsRefreshRuntime: "Refresh status",
+  myAgentsPricingHealed: "Listing reset to the runtime model.",
   myAgentsOfficialSectionHint:
-    "Save with Official · OpenRouter to run the default model on Interfaze’s key. Other models stay on this agent’s key.",
+    "Official hosted inference is frozen. OpenRouter here is a Store/BYO key on the agent — not Interfaze’s key.",
   myAgentsMineSectionHint:
-    "Chat pick Mine uses the agent’s own key. These models stay on that key.",
+    "These models stay on this agent’s own key. Provider follows the live runtime.",
   myAgentsProviderUnlisted: "Authorized, not in this agent’s self-report yet — won’t appear in chat until it reports the model.",
   myAgentsSaveProviders: "Save providers",
   myAgentsProvidersSaved: "Providers saved",
@@ -1136,11 +1142,13 @@ const zh: RanchMessages = {
   rateLimited: "余额不足，无法发送。请先去钱包充值，或查看套餐与用量。",
   billingUnavailable: "计费服务暂时不可用，请稍后再试。",
   unsupportedModel: "该智能体不支持所选模型。",
-  officialNotAuthorized: "官方 · OpenRouter 尚未授权该模型。请改选「我的」，或让 Owner 勾选后保存。",
+  officialNotAuthorized:
+    "官方代打未开放。请用这只 agent 自己的钥匙，或把 Store OpenRouter 钥匙写进 runtime。",
   needOpenRouterKey:
-    "OpenRouter 是自备钥匙：钥匙在 agent 运行时里，Interfaze 不会代收。请写进它的 OpenClaw / runtime，或去 Store 买额度让 Owner 写入。",
+    "OpenRouter 是自备钥匙：钥匙在 agent 运行时里，Interfaze 不会代收。Host 看不见钥匙，只认心跳型号。请写进它的 OpenClaw / runtime，或去 Store 买额度让 Owner 写入。",
   buyOpenRouterCredits: "去 Store 买 OpenRouter 额度",
-  officialModelUnsupported: "官方 v0 是单次补全，思考/推理模跑不了。请改选 kimi 或其他对话模。",
+  officialModelUnsupported:
+    "官方代打已冻结，思考/推理模跑不了。请用 agent 自己的钥匙，或写入 Store 钥匙后再选对话模。",
   modelPricingUnavailable: "平台暂无该模型报价，请换一个；或等 Host 价包录入后再试。",
   pricingMismatch: (listed, observed) =>
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
@@ -1424,7 +1432,7 @@ const zh: RanchMessages = {
   myAgentsPricingOptionLine: "${name} · 入 ${in} · 出 ${out}",
   myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} Credits /百万",
   myAgentsPricingCreditsNote: "与钱包充值相同：100 Credits = $1。每跳按整数 Credits 结算。",
-  myAgentsPricingRuntimeHint: "Runtime 上报：${model}（自报，未验真）。",
+  myAgentsPricingRuntimeHint: "Runtime 上报：${model}（只认心跳型号，Host 看不见钥匙）。",
   myAgentsPricingSelfReportNote:
     "Owner 只设默认模型 + 上浮；底价由 Host 维护，智能体不能改写全网结算价。",
   myAgentsInferencePathByo: "自持钥",
@@ -1434,7 +1442,7 @@ const zh: RanchMessages = {
     "聊天只选模型。这里的 OpenRouter 是写在 agent 上的 Store 钥匙，不是 Interfaze 官方代打。",
   myAgentsProviderLabel: "供应商",
   myAgentsProviderHint:
-    "供应商跟 agent 运行时走。只有它自报了 OpenRouter 型号（Store 钥匙已写入 runtime）才能保存 OpenRouter。型号 id 里的货架前缀不是供应商。",
+    "供应商跟 agent 运行时走。Host 看不见钥匙，只认心跳型号。只有它自报了 OpenRouter 型号（写入 Store 钥匙后点「刷新状态」）才能保存。型号 id 里的货架前缀不是供应商。",
   myAgentsProviderByo: "我的",
   myAgentsProviderOfficial: "官方 · OpenRouter",
   myAgentsProviderMine: "我的",
@@ -1443,14 +1451,16 @@ const zh: RanchMessages = {
   myAgentsProviderOfficialOpenRouter: "官方 · OpenRouter",
   myAgentsProviderOpenRouter: "OpenRouter",
   myAgentsNeedStoreKey:
-    "OpenRouter 需要这只 agent 自己的钥匙。还没有的话，去 Store 买额度并写入 runtime。",
+    "OpenRouter 需要这只 agent 自己的钥匙。Host 看不见钥匙，只认心跳型号。还没有的话，去 Store 买额度、写入 runtime，再点「刷新状态」。",
   myAgentsOpenRouterRuntimeRequired:
-    "运行时仍是这只 agent 自己的厂家。在它自报 OpenRouter 型号之前不能保存——请先把 Store 钥匙写进 runtime。",
+    "运行时仍是这只 agent 自己的厂家。Host 看不见钥匙是否装上——请先把 Store 钥匙写进 runtime，再点「刷新状态」。只有它自报了 OpenRouter 型号才能保存。",
   myAgentsBuyStoreKey: "去 Store 购买",
+  myAgentsRefreshRuntime: "刷新状态",
+  myAgentsPricingHealed: "挂牌已改回运行时型号。",
   myAgentsOfficialSectionHint:
-    "用官方 · OpenRouter 保存后，默认模型走 Interfaze 的钥匙；其余模型仍走本 agent 的钥匙。",
+    "官方代打已冻结。这里的 OpenRouter 是写在 agent 上的 Store/自持钥匙，不是 Interfaze 持钥。",
   myAgentsMineSectionHint:
-    "聊天选「我的」时走 agent 自己的钥匙。下列模型留在那把钥匙上。",
+    "下列模型走这只 agent 自己的钥匙。供应商跟运行时走。",
   myAgentsProviderUnlisted: "已授权，但 agent 尚未自报——写进自报之前不会出现在聊天下拉。",
   myAgentsSaveProviders: "保存供应商",
   myAgentsProvidersSaved: "供应商已保存",
