@@ -384,7 +384,10 @@ function storeOpenRouterUrl(base?: string): string {
   return `${(base || "https://agentplanet.org").replace(/\/+$/, "")}/store/openrouter`;
 }
 
-function shouldOfferStoreOpenRouterKey(code: string | undefined, message: string): boolean {
+function shouldOfferStoreOpenRouterKey(
+  code: string | null | undefined,
+  message: string,
+): boolean {
   if (code === "insufficient_credits") return false;
   if (code === "official_not_authorized" || code === "official_model_unsupported") {
     return true;
