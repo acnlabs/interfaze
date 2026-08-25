@@ -351,6 +351,7 @@ export type RanchMessages = {
   myAgentsProviderOfficialOpenRouter: string;
   myAgentsProviderOpenRouter: string;
   myAgentsNeedStoreKey: string;
+  myAgentsOpenRouterRuntimeRequired: string;
   myAgentsBuyStoreKey: string;
   myAgentsOfficialSectionHint: string;
   myAgentsMineSectionHint: string;
@@ -879,7 +880,7 @@ const en: RanchMessages = {
     "Chat picks a model. OpenRouter here is a Store key on the agent — not Interfaze’s official hop.",
   myAgentsProviderLabel: "Provider",
   myAgentsProviderHint:
-    "Only vendors this agent has reported, plus OpenRouter (Store key on the agent — not official hop). Catalog prefixes in a model id are not providers.",
+    "Provider follows the agent runtime. OpenRouter can be saved only after the agent reports an OpenRouter model (Store key written into its runtime). Catalog prefixes are not providers.",
   myAgentsProviderByo: "Mine",
   myAgentsProviderOfficial: "Official · OpenRouter",
   myAgentsProviderMine: "Mine",
@@ -889,6 +890,8 @@ const en: RanchMessages = {
   myAgentsProviderOpenRouter: "OpenRouter",
   myAgentsNeedStoreKey:
     "OpenRouter needs a key on this agent. If it doesn’t have one yet, buy Store credits and write the key into the runtime.",
+  myAgentsOpenRouterRuntimeRequired:
+    "Runtime is still this agent’s own vendor. OpenRouter cannot be saved until the agent reports an OpenRouter model — write a Store key into the runtime first.",
   myAgentsBuyStoreKey: "Buy in Store",
   myAgentsOfficialSectionHint:
     "Save with Official · OpenRouter to run the default model on Interfaze’s key. Other models stay on this agent’s key.",
@@ -1431,7 +1434,7 @@ const zh: RanchMessages = {
     "聊天只选模型。这里的 OpenRouter 是写在 agent 上的 Store 钥匙，不是 Interfaze 官方代打。",
   myAgentsProviderLabel: "供应商",
   myAgentsProviderHint:
-    "只列出这只 agent 已自报的厂家，外加 OpenRouter（Store 钥匙，不是官方代打）。型号 id 里的货架前缀不是供应商。",
+    "供应商跟 agent 运行时走。只有它自报了 OpenRouter 型号（Store 钥匙已写入 runtime）才能保存 OpenRouter。型号 id 里的货架前缀不是供应商。",
   myAgentsProviderByo: "我的",
   myAgentsProviderOfficial: "官方 · OpenRouter",
   myAgentsProviderMine: "我的",
@@ -1441,6 +1444,8 @@ const zh: RanchMessages = {
   myAgentsProviderOpenRouter: "OpenRouter",
   myAgentsNeedStoreKey:
     "OpenRouter 需要这只 agent 自己的钥匙。还没有的话，去 Store 买额度并写入 runtime。",
+  myAgentsOpenRouterRuntimeRequired:
+    "运行时仍是这只 agent 自己的厂家。在它自报 OpenRouter 型号之前不能保存——请先把 Store 钥匙写进 runtime。",
   myAgentsBuyStoreKey: "去 Store 购买",
   myAgentsOfficialSectionHint:
     "用官方 · OpenRouter 保存后，默认模型走 Interfaze 的钥匙；其余模型仍走本 agent 的钥匙。",

@@ -82,6 +82,13 @@ function modelIsOfficial(id: string, official: string[]): boolean {
   return official.some((item) => sameModelId(item, id));
 }
 
+function isKnownByoVendor(vendor: string, supported: string[]): boolean {
+  const v = vendor.trim().toLowerCase();
+  if (!v) return false;
+  if (v === "tencenttokenplan") return true;
+  return supported.some((id) => modelVendorId(id).toLowerCase() === v);
+}
+
 function providerIdForModel(modelId: string, supported: string[]): string {
   const id = modelId.trim();
   if (!id) return "";
@@ -90,6 +97,28 @@ function providerIdForModel(modelId: string, supported: string[]): string {
   }
   // Listing ids like moonshotai/kimi-k2.5 are OpenRouter catalog SKUs, not a vendor we sell.
   return OPENROUTER_BYO;
+}
+
+/** Settings Provider follows the live runtime, not a leftover OpenRouter listing. */
+function providerIdFromRuntime(
+  runtime: string,
+  listed: string,
+  supported: string[],
+): string {
+  const rt = (runtime || "").trim();
+  if (rt) {
+    const vendor = modelVendorId(rt);
+    if (!vendor) return OTHER_VENDOR;
+    if (isKnownByoVendor(vendor, supported)) return vendor;
+    return OPENROUTER_BYO;
+  }
+  return providerIdForModel(listed, supported);
+}
+
+function runtimeIsOpenRouter(runtime: string, supported: string[]): boolean {
+  const vendor = modelVendorId((runtime || "").trim());
+  if (!vendor) return false;
+  return !isKnownByoVendor(vendor, supported);
 }
 
 /** Saving under Official adds the default model; saving under a BYO vendor removes it. */
@@ -907,7 +936,13 @@ export function AgentOwnerSettings({
     setOfficialSaved(official);
     setOfficialMsg(null);
     setOfficialError(null);
-    setSettingsProvider(providerIdForModel(resolvePricingModelId(detail), []));
+    setSettingsProvider(
+      providerIdFromRuntime(
+        detail.runtime_model_id || "",
+        resolvePricingModelId(detail),
+        [],
+      ),
+    );
   }, [
     detail.agent_id,
     detail.token_pricing?.model_id,
@@ -938,8 +973,13 @@ export function AgentOwnerSettings({
         if (Array.isArray(status.official_models)) {
           setOfficialSaved(status.official_models);
         }
-        const current = resolvePricingModelId(detail);
-        setSettingsProvider(providerIdForModel(current, ids));
+        setSettingsProvider(
+          providerIdFromRuntime(
+            status.runtime_model_id || detail.runtime_model_id || "",
+            resolvePricingModelId(detail),
+            ids,
+          ),
+        );
       })
       .catch(() => {
         if (cancelled) return;
@@ -1198,6 +1238,10 @@ export function AgentOwnerSettings({
     vendorModels.length > 0 &&
     vendorModels.some((id) => sameModelId(id, displayedModelId));
   const modelsBusy = officialSelected ? officialCatalogLoading : modelsLoading;
+  const openRouterOnRuntime = runtimeIsOpenRouter(
+    detail.runtime_model_id || "",
+    supportedModels,
+  );
   const canSavePricing =
     pricingDirty &&
     previewReady &&
@@ -1206,6 +1250,7 @@ export function AgentOwnerSettings({
     markupParsed !== null &&
     displayedModelId.length > 0 &&
     modelOnList &&
+    !(officialSelected && !openRouterOnRuntime) &&
     !modelsBusy &&
     !savingPricing &&
     !busy;
@@ -1876,8 +1921,17 @@ export function AgentOwnerSettings({
             </select>
           )}
           {officialSelected ? (
-            <p style={{ margin: "8px 0 0", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-              {t.myAgentsNeedStoreKey}{" "}
+            <p
+              style={{
+                margin: "8px 0 0",
+                fontSize: 12,
+                color: openRouterOnRuntime ? colors.muted : colors.danger,
+                lineHeight: 1.45,
+              }}
+            >
+              {openRouterOnRuntime
+                ? t.myAgentsNeedStoreKey
+                : t.myAgentsOpenRouterRuntimeRequired}{" "}
               <a
                 href={storeOpenRouterUrl(_agentPlanetBaseUrl)}
                 target="_blank"
