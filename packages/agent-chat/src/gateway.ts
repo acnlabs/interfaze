@@ -68,10 +68,27 @@ export type AgentCreateTier = {
   total_credits: number;
 };
 
+export type AgentCreateMachine = {
+  tier_id: "starter" | "standard" | string;
+  product_id: string;
+  machine_credits: number;
+};
+
+export type AgentCreateKey = {
+  product_id: string;
+  or_usd_limit?: number;
+  key_quota_credits: number;
+  key_fee_credits: number;
+  key_credits: number;
+};
+
 export type AgentCreateAvailability = {
   available: boolean;
   reason?: string | null;
   message?: string | null;
+  machines?: AgentCreateMachine[];
+  keys?: AgentCreateKey[];
+  default_key_product_id?: string;
   tiers: AgentCreateTier[];
   key_product_id?: string;
   key_quota_credits?: number;
@@ -92,6 +109,7 @@ export type AgentCreateJob = {
     | string;
   name?: string;
   tier_id?: string;
+  key_product_id?: string | null;
   order_id?: string | null;
   key_order_id?: string | null;
   agent_id?: string | null;
@@ -602,7 +620,11 @@ export type GatewayClient = {
   /** Cancel pending gift invite for an owned agent. */
   cancelMyAgentTransferInvite: (agentId: string) => Promise<{ success: boolean }>;
   getAgentCreateAvailability: () => Promise<AgentCreateAvailability>;
-  createAgentJob: (body: { name: string; tier_id: "starter" | "standard" }) => Promise<AgentCreateJob>;
+  createAgentJob: (body: {
+    name: string;
+    tier_id: "starter" | "standard";
+    key_product_id?: string;
+  }) => Promise<AgentCreateJob>;
   getAgentCreateJob: (jobId: string) => Promise<AgentCreateJob>;
   payAgentCreateJob: (jobId: string) => Promise<AgentCreateJob>;
   retryBindAgentCreateJob: (jobId: string) => Promise<AgentCreateJob>;

@@ -271,8 +271,11 @@ export type RanchMessages = {
   createAgentBlurb: string;
   createAgentName: string;
   createAgentTier: string;
+  createAgentServerSection: string;
+  createAgentKeySection: string;
   createAgentStarter: string;
   createAgentStandard: string;
+  createAgentKeyUsd: string;
   createAgentMachineLine: string;
   createAgentKeyQuotaLine: string;
   createAgentKeyFeeLine: string;
@@ -792,14 +795,17 @@ const en: RanchMessages = {
   createAgent: "Create",
   createAgentTitle: "Create a hosted agent",
   createAgentBlurb:
-    "Pay for a hosted machine plus a starter model pack. The key is written onto your machine — you use your own model allowance.",
+    "Pay for a hosted machine and a model pack. The key is written onto your machine — you use your own model allowance.",
   createAgentName: "Name",
   createAgentTier: "Plan",
+  createAgentServerSection: "Server",
+  createAgentKeySection: "Model allowance",
   createAgentStarter: "Starter · 2C2G / 30 days",
   createAgentStandard: "Standard · 2C4G / 30 days",
+  createAgentKeyUsd: "${usd} OpenRouter",
   createAgentMachineLine: "Machine {n} credits",
   createAgentKeyQuotaLine: "Model allowance {n} credits",
-  createAgentKeyFeeLine: "Service fee {n} credits (10%)",
+  createAgentKeyFeeLine: "Service fee {n} credits ({pct}%)",
   createAgentKeyLine: "Starter model pack {n} credits (includes 10% service fee)",
   createAgentTotalLine: "Total {n} credits",
   createAgentSubmit: "Pay and create",
@@ -1342,14 +1348,17 @@ const zh: RanchMessages = {
   createAgent: "创建",
   createAgentTitle: "创建托管 agent",
   createAgentBlurb:
-    "付机费加一笔起步模型额度。钥匙写进你的机器，用你自己的模型额度。",
+    "付一台托管机，再选一笔模型额度。钥匙写进你的机器，用你自己的额度。",
   createAgentName: "名字",
   createAgentTier: "档位",
+  createAgentServerSection: "服务器",
+  createAgentKeySection: "模型额度",
   createAgentStarter: "入门 · 2C2G / 30 天",
   createAgentStandard: "标准 · 2C4G / 30 天",
+  createAgentKeyUsd: "${usd} OpenRouter",
   createAgentMachineLine: "机费 {n} credits",
   createAgentKeyQuotaLine: "模型额度 {n} credits",
-  createAgentKeyFeeLine: "服务费 {n} credits（10%）",
+  createAgentKeyFeeLine: "服务费 {n} credits（{pct}%）",
   createAgentKeyLine: "起步模型额度 {n} credits（含 10% 服务费）",
   createAgentTotalLine: "合计 {n} credits",
   createAgentSubmit: "付款并创建",
