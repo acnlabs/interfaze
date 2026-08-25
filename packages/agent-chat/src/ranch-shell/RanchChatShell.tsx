@@ -197,8 +197,9 @@ function isHostVisibleDirect(c: ChatSummary, hostOrigins: string[]): boolean {
 }
 
 function conversationLabel(c: ChatSummary, t: RanchMessages): string {
-  const headline = (c.embed?.headline || c.last_message_content || "").trim();
-  return headline || t.startNewChat;
+  const headline = (c.embed?.headline || "").trim();
+  if (headline) return headline;
+  return c.last_message_at || c.created_at ? t.untitledChat : t.startNewChat;
 }
 
 /** Sidebar is one row per agent (latest chat). Groups stay one row each. */
