@@ -88,10 +88,7 @@ function providerIdForModel(modelId: string, supported: string[]): string {
   if (supported.some((item) => sameModelId(item, id))) {
     return modelVendorId(id) || OTHER_VENDOR;
   }
-  if (supported.length === 0) {
-    const vendor = modelVendorId(id);
-    if (vendor && vendor.toLowerCase() !== OPENROUTER_BYO) return vendor;
-  }
+  // Listing ids like moonshotai/kimi-k2.5 are OpenRouter catalog SKUs, not a vendor we sell.
   return OPENROUTER_BYO;
 }
 
@@ -1102,13 +1099,9 @@ export function AgentOwnerSettings({
   const listingPublished =
     oldModelId.length > 0 && typeof oldMarkup === "number" && Number.isFinite(oldMarkup);
   const officialIds = officialCatalog.map((row) => row.id);
-  const savedVendor = modelVendorId(resolvePricingModelId(detail));
-  const byoVendors = vendorsFromModels([
-    ...supportedModels,
-    ...(savedVendor && savedVendor.toLowerCase() !== OPENROUTER_BYO
-      ? [resolvePricingModelId(detail)]
-      : []),
-  ]).filter((id) => id.toLowerCase() !== OPENROUTER_BYO);
+  const byoVendors = vendorsFromModels(supportedModels).filter(
+    (id) => id.toLowerCase() !== OPENROUTER_BYO,
+  );
   const hasBareModels = supportedModels.some((id) => !modelVendorId(id));
   const providerOptions: Array<{ id: string; label: string }> = [
     ...byoVendors.map((id) => ({ id, label: id })),
