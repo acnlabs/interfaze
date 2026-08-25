@@ -175,6 +175,55 @@ function isGroupChat(c: ChatSummary): boolean {
   return c.type === "group" || c.type === "GROUP";
 }
 
+function chatActivityTs(c: ChatSummary): number {
+  const raw = c.last_message_at || c.created_at;
+  if (!raw) return 0;
+  const ts = Date.parse(raw);
+  return Number.isNaN(ts) ? 0 : ts;
+}
+
+function normalizeOrigin(origin: string): string {
+  return origin.replace(/\/+$/, "").toLowerCase();
+}
+
+/** Interfaze inbox: global 1:1 + this host's keyed chats. Hide Studio/Play threads. */
+function isHostVisibleDirect(c: ChatSummary, hostOrigins: string[]): boolean {
+  if (isGroupChat(c)) return true;
+  const context = c.embed?.context;
+  if (!context) return true;
+  const origin = normalizeOrigin(c.embed?.origin || "");
+  const allowed = new Set(hostOrigins.map(normalizeOrigin).filter(Boolean));
+  return allowed.has(origin);
+}
+
+function conversationLabel(c: ChatSummary, t: RanchMessages): string {
+  const headline = (c.embed?.headline || c.last_message_content || "").trim();
+  return headline || t.startNewChat;
+}
+
+/** Sidebar is one row per agent (latest chat). Groups stay one row each. */
+function collapseDirectChatsByAgent(list: ChatSummary[]): ChatSummary[] {
+  const groups = new Map<string, ChatSummary[]>();
+  const leftover: ChatSummary[] = [];
+  for (const c of list) {
+    if (isGroupChat(c) || !agentIdKey(c.agent_id)) {
+      leftover.push(c);
+      continue;
+    }
+    const key = agentIdKey(c.agent_id);
+    const bucket = groups.get(key) ?? [];
+    bucket.push(c);
+    groups.set(key, bucket);
+  }
+  const collapsed: ChatSummary[] = leftover.slice();
+  for (const bucket of groups.values()) {
+    const latest = [...bucket].sort((a, b) => chatActivityTs(b) - chatActivityTs(a))[0]!;
+    const unread = bucket.reduce((n, row) => n + (row.unread_count ?? 0), 0);
+    collapsed.push(unread === (latest.unread_count ?? 0) ? latest : { ...latest, unread_count: unread });
+  }
+  return collapsed.sort((a, b) => chatActivityTs(b) - chatActivityTs(a));
+}
+
 /** Legacy system bubbles from before delivery icons — hide in the transcript. */
 function isLegacyDeliveryAckBubble(m: ChatMessage): boolean {
   if (m.sender_type !== "system") return false;
@@ -838,7 +887,7 @@ function trailingMentionQuery(text: string): string | null {
   return m ? m[1] : null;
 }
 
-type SlashCmdId = "topic" | "agent" | "members" | "info";
+type SlashCmdId = "agent" | "members" | "info";
 
 /** Insert 「显示名」 reference — not a delivery @mention. */
 function formatAgentRef(displayName: string): string {
@@ -1667,8 +1716,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     confirmLabel: string;
     onConfirm: () => void;
   } | null>(null);
-  /** Detail panel tab. Group: members | topics. Direct: info | settings? | wallet? | topics. */
-  const [infoTab, setInfoTab] = useState<"info" | "settings" | "wallet" | "members" | "topics">("info");
+  /** Detail panel tab. Group: members. Direct: info | settings? | wallet? | chats. */
+  const [infoTab, setInfoTab] = useState<"info" | "settings" | "wallet" | "members" | "chats">("info");
   /** Owned-agent ACN detail for Info (read-only) + Settings (manage). */
   const [ownedAgentDetail, setOwnedAgentDetail] = useState<MyAgentSummary | null>(null);
   const [composerModel, setComposerModel] = useState<{
@@ -2027,7 +2076,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, [open, directoryAgents, client, refreshChats]);
 
   const openConversation = useCallback(
-    async (chat: ChatSummary) => {
+    async (chat: ChatSummary, opts?: { keepChatsPanel?: boolean }) => {
       const seq = ++loadSeqRef.current;
       activeChatIdRef.current = chat.chat_id;
       setActive(chat);
@@ -2036,10 +2085,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setMessages([]);
       setAgentNames({});
       setAgentStatuses({});
-      setShowMembersPanel(false);
+      const keepChats = !!opts?.keepChatsPanel && !isGroupChat(chat);
+      setShowMembersPanel(keepChats);
       setShowAddMember(false);
       setEditingTitle(false);
-      setInfoTab(isGroupChat(chat) ? "members" : "info");
+      setInfoTab(isGroupChat(chat) ? "members" : keepChats ? "chats" : "info");
       setOwnedAgentDetail(null);
       setShowCreateTopic(false);
       setTopicTitleDraft("");
@@ -2056,19 +2106,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
       clearReplySlot();
       agentIdsRef.current = [];
       try {
-        const [msgs, participants, threadList] = await Promise.all([
+        const [msgs, participants] = await Promise.all([
           client.listMessages(chat.chat_id),
           isGroupChat(chat)
             ? client.listParticipants(chat.chat_id).catch(() => [])
             : Promise.resolve([]),
-          client.listThreads(chat.chat_id).catch(() => [] as ThreadSummary[]),
         ]);
         if (seq !== loadSeqRef.current) return;
         setMessages(msgs);
         if (latestUserDeliveryFailed(msgs)) {
           void resolveAfterDeliveryIssue(chat.chat_id);
         }
-        setTopics(threadList);
+        setTopics([]);
         const agents = participants.filter(
           (p) => p.participant_type === "agent" && p.is_active !== false,
         );
@@ -2124,11 +2173,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
       try {
         const list = await client.listChats();
         if (cancelled) return;
-        let found = list.find(
-          (c) =>
-            !isGroupChat(c) &&
-            (c.agent_id || "").replace(/^acn:/i, "").trim().toLowerCase() === want,
-        );
+        const hostOrigins = [
+          interfazeBaseUrl || "",
+          "https://interfaze.io",
+          typeof window !== "undefined" ? window.location.origin : "",
+        ];
+        const siblings = list
+          .filter(
+            (c) =>
+              isHostVisibleDirect(c, hostOrigins) &&
+              !isGroupChat(c) &&
+              (c.agent_id || "").replace(/^acn:/i, "").trim().toLowerCase() === want,
+          )
+          .sort((a, b) => chatActivityTs(b) - chatActivityTs(a));
+        let found = siblings[0];
         if (!found) {
           found = await client.createOrGetDirectChat(initialOpenAgentId as string);
         }
@@ -2142,7 +2200,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     return () => {
       cancelled = true;
     };
-  }, [open, initialOpenAgentId, client, openConversation]);
+  }, [open, initialOpenAgentId, client, openConversation, interfazeBaseUrl]);
 
   const loadTopics = useCallback(
     async (chatId: string) => {
@@ -2195,21 +2253,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
     async (cmdId: SlashCmdId, arg = "") => {
       if (!active) return;
       const group = isGroupChat(active);
-      if (cmdId === "topic") {
-        const title = arg.trim() || t.defaultTopicTitle;
-        setBusy(true);
-        setError(null);
-        try {
-          const created = await client.createThread(active.chat_id, { title });
-          startTopicInTimeline(created);
-          // Title is also a real outbound message in that topic (not only a divider).
-          await sendRef.current?.({ text: title, threadId: created.id });
-        } catch (e) {
-          setError(e instanceof Error ? e.message : t.sendFailed);
-          setBusy(false);
-        }
-        return;
-      }
       if (cmdId === "agent") {
         // Keep `/agent ` (optional filter) so the reference picker opens; insert is not delivery.
         const q = arg.trim();
@@ -2235,7 +2278,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         setShowMembersPanel(true);
       }
     },
-    [active, client, startTopicInTimeline, t.defaultTopicTitle, t.sendFailed],
+    [active],
   );
 
   const reloadParticipants = useCallback(
@@ -2370,11 +2413,47 @@ export function RanchChatShell(props: RanchChatShellProps) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [messages, view, replySlot]);
 
+  const startFreshDirect = async (agentId: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const c = await client.createDirect(agentId, {
+        context: `new:${crypto.randomUUID()}`,
+      });
+      await refreshChats();
+      await openConversation(c, { keepChatsPanel: true });
+    } catch (e) {
+      setError(
+        e instanceof ChatGatewayError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Failed to start chat",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const startDirect = async (agentId: string) => {
     setBusy(true);
     setError(null);
     try {
-      const c = await client.createOrGetDirectChat(agentId);
+      const key = agentIdKey(agentId);
+      const hostOrigins = [
+        interfazeBaseUrl || "",
+        "https://interfaze.io",
+        typeof window !== "undefined" ? window.location.origin : "",
+      ];
+      const latest = chats
+        .filter(
+          (c) =>
+            isHostVisibleDirect(c, hostOrigins) &&
+            !isGroupChat(c) &&
+            agentIdKey(c.agent_id) === key,
+        )
+        .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))[0];
+      const c = latest ?? (await client.createOrGetDirectChat(agentId));
       setPickerMode(null);
       await refreshChats();
       await openConversation(c);
@@ -2753,13 +2832,32 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   if (!open) return null;
 
-  const filtered = chats.filter((c) => {
-    // Legacy platform sys:* assistants are retired from Interfaze surfaces.
-    if ((c.agent_id || "").startsWith("sys:")) return false;
-    const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return chatTitle(c).toLowerCase().includes(q) || (c.agent_id ?? "").toLowerCase().includes(q);
-  });
+  const hostOrigins = [
+    interfazeBaseUrl || "",
+    "https://interfaze.io",
+    typeof window !== "undefined" ? window.location.origin : "",
+  ];
+  const inboxChats = chats.filter((c) => isHostVisibleDirect(c, hostOrigins));
+  const filtered = collapseDirectChatsByAgent(
+    inboxChats.filter((c) => {
+      // Legacy platform sys:* assistants are retired from Interfaze surfaces.
+      if ((c.agent_id || "").startsWith("sys:")) return false;
+      const q = search.trim().toLowerCase();
+      if (!q) return true;
+      return chatTitle(c).toLowerCase().includes(q) || (c.agent_id ?? "").toLowerCase().includes(q);
+    }),
+  );
+  const siblingChats =
+    active && !isGroupChat(active) && active.agent_id
+      ? inboxChats
+          .filter(
+            (c) =>
+              !isGroupChat(c) &&
+              !(c.agent_id || "").startsWith("sys:") &&
+              agentIdKey(c.agent_id) === agentIdKey(active.agent_id),
+          )
+          .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))
+      : [];
 
   const showAgentReplyPending =
     replySlot?.phase === "pending" && replySlot.chatId === active?.chat_id;
@@ -3082,7 +3180,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const slashMenuOpen = isSlashMenuDraft(draft);
   const slashCommands: SlashCmdDef[] = (
     [
-      { id: "topic" as const, label: "/topic", description: t.slashTopicDesc },
       { id: "agent" as const, label: "/agent", description: t.slashAgentDesc },
       {
         id: "members" as const,
@@ -3392,7 +3489,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
             )
           ) : (
             filtered.map((c) => {
-              const selected = active?.chat_id === c.chat_id;
+              const selected = isGroupChat(c)
+                ? active?.chat_id === c.chat_id
+                : !!(
+                    active &&
+                    !isGroupChat(active) &&
+                    agentIdKey(active.agent_id) === agentIdKey(c.agent_id)
+                  );
               const title = chatTitle(c);
               const preview =
                 c.last_message_content || (isGroupChat(c) ? t.groupChat : t.noMessagesYet);
@@ -3402,9 +3505,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
               const dot = !isGroupChat(c) ? agentStatusDotColor(listPresence) : null;
               return (
                 <button
-                  key={c.chat_id}
+                  key={isGroupChat(c) ? c.chat_id : `agent:${agentIdKey(c.agent_id)}`}
                   type="button"
-                  onClick={() => void openConversation(c)}
+                  onClick={() => {
+                    if (active?.chat_id === c.chat_id) return;
+                    void openConversation(c);
+                  }}
                   title={
                     !isGroupChat(c)
                       ? [c.agent_id, listTitle].filter(Boolean).join(" · ") || undefined
@@ -3469,7 +3575,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       </span>
                       <span style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                         <span style={{ fontSize: 10, color: colors.muted }}>
-                          {formatRelativeTime(c.last_message_at, t)}
+                          {formatRelativeTime(c.last_message_at || c.created_at, t)}
                         </span>
                         {(c.unread_count ?? 0) > 0 ? (
                           <span
@@ -3751,15 +3857,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     onClick={() => {
                       setShowAddMember(false);
                       setEditingTitle(false);
-                      setInfoTab(
-                        activeTopic
-                          ? "topics"
-                          : active && isGroupChat(active)
-                            ? "members"
-                            : "info",
-                      );
+                      setInfoTab(active && isGroupChat(active) ? "members" : "info");
                       setShowMembersPanel(true);
-                      if (active) void loadTopics(active.chat_id);
                     }}
                     style={{
                       display: "flex",
@@ -4250,11 +4349,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         key={cmd.id}
                         type="button"
                         onClick={() => {
-                          if (cmd.id === "topic") {
-                            setDraft("/topic ");
-                            setSlashIndex(0);
-                            return;
-                          }
                           if (cmd.id === "agent") {
                             setDraft("/agent ");
                             setAgentRefIndex(0);
@@ -4753,12 +4847,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         e.preventDefault();
                         const pick = slashCandidates[slashIndex] || slashCandidates[0];
                         if (!pick) return;
-                        if (pick.id === "topic") {
-                          // Keep drafting a title after the command.
-                          setDraft("/topic ");
-                          setSlashIndex(0);
-                          return;
-                        }
                         if (pick.id === "agent") {
                           setDraft("/agent ");
                           setAgentRefIndex(0);
@@ -5004,20 +5092,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     }}
                   >
                     {(groupActive
-                      ? ([
-                          ["members", t.members],
-                          ["topics", t.topics],
-                        ] as const)
+                      ? ([["members", t.members]] as const)
                       : activeIsOwned
                         ? ([
                             ["info", t.infoTab],
                             ["wallet", t.walletTab],
-                            ["topics", t.topics],
+                            ["chats", t.chatsTab],
                             ["settings", t.settingsTab],
                           ] as const)
                         : ([
                             ["info", t.infoTab],
-                            ["topics", t.topics],
+                            ["chats", t.chatsTab],
                           ] as const)
                     ).map(([key, label]) => (
                       <button
@@ -5027,7 +5112,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           setInfoTab(key);
                           setShowAddMember(false);
                           setShowCreateTopic(false);
-                          if (key === "topics") void loadTopics(active.chat_id);
                         }}
                         style={{
                           ...btnGhost,
@@ -5043,73 +5127,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     ))}
                   </div>
 
-                  {infoTab === "topics" ? (
+                  {infoTab === "chats" && !groupActive ? (
                     <>
                       <div style={{ flex: 1, overflow: "auto", padding: 12 }}>
-                        {showCreateTopic ? (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                            <input
-                              value={topicTitleDraft}
-                              onChange={(e) => setTopicTitleDraft(e.target.value)}
-                              placeholder={t.topicTitle}
-                              style={inputStyle}
-                              autoFocus
-                            />
-                            <textarea
-                              value={topicDescDraft}
-                              onChange={(e) => setTopicDescDraft(e.target.value)}
-                              placeholder={t.topicDescription}
-                              rows={3}
-                              style={{
-                                ...inputStyle,
-                                resize: "vertical",
-                                minHeight: 72,
-                                fontFamily: "inherit",
-                              }}
-                            />
-                            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                              <button
-                                type="button"
-                                style={btnGhost}
-                                onClick={() => {
-                                  setShowCreateTopic(false);
-                                  setTopicTitleDraft("");
-                                  setTopicDescDraft("");
-                                }}
-                              >
-                                {t.cancel}
-                              </button>
-                              <button
-                                type="button"
-                                style={btnPrimary}
-                                disabled={busy || !topicTitleDraft.trim()}
-                                onClick={() => {
-                                  void (async () => {
-                                    const title = topicTitleDraft.trim();
-                                    setBusy(true);
-                                    try {
-                                      const created = await client.createThread(active.chat_id, {
-                                        title,
-                                        objective: topicDescDraft.trim() || undefined,
-                                      });
-                                      startTopicInTimeline(created);
-                                      await sendRef.current?.({ text: title, threadId: created.id });
-                                    } catch (e) {
-                                      setError(e instanceof Error ? e.message : t.sendFailed);
-                                      setBusy(false);
-                                    }
-                                  })();
-                                }}
-                              >
-                                {t.createTopic}
-                              </button>
-                            </div>
-                          </div>
-                        ) : loadingTopics && topics.length === 0 ? (
-                          <p style={{ color: colors.muted, textAlign: "center", padding: 24 }}>
-                            {t.loading}
-                          </p>
-                        ) : topics.length === 0 ? (
+                        {siblingChats.length === 0 ? (
                           <div
                             style={{
                               textAlign: "center",
@@ -5117,22 +5138,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               color: colors.muted,
                             }}
                           >
-                            <p style={{ margin: "0 0 6px", fontSize: 14, color: colors.text }}>
-                              {t.noTopicsYet}
-                            </p>
-                            <p style={{ margin: 0, fontSize: 12 }}>{t.noTopicsHint}</p>
+                            <p style={{ margin: 0, fontSize: 12 }}>{t.noAgentChatsHint}</p>
                           </div>
                         ) : (
                           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                            {topics.map((topic) => (
+                            {siblingChats.map((c) => (
                               <button
-                                key={topic.id}
+                                key={c.chat_id}
                                 type="button"
-                                onClick={() => openTopic(topic)}
+                                onClick={() => void openConversation(c, { keepChatsPanel: true })}
                                 style={{
                                   ...listItem,
                                   background:
-                                    activeTopic?.id === topic.id
+                                    active.chat_id === c.chat_id
                                       ? colors.accentSoft
                                       : "transparent",
                                   textAlign: "left",
@@ -5148,41 +5166,26 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                       whiteSpace: "nowrap",
                                     }}
                                   >
-                                    {topic.title?.trim() || t.topics}
-                                  </div>
-                                  {topic.objective?.trim() ? (
-                                    <div
-                                      style={{
-                                        fontSize: 11,
-                                        color: colors.muted,
-                                        marginTop: 2,
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                        whiteSpace: "nowrap",
-                                      }}
-                                    >
-                                      {topic.objective}
-                                    </div>
-                                  ) : null}
-                                  <div
-                                    style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}
-                                  >
-                                    {t.topicMessages(topic.message_count ?? 0)}
+                                    {conversationLabel(c, t)}
                                   </div>
                                 </div>
+                                <span style={{ fontSize: 10, color: colors.muted, flexShrink: 0 }}>
+                                  {formatRelativeTime(c.last_message_at || c.created_at, t)}
+                                </span>
                               </button>
                             ))}
                           </div>
                         )}
                       </div>
-                      {!showCreateTopic ? (
+                      {active.agent_id ? (
                         <div style={{ padding: 12, borderTop: `1px solid ${colors.border}` }}>
                           <button
                             type="button"
                             style={{ ...btnPrimary, width: "100%" }}
-                            onClick={() => setShowCreateTopic(true)}
+                            disabled={busy}
+                            onClick={() => void startFreshDirect(active.agent_id!)}
                           >
-                            {t.newTopic}
+                            {t.startNewChat}
                           </button>
                         </div>
                       ) : null}
