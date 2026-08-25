@@ -51,6 +51,8 @@ export type RanchMessages = {
   officialNotAuthorized: string;
   officialModelUnsupported: string;
   modelPricingUnavailable: string;
+  needOpenRouterKey: string;
+  buyOpenRouterCredits: string;
   /** Soft warn: L2 listing model ≠ runtime/writeback model. */
   pricingMismatch: (listed: string, observed: string) => string;
   /** Agent bubble footer: this hop's token burn, in/out separately. */
@@ -342,6 +344,9 @@ export type RanchMessages = {
   myAgentsProviderAgent: string;
   myAgentsProviderOther: string;
   myAgentsProviderOfficialOpenRouter: string;
+  myAgentsProviderOpenRouter: string;
+  myAgentsNeedStoreKey: string;
+  myAgentsBuyStoreKey: string;
   myAgentsOfficialSectionHint: string;
   myAgentsMineSectionHint: string;
   myAgentsProviderUnlisted: string;
@@ -558,6 +563,9 @@ const en: RanchMessages = {
   billingUnavailable: "Billing check unavailable. Try again in a moment.",
   unsupportedModel: "This agent does not support that model.",
   officialNotAuthorized: "Official · OpenRouter is not authorized for this model. Pick Mine, or ask the owner to enable it.",
+  needOpenRouterKey:
+    "This agent doesn’t have an OpenRouter key, or the key is empty. Buy Store credits so the owner can write a key into the agent.",
+  buyOpenRouterCredits: "Buy OpenRouter credits",
   officialModelUnsupported:
     "Official v0 is a single completion and cannot run thinking/reasoning models. Pick kimi or another chat model.",
   modelPricingUnavailable: "No platform price for that model yet. Pick another or ask the owner to wait for Host pack coverage.",
@@ -847,7 +855,7 @@ const en: RanchMessages = {
     "Pick the default from models this agent already reports. You cannot add or remove models here.",
   myAgentsPricingModelsEmpty: "This agent has not reported any models yet.",
   myAgentsPricingModelSearch: "Search",
-  myAgentsPricingOfficialEmpty: "No matching Official · OpenRouter models in Host Catalog.",
+  myAgentsPricingOfficialEmpty: "No matching OpenRouter models in Host Catalog.",
   myAgentsPricingOptionLine: "${name} · in ${in} · out ${out}",
   myAgentsPricingCreditsLine: "in ${in} · out ${out} Credits / 1M",
   myAgentsPricingCreditsNote: "100 Credits = $1, same as wallet recharge. Each hop settles in whole Credits.",
@@ -858,16 +866,20 @@ const en: RanchMessages = {
   myAgentsInferencePathByoHint:
     "This agent calls models with its own key. Usage is self-reported — Host cannot verify. Official hosted inference is not available yet.",
   myAgentsInferencePathByoHintReady:
-    "Chat picks a model. Save with Official · OpenRouter to run that default model on Interfaze’s key — not the agent’s own OpenRouter.",
+    "Chat picks a model. OpenRouter here is a Store key on the agent — not Interfaze’s official hop.",
   myAgentsProviderLabel: "Provider",
   myAgentsProviderHint:
-    "BYO suppliers come from this agent’s self-reported model ids (the vendor/ prefix). Official · OpenRouter lists Host Catalog models OpenRouter actually serves.",
+    "Self-reported vendors come from this agent’s model ids (the vendor/ prefix). OpenRouter is always listed: it uses a Store key on the agent, not Interfaze’s official hop.",
   myAgentsProviderByo: "Mine",
   myAgentsProviderOfficial: "Official · OpenRouter",
   myAgentsProviderMine: "Mine",
   myAgentsProviderAgent: "This agent",
   myAgentsProviderOther: "Other",
   myAgentsProviderOfficialOpenRouter: "Official · OpenRouter",
+  myAgentsProviderOpenRouter: "OpenRouter",
+  myAgentsNeedStoreKey:
+    "OpenRouter needs a key on this agent. If it doesn’t have one yet, buy Store credits and write the key into the runtime.",
+  myAgentsBuyStoreKey: "Buy in Store",
   myAgentsOfficialSectionHint:
     "Save with Official · OpenRouter to run the default model on Interfaze’s key. Other models stay on this agent’s key.",
   myAgentsMineSectionHint:
@@ -1112,6 +1124,9 @@ const zh: RanchMessages = {
   billingUnavailable: "计费服务暂时不可用，请稍后再试。",
   unsupportedModel: "该智能体不支持所选模型。",
   officialNotAuthorized: "官方 · OpenRouter 尚未授权该模型。请改选「我的」，或让 Owner 勾选后保存。",
+  needOpenRouterKey:
+    "这只 agent 还没有 OpenRouter 钥匙，或额度已用尽。去 Store 购买额度，写入 runtime 后即可继续聊。",
+  buyOpenRouterCredits: "去 Store 买 OpenRouter 额度",
   officialModelUnsupported: "官方 v0 是单次补全，思考/推理模跑不了。请改选 kimi 或其他对话模。",
   modelPricingUnavailable: "平台暂无该模型报价，请换一个；或等 Host 价包录入后再试。",
   pricingMismatch: (listed, observed) =>
@@ -1387,7 +1402,7 @@ const zh: RanchMessages = {
     "从这只 agent 已自报的模型里选默认。这里不能增删模型。",
   myAgentsPricingModelsEmpty: "这只 agent 还没有自报任何模型。",
   myAgentsPricingModelSearch: "搜索",
-  myAgentsPricingOfficialEmpty: "Host Catalog 里没有匹配的官方 · OpenRouter 模型。",
+  myAgentsPricingOfficialEmpty: "Host Catalog 里没有匹配的 OpenRouter 模型。",
   myAgentsPricingOptionLine: "${name} · 入 ${in} · 出 ${out}",
   myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} Credits /百万",
   myAgentsPricingCreditsNote: "与钱包充值相同：100 Credits = $1。每跳按整数 Credits 结算。",
@@ -1398,16 +1413,20 @@ const zh: RanchMessages = {
   myAgentsInferencePathByoHint:
     "这只 agent 用自己的钥匙打模型。用量自报，平台未核验。官方代打尚未开放。",
   myAgentsInferencePathByoHintReady:
-    "聊天只选模型。用官方 · OpenRouter 保存后，默认模型走 Interfaze 的钥匙，不是 agent 自己的 OpenRouter。",
+    "聊天只选模型。这里的 OpenRouter 是写在 agent 上的 Store 钥匙，不是 Interfaze 官方代打。",
   myAgentsProviderLabel: "供应商",
   myAgentsProviderHint:
-    "自家厂家来自这只 agent 自报模型 id（斜杠前的 vendor）。官方 · OpenRouter 列出 Host Catalog 里 OpenRouter 真正在卖的型号。",
+    "自报厂家来自这只 agent 的模型 id（斜杠前的 vendor）。OpenRouter 始终可选：走 agent 上的 Store 钥匙，不是官方代打。",
   myAgentsProviderByo: "我的",
   myAgentsProviderOfficial: "官方 · OpenRouter",
   myAgentsProviderMine: "我的",
   myAgentsProviderAgent: "本 agent",
   myAgentsProviderOther: "其他",
   myAgentsProviderOfficialOpenRouter: "官方 · OpenRouter",
+  myAgentsProviderOpenRouter: "OpenRouter",
+  myAgentsNeedStoreKey:
+    "OpenRouter 需要这只 agent 自己的钥匙。还没有的话，去 Store 买额度并写入 runtime。",
+  myAgentsBuyStoreKey: "去 Store 购买",
   myAgentsOfficialSectionHint:
     "用官方 · OpenRouter 保存后，默认模型走 Interfaze 的钥匙；其余模型仍走本 agent 的钥匙。",
   myAgentsMineSectionHint:

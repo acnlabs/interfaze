@@ -12,14 +12,13 @@ import {
 import { createPortal } from "react-dom";
 import {
   ChatGatewayError,
-  officialCatalogRates,
+  syncCatalogRates,
   type ChatAgentSearchHit,
   type GatewayClient,
   type MyAgentAllowlistEntry,
   type MyAgentSummary,
 } from "../gateway";
 import { copyText } from "./connectPrompt";
-import { officialV0SupportsModel } from "./officialV0";
 import type { RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 
@@ -83,13 +82,17 @@ function modelIsOfficial(id: string, official: string[]): boolean {
   return official.some((item) => sameModelId(item, id));
 }
 
-function providerIdForModel(
-  modelId: string,
-  official: string[],
-  hostReady: boolean,
-): string {
-  if (hostReady && modelIsOfficial(modelId, official)) return OFFICIAL_OPENROUTER;
-  return modelVendorId(modelId);
+function providerIdForModel(modelId: string, supported: string[]): string {
+  const id = modelId.trim();
+  if (!id) return "";
+  if (supported.some((item) => sameModelId(item, id))) {
+    return modelVendorId(id) || OTHER_VENDOR;
+  }
+  if (supported.length === 0) {
+    const vendor = modelVendorId(id);
+    if (vendor && vendor.toLowerCase() !== OPENROUTER_BYO) return vendor;
+  }
+  return OPENROUTER_BYO;
 }
 
 /** Saving under Official adds the default model; saving under a BYO vendor removes it. */
@@ -172,8 +175,12 @@ function catalogSourceHref(
   return null;
 }
 
-const OFFICIAL_OPENROUTER = "official_openrouter";
+const OPENROUTER_BYO = "openrouter";
 const OTHER_VENDOR = "__other__";
+
+function storeOpenRouterUrl(base?: string): string {
+  return `${(base || "https://agentplanet.org").replace(/\/+$/, "")}/store/openrouter`;
+}
 
 /** OpenRouter-style ``vendor/model``; empty if the agent reported a bare id. */
 function modelVendorId(modelId: string): string {
@@ -205,7 +212,7 @@ function modelsForVendor(ids: string[], vendor: string): string[] {
 
 function modelsForProvider(ids: string[], provider: string): string[] {
   if (!provider) return [];
-  if (provider === OFFICIAL_OPENROUTER) return [];
+  if (provider === OPENROUTER_BYO) return [];
   if (provider === OTHER_VENDOR) return modelsForVendor(ids, "");
   return modelsForVendor(ids, provider);
 }
@@ -903,13 +910,7 @@ export function AgentOwnerSettings({
     setOfficialSaved(official);
     setOfficialMsg(null);
     setOfficialError(null);
-    setSettingsProvider(
-      providerIdForModel(
-        resolvePricingModelId(detail),
-        official,
-        Boolean(detail.host_inference_ready),
-      ),
-    );
+    setSettingsProvider(providerIdForModel(resolvePricingModelId(detail), []));
   }, [
     detail.agent_id,
     detail.token_pricing?.model_id,
@@ -939,27 +940,9 @@ export function AgentOwnerSettings({
         }
         if (Array.isArray(status.official_models)) {
           setOfficialSaved(status.official_models);
-          const listed = resolvePricingModelId(detail);
-          const ready =
-            typeof status.host_inference_ready === "boolean"
-              ? status.host_inference_ready
-              : Boolean(detail.host_inference_ready);
-          setSettingsProvider(providerIdForModel(listed, status.official_models, ready));
         }
         const current = resolvePricingModelId(detail);
-        const ready =
-          typeof status.host_inference_ready === "boolean"
-            ? status.host_inference_ready
-            : Boolean(detail.host_inference_ready);
-        const listedOfficial =
-          ready && modelIsOfficial(current, status.official_models ?? []);
-        if (
-          !listedOfficial &&
-          ids.length > 0 &&
-          !ids.some((id) => id.toLowerCase() === current.toLowerCase())
-        ) {
-          setModelIdDraft(ids[0]);
-        }
+        setSettingsProvider(providerIdForModel(current, ids));
       })
       .catch(() => {
         if (cancelled) return;
@@ -1016,11 +999,6 @@ export function AgentOwnerSettings({
   }, [client, supportedKey]);
 
   useEffect(() => {
-    if (!hostReady) {
-      setOfficialCatalog([]);
-      setOfficialCatalogLoading(false);
-      return;
-    }
     let cancelled = false;
     setOfficialCatalogLoading(true);
     void (async () => {
@@ -1040,11 +1018,10 @@ export function AgentOwnerSettings({
           for (const row of data.items) {
             const src = (row.source || "openrouter").toLowerCase();
             if (src && src !== "openrouter") continue;
-            const quote = officialCatalogRates(row);
+            const quote = syncCatalogRates(row);
             if (!quote) continue;
             const id = (row.model_id || "").trim();
             if (!id) continue;
-            if (!officialV0SupportsModel(id)) continue;
             if (acc.some((item) => sameModelId(item.id, id))) continue;
             acc.push({
               id,
@@ -1067,7 +1044,7 @@ export function AgentOwnerSettings({
     return () => {
       cancelled = true;
     };
-  }, [client, hostReady]);
+  }, [client]);
 
   useEffect(() => {
     setDeliveryDraft(deliveryFromDetail(detail.delivery));
@@ -1125,20 +1102,24 @@ export function AgentOwnerSettings({
   const listingPublished =
     oldModelId.length > 0 && typeof oldMarkup === "number" && Number.isFinite(oldMarkup);
   const officialIds = officialCatalog.map((row) => row.id);
-  const byoVendors = vendorsFromModels(supportedModels);
+  const savedVendor = modelVendorId(resolvePricingModelId(detail));
+  const byoVendors = vendorsFromModels([
+    ...supportedModels,
+    ...(savedVendor && savedVendor.toLowerCase() !== OPENROUTER_BYO
+      ? [resolvePricingModelId(detail)]
+      : []),
+  ]).filter((id) => id.toLowerCase() !== OPENROUTER_BYO);
   const hasBareModels = supportedModels.some((id) => !modelVendorId(id));
   const providerOptions: Array<{ id: string; label: string }> = [
     ...byoVendors.map((id) => ({ id, label: id })),
     ...(hasBareModels ? [{ id: OTHER_VENDOR, label: t.myAgentsProviderOther }] : []),
-    ...(hostReady
-      ? [{ id: OFFICIAL_OPENROUTER, label: t.myAgentsProviderOfficialOpenRouter }]
-      : []),
+    { id: OPENROUTER_BYO, label: t.myAgentsProviderOpenRouter },
   ];
   const activeProvider =
     (settingsProvider && providerOptions.some((p) => p.id === settingsProvider)
       ? settingsProvider
       : providerOptions[0]?.id) || "";
-  const officialSelected = activeProvider === OFFICIAL_OPENROUTER;
+  const officialSelected = activeProvider === OPENROUTER_BYO;
   const vendorModels = officialSelected
     ? officialIds
     : modelsForProvider(supportedModels, activeProvider);
@@ -1225,12 +1206,8 @@ export function AgentOwnerSettings({
     displayedModelId,
     officialSelected,
   );
-  const officialDirty =
-    hostReady &&
-    displayedModelId.length > 0 &&
-    !officialSetsEqual(nextOfficial, officialSaved);
-  const canSaveOfficial =
-    officialDirty && !savingOfficial && !busy && !modelsBusy && hostReady;
+  const officialDirty = false;
+  const canSaveOfficial = false;
 
   const policyMode = (detail.policy_mode || "").toLowerCase();
   const currentPolicy = policyFromDetail(detail.policy_mode);
@@ -1844,7 +1821,12 @@ export function AgentOwnerSettings({
               onChange={(e) => {
                 const next = e.target.value;
                 setSettingsProvider(next);
-                if (next === OFFICIAL_OPENROUTER) return;
+                if (next === OPENROUTER_BYO) {
+                  const equiv = findOfficialEquivalent(modelIdDraft, officialIds);
+                  if (equiv) setModelIdDraft(equiv);
+                  else if (officialIds[0]) setModelIdDraft(officialIds[0]);
+                  return;
+                }
                 const list = modelsForProvider(supportedModels, next);
                 if (list.length > 0 && !list.some((id) => sameModelId(id, modelIdDraft))) {
                   setModelIdDraft(list[0]);
@@ -1860,6 +1842,19 @@ export function AgentOwnerSettings({
               ))}
             </select>
           )}
+          {officialSelected ? (
+            <p style={{ margin: "8px 0 0", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+              {t.myAgentsNeedStoreKey}{" "}
+              <a
+                href={storeOpenRouterUrl(_agentPlanetBaseUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: colors.text, textDecoration: "underline" }}
+              >
+                {t.myAgentsBuyStoreKey}
+              </a>
+            </p>
+          ) : null}
         </div>
         <div style={{ marginBottom: 10 }}>
           <div
@@ -1896,7 +1891,7 @@ export function AgentOwnerSettings({
           </div>
           {modelsBusy ? (
             <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>…</p>
-          ) : activeProvider === OFFICIAL_OPENROUTER ? (
+          ) : activeProvider === OPENROUTER_BYO ? (
             officialIds.length === 0 ? (
               <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
                 {t.myAgentsPricingOfficialEmpty}

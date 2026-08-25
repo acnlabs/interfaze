@@ -369,6 +369,18 @@ export function officialCatalogRates(row: {
   };
 }
 
+/** BYO / Store OpenRouter listing uses Host sync, not official Catalog × 1.15. */
+export function syncCatalogRates(row: {
+  input_price_per_million: number;
+  output_price_per_million: number;
+}): { input: number; output: number } | null {
+  const syncIn = Number(row.input_price_per_million);
+  const syncOut = Number(row.output_price_per_million);
+  if (!Number.isFinite(syncIn) || !Number.isFinite(syncOut)) return null;
+  const round = (n: number) => Math.round(n * 1e6) / 1e6;
+  return { input: round(syncIn), output: round(syncOut) };
+}
+
 export type ModelCatalogList = {
   items: ModelCatalogItem[];
   total: number;

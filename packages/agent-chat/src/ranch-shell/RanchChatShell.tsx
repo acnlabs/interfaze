@@ -380,6 +380,44 @@ function applyMarkupUsd(base: number, markupPercent: number | null | undefined):
   return base * (1 + markup / 100);
 }
 
+function storeOpenRouterUrl(base?: string): string {
+  return `${(base || "https://agentplanet.org").replace(/\/+$/, "")}/store/openrouter`;
+}
+
+function shouldOfferStoreOpenRouterKey(code: string | undefined, message: string): boolean {
+  if (code === "insufficient_credits") return false;
+  if (code === "official_not_authorized" || code === "official_model_unsupported") {
+    return true;
+  }
+  const blob = `${code || ""} ${message || ""}`;
+  return /invalid[- ]api[- ]key|missing[- ]api[- ]key|no api key|openrouter.*(?:key|credit|quota)|api key not/i.test(
+    blob,
+  );
+}
+
+function sendFailureCopy(
+  e: unknown,
+  t: RanchMessages,
+): { text: string; offerStoreKey: boolean } {
+  if (!(e instanceof ChatGatewayError)) return { text: t.sendFailed, offerStoreKey: false };
+  const offerStoreKey = shouldOfferStoreOpenRouterKey(e.code, e.message);
+  const text =
+    e.code === "agent_unreachable"
+      ? t.unreachable
+      : e.code === "rate_limited"
+        ? t.rateLimited
+        : e.code === "acn_unavailable"
+          ? t.billingUnavailable
+          : e.code === "unsupported_model"
+            ? t.unsupportedModel
+            : offerStoreKey
+              ? t.needOpenRouterKey
+              : e.code === "model_pricing_unavailable"
+                ? t.modelPricingUnavailable
+                : e.message || t.sendFailed;
+  return { text, offerStoreKey };
+}
+
 /** Bubble footer: drop provider prefix, then cap length so in/out stay visible. */
 function compactModelLabel(modelId: string | null | undefined, max = 16): string {
   const bare = shortModelLabel(modelId);
@@ -1785,6 +1823,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [topicDescDraft, setTopicDescDraft] = useState("");
   const [loadingTopics, setLoadingTopics] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [storeKeyPrompt, setStoreKeyPrompt] = useState(false);
+  useEffect(() => {
+    if (!error) setStoreKeyPrompt(false);
+  }, [error]);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
   /** Agent-slot: typing → timeout+retry (not endless spinner). */
   const [replySlot, setReplySlot] = useState<null | {
@@ -2651,25 +2693,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
           else setDeliveryBroken(chatId, true);
         });
       }
-      setError(
-        e instanceof ChatGatewayError
-          ? e.code === "agent_unreachable"
-            ? t.unreachable
-            : e.code === "rate_limited"
-              ? t.rateLimited
-              : e.code === "acn_unavailable"
-                ? t.billingUnavailable
-                : e.code === "unsupported_model"
-                  ? t.unsupportedModel
-                  : e.code === "official_not_authorized"
-                    ? t.officialNotAuthorized
-                    : e.code === "official_model_unsupported"
-                      ? t.officialModelUnsupported
-                    : e.code === "model_pricing_unavailable"
-                      ? t.modelPricingUnavailable
-                      : e.message
-          : t.sendFailed,
-      );
+      const fail = sendFailureCopy(e, t);
+      setError(fail.text);
+      setStoreKeyPrompt(fail.offerStoreKey);
       try {
         await reloadMessages(chatId, seq);
       } catch {
@@ -2807,25 +2833,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
             else setDeliveryBroken(chatId, true);
           });
         }
-        setError(
-          e instanceof ChatGatewayError
-            ? e.code === "agent_unreachable"
-              ? t.unreachable
-              : e.code === "rate_limited"
-                ? t.rateLimited
-                : e.code === "acn_unavailable"
-                  ? t.billingUnavailable
-                  : e.code === "unsupported_model"
-                    ? t.unsupportedModel
-                    : e.code === "official_not_authorized"
-                      ? t.officialNotAuthorized
-                      : e.code === "official_model_unsupported"
-                        ? t.officialModelUnsupported
-                      : e.code === "model_pricing_unavailable"
-                        ? t.modelPricingUnavailable
-                        : e.message
-            : t.sendFailed,
-        );
+        const fail = sendFailureCopy(e, t);
+        setError(fail.text);
+        setStoreKeyPrompt(fail.offerStoreKey);
       } finally {
         setBusy(false);
       }
@@ -3638,6 +3648,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
             }}
           >
             <span>{error}</span>
+            {storeKeyPrompt ? (
+              <a
+                href={storeOpenRouterUrl(agentPlanetBaseUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: colors.text, textDecoration: "underline" }}
+              >
+                {t.buyOpenRouterCredits}
+              </a>
+            ) : null}
             {/session expired|登录已失效|not authenticated/i.test(error) &&
             (onReauth || onLogout) ? (
               <div style={{ display: "flex", gap: 8 }}>
@@ -4213,7 +4233,24 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 </div>
               ) : null}
               {error && (
-                <div style={{ padding: "8px 14px", color: colors.danger, fontSize: 12 }}>{error}</div>
+                <div style={{ padding: "8px 14px", color: colors.danger, fontSize: 12 }}>
+                  <div>{error}</div>
+                  {storeKeyPrompt ? (
+                    <a
+                      href={storeOpenRouterUrl(agentPlanetBaseUrl)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: "inline-block",
+                        marginTop: 6,
+                        color: colors.text,
+                        textDecoration: "underline",
+                      }}
+                    >
+                      {t.buyOpenRouterCredits}
+                    </a>
+                  ) : null}
+                </div>
               )}
 
               <form
