@@ -5,11 +5,44 @@ import {
   ChatGatewayError,
   type AgentCreateAvailability,
   type AgentCreateJob,
-  type AgentCreateTier,
+  type AgentCreateKey,
+  type AgentCreateMachine,
   type GatewayClient,
 } from "../gateway";
 import type { RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors } from "./styles";
+
+function machinesFrom(avail: AgentCreateAvailability | null): AgentCreateMachine[] {
+  if (!avail) return [];
+  if (avail.machines?.length) return avail.machines;
+  return avail.tiers.map((row) => ({
+    tier_id: row.tier_id,
+    product_id: row.product_id,
+    machine_credits: row.machine_credits,
+  }));
+}
+
+function keysFrom(avail: AgentCreateAvailability | null): AgentCreateKey[] {
+  if (!avail) return [];
+  if (avail.keys?.length) return avail.keys;
+  const credits = avail.key_credits;
+  if (!avail.key_product_id && credits == null) return [];
+  return [
+    {
+      product_id: avail.key_product_id || "or-starter",
+      key_quota_credits: avail.key_quota_credits ?? 500,
+      key_fee_credits: avail.key_fee_credits ?? 50,
+      key_credits: credits ?? 550,
+    },
+  ];
+}
+
+function feePercent(row: AgentCreateKey): number {
+  if (row.key_quota_credits > 0) {
+    return Math.round((row.key_fee_credits / row.key_quota_credits) * 100);
+  }
+  return 0;
+}
 
 type Props = {
   client: GatewayClient;
@@ -36,6 +69,7 @@ export function CreateAgentDialog({
   const [avail, setAvail] = useState<AgentCreateAvailability | null>(null);
   const [name, setName] = useState("");
   const [tierId, setTierId] = useState<string>("starter");
+  const [keyProductId, setKeyProductId] = useState<string>("or-starter");
   const [job, setJob] = useState<AgentCreateJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
@@ -48,7 +82,14 @@ export function CreateAgentDialog({
       .then((row) => {
         if (cancelled) return;
         setAvail(row);
-        if (row.tiers[0]?.tier_id) setTierId(row.tiers[0].tier_id);
+        const machines = machinesFrom(row);
+        const keys = keysFrom(row);
+        if (machines[0]?.tier_id) setTierId(machines[0].tier_id);
+        const preferred =
+          row.default_key_product_id ||
+          row.key_product_id ||
+          keys[0]?.product_id;
+        if (preferred) setKeyProductId(preferred);
       })
       .catch(() => {
         if (!cancelled) {
@@ -63,8 +104,13 @@ export function CreateAgentDialog({
     };
   }, [client]);
 
-  const tier: AgentCreateTier | undefined = avail?.tiers.find((x) => x.tier_id === tierId);
+  const machines = machinesFrom(avail);
+  const keys = keysFrom(avail);
+  const machine = machines.find((row) => row.tier_id === tierId) ?? machines[0];
+  const key = keys.find((row) => row.product_id === keyProductId) ?? keys[0];
+  const totalCredits = (machine?.machine_credits ?? 0) + (key?.key_credits ?? 0);
   const rechargeUrl = `${agentPlanetBaseUrl.replace(/\/+$/, "")}/wallet`;
+  const locked = acting || !!job;
 
   const pollUntilSettled = async (jobId: string) => {
     for (let i = 0; i < 90; i += 1) {
@@ -91,6 +137,7 @@ export function CreateAgentDialog({
       const created = await client.createAgentJob({
         name: name.trim(),
         tier_id: tierId as "starter" | "standard",
+        key_product_id: keyProductId,
       });
       setJob(created);
       if (created.status === "ready" && created.agent_id) {
@@ -179,16 +226,16 @@ export function CreateAgentDialog({
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                disabled={acting || !!job}
+                disabled={locked}
                 style={input}
                 maxLength={100}
               />
             </label>
-            <div style={{ margin: "12px 0" }}>
+            <div style={{ margin: "12px 0 8px" }}>
               <div style={{ fontSize: 11, color: colors.muted, marginBottom: 6 }}>
-                {t.createAgentTier}
+                {t.createAgentServerSection}
               </div>
-              {(avail.tiers.length ? avail.tiers : []).map((row) => (
+              {machines.map((row) => (
                 <label
                   key={row.tier_id}
                   style={{
@@ -203,38 +250,69 @@ export function CreateAgentDialog({
                     type="radio"
                     name="tier"
                     checked={tierId === row.tier_id}
-                    disabled={acting || !!job}
+                    disabled={locked}
                     onChange={() => setTierId(row.tier_id)}
                   />
                   <span>
                     <strong>
                       {row.tier_id === "standard" ? t.createAgentStandard : t.createAgentStarter}
                     </strong>
-                    <span style={{ color: colors.muted }}> · {row.total_credits} credits</span>
+                    <span style={{ color: colors.muted }}> · {row.machine_credits} credits</span>
                   </span>
                 </label>
               ))}
             </div>
-            {tier ? (
+            <div style={{ margin: "8px 0 12px" }}>
+              <div style={{ fontSize: 11, color: colors.muted, marginBottom: 6 }}>
+                {t.createAgentKeySection}
+              </div>
+              {keys.map((row) => (
+                <label
+                  key={row.product_id}
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "flex-start",
+                    marginBottom: 8,
+                    fontSize: 13,
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="key"
+                    checked={keyProductId === row.product_id}
+                    disabled={locked}
+                    onChange={() => setKeyProductId(row.product_id)}
+                  />
+                  <span>
+                    <strong>
+                      {row.or_usd_limit != null
+                        ? t.createAgentKeyUsd.replace("{usd}", String(row.or_usd_limit))
+                        : row.product_id}
+                    </strong>
+                    <span style={{ color: colors.muted }}>
+                      {" "}
+                      · {row.key_quota_credits} + {row.key_fee_credits} ({feePercent(row)}%) ·{" "}
+                      {row.key_credits}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {machine && key ? (
               <ul style={{ margin: "0 0 12px", paddingLeft: 18, fontSize: 12, color: colors.muted }}>
                 <li>
-                  {t.createAgentMachineLine.replace("{n}", String(tier.machine_credits))}
+                  {t.createAgentMachineLine.replace("{n}", String(machine.machine_credits))}
                 </li>
                 <li>
-                  {t.createAgentKeyQuotaLine.replace(
-                    "{n}",
-                    String(tier.key_quota_credits ?? avail.key_quota_credits ?? 500),
-                  )}
+                  {t.createAgentKeyQuotaLine.replace("{n}", String(key.key_quota_credits))}
                 </li>
                 <li>
-                  {t.createAgentKeyFeeLine.replace(
-                    "{n}",
-                    String(tier.key_fee_credits ?? avail.key_fee_credits ?? 50),
-                  )}
+                  {t.createAgentKeyFeeLine
+                    .replace("{n}", String(key.key_fee_credits))
+                    .replace("{pct}", String(feePercent(key)))}
                 </li>
-                <li>
-                  {t.createAgentTotalLine.replace("{n}", String(tier.total_credits))}
-                </li>
+                <li>{t.createAgentTotalLine.replace("{n}", String(totalCredits))}</li>
               </ul>
             ) : null}
             {job ? (
@@ -282,7 +360,7 @@ export function CreateAgentDialog({
               <button
                 type="button"
                 style={{ ...btnPrimary, width: "100%" }}
-                disabled={acting || busy || name.trim().length < 2}
+                disabled={acting || busy || name.trim().length < 2 || !machine || !key}
                 onClick={() => void submit()}
               >
                 {acting ? t.createAgentWorking : t.createAgentSubmit}
@@ -307,7 +385,9 @@ const overlay: CSSProperties = {
 };
 
 const card: CSSProperties = {
-  width: "min(420px, 100%)",
+  width: "min(460px, 100%)",
+  maxHeight: "min(90vh, 720px)",
+  overflow: "auto",
   background: colors.panel,
   border: `1px solid ${colors.border}`,
   borderRadius: 12,
