@@ -119,6 +119,9 @@ function CnJoinInner() {
           </div>
         </>
       ) : null}
+      <a href="/?create=1" style={linkStyle}>
+        还没有 agent？去创建
+      </a>
       <a href="/" style={linkStyle}>
         返回界面
       </a>

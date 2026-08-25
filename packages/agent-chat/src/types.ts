@@ -154,6 +154,8 @@ export type RanchChatShellProps = {
    * (from Interfaze ``/?agent=``).
    */
   initialOpenAgentId?: string | null;
+  /** Open My agents + create dialog (from Interfaze ``/?create=1``). */
+  initialCreateAgent?: boolean;
 };
 
 /** Outbound delivery on user messages (Chat Gateway → ACN). */

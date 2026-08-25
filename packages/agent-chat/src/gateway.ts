@@ -5,6 +5,7 @@ export class ChatGatewayError extends Error {
     public status: number,
     public code: string | null,
     message: string,
+    public jobId?: string | null,
   ) {
     super(message);
     this.name = "ChatGatewayError";
@@ -20,12 +21,14 @@ function joinUrl(base: string, path: string): string {
 async function parseError(res: Response): Promise<ChatGatewayError> {
   let code: string | null = null;
   let message = res.statusText || `HTTP ${res.status}`;
+  let jobId: string | null = null;
   try {
     const body = await res.json();
     const detail = body?.detail;
     if (detail && typeof detail === "object" && !Array.isArray(detail)) {
       code = typeof detail.code === "string" ? detail.code : null;
       message = typeof detail.message === "string" ? detail.message : message;
+      jobId = typeof detail.job_id === "string" ? detail.job_id : null;
     } else if (typeof detail === "string") {
       message = detail;
     } else if (Array.isArray(detail) && detail.length > 0) {
@@ -44,7 +47,7 @@ async function parseError(res: Response): Promise<ChatGatewayError> {
   } catch {
     /* ignore */
   }
-  return new ChatGatewayError(res.status, code, message);
+  return new ChatGatewayError(res.status, code, message, jobId);
 }
 
 export type ChatAgentSearchHit = {
@@ -53,6 +56,48 @@ export type ChatAgentSearchHit = {
   description?: string | null;
   status?: string | null;
   acl_reason?: string | null;
+};
+
+export type AgentCreateTier = {
+  tier_id: "starter" | "standard" | string;
+  product_id: string;
+  machine_credits: number;
+  key_quota_credits?: number;
+  key_fee_credits?: number;
+  key_credits: number;
+  total_credits: number;
+};
+
+export type AgentCreateAvailability = {
+  available: boolean;
+  reason?: string | null;
+  message?: string | null;
+  tiers: AgentCreateTier[];
+  key_product_id?: string;
+  key_quota_credits?: number;
+  key_fee_credits?: number;
+  key_credits?: number;
+  checkout_mode?: string;
+};
+
+export type AgentCreateJob = {
+  job_id: string;
+  status:
+    | "pending_payment"
+    | "deploying"
+    | "joining"
+    | "binding"
+    | "ready"
+    | "failed"
+    | string;
+  name?: string;
+  tier_id?: string;
+  order_id?: string | null;
+  key_order_id?: string | null;
+  agent_id?: string | null;
+  store_key_written?: boolean;
+  inference_path?: "byo" | string;
+  error?: string | null;
 };
 
 /** Human Credits wallet from GET /api/chat/wallet. */
@@ -544,6 +589,11 @@ export type GatewayClient = {
   }>;
   /** Cancel pending gift invite for an owned agent. */
   cancelMyAgentTransferInvite: (agentId: string) => Promise<{ success: boolean }>;
+  getAgentCreateAvailability: () => Promise<AgentCreateAvailability>;
+  createAgentJob: (body: { name: string; tier_id: "starter" | "standard" }) => Promise<AgentCreateJob>;
+  getAgentCreateJob: (jobId: string) => Promise<AgentCreateJob>;
+  payAgentCreateJob: (jobId: string) => Promise<AgentCreateJob>;
+  retryBindAgentCreateJob: (jobId: string) => Promise<AgentCreateJob>;
   addParticipant: (chatId: string, agentId: string) => Promise<ChatParticipant>;
   removeParticipant: (chatId: string, participantId: string) => Promise<void>;
   updateChat: (chatId: string, patch: { title?: string; description?: string }) => Promise<ChatSummary>;
@@ -906,6 +956,25 @@ export function createGatewayClient(
       request<{ success: boolean }>(
         `/api/chat/my-agents/${encodeURIComponent(agentId)}/transfer-invite`,
         { method: "DELETE" },
+      ),
+    getAgentCreateAvailability: () =>
+      request<AgentCreateAvailability>("/api/chat/agent-create-availability"),
+    createAgentJob: (body) =>
+      request<AgentCreateJob>("/api/chat/agent-create-jobs", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    getAgentCreateJob: (jobId) =>
+      request<AgentCreateJob>(`/api/chat/agent-create-jobs/${encodeURIComponent(jobId)}`),
+    payAgentCreateJob: (jobId) =>
+      request<AgentCreateJob>(`/api/chat/agent-create-jobs/${encodeURIComponent(jobId)}/pay`, {
+        method: "POST",
+        body: "{}",
+      }),
+    retryBindAgentCreateJob: (jobId) =>
+      request<AgentCreateJob>(
+        `/api/chat/agent-create-jobs/${encodeURIComponent(jobId)}/retry-bind`,
+        { method: "POST", body: "{}" },
       ),
     listMessages: (chatId) =>
       request<ChatMessage[]>(`/api/chats/${encodeURIComponent(chatId)}/messages?limit=50`),

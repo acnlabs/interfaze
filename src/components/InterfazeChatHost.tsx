@@ -64,6 +64,26 @@ function useAccountDeepLink() {
   return initialAccountPanel;
 }
 
+function useCreateAgentDeepLink() {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("create") !== "1") return;
+    setOpen(true);
+    sp.delete("create");
+    const q = sp.toString();
+    window.history.replaceState(
+      null,
+      "",
+      q ? `${window.location.pathname}?${q}` : window.location.pathname,
+    );
+  }, []);
+
+  return open;
+}
+
 function useClaimedAgentDeepLink() {
   const [agentId, setAgentId] = useState<string | null>(null);
 
@@ -91,6 +111,7 @@ function CnChatHost() {
   const [sessionUser, setSessionUser] = useState(() => getCnSessionUser());
   const initialAccountPanel = useAccountDeepLink();
   const initialOpenAgentId = useClaimedAgentDeepLink();
+  const initialCreateAgent = useCreateAgentDeepLink();
   const reauthStarted = useRef(false);
 
   const tokenGetter = useCallback(async () => getCnSessionToken(), []);
@@ -179,6 +200,7 @@ function CnChatHost() {
       }
       initialAccountPanel={initialAccountPanel}
       initialOpenAgentId={initialOpenAgentId}
+      initialCreateAgent={initialCreateAgent}
       onLogout={handleLogout}
       onReauth={() => handleReauth({ forceLogin: true })}
       onOwnedAgentUpdated={(agent) => {
@@ -214,6 +236,7 @@ function GlobalChatHost() {
   const [directoryAgents, setDirectoryAgents] = useState<AgentDirectoryItem[]>([]);
   const initialAccountPanel = useAccountDeepLink();
   const initialOpenAgentId = useClaimedAgentDeepLink();
+  const initialCreateAgent = useCreateAgentDeepLink();
   const reauthStarted = useRef(false);
 
   useEffect(() => {
@@ -367,6 +390,7 @@ function GlobalChatHost() {
       }
       initialAccountPanel={initialAccountPanel}
       initialOpenAgentId={initialOpenAgentId}
+      initialCreateAgent={initialCreateAgent}
       onLogout={isAuthenticated ? handleLogout : undefined}
       onReauth={
         isAuthenticated
