@@ -459,14 +459,20 @@ function isByoVendor(vendor: string, runtimeVendor: string): boolean {
   return !!runtimeVendor && vendor === runtimeVendor;
 }
 
-/** Listed SKU is OpenRouter (not the agent's self-reported vendor). */
+/** Live runtime is OpenRouter, not a self-reported BYO vendor (e.g. TokenHub). */
 function isOpenRouterByoListed(
   listed: string | null | undefined,
   runtime: string | null | undefined,
+  supported: string[] = [],
 ): boolean {
-  const vendor = modelVendorId(listed).toLowerCase();
+  const vendor = modelVendorId(runtime).toLowerCase();
   if (!vendor) return false;
-  return !isByoVendor(vendor, modelVendorId(runtime).toLowerCase());
+  if (vendor === "tencenttokenplan") return false;
+  if (supported.some((id) => modelVendorId(id).toLowerCase() === vendor)) {
+    return false;
+  }
+  void listed;
+  return true;
 }
 
 function modelFitsComposerPath(
@@ -3050,7 +3056,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             : null;
           const nextModel = pickComposerModelForPath({
             official: listedOfficial,
-            openRouterByo: isOpenRouterByoListed(listed, runtime),
+            openRouterByo: isOpenRouterByoListed(listed, runtime, supported),
             wanted: listedChanged ? listed : stored,
             listed,
             runtime,
@@ -3095,6 +3101,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const openRouterByo = isOpenRouterByoListed(
       composerModel?.listed_model_id,
       composerModel?.runtime_model_id,
+      composerModel?.supported_models,
     );
     if (composerModel?.official_channel || !openRouterByo) {
       setComposerCatalog([]);
@@ -4295,6 +4302,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       isOpenRouterByoListed(
                         composerModel?.listed_model_id,
                         composerModel?.runtime_model_id,
+                        composerModel?.supported_models,
                       )
                     }
                     storeUrl={storeOpenRouterUrl(agentPlanetBaseUrl)}
@@ -4682,6 +4690,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       const openRouterByo = isOpenRouterByoListed(
                         composerModel.listed_model_id,
                         composerModel.runtime_model_id,
+                        composerModel.supported_models,
                       );
                       const options = (() => {
                         const fromApi =
