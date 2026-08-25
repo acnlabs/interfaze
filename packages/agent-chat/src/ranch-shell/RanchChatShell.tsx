@@ -2433,7 +2433,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         context: `new:${crypto.randomUUID()}`,
       });
       await refreshChats();
-      await openConversation(c, { keepChatsPanel: true });
+      await openConversation(c);
     } catch (e) {
       setError(
         e instanceof ChatGatewayError
@@ -5152,7 +5152,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               <button
                                 key={c.chat_id}
                                 type="button"
-                                onClick={() => void openConversation(c, { keepChatsPanel: true })}
+                                onClick={() => {
+                                  if (active.chat_id === c.chat_id) {
+                                    setShowMembersPanel(false);
+                                    return;
+                                  }
+                                  void openConversation(c);
+                                }}
                                 style={{
                                   ...listItem,
                                   background:
