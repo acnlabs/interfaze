@@ -9,6 +9,7 @@ import {
 } from "./AgentOwnerSettings";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import { copyConnectPromptWithInvite } from "./connectPrompt";
+import { CreateAgentDialog } from "./CreateAgentDialog";
 import type { RanchLocale, RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors } from "./styles";
 
@@ -29,6 +30,8 @@ type Props = {
   onAgentUpdated?: (agent: MyAgentSummary, previousName?: string | null) => void;
   /** After permanent delete — leave detail and refresh list. */
   onAgentRemoved?: (agentId: string) => void;
+  /** Open the create dialog after availability is confirmed. */
+  initialShowCreate?: boolean;
 };
 
 function shortId(id: string): string {
@@ -58,6 +61,7 @@ export function MyAgentsPanel({
   onOpenChat,
   onAgentUpdated,
   onAgentRemoved,
+  initialShowCreate,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +71,8 @@ export function MyAgentsPanel({
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createAvailable, setCreateAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +93,25 @@ export function MyAgentsPanel({
       cancelled = true;
     };
   }, [client, t.myAgentsLoadFailed]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void client
+      .getAgentCreateAvailability()
+      .then((row) => {
+        if (!cancelled) setCreateAvailable(row.available === true);
+      })
+      .catch(() => {
+        if (!cancelled) setCreateAvailable(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+
+  useEffect(() => {
+    if (initialShowCreate && createAvailable) setShowCreate(true);
+  }, [initialShowCreate, createAvailable]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -166,13 +191,20 @@ export function MyAgentsPanel({
           {selectedId ? detail?.name || shortId(selectedId) : t.myAgentsTitle}
         </strong>
         {!selectedId ? (
-          <button
-            type="button"
-            style={btnGhost}
-            onClick={() => onConnectExisting?.()}
-          >
-            {t.connectExisting}
-          </button>
+          <div style={{ display: "flex", gap: 6 }}>
+            {createAvailable ? (
+              <button type="button" style={btnPrimary} onClick={() => setShowCreate(true)}>
+                {t.createAgent}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              style={btnGhost}
+              onClick={() => onConnectExisting?.()}
+            >
+              {t.connectExisting}
+            </button>
+          </div>
         ) : (
           <span style={{ width: 40 }} />
         )}
@@ -273,9 +305,14 @@ export function MyAgentsPanel({
             </p>
             <p style={{ margin: "0 0 16px", fontSize: 12, lineHeight: 1.55 }}>{t.myAgentsEmptyBody}</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
+              {createAvailable ? (
+                <button type="button" style={btnPrimary} onClick={() => setShowCreate(true)}>
+                  {t.createAgent}
+                </button>
+              ) : null}
               <button
                 type="button"
-                style={btnPrimary}
+                style={btnGhost}
                 onClick={() => onConnectExisting?.()}
               >
                 {t.connectExisting}
@@ -354,6 +391,20 @@ export function MyAgentsPanel({
           </ul>
         )}
       </div>
+      {showCreate ? (
+        <CreateAgentDialog
+          client={client}
+          messages={t}
+          agentPlanetBaseUrl={agentPlanetBaseUrl}
+          busy={busy}
+          onClose={() => setShowCreate(false)}
+          onReady={(agentId) => {
+            setShowCreate(false);
+            void client.listMyAgents(50).then(setAgents).catch(() => undefined);
+            onOpenChat(agentId);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

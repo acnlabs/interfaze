@@ -263,6 +263,30 @@ export type RanchMessages = {
   myAgentsTitle: string;
   myAgentsEmptyTitle: string;
   myAgentsEmptyBody: string;
+  createAgent: string;
+  createAgentTitle: string;
+  createAgentBlurb: string;
+  createAgentName: string;
+  createAgentTier: string;
+  createAgentStarter: string;
+  createAgentStandard: string;
+  createAgentMachineLine: string;
+  createAgentKeyQuotaLine: string;
+  createAgentKeyFeeLine: string;
+  createAgentKeyLine: string;
+  createAgentTotalLine: string;
+  createAgentSubmit: string;
+  createAgentWorking: string;
+  createAgentProgress: string;
+  createAgentReady: string;
+  createAgentPendingPay: string;
+  createAgentNeedCredits: string;
+  createAgentRecharge: string;
+  createAgentRetryPay: string;
+  createAgentRetryBind: string;
+  createAgentUnavailable: string;
+  createAgentFailed: string;
+  createAgentSlow: string;
   myAgentsOfflineHint: string;
   myAgentsSectionIdentity: string;
   myAgentsSectionOverview: string;
@@ -750,9 +774,34 @@ const en: RanchMessages = {
   networkOrgs: "Orgs",
   comingSoon: "Coming soon",
   myAgentsTitle: "My agents",
-  myAgentsEmptyTitle: "No agents claimed yet",
+  myAgentsEmptyTitle: "No agents yet",
   myAgentsEmptyBody:
-    "Connect an existing agent with a prompt, link, or QR code. Claiming happens on Interfaze — do not share a claim token.",
+    "Create a hosted agent, or connect an existing one with a prompt, link, or QR code. Claiming happens on Interfaze — do not share a claim token.",
+  createAgent: "Create",
+  createAgentTitle: "Create a hosted agent",
+  createAgentBlurb:
+    "Pay for a hosted machine plus a starter model pack. The key is written onto your machine — you use your own model allowance.",
+  createAgentName: "Name",
+  createAgentTier: "Plan",
+  createAgentStarter: "Starter · 2C2G / 30 days",
+  createAgentStandard: "Standard · 2C4G / 30 days",
+  createAgentMachineLine: "Machine {n} credits",
+  createAgentKeyQuotaLine: "Model allowance {n} credits",
+  createAgentKeyFeeLine: "Service fee {n} credits (10%)",
+  createAgentKeyLine: "Starter model pack {n} credits (includes 10% service fee)",
+  createAgentTotalLine: "Total {n} credits",
+  createAgentSubmit: "Pay and create",
+  createAgentWorking: "Working…",
+  createAgentProgress: "Deploying and writing the starter key…",
+  createAgentReady: "Ready",
+  createAgentPendingPay: "Waiting for payment.",
+  createAgentNeedCredits: "Not enough credits. Recharge, then retry pay.",
+  createAgentRecharge: "Recharge wallet",
+  createAgentRetryPay: "Retry pay",
+  createAgentRetryBind: "Retry bind",
+  createAgentUnavailable: "Create is not available in this region yet.",
+  createAgentFailed: "Could not create this agent.",
+  createAgentSlow: "Still deploying. Open My agents later to check.",
   myAgentsOfflineHint:
     "This agent is registered but offline — start the process that keeps it alive, or check message receiving.",
   myAgentsSectionIdentity: "Profile",
@@ -1265,9 +1314,34 @@ const zh: RanchMessages = {
   networkOrgs: "组织",
   comingSoon: "即将支持",
   myAgentsTitle: "我的 Agents",
-  myAgentsEmptyTitle: "还没有认领的 agent",
+  myAgentsEmptyTitle: "还没有 agent",
   myAgentsEmptyBody:
-    "用提示词、链接或二维码接入已有 agent。认领在 Interfaze 完成，不要分享认领 token。",
+    "可以创建一台托管机，或用提示词、链接、二维码接入已有 agent。认领在 Interfaze 完成，不要分享认领 token。",
+  createAgent: "创建",
+  createAgentTitle: "创建托管 agent",
+  createAgentBlurb:
+    "付机费加一笔起步模型额度。钥匙写进你的机器，用你自己的模型额度。",
+  createAgentName: "名字",
+  createAgentTier: "档位",
+  createAgentStarter: "入门 · 2C2G / 30 天",
+  createAgentStandard: "标准 · 2C4G / 30 天",
+  createAgentMachineLine: "机费 {n} credits",
+  createAgentKeyQuotaLine: "模型额度 {n} credits",
+  createAgentKeyFeeLine: "服务费 {n} credits（10%）",
+  createAgentKeyLine: "起步模型额度 {n} credits（含 10% 服务费）",
+  createAgentTotalLine: "合计 {n} credits",
+  createAgentSubmit: "付款并创建",
+  createAgentWorking: "处理中…",
+  createAgentProgress: "正在部署并写入起步 key…",
+  createAgentReady: "已就绪",
+  createAgentPendingPay: "待支付。",
+  createAgentNeedCredits: "余额不足。充值后再点重试支付。",
+  createAgentRecharge: "去充值",
+  createAgentRetryPay: "重试支付",
+  createAgentRetryBind: "重试绑定",
+  createAgentUnavailable: "这个区域还不能创建。",
+  createAgentFailed: "创建失败。",
+  createAgentSlow: "还在部署。稍后再打开「我的 Agents」查看。",
   myAgentsOfflineHint:
     "此 agent 已注册但离线——请启动保持在线的进程，或检查收信方式是否已配置。",
   myAgentsSectionIdentity: "资料",

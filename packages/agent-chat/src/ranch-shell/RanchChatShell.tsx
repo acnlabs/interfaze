@@ -1580,6 +1580,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     onOwnedAgentRemoved,
     initialAccountPanel = null,
     initialOpenAgentId = null,
+    initialCreateAgent = false,
   } = props;
 
   const [uiLocale, setUiLocale] = useState<RanchLocale>(() => resolveRanchLocale(localeProp));
@@ -1695,6 +1696,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
     else if (initialAccountPanel === "manage") setShowAccountManage(true);
     else if (initialAccountPanel === "profile") setShowAccountProfile(true);
   }, [initialAccountPanel]);
+
+  useEffect(() => {
+    if (!initialCreateAgent) return;
+    closeAccountSurfaces();
+    setShowMyAgents(true);
+  }, [initialCreateAgent]);
   const [showAddMember, setShowAddMember] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -3742,6 +3749,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               setShowAccountManage(false);
               void startDirect(id);
             }}
+            initialShowCreate={initialCreateAgent}
             onAgentUpdated={(row, previousName) => {
               applyOwnedAgentProfileUpdate(row, previousName);
             }}

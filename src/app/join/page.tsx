@@ -139,6 +139,9 @@ function JoinInner() {
           </div>
         </>
       ) : null}
+      <a href="/?create=1" style={linkStyle}>
+        No agent yet? Create one
+      </a>
       <a href="/" style={linkStyle}>
         Back to Interfaze
       </a>
