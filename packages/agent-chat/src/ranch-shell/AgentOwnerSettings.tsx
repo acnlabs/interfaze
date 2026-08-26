@@ -95,6 +95,8 @@ function providerIdForModel(modelId: string, supported: string[]): string {
   if (supported.some((item) => sameModelId(item, id))) {
     return modelVendorId(id) || OTHER_VENDOR;
   }
+  // Before self-report loads, don't treat leftover listing SKUs as OpenRouter.
+  if (supported.length === 0) return "";
   // Listing ids like moonshotai/kimi-k2.5 are OpenRouter catalog SKUs, not a vendor we sell.
   return OPENROUTER_BYO;
 }
@@ -881,7 +883,13 @@ export function AgentOwnerSettings({
     Array<{ id: string } & CatalogPair>
   >([]);
   const [officialCatalogLoading, setOfficialCatalogLoading] = useState(false);
-  const [settingsProvider, setSettingsProvider] = useState<string>("");
+  const [settingsProvider, setSettingsProvider] = useState(() =>
+    providerIdFromRuntime(
+      detail.runtime_model_id || "",
+      resolvePricingModelId(detail),
+      [],
+    ),
+  );
   const [markupDraft, setMarkupDraft] = useState(() => {
     const mu = detail.token_pricing?.markup_percent;
     if (typeof mu === "number" && Number.isFinite(mu) && mu >= 0) return String(mu);
@@ -1203,10 +1211,26 @@ export function AgentOwnerSettings({
     ...(hasBareModels ? [{ id: OTHER_VENDOR, label: t.myAgentsProviderOther }] : []),
     { id: OPENROUTER_BYO, label: t.myAgentsProviderOpenRouter },
   ];
-  const activeProvider =
-    (settingsProvider && providerOptions.some((p) => p.id === settingsProvider)
-      ? settingsProvider
-      : providerOptions[0]?.id) || "";
+  if (
+    settingsProvider &&
+    settingsProvider !== OPENROUTER_BYO &&
+    !providerOptions.some((p) => p.id === settingsProvider)
+  ) {
+    providerOptions.unshift({
+      id: settingsProvider,
+      label:
+        settingsProvider === OTHER_VENDOR
+          ? t.myAgentsProviderOther
+          : settingsProvider,
+    });
+  }
+  const activeProvider = settingsProvider
+    ? settingsProvider
+    : modelsLoading
+      ? ""
+      : providerOptions.find((p) => p.id !== OPENROUTER_BYO)?.id ||
+        providerOptions[0]?.id ||
+        "";
   const officialSelected = activeProvider === OPENROUTER_BYO;
   const vendorModels = officialSelected
     ? officialIds
@@ -1997,6 +2021,11 @@ export function AgentOwnerSettings({
               disabled={busy || modelsLoading}
               style={inputStyle}
             >
+              {!activeProvider ? (
+                <option value="" disabled>
+                  …
+                </option>
+              ) : null}
               {providerOptions.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.label}
