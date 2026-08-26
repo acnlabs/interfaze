@@ -187,13 +187,6 @@ function isGlobalDirect(c: ChatSummary): boolean {
   return !c.embed?.context;
 }
 
-function contextFallbackLabel(context?: string | null): string {
-  const raw = (context || "").trim();
-  if (!raw || raw.startsWith("new:")) return "";
-  if (raw.startsWith("work:") || raw.startsWith("plot:")) return raw.slice(raw.indexOf(":") + 1);
-  return raw;
-}
-
 function hostCaption(origin?: string | null): string {
   const raw = (origin || "").trim();
   if (!raw) return "";
@@ -207,9 +200,6 @@ function hostCaption(origin?: string | null): string {
 function conversationLabel(c: ChatSummary, t: RanchMessages): string {
   const headline = (c.embed?.headline || "").trim();
   if (headline) return headline;
-  const fromContext = contextFallbackLabel(c.embed?.context);
-  if (fromContext) return fromContext;
-  if (!c.embed?.context) return t.mainChat;
   return c.last_message_at || c.created_at ? t.untitledChat : t.startNewChat;
 }
 
