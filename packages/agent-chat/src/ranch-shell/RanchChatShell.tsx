@@ -210,6 +210,12 @@ function chatHasStarted(c: ChatSummary): boolean {
   return Boolean(c.last_message_at);
 }
 
+function agentIsMine(agentId: string | null | undefined, mineIds: string[]): boolean {
+  const key = agentIdKey(agentId);
+  if (!key) return false;
+  return mineIds.some((id) => agentIdKey(id) === key);
+}
+
 /** Sidebar is one row per agent (latest chat). Groups stay one row each. */
 function collapseDirectChatsByAgent(list: ChatSummary[]): ChatSummary[] {
   const groups = new Map<string, ChatSummary[]>();
@@ -2949,10 +2955,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   if (!open) return null;
 
+  const mineAgentIds = directoryAgents
+    .filter((a) => a.group === "mine" && a.agent_id.trim())
+    .map((a) => a.agent_id);
   const inboxChats = chats.filter((c) => {
     if (isGroupChat(c)) return true;
     if (active && c.chat_id === active.chat_id) return true;
-    return chatHasStarted(c);
+    if (chatHasStarted(c)) return true;
+    // Own agents stay in the inbox even before the first message.
+    return isGlobalDirect(c) && agentIsMine(c.agent_id, mineAgentIds);
   });
   const filtered = collapseDirectChatsByAgent(
     inboxChats.filter((c) => {
@@ -2978,8 +2989,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             (c) =>
               !isGroupChat(c) &&
               !(c.agent_id || "").startsWith("sys:") &&
-              agentIdKey(c.agent_id) === agentIdKey(active.agent_id) &&
-              (c.chat_id === active.chat_id || chatHasStarted(c)),
+              agentIdKey(c.agent_id) === agentIdKey(active.agent_id),
           )
           .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))
       : [];
@@ -4037,7 +4047,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           fontSize: 13,
                         }}
                       >
-                        {(isGroupChat(active)
+                        {(isGroupChat(active) || !chatHasStarted(active)
                           ? chatTitle(active)
                           : conversationLabel(active, t)
                         )
@@ -4077,14 +4087,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         title={
                           activeTopic
                             ? activeTopic.title || t.topics
-                            : isGroupChat(active)
-                              ? active.agent_id || undefined
+                            : isGroupChat(active) || !chatHasStarted(active)
+                              ? chatTitle(active)
                               : conversationLabel(active, t)
                         }
                       >
                         {activeTopic
                           ? activeTopic.title?.trim() || t.topics
-                          : isGroupChat(active)
+                          : isGroupChat(active) || !chatHasStarted(active)
                             ? chatTitle(active)
                             : conversationLabel(active, t)}
                       </strong>
