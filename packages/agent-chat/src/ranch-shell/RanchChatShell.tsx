@@ -203,6 +203,13 @@ function conversationLabel(c: ChatSummary, t: RanchMessages): string {
   return c.last_message_at || c.created_at ? t.untitledChat : t.startNewChat;
 }
 
+/** ChatGPT-style: a row exists only after someone has spoken. */
+function chatHasStarted(c: ChatSummary): boolean {
+  if ((c.embed?.headline || "").trim()) return true;
+  if ((c.last_message_content || "").trim()) return true;
+  return Boolean(c.last_message_at);
+}
+
 /** Sidebar is one row per agent (latest chat). Groups stay one row each. */
 function collapseDirectChatsByAgent(list: ChatSummary[]): ChatSummary[] {
   const groups = new Map<string, ChatSummary[]>();
@@ -2942,7 +2949,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   if (!open) return null;
 
-  const inboxChats = chats;
+  const inboxChats = chats.filter((c) => {
+    if (isGroupChat(c)) return true;
+    if (active && c.chat_id === active.chat_id) return true;
+    return chatHasStarted(c);
+  });
   const filtered = collapseDirectChatsByAgent(
     inboxChats.filter((c) => {
       // Legacy platform sys:* assistants are retired from Interfaze surfaces.
@@ -2967,7 +2978,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
             (c) =>
               !isGroupChat(c) &&
               !(c.agent_id || "").startsWith("sys:") &&
-              agentIdKey(c.agent_id) === agentIdKey(active.agent_id),
+              agentIdKey(c.agent_id) === agentIdKey(active.agent_id) &&
+              (c.chat_id === active.chat_id || chatHasStarted(c)),
           )
           .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))
       : [];
@@ -4025,7 +4037,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           fontSize: 13,
                         }}
                       >
-                        {chatTitle(active).slice(0, 1).toUpperCase()}
+                        {(isGroupChat(active)
+                          ? chatTitle(active)
+                          : conversationLabel(active, t)
+                        )
+                          .slice(0, 1)
+                          .toUpperCase()}
                       </span>
                       {!isGroupChat(active) && agentStatusDotColor(activePresence) ? (
                         <span
@@ -4060,12 +4077,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         title={
                           activeTopic
                             ? activeTopic.title || t.topics
-                            : active.agent_id || undefined
+                            : isGroupChat(active)
+                              ? active.agent_id || undefined
+                              : conversationLabel(active, t)
                         }
                       >
                         {activeTopic
                           ? activeTopic.title?.trim() || t.topics
-                          : chatTitle(active)}
+                          : isGroupChat(active)
+                            ? chatTitle(active)
+                            : conversationLabel(active, t)}
                       </strong>
                       {activeTopic ? (
                         <span
