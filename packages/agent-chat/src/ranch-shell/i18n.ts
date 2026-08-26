@@ -354,7 +354,7 @@ export type RanchMessages = {
   myAgentsOpenRouterRuntimeRequired: string;
   myAgentsBuyStoreKey: string;
   myAgentsRefreshRuntime: string;
-  myAgentsPricingHealed: string;
+  myAgentsListingStaleHint: string;
   myAgentsOfficialSectionHint: string;
   myAgentsMineSectionHint: string;
   myAgentsProviderUnlisted: string;
@@ -898,7 +898,8 @@ const en: RanchMessages = {
     "Runtime is still this agent’s own vendor. Host cannot see whether an OpenRouter key is installed. Write a Store key into the runtime, then Refresh status. OpenRouter can be saved only after the agent reports an OpenRouter model.",
   myAgentsBuyStoreKey: "Buy in Store",
   myAgentsRefreshRuntime: "Refresh status",
-  myAgentsPricingHealed: "Listing reset to the runtime model.",
+  myAgentsListingStaleHint:
+    "The published listing still says OpenRouter, but this agent is running its own key. That’s leftover — not a real OpenRouter setup. OpenRouter can be saved only after the agent reports an OpenRouter model.",
   myAgentsOfficialSectionHint:
     "Official hosted inference is frozen. OpenRouter here is a Store/BYO key on the agent — not Interfaze’s key.",
   myAgentsMineSectionHint:
@@ -1456,7 +1457,8 @@ const zh: RanchMessages = {
     "运行时仍是这只 agent 自己的厂家。Host 看不见钥匙是否装上——请先把 Store 钥匙写进 runtime，再点「刷新状态」。只有它自报了 OpenRouter 型号才能保存。",
   myAgentsBuyStoreKey: "去 Store 购买",
   myAgentsRefreshRuntime: "刷新状态",
-  myAgentsPricingHealed: "挂牌已改回运行时型号。",
+  myAgentsListingStaleHint:
+    "挂牌还写着 OpenRouter，但这只 agent 正在用自己的钥匙。那是旧挂牌，不是真的 OpenRouter。只有它自报了 OpenRouter 型号才能保存。",
   myAgentsOfficialSectionHint:
     "官方代打已冻结。这里的 OpenRouter 是写在 agent 上的 Store/自持钥匙，不是 Interfaze 持钥。",
   myAgentsMineSectionHint:

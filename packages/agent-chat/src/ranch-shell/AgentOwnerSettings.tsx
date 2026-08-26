@@ -121,11 +121,11 @@ function runtimeIsOpenRouter(runtime: string, supported: string[]): boolean {
   return !isKnownByoVendor(vendor, supported);
 }
 
-/** Leftover OpenRouter shelf id while heartbeat is still a BYO vendor (e.g. TokenHub). */
-function listingNeedsRuntimeHeal(
+/** Leftover OpenRouter shelf id while the agent is actually running its own key. */
+function listingIsStaleOpenRouter(
   listed: string,
   runtime: string,
-  supported: string[],
+  supported: string[] = [],
 ): boolean {
   const ls = listed.trim();
   const rt = runtime.trim();
@@ -156,11 +156,14 @@ function nextOfficialModels(
     : saved;
 }
 
-function resolvePricingModelId(detail: MyAgentSummary): string {
-  // Saved listing wins; else runtime heartbeat report; else catalog default.
+function resolvePricingModelId(
+  detail: MyAgentSummary,
+  supported: string[] = [],
+): string {
+  // Saved listing wins unless it is a leftover OpenRouter shelf id.
   const listed = (detail.token_pricing?.model_id || "").trim();
-  if (listed) return listed;
   const runtime = (detail.runtime_model_id || "").trim();
+  if (listed && !listingIsStaleOpenRouter(listed, runtime, supported)) return listed;
   if (runtime) return runtime;
   const preferred = (detail.preferred_model_id || "").trim();
   if (preferred) return preferred;
@@ -890,9 +893,6 @@ export function AgentOwnerSettings({
   const [pricingMsg, setPricingMsg] = useState<string | null>(null);
   const [pricingError, setPricingError] = useState<string | null>(null);
   const [refreshingRuntime, setRefreshingRuntime] = useState(false);
-  const listingHealRef = useRef("");
-  const onUpdatedRef = useRef(onUpdated);
-  onUpdatedRef.current = onUpdated;
   type DeliveryChoice = "direct" | "relay" | "none";
   const deliveryFromDetail = (d: string | null | undefined): DeliveryChoice => {
     if (d === "direct") return "direct";
@@ -945,7 +945,7 @@ export function AgentOwnerSettings({
   }, [detail.agent_id, detail.name, detail.description, detail.tags?.join("\u0001")]);
 
   useEffect(() => {
-    setModelIdDraft(resolvePricingModelId(detail));
+    setModelIdDraft(resolvePricingModelId(detail, supportedModels));
     const mu = detail.token_pricing?.markup_percent;
     setMarkupDraft(
       typeof mu === "number" && Number.isFinite(mu) && mu >= 0
@@ -962,8 +962,8 @@ export function AgentOwnerSettings({
     setSettingsProvider(
       providerIdFromRuntime(
         detail.runtime_model_id || "",
-        resolvePricingModelId(detail),
-        [],
+        resolvePricingModelId(detail, supportedModels),
+        supportedModels,
       ),
     );
   }, [
@@ -996,10 +996,11 @@ export function AgentOwnerSettings({
         if (Array.isArray(status.official_models)) {
           setOfficialSaved(status.official_models);
         }
+        setModelIdDraft(resolvePricingModelId(detail, ids));
         setSettingsProvider(
           providerIdFromRuntime(
             status.runtime_model_id || detail.runtime_model_id || "",
-            resolvePricingModelId(detail),
+            resolvePricingModelId(detail, ids),
             ids,
           ),
         );
@@ -1020,71 +1021,6 @@ export function AgentOwnerSettings({
       cancelled = true;
     };
   }, [client, detail.agent_id, detail.token_pricing?.model_id, detail.runtime_model_id]);
-
-  useEffect(() => {
-    if (modelsLoading) return;
-    const listed = (detail.token_pricing?.model_id || "").trim();
-    const runtime = (detail.runtime_model_id || "").trim();
-    if (!listingNeedsRuntimeHeal(listed, runtime, supportedModels)) return;
-    const key = `${detail.agent_id}:${listed}:${runtime}`;
-    if (listingHealRef.current === key) return;
-    listingHealRef.current = key;
-    const markup =
-      typeof detail.token_pricing?.markup_percent === "number" &&
-      Number.isFinite(detail.token_pricing.markup_percent) &&
-      detail.token_pricing.markup_percent >= 0
-        ? detail.token_pricing.markup_percent
-        : DEFAULT_MARKUP_PERCENT;
-    let cancelled = false;
-    setSavingPricing(true);
-    void (async () => {
-      try {
-        const row = await client.getModelCatalogItem(runtime);
-        const cin = Number(row.input_price_per_million);
-        const cout = Number(row.output_price_per_million);
-        if (!Number.isFinite(cin) || !Number.isFinite(cout)) {
-          listingHealRef.current = "";
-          return;
-        }
-        if (cancelled) {
-          listingHealRef.current = "";
-          return;
-        }
-        const updated = await client.updateMyAgentTokenPricing(detail.agent_id, {
-          model_id: runtime,
-          input_price_per_million: applyMarkup(cin, markup),
-          output_price_per_million: applyMarkup(cout, markup),
-          markup_percent: markup,
-        });
-        if (cancelled) {
-          listingHealRef.current = "";
-          return;
-        }
-        setModelIdDraft(resolvePricingModelId(updated));
-        const mu = updated.token_pricing?.markup_percent;
-        if (typeof mu === "number" && Number.isFinite(mu)) setMarkupDraft(String(mu));
-        setPricingMsg(t.myAgentsPricingHealed);
-        window.setTimeout(() => setPricingMsg(null), 2500);
-        onUpdatedRef.current?.(updated);
-      } catch {
-        listingHealRef.current = "";
-      } finally {
-        if (!cancelled) setSavingPricing(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    client,
-    detail.agent_id,
-    detail.runtime_model_id,
-    detail.token_pricing?.markup_percent,
-    detail.token_pricing?.model_id,
-    modelsLoading,
-    supportedModels,
-    t.myAgentsPricingHealed,
-  ]);
 
   useEffect(() => {
     if (officialSaved.length === 0) return;
@@ -1246,8 +1182,17 @@ export function AgentOwnerSettings({
     const n = Number(markupDraft);
     return Number.isFinite(n) && n >= 0 && n <= 1000 ? n : null;
   })();
+  const runtimeId = (detail.runtime_model_id || "").trim();
+  const listingStale = listingIsStaleOpenRouter(
+    oldModelId,
+    runtimeId,
+    supportedModels,
+  );
   const listingPublished =
-    oldModelId.length > 0 && typeof oldMarkup === "number" && Number.isFinite(oldMarkup);
+    !listingStale &&
+    oldModelId.length > 0 &&
+    typeof oldMarkup === "number" &&
+    Number.isFinite(oldMarkup);
   const officialIds = officialCatalog.map((row) => row.id);
   const byoVendors = vendorsFromModels(supportedModels).filter(
     (id) => id.toLowerCase() !== OPENROUTER_BYO,
@@ -1318,7 +1263,6 @@ export function AgentOwnerSettings({
     (!listingPublished ||
       !sameModelId(displayedModelId, oldModelId) ||
       markupParsed !== oldMarkup);
-  const runtimeId = (detail.runtime_model_id || "").trim();
   const runtimeMismatch = Boolean(
     runtimeId && !sameModelId(runtimeId, displayedModelId),
   );
@@ -1702,8 +1646,9 @@ export function AgentOwnerSettings({
           setOfficialSaved(status.official_models);
         }
         const runtime = status.runtime_model_id || detail.runtime_model_id || "";
+        setModelIdDraft(resolvePricingModelId(detail, ids));
         setSettingsProvider(
-          providerIdFromRuntime(runtime, resolvePricingModelId(detail), ids),
+          providerIdFromRuntime(runtime, resolvePricingModelId(detail, ids), ids),
         );
         onUpdated?.({
           ...detail,
@@ -2071,6 +2016,25 @@ export function AgentOwnerSettings({
               {openRouterOnRuntime
                 ? t.myAgentsNeedStoreKey
                 : t.myAgentsOpenRouterRuntimeRequired}{" "}
+              <a
+                href={storeOpenRouterUrl(_agentPlanetBaseUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: colors.text, textDecoration: "underline" }}
+              >
+                {t.myAgentsBuyStoreKey}
+              </a>
+            </p>
+          ) : listingStale ? (
+            <p
+              style={{
+                margin: "8px 0 0",
+                fontSize: 12,
+                color: colors.muted,
+                lineHeight: 1.45,
+              }}
+            >
+              {t.myAgentsListingStaleHint}{" "}
               <a
                 href={storeOpenRouterUrl(_agentPlanetBaseUrl)}
                 target="_blank"
