@@ -828,6 +828,8 @@ type Props = {
   onUpdated?: (detail: MyAgentSummary) => void;
   /** Called after permanent delete succeeds. */
   onRemoved?: (agentId: string) => void;
+  /** Open the account-level Store keys list (not this agent's secret). */
+  onOpenKeys?: () => void;
 };
 
 /**
@@ -847,6 +849,7 @@ export function AgentOwnerSettings({
   showConnectSection = true,
   onUpdated,
   onRemoved,
+  onOpenKeys,
 }: Props) {
   const [confirmRotate, setConfirmRotate] = useState(false);
   const [confirmRelay, setConfirmRelay] = useState(false);
@@ -2055,6 +2058,26 @@ export function AgentOwnerSettings({
               >
                 {t.myAgentsBuyStoreKey}
               </a>
+              {onOpenKeys ? (
+                <>
+                  {" · "}
+                  <button
+                    type="button"
+                    onClick={onOpenKeys}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: colors.text,
+                      textDecoration: "underline",
+                      padding: 0,
+                      font: "inherit",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {t.accountKeysOpenList}
+                  </button>
+                </>
+              ) : null}
             </p>
           ) : listingStale ? (
             <p
@@ -2074,6 +2097,51 @@ export function AgentOwnerSettings({
               >
                 {t.myAgentsBuyStoreKey}
               </a>
+              {onOpenKeys ? (
+                <>
+                  {" · "}
+                  <button
+                    type="button"
+                    onClick={onOpenKeys}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: colors.text,
+                      textDecoration: "underline",
+                      padding: 0,
+                      font: "inherit",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {t.accountKeysOpenList}
+                  </button>
+                </>
+              ) : null}
+            </p>
+          ) : onOpenKeys ? (
+            <p
+              style={{
+                margin: "8px 0 0",
+                fontSize: 12,
+                color: colors.muted,
+                lineHeight: 1.45,
+              }}
+            >
+              <button
+                type="button"
+                onClick={onOpenKeys}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: colors.text,
+                  textDecoration: "underline",
+                  padding: 0,
+                  font: "inherit",
+                  cursor: "pointer",
+                }}
+              >
+                {t.accountKeysOpenList}
+              </button>
             </p>
           ) : null}
         </div>

@@ -13,10 +13,11 @@
 | 入口 | 职责 | 不做 |
 |---|---|---|
 | **Wallet** | 人 Credits（CN：**星币**）余额、流水、充值深链 | 套餐档位、对话计量 UI |
+| **钥匙 / Keys** | Store 买的模型额度、写进哪只 agent | 明文 `sk-or-…`；全局系统 Key；人钱包 |
 | **Plan & Usage** | 方案权益、额度/津贴、（未来）1:1 与群 @ **直接投递方**的用量 | 人钱包充提；任务赏金全账；分包链明细 |
 | **会话 Wallet 页签** | 单个 owned agent 的 Credits / Spend Policy / 审批 | 人余额主界面 |
 
-菜单顺序（已落地）：Profile → Manage → Wallet → Plan & Usage → Discover → Log out。
+菜单顺序（已落地）：Profile → Manage → Wallet → Keys → Plan & Usage → Discover → Log out。
 
 **分区文案 / 充值 / 账本：**
 

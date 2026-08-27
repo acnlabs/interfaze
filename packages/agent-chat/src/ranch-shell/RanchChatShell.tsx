@@ -33,6 +33,7 @@ import {
 } from "./AgentOwnerSettings";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import {
+  AccountKeysPanel,
   AccountManagePanel,
   AccountPlanUsagePanel,
   AccountProfilePanel,
@@ -1394,6 +1395,7 @@ function AccountFooter({
   onProfile,
   onManage,
   onWallet,
+  onKeys,
   onPlanUsage,
   onDiscoverAgents,
   t,
@@ -1403,6 +1405,7 @@ function AccountFooter({
   onProfile?: () => void;
   onManage?: () => void;
   onWallet?: () => void;
+  onKeys?: () => void;
   onPlanUsage?: () => void;
   onDiscoverAgents?: () => void;
   t: RanchMessages;
@@ -1480,7 +1483,7 @@ function AccountFooter({
   };
 
   const hasUpper =
-    !!(onProfile || onManage || onWallet || onPlanUsage || onDiscoverAgents);
+    !!(onProfile || onManage || onWallet || onKeys || onPlanUsage || onDiscoverAgents);
 
   return (
     <div
@@ -1551,6 +1554,17 @@ function AccountFooter({
               <span style={{ flex: 1 }}>{t.accountWallet}</span>
             </button>
           ) : null}
+          {onKeys ? (
+            <button
+              type="button"
+              role="menuitem"
+              style={menuItemStyle}
+              onClick={() => runAndClose(onKeys)}
+              {...hoverHandlers}
+            >
+              <span style={{ flex: 1 }}>{t.accountKeys}</span>
+            </button>
+          ) : null}
           {onPlanUsage ? (
             <button
               type="button"
@@ -1562,7 +1576,7 @@ function AccountFooter({
               <span style={{ flex: 1 }}>{t.accountPlanUsage}</span>
             </button>
           ) : null}
-          {(onProfile || onManage || onWallet || onPlanUsage) && onDiscoverAgents ? (
+          {(onProfile || onManage || onWallet || onKeys || onPlanUsage) && onDiscoverAgents ? (
             <div style={{ height: 1, background: colors.border, margin: "2px 0" }} />
           ) : null}
           {onDiscoverAgents ? (
@@ -1821,12 +1835,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showAccountProfile, setShowAccountProfile] = useState(false);
   const [showAccountManage, setShowAccountManage] = useState(false);
   const [showAccountWallet, setShowAccountWallet] = useState(false);
+  const [showAccountKeys, setShowAccountKeys] = useState(false);
   const [showAccountPlan, setShowAccountPlan] = useState(false);
 
   const closeAccountSurfaces = () => {
     setShowAccountProfile(false);
     setShowAccountManage(false);
     setShowAccountWallet(false);
+    setShowAccountKeys(false);
     setShowAccountPlan(false);
     setShowMyAgents(false);
   };
@@ -1837,6 +1853,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     closeAccountSurfaces();
     if (initialAccountPanel === "plan") setShowAccountPlan(true);
     else if (initialAccountPanel === "wallet") setShowAccountWallet(true);
+    else if (initialAccountPanel === "keys") setShowAccountKeys(true);
     else if (initialAccountPanel === "manage") setShowAccountManage(true);
     else if (initialAccountPanel === "profile") setShowAccountProfile(true);
   }, [initialAccountPanel]);
@@ -3821,6 +3838,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
               closeAccountSurfaces();
               setShowAccountWallet(true);
             }}
+            onKeys={() => {
+              setPickerMode(null);
+              closeAccountSurfaces();
+              setShowAccountKeys(true);
+            }}
             onPlanUsage={() => {
               setPickerMode(null);
               closeAccountSurfaces();
@@ -3862,6 +3884,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
           />
         ) : null}
 
+        {showAccountKeys ? (
+          <AccountKeysPanel
+            client={client}
+            messages={t}
+            agentPlanetBaseUrl={agentPlanetBaseUrl}
+            onClose={() => setShowAccountKeys(false)}
+          />
+        ) : null}
+
         {showAccountPlan ? (
           <AccountPlanUsagePanel
             client={client}
@@ -3897,6 +3928,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
               applyOwnedAgentProfileUpdate(row, previousName);
             }}
             onAgentRemoved={applyOwnedAgentRemoved}
+            onOpenKeys={() => {
+              setShowMyAgents(false);
+              closeAccountSurfaces();
+              setShowAccountKeys(true);
+            }}
           />
         ) : null}
       </div>
@@ -5424,6 +5460,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           busy={busy}
                           onUpdated={applyOwnedAgentProfileUpdate}
                           onRemoved={applyOwnedAgentRemoved}
+                          onOpenKeys={() => {
+                            closeAccountSurfaces();
+                            setShowAccountKeys(true);
+                          }}
                         />
                       ) : (
                         <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>

@@ -181,6 +181,16 @@ export type RanchMessages = {
   accountProfileHint: string;
   accountWallet: string;
   accountWalletHint: string;
+  /** Account menu: Store model credit (not API keys, not Wallet). */
+  accountKeys: string;
+  accountKeysHint: string;
+  accountKeysLoadFailed: string;
+  accountKeysEmpty: string;
+  accountKeysBuy: string;
+  accountKeysBuyHint: string;
+  accountKeysWrittenTo: string;
+  accountKeysNotWritten: string;
+  accountKeysOpenList: string;
   collabBudget: string;
   collabBudgetHint: string;
   collabAccountCap: string;
@@ -705,6 +715,17 @@ const en: RanchMessages = {
   accountProfileHint: "Signed-in account from your identity provider. Edit name and avatar there for now.",
   accountWallet: "Wallet",
   accountWalletHint: "Your human Credits balance. Agent wallets stay under each agent.",
+  accountKeys: "Keys",
+  accountKeysHint:
+    "Model credit you bought in Store. A standalone buy is yours to use anywhere — it does not attach to an existing agent.",
+  accountKeysLoadFailed: "Couldn’t load keys.",
+  accountKeysEmpty: "No Store keys yet.",
+  accountKeysBuy: "Buy in Store",
+  accountKeysBuyHint:
+    "Creating a new agent can write a Store key into that machine. Buying here yourself does not write into an existing agent.",
+  accountKeysWrittenTo: "Written to {name}",
+  accountKeysNotWritten: "Not written to any agent",
+  accountKeysOpenList: "View keys",
   collabBudget: "Collaboration budget",
   collabBudgetHint:
     "Oil tank for multi-agent help. With remaining Credits, collaboration runs without asking each time.",
@@ -1268,6 +1289,15 @@ const zh: RanchMessages = {
   accountProfileHint: "登录账号来自身份提供方。目前请在那里修改名称与头像。",
   accountWallet: "钱包",
   accountWalletHint: "你本人的 Credits 余额。Agent 钱包在各自 Agent 详情里。",
+  accountKeys: "钥匙",
+  accountKeysHint: "Store 买的模型额度。自己买 = 拿到哪都能用，不会自动写进已有机。",
+  accountKeysLoadFailed: "无法加载钥匙。",
+  accountKeysEmpty: "还没有 Store 钥匙。",
+  accountKeysBuy: "去 Store 买",
+  accountKeysBuyHint: "创建新机时可以代买并写入那一台。自己买完不会自动配到已有机。",
+  accountKeysWrittenTo: "已写入 {name}",
+  accountKeysNotWritten: "未写入任何 agent",
+  accountKeysOpenList: "查看钥匙清单",
   collabBudget: "协作预算",
   collabBudgetHint: "多智能体协作用的额度油箱。有剩余时自动放行，不用每次点同意。",
   collabAccountCap: "默认额度",

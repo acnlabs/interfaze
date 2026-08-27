@@ -126,6 +126,21 @@ export type HumanWallet = {
   owner_id?: string | null;
 };
 
+/** Store model credit — never includes plaintext key material. */
+export type AccountKey = {
+  order_id: string;
+  product_id?: string | null;
+  credits_spent: number;
+  status: string;
+  created_at: string;
+  written_agent_id?: string | null;
+  written_agent_name?: string | null;
+};
+
+export type AccountKeyList = {
+  keys: AccountKey[];
+};
+
 /** Catalog tier from GET /api/chat/plan-usage. */
 export type PlanCatalogEntry = {
   code: string;
@@ -525,6 +540,8 @@ export type GatewayClient = {
   ) => Promise<MyAgentSummary>;
   /** Signed-in human Credits wallet. */
   getHumanWallet: () => Promise<HumanWallet>;
+  /** Store model-credit orders for this human. Never returns plaintext keys. */
+  getMyKeys: () => Promise<AccountKeyList>;
   listHumanWalletTransactions: (
     page?: number,
     pageSize?: number,
@@ -812,6 +829,50 @@ export function createGatewayClient(
         },
       ),
     getHumanWallet: () => request<HumanWallet>("/api/chat/wallet"),
+    getMyKeys: async () => {
+      try {
+        return await request<AccountKeyList>("/api/chat/my-keys");
+      } catch (err) {
+        if (!(err instanceof ChatGatewayError) || err.status !== 404) throw err;
+        const raw = await request<{
+          orders?: Array<{
+            order_id: string;
+            product_id?: string | null;
+            product_type?: string | null;
+            credits_spent?: number;
+            or_key_label?: string | null;
+            or_key_value?: string | null;
+            status?: string;
+            created_at?: string;
+          }>;
+        }>("/api/store/orders");
+        const keys: AccountKey[] = (raw.orders || [])
+          .filter((row) => {
+            const productType = String(row.product_type || "").toLowerCase();
+            if (productType === "openrouter_key") return true;
+            if (productType) return false;
+            const productId = String(row.product_id || "").toLowerCase();
+            if (
+              productId.includes("openrouter") ||
+              productId.includes("or-key") ||
+              productId.includes("or_key")
+            ) {
+              return true;
+            }
+            return Boolean(row.or_key_label);
+          })
+          .map((row) => ({
+            order_id: row.order_id,
+            product_id: row.product_id ?? null,
+            credits_spent: Number(row.credits_spent || 0),
+            status: row.status || "completed",
+            created_at: row.created_at || "",
+            written_agent_id: null,
+            written_agent_name: null,
+          }));
+        return { keys };
+      }
+    },
     getPlanUsage: () => request<PlanUsage>("/api/chat/plan-usage"),
     putOnDemandLimit: (mode, limitCredits) =>
       request<PlanUsage>("/api/chat/plan-usage/on-demand-limit", {
