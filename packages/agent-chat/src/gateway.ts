@@ -95,6 +95,9 @@ export type AgentCreateAvailability = {
   key_fee_credits?: number;
   key_credits?: number;
   checkout_mode?: string;
+  region?: string;
+  default_runtime?: string;
+  runtimes?: { id: string; label: string }[];
 };
 
 export type AgentCreateJob = {
@@ -624,6 +627,7 @@ export type GatewayClient = {
     name: string;
     tier_id: "starter" | "standard";
     key_product_id?: string;
+    runtime?: "hermes" | "openclaw";
   }) => Promise<AgentCreateJob>;
   getAgentCreateJob: (jobId: string) => Promise<AgentCreateJob>;
   payAgentCreateJob: (jobId: string) => Promise<AgentCreateJob>;

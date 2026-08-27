@@ -69,6 +69,7 @@ export function CreateAgentDialog({
   const [avail, setAvail] = useState<AgentCreateAvailability | null>(null);
   const [name, setName] = useState("");
   const [tierId, setTierId] = useState<string>("starter");
+  const [runtime, setRuntime] = useState<"hermes" | "openclaw">("hermes");
   const [keyProductId, setKeyProductId] = useState<string>("or-starter");
   const [job, setJob] = useState<AgentCreateJob | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +86,8 @@ export function CreateAgentDialog({
         const machines = machinesFrom(row);
         const keys = keysFrom(row);
         if (machines[0]?.tier_id) setTierId(machines[0].tier_id);
+        const preferredRuntime = row.default_runtime === "openclaw" ? "openclaw" : "hermes";
+        setRuntime(preferredRuntime);
         const preferred =
           row.default_key_product_id ||
           row.key_product_id ||
@@ -138,6 +141,7 @@ export function CreateAgentDialog({
         name: name.trim(),
         tier_id: tierId as "starter" | "standard",
         key_product_id: keyProductId,
+        runtime,
       });
       setJob(created);
       if (created.status === "ready" && created.agent_id) {
@@ -261,6 +265,39 @@ export function CreateAgentDialog({
                   </span>
                 </label>
               ))}
+            </div>
+            <div style={{ margin: "8px 0 12px" }}>
+              <div style={{ fontSize: 11, color: colors.muted, marginBottom: 6 }}>
+                {t.createAgentRuntimeSection}
+              </div>
+              {(["hermes", "openclaw"] as const).map((id) => (
+                <label
+                  key={id}
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "flex-start",
+                    marginBottom: 8,
+                    fontSize: 13,
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="runtime"
+                    checked={runtime === id}
+                    disabled={locked}
+                    onChange={() => setRuntime(id)}
+                  />
+                  <span>
+                    <strong>
+                      {id === "openclaw" ? t.createAgentRuntimeOpenclaw : t.createAgentRuntimeHermes}
+                    </strong>
+                  </span>
+                </label>
+              ))}
+              <div style={{ fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
+                {avail?.region === "cn" ? t.createAgentRegionCn : t.createAgentRegionSg}
+              </div>
             </div>
             <div style={{ margin: "8px 0 12px" }}>
               <div style={{ fontSize: 11, color: colors.muted, marginBottom: 6 }}>
