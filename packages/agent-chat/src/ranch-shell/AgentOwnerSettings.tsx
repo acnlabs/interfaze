@@ -1298,6 +1298,7 @@ export function AgentOwnerSettings({
     detail.runtime_model_id || "",
     supportedModels,
   );
+  const openRouterBlocked = officialSelected && !openRouterOnRuntime;
   const canSavePricing =
     pricingDirty &&
     previewReady &&
@@ -1306,7 +1307,7 @@ export function AgentOwnerSettings({
     markupParsed !== null &&
     displayedModelId.length > 0 &&
     modelOnList &&
-    !(officialSelected && !openRouterOnRuntime) &&
+    !openRouterBlocked &&
     !modelsBusy &&
     !savingPricing &&
     !busy;
@@ -1466,6 +1467,7 @@ export function AgentOwnerSettings({
       canSavePolicy ||
       canSavePricing ||
       canSaveOfficial) &&
+    !openRouterBlocked &&
     !saving &&
     !busy;
 
@@ -2591,7 +2593,19 @@ export function AgentOwnerSettings({
         {hasEdits || saving ? (
           <button
             type="button"
-            style={{ ...btnPrimary, width: "100%" }}
+            style={{
+              ...btnPrimary,
+              width: "100%",
+              ...(canSaveAny
+                ? {}
+                : {
+                    background: "#334155",
+                    borderColor: "#334155",
+                    color: colors.muted,
+                    cursor: "not-allowed",
+                    opacity: 0.75,
+                  }),
+            }}
             disabled={!canSaveAny}
             onClick={saveAll}
           >
