@@ -181,7 +181,7 @@ export type RanchMessages = {
   accountProfileHint: string;
   accountWallet: string;
   accountWalletHint: string;
-  /** Account menu: Store model credit (not API keys, not Wallet). */
+  /** Account menu: Store model quota (not API keys, not Wallet Credits). */
   accountKeys: string;
   accountKeysHint: string;
   accountKeysLoadFailed: string;
@@ -715,17 +715,17 @@ const en: RanchMessages = {
   accountProfileHint: "Signed-in account from your identity provider. Edit name and avatar there for now.",
   accountWallet: "Wallet",
   accountWalletHint: "Your human Credits balance. Agent wallets stay under each agent.",
-  accountKeys: "Model credit",
+  accountKeys: "Model quota",
   accountKeysHint:
-    "Model credit you bought in Store. A standalone buy is yours to use anywhere — it does not attach to an existing agent.",
-  accountKeysLoadFailed: "Couldn’t load model credit.",
-  accountKeysEmpty: "No model credit yet.",
+    "Model quota you bought in Store. A standalone buy is yours to use anywhere — it does not attach to an existing agent.",
+  accountKeysLoadFailed: "Couldn’t load model quota.",
+  accountKeysEmpty: "No model quota yet.",
   accountKeysBuy: "Buy in Store",
   accountKeysBuyHint:
-    "Creating a new agent can write Store model credit into that machine. Buying here yourself does not write into an existing agent.",
+    "Creating a new agent can write Store model quota into that machine. Buying here yourself does not write into an existing agent.",
   accountKeysWrittenTo: "Written to {name}",
   accountKeysNotWritten: "Not written to any agent",
-  accountKeysOpenList: "View model credit",
+  accountKeysOpenList: "View model quota",
   collabBudget: "Collaboration budget",
   collabBudgetHint:
     "Oil tank for multi-agent help. With remaining Credits, collaboration runs without asking each time.",

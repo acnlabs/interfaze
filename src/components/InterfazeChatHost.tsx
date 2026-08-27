@@ -43,7 +43,7 @@ function useAccountDeepLink() {
     const sp = new URLSearchParams(window.location.search);
     const account = (sp.get("account") || "").toLowerCase();
     const panel =
-      account === "credit" || account === "keys"
+      account === "quota" || account === "credit" || account === "keys"
         ? "keys"
         : account === "plan" ||
             account === "wallet" ||
