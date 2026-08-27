@@ -129,7 +129,7 @@ export type HumanWallet = {
   owner_id?: string | null;
 };
 
-/** Store model credit — never includes plaintext key material. */
+/** Store model quota — never includes plaintext key material. */
 export type AccountKey = {
   order_id: string;
   product_id?: string | null;
@@ -543,7 +543,7 @@ export type GatewayClient = {
   ) => Promise<MyAgentSummary>;
   /** Signed-in human Credits wallet. */
   getHumanWallet: () => Promise<HumanWallet>;
-  /** Store model-credit orders for this human. Never returns plaintext keys. */
+  /** Store model-quota orders for this human. Never returns plaintext keys. */
   getMyKeys: () => Promise<AccountKeyList>;
   listHumanWalletTransactions: (
     page?: number,

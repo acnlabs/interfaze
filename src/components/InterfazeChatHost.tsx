@@ -42,16 +42,19 @@ function useAccountDeepLink() {
     if (typeof window === "undefined") return;
     const sp = new URLSearchParams(window.location.search);
     const account = (sp.get("account") || "").toLowerCase();
-    if (
-      account !== "plan" &&
-      account !== "wallet" &&
-      account !== "keys" &&
-      account !== "manage" &&
-      account !== "profile"
-    ) {
+    const panel =
+      account === "quota" || account === "credit" || account === "keys"
+        ? "keys"
+        : account === "plan" ||
+            account === "wallet" ||
+            account === "manage" ||
+            account === "profile"
+          ? account
+          : null;
+    if (!panel) {
       return;
     }
-    setInitialAccountPanel(account);
+    setInitialAccountPanel(panel);
     sp.delete("account");
     sp.delete("checkout");
     const q = sp.toString();
