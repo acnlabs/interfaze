@@ -281,6 +281,11 @@ export type RanchMessages = {
   createAgentName: string;
   createAgentTier: string;
   createAgentServerSection: string;
+  createAgentRuntimeSection: string;
+  createAgentRuntimeHermes: string;
+  createAgentRuntimeOpenclaw: string;
+  createAgentRegionSg: string;
+  createAgentRegionCn: string;
   createAgentKeySection: string;
   createAgentStarter: string;
   createAgentStandard: string;
@@ -822,6 +827,11 @@ const en: RanchMessages = {
   createAgentName: "Name",
   createAgentTier: "Plan",
   createAgentServerSection: "Server",
+  createAgentRuntimeSection: "Runtime",
+  createAgentRuntimeHermes: "Hermes",
+  createAgentRuntimeOpenclaw: "OpenClaw",
+  createAgentRegionSg: "Deploys on an overseas machine.",
+  createAgentRegionCn: "Deploys on a China-region machine.",
   createAgentKeySection: "Model allowance",
   createAgentStarter: "Starter · 2C2G / 30 days",
   createAgentStandard: "Standard · 2C4G / 30 days",
@@ -1391,6 +1401,11 @@ const zh: RanchMessages = {
   createAgentName: "名字",
   createAgentTier: "档位",
   createAgentServerSection: "服务器",
+  createAgentRuntimeSection: "框架",
+  createAgentRuntimeHermes: "Hermes",
+  createAgentRuntimeOpenclaw: "OpenClaw",
+  createAgentRegionSg: "开在海外机器。",
+  createAgentRegionCn: "开在中国区机器。",
   createAgentKeySection: "模型额度",
   createAgentStarter: "入门 · 2C2G / 30 天",
   createAgentStandard: "标准 · 2C4G / 30 天",
