@@ -148,7 +148,7 @@ export type RanchChatShellProps = {
    * Open an account surface on mount (e.g. after plan checkout return).
    * Host typically sets this from `?account=plan`.
    */
-  initialAccountPanel?: "plan" | "wallet" | "manage" | "profile" | null;
+  initialAccountPanel?: "plan" | "wallet" | "keys" | "manage" | "profile" | null;
   /**
    * After first-claim, open or create the 1:1 with this ACN agent id
    * (from Interfaze ``/?agent=``).

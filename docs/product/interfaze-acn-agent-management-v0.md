@@ -53,6 +53,7 @@ Interfaze（RanchChatShell）
 ├── 侧栏账号区（Cursor 式扁平菜单）
 │   ├── Profile → Manage（子页：Agents / Subnets / Orgs，不在菜单平铺）
 │   ├── Wallet（人 Credits；≠ Plan & Usage；≠ agent Wallet）
+│   ├── Keys（Store 模型额度；≠ 明文 API Key；≠ Wallet）
 │   ├── Plan & Usage（权益/额度/对话用量占位；不含钱包）
 │   ├── Discover
 │   └── Log out

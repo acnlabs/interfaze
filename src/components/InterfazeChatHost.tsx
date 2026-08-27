@@ -35,7 +35,7 @@ export default function InterfazeChatHost() {
 
 function useAccountDeepLink() {
   const [initialAccountPanel, setInitialAccountPanel] = useState<
-    "plan" | "wallet" | "manage" | "profile" | null
+    "plan" | "wallet" | "keys" | "manage" | "profile" | null
   >(null);
 
   useEffect(() => {
@@ -45,6 +45,7 @@ function useAccountDeepLink() {
     if (
       account !== "plan" &&
       account !== "wallet" &&
+      account !== "keys" &&
       account !== "manage" &&
       account !== "profile"
     ) {

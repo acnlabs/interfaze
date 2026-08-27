@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type {
+  AccountKey,
   ChatCollabBudget,
   GatewayClient,
   HumanWallet,
@@ -1594,6 +1595,114 @@ export function AccountWalletPanel({
           )}
         </>
       )}
+    </PanelChrome>
+  );
+}
+
+function storeOpenRouterUrl(base?: string): string {
+  return `${(base || "https://agentplanet.org").replace(/\/+$/, "")}/store/openrouter`;
+}
+
+export function AccountKeysPanel({
+  client,
+  messages: t,
+  agentPlanetBaseUrl = "https://agentplanet.org",
+  onClose,
+}: {
+  client: GatewayClient;
+  messages: RanchMessages;
+  agentPlanetBaseUrl?: string;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [keys, setKeys] = useState<AccountKey[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    void client
+      .getMyKeys()
+      .then((row) => {
+        if (cancelled) return;
+        setKeys(row.keys || []);
+      })
+      .catch(() => {
+        if (!cancelled) setError(t.accountKeysLoadFailed);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, t.accountKeysLoadFailed]);
+
+  const storeUrl = storeOpenRouterUrl(agentPlanetBaseUrl);
+
+  return (
+    <PanelChrome title={t.accountKeys} onClose={onClose} closeLabel={t.close}>
+      <p style={{ margin: "0 0 16px", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
+        {t.accountKeysHint}
+      </p>
+      {loading ? (
+        <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
+      ) : error ? (
+        <p style={{ color: colors.danger, fontSize: 13 }}>{error}</p>
+      ) : keys.length === 0 ? (
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: colors.muted }}>{t.accountKeysEmpty}</p>
+      ) : (
+        <ul style={{ listStyle: "none", margin: "0 0 20px", padding: 0 }}>
+          {keys.map((key) => {
+            const written = key.written_agent_name || key.written_agent_id;
+            return (
+              <li
+                key={key.order_id}
+                style={{
+                  padding: "12px 0",
+                  borderBottom: `1px solid ${colors.border}`,
+                }}
+              >
+                <span style={{ display: "block", fontSize: 14, fontWeight: 600 }}>
+                  OpenRouter
+                </span>
+                <span style={{ display: "block", marginTop: 4, fontSize: 12, color: colors.muted }}>
+                  {fmtTpl(t.accountPlanPriceCredits, { n: fmtCredits(key.credits_spent) })}
+                  {key.status ? ` · ${key.status}` : ""}
+                </span>
+                <span style={{ display: "block", marginTop: 4, fontSize: 12, color: colors.muted }}>
+                  {written
+                    ? fmtTpl(t.accountKeysWrittenTo, { name: written })
+                    : t.accountKeysNotWritten}
+                </span>
+                {key.created_at ? (
+                  <span style={{ display: "block", marginTop: 4, fontSize: 11, color: colors.muted }}>
+                    {fmtTxTime(key.created_at)}
+                  </span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <a
+        href={storeUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          ...btnPrimary,
+          display: "inline-block",
+          textDecoration: "none",
+          textAlign: "center",
+          marginBottom: 12,
+        }}
+      >
+        {t.accountKeysBuy}
+      </a>
+      <p style={{ margin: 0, fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
+        {t.accountKeysBuyHint}
+      </p>
     </PanelChrome>
   );
 }

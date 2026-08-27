@@ -31,6 +31,8 @@ type Props = {
   onAgentUpdated?: (agent: MyAgentSummary, previousName?: string | null) => void;
   /** After permanent delete — leave detail and refresh list. */
   onAgentRemoved?: (agentId: string) => void;
+  /** Open the account-level Store keys list. */
+  onOpenKeys?: () => void;
 };
 
 function shortId(id: string): string {
@@ -61,6 +63,7 @@ export function MyAgentsPanel({
   onOpenChat,
   onAgentUpdated,
   onAgentRemoved,
+  onOpenKeys,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -254,6 +257,7 @@ export function MyAgentsPanel({
                   );
                   onAgentUpdated?.(row, previousName);
                 }}
+                onOpenKeys={onOpenKeys}
                 onRemoved={(agentId) => {
                   setAgents((prev) =>
                     prev.filter(
