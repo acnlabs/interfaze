@@ -2354,13 +2354,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const openedInitialAgentRef = useRef(false);
   useEffect(() => {
     const want = (initialOpenAgentId || "").replace(/^acn:/i, "").trim().toLowerCase();
-    if (!open || !want || openedInitialAgentRef.current) return;
+    if (!open || !want || openedInitialAgentRef.current || loadingChats) return;
     let cancelled = false;
     void (async () => {
       try {
-        const list = await client.listChats();
-        if (cancelled) return;
-        const siblings = list
+        const siblings = chats
           .filter(
             (c) =>
               !isGroupChat(c) &&
@@ -2374,14 +2372,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
         if (cancelled || !found) return;
         openedInitialAgentRef.current = true;
         await openConversation(found);
-      } catch {
-        /* claim landing still works — user can open from the list */
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("acnlabs:agent-chat:initial-opened"));
+        }
+      } catch (e) {
+        if (cancelled) return;
+        if (isAuthFailure(e)) return;
+        setError(e instanceof Error ? e.message : "Failed to open chat");
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [open, initialOpenAgentId, client, openConversation]);
+  }, [open, initialOpenAgentId, client, openConversation, loadingChats]);
 
   const loadTopics = useCallback(
     async (chatId: string) => {

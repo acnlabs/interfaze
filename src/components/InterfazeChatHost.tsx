@@ -18,6 +18,7 @@ import {
   startWeChatLogin,
 } from "@/lib/auth/cn";
 import { getGatewayBaseUrl } from "@/lib/gateway";
+import { currentReturnTo, takeOpenAgentId, clearOpenAgentId } from "@/lib/openAgentDeepLink";
 import { getAgentPlanetBaseUrl, getAppOrigin, isCnRegion } from "@/lib/region";
 
 type ReauthOpts = {
@@ -92,18 +93,27 @@ function useClaimedAgentDeepLink() {
   const [agentId, setAgentId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const sp = new URLSearchParams(window.location.search);
-    const raw = (sp.get("agent") || "").trim();
+    const raw = takeOpenAgentId();
     if (!raw) return;
     setAgentId(raw);
-    sp.delete("agent");
-    const q = sp.toString();
-    window.history.replaceState(
-      null,
-      "",
-      q ? `${window.location.pathname}?${q}` : window.location.pathname,
-    );
+  }, []);
+
+  useEffect(() => {
+    const onOpened = () => {
+      clearOpenAgentId();
+      if (typeof window === "undefined") return;
+      const sp = new URLSearchParams(window.location.search);
+      if (!sp.has("agent")) return;
+      sp.delete("agent");
+      const q = sp.toString();
+      window.history.replaceState(
+        null,
+        "",
+        q ? `${window.location.pathname}?${q}` : window.location.pathname,
+      );
+    };
+    window.addEventListener("acnlabs:agent-chat:initial-opened", onOpened);
+    return () => window.removeEventListener("acnlabs:agent-chat:initial-opened", onOpened);
   }, []);
 
   return agentId;
@@ -128,9 +138,7 @@ function CnChatHost() {
   const handleReauth = useCallback((_opts?: ReauthOpts) => {
     if (reauthStarted.current) return;
     reauthStarted.current = true;
-    startWeChatLogin(
-      typeof window !== "undefined" ? window.location.pathname + window.location.search : "/",
-    );
+    startWeChatLogin(currentReturnTo());
   }, []);
 
   useEffect(() => {
@@ -269,7 +277,7 @@ function GlobalChatHost() {
           ...(forceLogin ? { prompt: "login" as const } : {}),
         },
         appState: {
-          returnTo: typeof window !== "undefined" ? window.location.pathname : "/",
+          returnTo: currentReturnTo(),
         },
       });
     },
