@@ -66,11 +66,8 @@ function applyMarkup(catalog: number, markupPercent: number): number {
   return roundUsdPerMillion(catalog * (1 + markupPercent / 100));
 }
 
-function inferMarkupPercent(listed: number, catalog: number): number | null {
-  if (!(catalog > 0) || !(listed >= 0) || !Number.isFinite(listed) || !Number.isFinite(catalog)) {
-    return null;
-  }
-  return Math.round((listed / catalog - 1) * 1000) / 10;
+function sameModelId(left: string, right: string): boolean {
+  return left.trim().toLowerCase() === right.trim().toLowerCase();
 }
 
 function resolvePricingModelId(detail: MyAgentSummary): string {
@@ -84,10 +81,33 @@ function resolvePricingModelId(detail: MyAgentSummary): string {
   return FALLBACK_MODEL_ID;
 }
 
+/** 1 Credit = $0.10 — same default as Host ``credit_to_usd_rate``. */
+const CREDIT_TO_USD = 0.1;
+
+function usdToCredits(usd: number): number {
+  if (!Number.isFinite(usd) || usd <= 0) return 0;
+  return Math.max(0, Math.ceil(roundUsdPerMillion(usd) / CREDIT_TO_USD - 1e-12));
+}
+
+function uniqModelIds(...groups: Array<Array<string | null | undefined> | undefined>): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const group of groups) {
+    for (const raw of group || []) {
+      const id = (raw || "").trim();
+      if (!id) continue;
+      const key = id.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(id);
+    }
+  }
+  return out;
+}
+
 function fmtUsd(n: number): string {
   if (!Number.isFinite(n)) return "—";
-  const s = n.toFixed(6).replace(/\.?0+$/, "");
-  return s || "0";
+  return roundUsdPerMillion(n).toFixed(6);
 }
 
 function fillTemplate(
@@ -439,21 +459,13 @@ export function AgentOwnerSettings({
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [modelIdDraft, setModelIdDraft] = useState(() => resolvePricingModelId(detail));
+  const [supportedModels, setSupportedModels] = useState<string[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
   const [markupDraft, setMarkupDraft] = useState(() => {
     const mu = detail.token_pricing?.markup_percent;
     if (typeof mu === "number" && Number.isFinite(mu) && mu >= 0) return String(mu);
     return String(DEFAULT_MARKUP_PERCENT);
   });
-  const [inputPriceDraft, setInputPriceDraft] = useState(() =>
-    detail.token_pricing != null
-      ? String(detail.token_pricing.input_price_per_million)
-      : "",
-  );
-  const [outputPriceDraft, setOutputPriceDraft] = useState(() =>
-    detail.token_pricing != null
-      ? String(detail.token_pricing.output_price_per_million)
-      : "",
-  );
   const [catalogIn, setCatalogIn] = useState<number | null>(null);
   const [catalogOut, setCatalogOut] = useState<number | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -502,6 +514,16 @@ export function AgentOwnerSettings({
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [allowlistHits, setAllowlistHits] = useState<ChatAgentSearchHit[]>([]);
   const [allowlistSearching, setAllowlistSearching] = useState(false);
+
+  type HumanVis = "public" | "invite_only";
+  const [humanVisibility, setHumanVisibility] = useState<HumanVis>("invite_only");
+  const [humanInvitees, setHumanInvitees] = useState<string[]>([]);
+  const [humanLoading, setHumanLoading] = useState(false);
+  const [humanError, setHumanError] = useState<string | null>(null);
+  const [humanMsg, setHumanMsg] = useState<string | null>(null);
+  const [humanDraft, setHumanDraft] = useState("");
+  const [humanActing, setHumanActing] = useState(false);
+  const [humanRemovingId, setHumanRemovingId] = useState<string | null>(null);
   const [confirmClosedPolicy, setConfirmClosedPolicy] = useState(false);
 
   useEffect(() => {
@@ -520,20 +542,11 @@ export function AgentOwnerSettings({
         ? String(mu)
         : String(DEFAULT_MARKUP_PERCENT),
     );
-    if (detail.token_pricing != null) {
-      setInputPriceDraft(String(detail.token_pricing.input_price_per_million));
-      setOutputPriceDraft(String(detail.token_pricing.output_price_per_million));
-    } else {
-      setInputPriceDraft("");
-      setOutputPriceDraft("");
-    }
     setPricingMsg(null);
     setPricingError(null);
     setCatalogError(null);
   }, [
     detail.agent_id,
-    detail.token_pricing?.input_price_per_million,
-    detail.token_pricing?.output_price_per_million,
     detail.token_pricing?.model_id,
     detail.token_pricing?.markup_percent,
     detail.preferred_model_id,
@@ -552,6 +565,8 @@ export function AgentOwnerSettings({
     }
     let cancelled = false;
     setCatalogLoading(true);
+    setCatalogIn(null);
+    setCatalogOut(null);
     setCatalogError(null);
     const timer = window.setTimeout(() => {
       client
@@ -569,23 +584,6 @@ export function AgentOwnerSettings({
           setCatalogIn(cin);
           setCatalogOut(cout);
           setCatalogError(null);
-          const listed = detail.token_pricing;
-          const storedMu = listed?.markup_percent;
-          if (typeof storedMu === "number" && Number.isFinite(storedMu) && storedMu >= 0) {
-            // Keep owner-saved markup; price effect will apply.
-            setMarkupDraft(String(storedMu));
-            return;
-          }
-          const sameModel =
-            listed != null && (listed.model_id || "").trim() === mid;
-          if (sameModel && listed) {
-            const inferred = inferMarkupPercent(listed.input_price_per_million, cin);
-            if (inferred != null && inferred >= 0) {
-              setMarkupDraft(String(inferred));
-              return;
-            }
-          }
-          // Leave markupDraft as-is (default 50% or user edit); price effect applies.
         })
         .catch(() => {
           if (cancelled) return;
@@ -604,18 +602,41 @@ export function AgentOwnerSettings({
   }, [
     client,
     detail.agent_id,
-    detail.token_pricing,
     modelIdDraft,
     t.myAgentsPricingCatalogMissing,
   ]);
 
   useEffect(() => {
-    if (catalogIn == null || catalogOut == null) return;
-    const mu = Number(markupDraft);
-    if (!Number.isFinite(mu) || mu < 0) return;
-    setInputPriceDraft(String(applyMarkup(catalogIn, mu)));
-    setOutputPriceDraft(String(applyMarkup(catalogOut, mu)));
-  }, [markupDraft, catalogIn, catalogOut]);
+    let cancelled = false;
+    setModelsLoading(true);
+    client
+      .getAgentModelStatus(detail.agent_id)
+      .then((status) => {
+        if (cancelled) return;
+        const ids = uniqModelIds(
+          status.supported_models,
+          [detail.token_pricing?.model_id],
+          [detail.runtime_model_id],
+        );
+        setSupportedModels(ids);
+        const current = resolvePricingModelId(detail);
+        if (ids.length > 0 && !ids.some((id) => id.toLowerCase() === current.toLowerCase())) {
+          setModelIdDraft(ids[0]);
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSupportedModels(
+          uniqModelIds([detail.token_pricing?.model_id], [detail.runtime_model_id]),
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setModelsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, detail.agent_id, detail.token_pricing?.model_id, detail.runtime_model_id]);
 
   useEffect(() => {
     setDeliveryDraft(deliveryFromDetail(detail.delivery));
@@ -663,46 +684,44 @@ export function AgentOwnerSettings({
     !savingProfile &&
     !busy;
 
-  const oldInput = detail.token_pricing?.input_price_per_million;
-  const oldOutput = detail.token_pricing?.output_price_per_million;
   const oldModelId = (detail.token_pricing?.model_id || "").trim();
   const oldMarkup = detail.token_pricing?.markup_percent;
-  const parsePrice = (raw: string): number | null => {
-    const s = raw.trim();
-    if (!s) return null;
-    const n = Number(s);
-    return Number.isFinite(n) && n >= 0 ? n : null;
-  };
-  const inputParsed = parsePrice(inputPriceDraft);
-  const outputParsed = parsePrice(outputPriceDraft);
   const modelIdTrim = modelIdDraft.trim();
   const markupParsed = (() => {
     const n = Number(markupDraft);
     return Number.isFinite(n) && n >= 0 && n <= 1000 ? n : null;
   })();
+  const listingPublished =
+    oldModelId.length > 0 && typeof oldMarkup === "number" && Number.isFinite(oldMarkup);
+  const inputParsed =
+    !catalogLoading && catalogIn != null && !catalogError && markupParsed != null
+      ? applyMarkup(catalogIn, markupParsed)
+      : null;
+  const outputParsed =
+    !catalogLoading && catalogOut != null && !catalogError && markupParsed != null
+      ? applyMarkup(catalogOut, markupParsed)
+      : null;
+  const previewReady = inputParsed != null && outputParsed != null;
   const pricingDirty =
-    inputParsed !== null &&
-    outputParsed !== null &&
     modelIdTrim.length > 0 &&
     markupParsed !== null &&
-    catalogIn != null &&
-    catalogOut != null &&
-    (oldInput == null ||
-      oldOutput == null ||
-      inputParsed !== oldInput ||
-      outputParsed !== oldOutput ||
-      modelIdTrim !== oldModelId ||
-      oldMarkup == null ||
+    (!listingPublished ||
+      !sameModelId(modelIdTrim, oldModelId) ||
       markupParsed !== oldMarkup);
+  const runtimeId = (detail.runtime_model_id || "").trim();
+  const runtimeMismatch = Boolean(runtimeId && !sameModelId(runtimeId, modelIdTrim));
+  const modelOnList =
+    supportedModels.length > 0 &&
+    supportedModels.some((id) => id.toLowerCase() === modelIdTrim.toLowerCase());
   const canSavePricing =
     pricingDirty &&
+    previewReady &&
     inputParsed !== null &&
     outputParsed !== null &&
     markupParsed !== null &&
     modelIdTrim.length > 0 &&
-    catalogIn != null &&
-    !catalogLoading &&
-    !catalogError &&
+    modelOnList &&
+    !modelsLoading &&
     !savingPricing &&
     !busy;
 
@@ -731,6 +750,108 @@ export function AgentOwnerSettings({
   const canSavePolicy = policyDirty && !savingPolicy && !busy;
   const showAllowlistEditor =
     selectedPolicy === "allowlist" || savedPolicy === "allowlist";
+
+  const applyHumanAccess = (data: {
+    invitees?: string[] | null;
+    visibility?: string | null;
+  }) => {
+    const vis = (data.visibility || "").trim();
+    setHumanVisibility(vis === "public" ? "public" : "invite_only");
+    setHumanInvitees(Array.isArray(data.invitees) ? data.invitees : []);
+  };
+
+  const loadHumanAccess = useCallback(async () => {
+    setHumanLoading(true);
+    setHumanError(null);
+    try {
+      const data = await client.getMyAgentHumanAccess(detail.agent_id);
+      applyHumanAccess(data);
+    } catch {
+      setHumanInvitees([]);
+      setHumanVisibility("invite_only");
+      setHumanError(t.myAgentsHumansLoadFailed);
+    } finally {
+      setHumanLoading(false);
+    }
+  }, [client, detail.agent_id, t.myAgentsHumansLoadFailed]);
+
+  useEffect(() => {
+    void loadHumanAccess();
+  }, [loadHumanAccess]);
+
+  const persistHumanAccess = async (next: {
+    invitees: string[];
+    visibility: HumanVis;
+  }) => {
+    const data = await client.replaceMyAgentHumanAccess(detail.agent_id, next);
+    applyHumanAccess(data);
+    setHumanMsg(t.myAgentsHumansSaved);
+    window.setTimeout(() => setHumanMsg(null), 2000);
+  };
+
+  const setHumanVisibilityNow = async (visibility: HumanVis) => {
+    if (humanActing || visibility === humanVisibility) return;
+    setHumanActing(true);
+    setHumanError(null);
+    try {
+      await persistHumanAccess({ invitees: humanInvitees, visibility });
+    } catch {
+      setHumanError(t.myAgentsHumansSaveFailed);
+    } finally {
+      setHumanActing(false);
+    }
+  };
+
+  const addHumanInvitee = async () => {
+    if (humanActing) return;
+    const uid = humanDraft.trim();
+    if (!uid || uid.length > 128 || uid.includes("/") || uid.includes("\\") || uid.includes("..")) {
+      setHumanError(t.myAgentsHumansInvalidId);
+      return;
+    }
+    if (humanInvitees.includes(uid)) {
+      setHumanDraft("");
+      return;
+    }
+    if (humanInvitees.length >= 50) {
+      setHumanError(t.myAgentsHumansFull);
+      return;
+    }
+    setHumanActing(true);
+    setHumanError(null);
+    try {
+      await persistHumanAccess({
+        invitees: [...humanInvitees, uid],
+        visibility: humanVisibility,
+      });
+      setHumanDraft("");
+    } catch (e) {
+      const code = e instanceof ChatGatewayError ? e.code : "";
+      setHumanError(
+        code === "rate_limited" ? t.myAgentsHumansFull : t.myAgentsHumansSaveFailed,
+      );
+    } finally {
+      setHumanActing(false);
+    }
+  };
+
+  const removeHumanInvitee = async (userId: string) => {
+    if (humanActing) return;
+    setHumanActing(true);
+    setHumanRemovingId(userId);
+    setHumanError(null);
+    try {
+      await persistHumanAccess({
+        invitees: humanInvitees.filter((id) => id !== userId),
+        visibility: humanVisibility,
+      });
+    } catch {
+      setHumanError(t.myAgentsHumansSaveFailed);
+    } finally {
+      setHumanActing(false);
+      setHumanRemovingId(null);
+    }
+  };
 
   const loadAllowlist = useCallback(async () => {
     setAllowlistLoading(true);
@@ -903,10 +1024,6 @@ export function AgentOwnerSettings({
         setModelIdDraft(resolvePricingModelId(row));
         const mu = row.token_pricing?.markup_percent;
         if (typeof mu === "number" && Number.isFinite(mu)) setMarkupDraft(String(mu));
-        if (row.token_pricing) {
-          setInputPriceDraft(String(row.token_pricing.input_price_per_million));
-          setOutputPriceDraft(String(row.token_pricing.output_price_per_million));
-        }
         window.setTimeout(() => setPricingMsg(null), 2000);
         onUpdated?.(row);
         return row;
@@ -1140,7 +1257,7 @@ export function AgentOwnerSettings({
     ...btnGhost,
     width: "100%",
     textAlign: "left",
-    padding: "10px 12px",
+    padding: "8px 12px",
     borderColor: active ? "rgba(96,165,250,0.65)" : colors.border,
     background: active ? "rgba(59,130,246,0.12)" : "transparent",
     color: colors.text,
@@ -1162,9 +1279,11 @@ export function AgentOwnerSettings({
             maxLength={100}
             disabled={busy || saving}
           />
-          <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
-            {t.myAgentsNameHint}
-          </div>
+          {nameChanged && !nameOk ? (
+            <div style={{ fontSize: 11, color: colors.danger, marginTop: 4 }}>
+              {t.myAgentsNameHint}
+            </div>
+          ) : null}
         </label>
         <label style={{ display: "block", marginBottom: 10 }}>
           <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
@@ -1177,13 +1296,33 @@ export function AgentOwnerSettings({
             maxLength={500}
             disabled={busy || saving}
           />
-          <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
-            {clearingDesc ? t.myAgentsDescClearHint : t.myAgentsDescHint}
-          </div>
+          {clearingDesc ? (
+            <div style={{ fontSize: 11, color: colors.danger, marginTop: 4 }}>
+              {t.myAgentsDescClearHint}
+            </div>
+          ) : descChanged && !descOk ? (
+            <div style={{ fontSize: 11, color: colors.danger, marginTop: 4 }}>
+              {t.myAgentsDescHint}
+            </div>
+          ) : null}
         </label>
         <label style={{ display: "block", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: colors.muted,
+              marginBottom: 4,
+              display: "flex",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 4,
+            }}
+          >
             {t.myAgentsTagsLabel}
+            <FieldHint text={t.myAgentsTagsHint} />
+            {tagsParsed.length > 0 ? (
+              <span style={{ marginLeft: "auto" }}>{tagsParsed.length}/20</span>
+            ) : null}
           </div>
           <input
             value={tagsDraft}
@@ -1195,10 +1334,6 @@ export function AgentOwnerSettings({
             autoComplete="off"
             spellCheck={false}
           />
-          <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
-            {t.myAgentsTagsHint}
-            {tagsParsed.length > 0 ? ` · ${tagsParsed.length}/20` : ""}
-          </div>
         </label>
         {profileError ? (
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>{profileError}</p>
@@ -1209,45 +1344,86 @@ export function AgentOwnerSettings({
       </section>
 
       <section>
-        <h3 style={sectionTitle}>{t.myAgentsSectionPricing}</h3>
-        <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-          {t.myAgentsPricingHint}
-        </p>
-        <p style={{ margin: "0 0 10px", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
-          {t.myAgentsPricingSelfReportNote}
-        </p>
+        <h3 style={{ ...sectionTitle, display: "flex", alignItems: "center" }}>
+          {t.myAgentsSectionPricing}
+          <FieldHint
+            text={`${t.myAgentsPricingHint} ${t.myAgentsPricingSelfReportNote}`}
+          />
+        </h3>
+        {(detail.inference_path || "byo") !== "official" ? (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              margin: "0 0 10px",
+              fontSize: 12,
+              color: colors.muted,
+            }}
+          >
+            {t.myAgentsInferencePathByo}
+            <FieldHint text={t.myAgentsInferencePathByoHint} />
+          </div>
+        ) : null}
         {detail.token_pricing == null ? (
           <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
             {t.myAgentsPricingUnlisted}
           </p>
         ) : null}
-        <label style={{ display: "block", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+        <div style={{ marginBottom: 10 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: colors.muted,
+              marginBottom: 6,
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
             {t.myAgentsPricingModelLabel}
+            <FieldHint text={t.myAgentsPricingModelHint} />
           </div>
-          <input
-            value={modelIdDraft}
-            onChange={(e) => setModelIdDraft(e.target.value)}
-            style={inputStyle}
-            placeholder={FALLBACK_MODEL_ID}
-            disabled={busy || savingPricing}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
-            {t.myAgentsPricingModelHint}
-          </div>
-          {(detail.runtime_model_id || "").trim() ? (
+          {modelsLoading ? (
+            <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>…</p>
+          ) : supportedModels.length === 0 ? (
+            <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
+              {t.myAgentsPricingModelsEmpty}
+            </p>
+          ) : (
+            <select
+              aria-label={t.myAgentsPricingModelLabel}
+              value={
+                supportedModels.find((id) => sameModelId(id, modelIdDraft)) ??
+                supportedModels[0]
+              }
+              onChange={(e) => setModelIdDraft(e.target.value)}
+              disabled={busy || savingPricing}
+              style={inputStyle}
+            >
+              {supportedModels.map((id) => (
+                <option key={id} value={id}>
+                  {id}
+                </option>
+              ))}
+            </select>
+          )}
+          {runtimeMismatch ? (
             <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
-              {fillTemplate(t.myAgentsPricingRuntimeHint, {
-                model: (detail.runtime_model_id || "").trim(),
-              })}
+              {fillTemplate(t.myAgentsPricingRuntimeHint, { model: runtimeId })}
             </div>
           ) : null}
-        </label>
+        </div>
         <label style={{ display: "block", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: colors.muted,
+              marginBottom: 4,
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
             {t.myAgentsPricingMarkupLabel}
+            <FieldHint text={t.myAgentsPricingMarkupHint} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
@@ -1255,73 +1431,52 @@ export function AgentOwnerSettings({
               onChange={(e) => setMarkupDraft(e.target.value)}
               style={{ ...inputStyle, flex: 1 }}
               inputMode="decimal"
-              disabled={busy || savingPricing || catalogLoading}
+              disabled={busy || savingPricing}
               autoComplete="off"
             />
             <span style={{ fontSize: 13, color: colors.muted }}>%</span>
           </div>
-          <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
-            {t.myAgentsPricingMarkupHint}
-          </div>
         </label>
-        {catalogLoading ? (
+        {!previewReady && !catalogError ? (
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted }}>…</p>
         ) : null}
         {catalogError ? (
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>{catalogError}</p>
         ) : null}
-        {catalogIn != null && catalogOut != null ? (
-          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-            {fillTemplate(t.myAgentsPricingCatalogLine, {
-              in: fmtUsd(catalogIn),
-              out: fmtUsd(catalogOut),
-            })}
-          </p>
-        ) : null}
-        {inputParsed != null && outputParsed != null ? (
-          <>
-            <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+        {previewReady &&
+        inputParsed != null &&
+        outputParsed != null &&
+        catalogIn != null &&
+        catalogOut != null ? (
+          <div style={{ margin: "0 0 10px", fontSize: 12, lineHeight: 1.45 }}>
+            <div style={{ color: colors.text }}>
               {fillTemplate(t.myAgentsPricingListingLine, {
                 in: fmtUsd(inputParsed),
                 out: fmtUsd(outputParsed),
               })}
-            </p>
-            {catalogIn != null ? (
-              <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-                {fillTemplate(t.myAgentsPricingExampleLine, {
-                  pay: fmtUsd(inputParsed),
-                  cost: fmtUsd(catalogIn),
-                })}
-              </p>
-            ) : null}
-          </>
+            </div>
+            <div style={{ color: colors.muted, marginTop: 4 }}>
+              {fillTemplate(t.myAgentsPricingCatalogLine, {
+                in: fmtUsd(catalogIn),
+                out: fmtUsd(catalogOut),
+              })}
+            </div>
+            <div
+              style={{
+                color: colors.muted,
+                marginTop: 4,
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              {fillTemplate(t.myAgentsPricingCreditsLine, {
+                in: String(usdToCredits(inputParsed)),
+                out: String(usdToCredits(outputParsed)),
+              })}
+              <FieldHint text={t.myAgentsPricingCreditsNote} />
+            </div>
+          </div>
         ) : null}
-        <label style={{ display: "block", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
-            {t.myAgentsPricingInputLabel}
-          </div>
-          <input
-            value={inputPriceDraft}
-            readOnly
-            style={{ ...inputStyle, opacity: 0.85, cursor: "default" }}
-            inputMode="decimal"
-            tabIndex={-1}
-            aria-readonly="true"
-          />
-        </label>
-        <label style={{ display: "block", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
-            {t.myAgentsPricingOutputLabel}
-          </div>
-          <input
-            value={outputPriceDraft}
-            readOnly
-            style={{ ...inputStyle, opacity: 0.85, cursor: "default" }}
-            inputMode="decimal"
-            tabIndex={-1}
-            aria-readonly="true"
-          />
-        </label>
         {pricingError ? (
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>{pricingError}</p>
         ) : null}
@@ -1344,11 +1499,10 @@ export function AgentOwnerSettings({
 
       {showConnectSection ? (
         <section>
-          <h3 style={sectionTitle}>{t.myAgentsSectionConnect}</h3>
-          <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-            {t.myAgentsDeliveryChoose}
+          <h3 style={{ ...sectionTitle, display: "flex", alignItems: "center" }}>
+            {t.myAgentsSectionConnect}
             <FieldHint text={t.myAgentsDeliveryHint} />
-          </p>
+          </h3>
           {!deliveryEditable ? (
             <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
               {t.myAgentsDeliveryLocked}
@@ -1361,28 +1515,28 @@ export function AgentOwnerSettings({
             </p>
           ) : null}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <button
-              type="button"
-              style={optionBtn(deliveryDraft === "relay")}
-              disabled={!deliveryEditable || saving || busy}
-              onClick={() => setDeliveryDraft("relay")}
-            >
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsDeliveryOptionPull}</div>
-              <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
-                {t.myAgentsDeliveryPullHelp}
-              </div>
-            </button>
-            <button
-              type="button"
-              style={optionBtn(deliveryDraft === "direct")}
-              disabled={!deliveryEditable || saving || busy}
-              onClick={() => setDeliveryDraft("direct")}
-            >
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsDeliveryOptionPush}</div>
-              <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
-                {t.myAgentsDeliveryPushHelp}
-              </div>
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button
+                type="button"
+                style={{ ...optionBtn(deliveryDraft === "relay"), flex: 1 }}
+                disabled={!deliveryEditable || saving || busy}
+                onClick={() => setDeliveryDraft("relay")}
+              >
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsDeliveryOptionPull}</div>
+              </button>
+              <FieldHint text={t.myAgentsDeliveryPullHelp} />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button
+                type="button"
+                style={{ ...optionBtn(deliveryDraft === "direct"), flex: 1 }}
+                disabled={!deliveryEditable || saving || busy}
+                onClick={() => setDeliveryDraft("direct")}
+              >
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsDeliveryOptionPush}</div>
+              </button>
+              <FieldHint text={t.myAgentsDeliveryPushHelp} />
+            </div>
           </div>
           {deliveryDraft === "direct" ? (
             <label style={{ display: "block", marginTop: 10 }}>
@@ -1461,48 +1615,192 @@ export function AgentOwnerSettings({
       <section>
         <h3 style={sectionTitle}>{t.myAgentsSectionAccess}</h3>
         <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-          {t.myAgentsPolicyChoose}
-          <FieldHint text={t.myAgentsPolicyHint} />
+          {t.myAgentsHumansHint}
         </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button
+            type="button"
+            style={optionBtn(humanVisibility === "public")}
+            disabled={busy || humanActing || humanLoading}
+            onClick={() => void setHumanVisibilityNow("public")}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsHumansPublic}</div>
+            <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
+              {t.myAgentsHumansPublicHelp}
+            </div>
+          </button>
+          <button
+            type="button"
+            style={optionBtn(humanVisibility === "invite_only")}
+            disabled={busy || humanActing || humanLoading}
+            onClick={() => void setHumanVisibilityNow("invite_only")}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsHumansInviteOnly}</div>
+            <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
+              {t.myAgentsHumansInviteOnlyHelp}
+            </div>
+          </button>
+        </div>
+        <div
+          style={{
+            marginTop: 12,
+            padding: "12px 12px",
+            borderRadius: 10,
+            border: `1px solid ${colors.border}`,
+            background: colors.bg,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 8,
+              flexWrap: "wrap",
+            }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 650, color: colors.text }}>
+              {t.myAgentsHumansListTitle}
+            </span>
+            <span style={{ fontSize: 11, color: colors.muted }}>
+              {t.myAgentsHumansCount(String(humanInvitees.length))}
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <input
+              value={humanDraft}
+              onChange={(e) => setHumanDraft(e.target.value)}
+              placeholder={t.myAgentsHumansPlaceholder}
+              disabled={busy || humanActing}
+              style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void addHumanInvitee();
+                }
+              }}
+            />
+            <button
+              type="button"
+              style={{ ...btnPrimary, fontSize: 12, fontWeight: 600, flexShrink: 0 }}
+              disabled={busy || humanActing || !humanDraft.trim()}
+              onClick={() => void addHumanInvitee()}
+            >
+              {humanActing && !humanRemovingId ? t.loading : t.myAgentsHumansAdd}
+            </button>
+          </div>
+          {humanError ? (
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>
+              {humanError}
+            </p>
+          ) : null}
+          {humanMsg ? (
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>
+              {humanMsg}
+            </p>
+          ) : null}
+          {humanLoading ? (
+            <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>{t.loading}</p>
+          ) : humanInvitees.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>
+              {t.myAgentsHumansEmpty}
+            </p>
+          ) : (
+            <ul
+              style={{
+                listStyle: "none",
+                margin: 0,
+                padding: 0,
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                maxHeight: 180,
+                overflow: "auto",
+              }}
+            >
+              {humanInvitees.map((uid) => (
+                <li
+                  key={uid}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: `1px solid ${colors.border}`,
+                  }}
+                >
+                  <div
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: colors.text,
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    {uid}
+                  </div>
+                  <button
+                    type="button"
+                    style={{ ...btnGhost, fontSize: 11, padding: "4px 8px", flexShrink: 0 }}
+                    disabled={busy || humanActing}
+                    onClick={() => void removeHumanInvitee(uid)}
+                  >
+                    {humanRemovingId === uid ? t.loading : t.myAgentsHumansRemove}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      <section>
+        <h3 style={{ ...sectionTitle, display: "flex", alignItems: "center" }}>
+          {t.myAgentsSectionAgents}
+          <FieldHint text={t.myAgentsPolicyHint} />
+        </h3>
         {currentPolicy === "manifest" ? (
           <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
             {t.myAgentsPolicyManifestNote}
           </p>
         ) : null}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <button
-            type="button"
-            style={optionBtn(selectedPolicy === "open")}
-            disabled={saving || busy}
-            onClick={() => setPolicyDraft("open")}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyOpen}</div>
-            <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
-              {t.myAgentsPolicyOpenHelp}
-            </div>
-          </button>
-          <button
-            type="button"
-            style={optionBtn(selectedPolicy === "allowlist")}
-            disabled={saving || busy}
-            onClick={() => setPolicyDraft("allowlist")}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyAllowlist}</div>
-            <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
-              {t.myAgentsPolicyAllowlistHelp}
-            </div>
-          </button>
-          <button
-            type="button"
-            style={optionBtn(selectedPolicy === "closed")}
-            disabled={saving || busy}
-            onClick={() => setPolicyDraft("closed")}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyClosed}</div>
-            <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
-              {t.myAgentsPolicyClosedHelp}
-            </div>
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              type="button"
+              style={{ ...optionBtn(selectedPolicy === "open"), flex: 1 }}
+              disabled={saving || busy}
+              onClick={() => setPolicyDraft("open")}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyOpen}</div>
+            </button>
+            <FieldHint text={t.myAgentsPolicyOpenHelp} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              type="button"
+              style={{ ...optionBtn(selectedPolicy === "allowlist"), flex: 1 }}
+              disabled={saving || busy}
+              onClick={() => setPolicyDraft("allowlist")}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyAllowlist}</div>
+            </button>
+            <FieldHint text={t.myAgentsPolicyAllowlistHelp} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              type="button"
+              style={{ ...optionBtn(selectedPolicy === "closed"), flex: 1 }}
+              disabled={saving || busy}
+              onClick={() => setPolicyDraft("closed")}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyClosed}</div>
+            </button>
+            <FieldHint text={t.myAgentsPolicyClosedHelp} />
+          </div>
         </div>
 
         {showAllowlistEditor ? (

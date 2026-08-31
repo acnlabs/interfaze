@@ -20,6 +20,9 @@ type Props = {
   onCreateGroup: (title: string, agentIds: string[]) => void;
   createJoinInvite?: () => Promise<{ code: string }>;
   interfazeBaseUrl?: string;
+  /** Open already in this mode. Combined with lockMode, hides the 1:1 / group tabs. */
+  initialMode?: "direct" | "group";
+  lockMode?: boolean;
 };
 
 export function NewChatPicker({
@@ -35,8 +38,10 @@ export function NewChatPicker({
   onCreateGroup,
   createJoinInvite,
   interfazeBaseUrl,
+  initialMode = "direct",
+  lockMode = false,
 }: Props) {
-  const [mode, setMode] = useState<"direct" | "group">("direct");
+  const [mode, setMode] = useState<"direct" | "group">(initialMode);
   const [selected, setSelected] = useState<string[]>([]);
   const [groupTitle, setGroupTitle] = useState(t.defaultGroupTitle);
   const [manualId, setManualId] = useState("");
@@ -142,13 +147,19 @@ export function NewChatPicker({
     <div style={overlay}>
       <div style={card}>
         <div style={header}>
-          <strong style={{ fontSize: 16 }}>{t.pickerTitle}</strong>
+          <strong style={{ fontSize: 16 }}>
+            {lockMode
+              ? mode === "group"
+                ? t.pickerTitleGroup
+                : t.pickerTitleDirect
+              : t.pickerTitle}
+          </strong>
           <button type="button" onClick={onClose} style={btnGhost} aria-label={t.close}>
             ✕
           </button>
         </div>
 
-        {allowGroupChat && (
+        {allowGroupChat && !lockMode && (
           <div style={{ display: "flex", gap: 8, padding: "0 16px 12px" }}>
             <button
               type="button"

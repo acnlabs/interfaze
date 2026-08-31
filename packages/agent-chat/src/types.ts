@@ -59,15 +59,23 @@ export type AgentChatShellProps = {
   disclaimer?: string;
 };
 
+export type ChatEmbed = {
+  origin?: string | null;
+  context?: string | null;
+  headline?: string | null;
+};
+
 export type ChatSummary = {
   chat_id: string;
   type: string;
   title?: string | null;
   agent_id?: string | null;
+  created_at?: string | null;
   last_message_at?: string | null;
   last_message_content?: string | null;
   unread_count?: number;
   agent_status?: string | null;
+  embed?: ChatEmbed | null;
   /** Group chats: member counts from Gateway list/detail. */
   total_members?: number;
   active_members?: number;

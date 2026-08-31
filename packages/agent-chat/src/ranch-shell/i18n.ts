@@ -62,6 +62,8 @@ export type RanchMessages = {
   expandSidebar: string;
   searchChats: string;
   newChat: string;
+  newDirectChat: string;
+  newGroupChat: string;
   gatewayUnavailable: string;
   loading: string;
   noChatsYet: string;
@@ -87,6 +89,9 @@ export type RanchMessages = {
   groupInfo: string;
   agentInfo: string;
   topics: string;
+  chatsTab: string;
+  startNewChat: string;
+  noAgentChatsHint: string;
   newTopic: string;
   createTopic: string;
   topicTitle: string;
@@ -134,6 +139,8 @@ export type RanchMessages = {
   noAgentsToAdd: string;
   noMessagesYet: string;
   pickerTitle: string;
+  pickerTitleDirect: string;
+  pickerTitleGroup: string;
   mineAgents: string;
   recommended: string;
   noMineAgents: string;
@@ -505,6 +512,8 @@ const en: RanchMessages = {
   expandSidebar: "Show sidebar",
   searchChats: "Search chats…",
   newChat: "New",
+  newDirectChat: "Direct chat",
+  newGroupChat: "Group chat",
   gatewayUnavailable: "Gateway unavailable",
   loading: "Loading…",
   noChatsYet: "No chats yet",
@@ -532,6 +541,9 @@ const en: RanchMessages = {
   groupInfo: "Group info",
   agentInfo: "Agent info",
   topics: "Topics",
+  chatsTab: "Chats",
+  startNewChat: "New chat",
+  noAgentChatsHint: "Each chat is a separate conversation with this agent.",
   newTopic: "New Topic",
   createTopic: "Create",
   topicTitle: "Topic title",
@@ -577,6 +589,8 @@ const en: RanchMessages = {
   noAgentsToAdd: "No more agents to add. Search Discover or connect a new agent first.",
   noMessagesYet: "No messages yet",
   pickerTitle: "New chat",
+  pickerTitleDirect: "New direct chat",
+  pickerTitleGroup: "New group chat",
   mineAgents: "MY AGENTS",
   recommended: "DISCOVER",
   noMineAgents:
@@ -987,6 +1001,8 @@ const zh: RanchMessages = {
   expandSidebar: "打开侧栏",
   searchChats: "搜索会话…",
   newChat: "新建",
+  newDirectChat: "私聊",
+  newGroupChat: "群聊",
   gatewayUnavailable: "Gateway 不可用",
   loading: "加载中…",
   noChatsYet: "还没有会话",
@@ -1011,6 +1027,9 @@ const zh: RanchMessages = {
   groupInfo: "群资料",
   agentInfo: "Agent 资料",
   topics: "话题",
+  chatsTab: "对话",
+  startNewChat: "新对话",
+  noAgentChatsHint: "和这个 agent 的每一场对话都是独立的。",
   newTopic: "新建话题",
   createTopic: "创建",
   topicTitle: "话题标题",
@@ -1056,6 +1075,8 @@ const zh: RanchMessages = {
   noAgentsToAdd: "没有更多可添加的 agent。去发现里搜，或先接上新的 agent。",
   noMessagesYet: "暂无消息",
   pickerTitle: "新建聊天",
+  pickerTitleDirect: "新建私聊",
+  pickerTitleGroup: "新建群聊",
   mineAgents: "我的 Agents",
   recommended: "发现",
   noMineAgents: "还没有认领的 agent。复制提示词粘贴到你的运行程序，让它自己接完。",

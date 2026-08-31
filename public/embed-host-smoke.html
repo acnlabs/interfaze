@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Interfaze embed smoke</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        background: #09090b;
+        color: #f4f4f5;
+      }
+      header {
+        padding: 12px 16px;
+        font-size: 13px;
+        color: #a1a1aa;
+        border-bottom: 1px solid #27272a;
+      }
+      iframe {
+        width: 100%;
+        height: calc(100dvh - 88px);
+        border: 0;
+        background: #09090b;
+      }
+      pre {
+        margin: 0;
+        padding: 8px 16px;
+        font-size: 11px;
+        color: #71717a;
+        max-height: 48px;
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      Host smoke — pass <code>#token=</code> (or <code>?token=</code>) from
+      <code>POST /api/chat/embed/sessions</code>.
+      Listen for <code>interfaze:ready</code> / <code>interfaze:error</code>.
+    </header>
+    <pre id="log">waiting…</pre>
+    <iframe id="frame" title="Interfaze embed"></iframe>
+    <script>
+      const params = new URLSearchParams(location.search);
+      const hash = new URLSearchParams(location.hash.startsWith("#") ? location.hash.slice(1) : "");
+      const token = (params.get("token") || hash.get("token") || "").trim();
+      const locale = params.get("locale") || "";
+      const theme = params.get("theme") || "dark";
+      const log = document.getElementById("log");
+      const frame = document.getElementById("frame");
+      if (!token) {
+        log.textContent = "missing #token= (or ?token=)";
+      } else {
+        const q = new URLSearchParams({ theme });
+        if (locale) q.set("locale", locale);
+        frame.src = "/embed?" + q.toString() + "#token=" + encodeURIComponent(token);
+      }
+      window.addEventListener("message", (ev) => {
+        if (!ev.data || typeof ev.data.type !== "string") return;
+        if (!ev.data.type.startsWith("interfaze:")) return;
+        log.textContent = JSON.stringify(ev.data);
+      });
+    </script>
+  </body>
+</html>
