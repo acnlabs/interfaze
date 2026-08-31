@@ -521,15 +521,17 @@ function modelFitsComposerPath(
   const vendor = modelVendorId(mid).toLowerCase();
   if (args.official) {
     if (isByoVendor(vendor, args.byoVendor)) return false;
-    if (args.officialIds.some((item) => sameModelId(item, mid))) return true;
-    if (args.catalogIds.some((item) => sameModelId(item, mid))) return true;
-    return !!vendor;
+    return (
+      args.officialIds.some((item) => sameModelId(item, mid)) ||
+      args.fallback.some((item) => sameModelId(item, mid)) ||
+      sameModelId(mid, args.listed)
+    );
   }
   if (args.openRouterByo) {
-    if (sameModelId(mid, args.listed)) return true;
-    if (args.catalogIds.some((item) => sameModelId(item, mid))) return true;
-    if (args.fallback.some((item) => sameModelId(item, mid))) return true;
-    return !!vendor;
+    return (
+      args.fallback.some((item) => sameModelId(item, mid)) ||
+      sameModelId(mid, args.listed)
+    );
   }
   if (vendor && !isByoVendor(vendor, args.byoVendor)) return false;
   return (
@@ -561,8 +563,8 @@ function pickComposerModelForPath(args: {
   if (args.wanted && modelFitsComposerPath(args.wanted, path)) {
     return (
       args.fallback.find((item) => sameModelId(item, args.wanted)) ||
-      args.catalogIds.find((item) => sameModelId(item, args.wanted)) ||
-      args.wanted
+      args.officialIds.find((item) => sameModelId(item, args.wanted)) ||
+      (sameModelId(args.wanted, args.listed) ? args.listed : null)
     );
   }
   if (
@@ -4784,31 +4786,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         composerModel.supported_models,
                       );
                       const options = (() => {
-                        const fromApi =
-                          (official || openRouterByo) && composerCatalog.length
-                            ? composerCatalog.map((row) => row.id)
-                            : composerModel.supported_models.length
-                              ? composerModel.supported_models
-                              : [listed].filter(Boolean);
+                        const fromApi = composerModel.supported_models.length
+                          ? composerModel.supported_models
+                          : [listed].filter(Boolean);
                         const seen = new Set<string>();
                         const out: string[] = [];
-                        const byoVendor = modelVendorId(composerModel.runtime_model_id).toLowerCase();
-                        const extras = [listed, selectedModelId].filter(
-                          (id): id is string =>
-                            !!id &&
-                            !!id.trim() &&
-                            (!official || officialV0SupportsModel(id)) &&
-                            modelFitsComposerPath(id, {
-                              official,
-                              openRouterByo,
-                              byoVendor,
-                              officialIds: composerModel.official_models,
-                              catalogIds: composerCatalog.map((row) => row.id),
-                              fallback: fromApi,
-                              listed: listed || null,
-                            }),
-                        );
-                        for (const id of [...extras, ...fromApi]) {
+                        for (const id of [listed, ...fromApi]) {
+                          if (!id || !id.trim()) continue;
                           const k = id.toLowerCase();
                           if (seen.has(k)) continue;
                           seen.add(k);
