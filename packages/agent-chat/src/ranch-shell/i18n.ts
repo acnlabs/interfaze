@@ -388,6 +388,8 @@ export type RanchMessages = {
   myAgentsSavePricing: string;
   myAgentsPricingSaved: string;
   myAgentsPricingFailed: string;
+  myAgentsPricingSyncing: string;
+  myAgentsPricingNoAck: string;
   myAgentsNameHint: string;
   myAgentsDescHint: string;
   myAgentsDescClearHint: string;
@@ -955,6 +957,8 @@ const en: RanchMessages = {
   myAgentsSavePricing: "Save default model & markup",
   myAgentsPricingSaved: "Pricing saved",
   myAgentsPricingFailed: "Couldn’t save pricing.",
+  myAgentsPricingSyncing: "Syncing to the agent…",
+  myAgentsPricingNoAck: "The agent did not confirm the new default. Nothing was saved.",
   myAgentsNameHint: "2–100 characters, at least one letter",
   myAgentsDescHint: "10–500 characters",
   myAgentsDescClearHint: "Description can’t be cleared here — leave as-is or write 10+ characters.",
@@ -1526,6 +1530,8 @@ const zh: RanchMessages = {
   myAgentsSavePricing: "保存默认模型与上浮",
   myAgentsPricingSaved: "定价已保存",
   myAgentsPricingFailed: "保存定价失败。",
+  myAgentsPricingSyncing: "正在同步到机上…",
+  myAgentsPricingNoAck: "机上没有回执，未保存。",
   myAgentsNameHint: "2–100 字，至少含一个字母",
   myAgentsDescHint: "10–500 字",
   myAgentsDescClearHint: "此处无法清空描述——保持原样，或填写 10 字以上。",

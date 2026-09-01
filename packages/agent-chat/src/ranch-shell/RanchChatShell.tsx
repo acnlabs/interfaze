@@ -567,6 +567,12 @@ function pickComposerModelForPath(args: {
       (sameModelId(args.wanted, args.listed) ? args.listed : null)
     );
   }
+  if (args.runtime && modelFitsComposerPath(args.runtime, path)) {
+    return (
+      args.fallback.find((item) => sameModelId(item, args.runtime)) ||
+      args.runtime
+    );
+  }
   if (
     args.listed &&
     !listingIsStaleOpenRouter(args.listed, args.runtime, args.fallback) &&

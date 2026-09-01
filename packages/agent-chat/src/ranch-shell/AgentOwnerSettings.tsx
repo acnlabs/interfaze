@@ -162,11 +162,11 @@ function resolvePricingModelId(
   detail: MyAgentSummary,
   supported: string[] = [],
 ): string {
-  // Saved listing wins unless it is a leftover OpenRouter shelf id.
-  const listed = (detail.token_pricing?.model_id || "").trim();
+  // Heartbeat default wins. Stale listing must not impersonate the machine.
   const runtime = (detail.runtime_model_id || "").trim();
-  if (listed && !listingIsStaleOpenRouter(listed, runtime, supported)) return listed;
   if (runtime) return runtime;
+  const listed = (detail.token_pricing?.model_id || "").trim();
+  if (listed && !listingIsStaleOpenRouter(listed, runtime, supported)) return listed;
   const preferred = (detail.preferred_model_id || "").trim();
   if (preferred) return preferred;
   return FALLBACK_MODEL_ID;
@@ -1554,11 +1554,15 @@ export function AgentOwnerSettings({
         return row;
       })
       .catch((err: unknown) => {
+        const code = err instanceof ChatGatewayError ? err.code : "";
         const msg =
-          err instanceof ChatGatewayError && err.message.trim()
-            ? err.message.trim()
-            : t.myAgentsPricingFailed;
+          code === "agent_unreachable"
+            ? t.myAgentsPricingNoAck
+            : err instanceof ChatGatewayError && err.message.trim()
+              ? err.message.trim()
+              : t.myAgentsPricingFailed;
         setPricingError(msg);
+        setModelIdDraft(resolvePricingModelId(detail, supportedModels));
         return null;
       })
       .finally(() => setSavingPricing(false));
@@ -2677,7 +2681,7 @@ export function AgentOwnerSettings({
             disabled={!canSaveAny}
             onClick={saveAll}
           >
-            {saving ? t.loading : t.save}
+            {savingPricing ? t.myAgentsPricingSyncing : saving ? t.loading : t.save}
           </button>
         ) : null}
         <button
