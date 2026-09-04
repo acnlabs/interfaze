@@ -463,6 +463,9 @@ export type GatewayClient = {
     inference_path?: "byo" | "official" | string | null;
     host_inference_ready?: boolean;
     official_models?: string[];
+    official_key_geo?: string;
+    official_region?: string;
+    official_default_model_id?: string | null;
     providers?: Array<{
       id: string;
       kind: "byo" | "official" | string;
@@ -752,6 +755,9 @@ export function createGatewayClient(
           kind: "byo" | "official" | string;
           brand?: string;
         }>;
+        official_key_geo?: string;
+        official_region?: string;
+        official_default_model_id?: string | null;
         mismatched: boolean;
         markup_percent?: number | null;
         supported_models?: string[];
