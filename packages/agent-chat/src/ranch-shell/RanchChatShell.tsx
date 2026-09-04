@@ -12,6 +12,7 @@ import {
 import {
   ChatGatewayError,
   createGatewayClient,
+  officialCatalogRates,
   syncCatalogRates,
   type GatewayClient,
   type MyAgentSummary,
@@ -46,7 +47,7 @@ import { NewChatPicker } from "./NewChatPicker";
 import { NewComposeMenu } from "./NewComposeMenu";
 import { ConnectAgentModal } from "./ConnectAgentModal";
 import { copyConnectPromptWithInvite } from "./connectPrompt";
-import { officialV0SupportsModel } from "./officialV0";
+import { officialShelfAllows, officialV0SupportsModel } from "./officialV0";
 import {
   RANCH_LOCALE_OPTIONS,
   ranchMessages,
@@ -523,6 +524,7 @@ function modelFitsComposerPath(
     if (isByoVendor(vendor, args.byoVendor)) return false;
     return (
       args.officialIds.some((item) => sameModelId(item, mid)) ||
+      args.catalogIds.some((item) => sameModelId(item, mid)) ||
       args.fallback.some((item) => sameModelId(item, mid)) ||
       sameModelId(mid, args.listed)
     );
@@ -564,7 +566,8 @@ function pickComposerModelForPath(args: {
     return (
       args.fallback.find((item) => sameModelId(item, args.wanted)) ||
       args.officialIds.find((item) => sameModelId(item, args.wanted)) ||
-      (sameModelId(args.wanted, args.listed) ? args.listed : null)
+      args.catalogIds.find((item) => sameModelId(item, args.wanted)) ||
+      (sameModelId(args.wanted, args.listed) ? args.listed : args.wanted)
     );
   }
   if (args.runtime && modelFitsComposerPath(args.runtime, path)) {
@@ -1917,6 +1920,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     mismatched: boolean;
     official_channel: boolean;
     official_models: string[];
+    official_key_geo?: string;
     markup_percent?: number | null;
     supported_models: string[];
     model_options: Array<{
@@ -1939,6 +1943,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   );
   const [composerCatalogLoading, setComposerCatalogLoading] = useState(false);
   const composerMenuRef = useRef<HTMLDivElement | null>(null);
+  const composerCatalogRef = useRef(composerCatalog);
+  composerCatalogRef.current = composerCatalog;
   /** Last Settings listing seen in this chat; change drops the composer pin. */
   const composerListedRef = useRef<{ chatId: string; listed: string } | null>(null);
   const [ownedAgentLoading, setOwnedAgentLoading] = useState(false);
@@ -3107,6 +3113,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
             mismatched: !!row.mismatched,
             official_channel: listedOfficial,
             official_models: officialIds,
+            official_key_geo:
+              typeof row.official_key_geo === "string" ? row.official_key_geo : "",
             markup_percent:
               typeof row.markup_percent === "number" ? row.markup_percent : null,
             supported_models: supported,
@@ -3125,6 +3133,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
           composerListedRef.current = listed
             ? { chatId: active.chat_id, listed }
             : null;
+          const catalogIds = listedOfficial
+            ? composerCatalogRef.current.map((row) => row.id)
+            : [];
           const nextModel = pickComposerModelForPath({
             official: listedOfficial,
             openRouterByo: isOpenRouterByoListed(listed, runtime, supported),
@@ -3133,10 +3144,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
             runtime,
             fallback,
             officialIds,
-            catalogIds: [],
+            catalogIds,
           });
-          setSelectedModelId(nextModel);
-          writeComposerModelPick(active.chat_id, nextModel);
+          const catalogPending = listedOfficial && catalogIds.length === 0;
+          if (
+            catalogPending &&
+            stored &&
+            !listedChanged &&
+            officialV0SupportsModel(stored)
+          ) {
+            setSelectedModelId(stored);
+          } else {
+            setSelectedModelId(nextModel);
+            writeComposerModelPick(active.chat_id, nextModel);
+          }
         })
         .catch(() => {
           if (!cancelled) {
@@ -3169,12 +3190,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, [composerMenuOpen]);
 
   useEffect(() => {
+    const official = Boolean(composerModel?.official_channel);
     const openRouterByo = isOpenRouterByoListed(
       composerModel?.listed_model_id,
       composerModel?.runtime_model_id,
       composerModel?.supported_models,
     );
-    if (composerModel?.official_channel || !openRouterByo) {
+    if (!official && !openRouterByo) {
+      setComposerCatalog([]);
+      setComposerCatalogLoading(false);
+      return;
+    }
+    const keyGeo = (composerModel?.official_key_geo || "").trim();
+    if (official && !keyGeo) {
       setComposerCatalog([]);
       setComposerCatalogLoading(false);
       return;
@@ -3198,10 +3226,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
           for (const row of data.items) {
             const src = (row.source || "openrouter").toLowerCase();
             if (src && src !== "openrouter") continue;
-            const quote = syncCatalogRates(row);
-            if (!quote) continue;
             const id = (row.model_id || "").trim();
             if (!id) continue;
+            if (official && !officialShelfAllows(id, keyGeo)) continue;
+            const quote = official ? officialCatalogRates(row) : syncCatalogRates(row);
+            if (!quote) continue;
+            if (quote.input < 0 || quote.output < 0) continue;
             if (acc.some((item) => sameModelId(item.id, id))) continue;
             acc.push({ id, in: quote.input, out: quote.output });
           }
@@ -3221,6 +3251,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, [
     client,
     composerModel?.official_channel,
+    composerModel?.official_key_geo,
     composerModel?.listed_model_id,
     composerModel?.runtime_model_id,
   ]);
@@ -3241,6 +3272,34 @@ export function RanchChatShell(props: RanchChatShellProps) {
     composerModel?.listed_model_id,
     composerModel?.official_channel,
     selectedModelId,
+  ]);
+
+  useEffect(() => {
+    if (!composerModel?.official_channel || !active?.chat_id) return;
+    if (composerCatalogLoading || composerCatalog.length === 0) return;
+    const stored = readComposerModelPick(active.chat_id);
+    const next = pickComposerModelForPath({
+      official: true,
+      openRouterByo: false,
+      wanted: stored,
+      listed: composerModel.listed_model_id ?? null,
+      runtime: composerModel.runtime_model_id ?? null,
+      fallback: composerModel.supported_models,
+      officialIds: composerModel.official_models,
+      catalogIds: composerCatalog.map((row) => row.id),
+    });
+    if (!next || sameModelId(next, selectedModelId)) return;
+    setSelectedModelId(next);
+    writeComposerModelPick(active.chat_id, next);
+  }, [
+    active?.chat_id,
+    composerCatalog,
+    composerCatalogLoading,
+    composerModel?.listed_model_id,
+    composerModel?.official_channel,
+    (composerModel?.official_models ?? []).join("\u0001"),
+    composerModel?.runtime_model_id,
+    (composerModel?.supported_models ?? []).join("\u0001"),
   ]);
 
   useEffect(() => {
@@ -4795,11 +4854,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         const fromApi = composerModel.supported_models.length
                           ? composerModel.supported_models
                           : [listed].filter(Boolean);
+                        const fromShelf = composerCatalog.map((row) => row.id);
                         const seen = new Set<string>();
                         const out: string[] = [];
-                        // Official shelf stays in Settings. Chat lists machine self-report
-                        // (plus the listing id only when it is a BYO/Store SKU).
-                        const source = official ? fromApi : [listed, ...fromApi];
+                        const source = official
+                          ? [listed, ...fromShelf]
+                          : [listed, ...fromApi];
                         for (const id of source) {
                           if (!id || !id.trim()) continue;
                           const k = id.toLowerCase();
@@ -4817,6 +4877,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         options[0] ||
                         "";
                       const priceFor = (id: string) => {
+                        const cat = composerCatalog.find((row) => sameModelId(row.id, id));
+                        if (official && cat) {
+                          return t.composerModelPrice(
+                            formatUsdPerMillion(
+                              applyMarkupUsd(cat.in, composerModel.markup_percent),
+                            ),
+                            formatUsdPerMillion(
+                              applyMarkupUsd(cat.out, composerModel.markup_percent),
+                            ),
+                          );
+                        }
                         const priced = composerModel.model_options.find((o) =>
                           sameModelId(o.model_id, id),
                         );
@@ -4835,7 +4906,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             return `${formatUsdPerMillion(inn)} in`;
                           }
                         }
-                        const cat = composerCatalog.find((row) => sameModelId(row.id, id));
                         if (cat) {
                           return t.composerModelPrice(
                             formatUsdPerMillion(
