@@ -20,7 +20,7 @@ export function officialShelfAllows(
   modelId: string | null | undefined,
   keyGeo: string | null | undefined,
 ): boolean {
-  const id = (modelId || "").trim().toLowerCase();
+  const id = (modelId || "").trim().toLowerCase().replace(/^~+/, "");
   if (!id || !officialV0SupportsModel(id)) return false;
   if ((keyGeo || "").trim().toLowerCase() !== "cn") return true;
   return !CN_KEY_BLOCKED_PREFIXES.some((prefix) => id.startsWith(prefix));
