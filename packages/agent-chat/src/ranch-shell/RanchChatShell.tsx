@@ -2737,7 +2737,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
           : (activeTopic?.id ?? composerTopic?.id ?? null);
       await client.sendMessage(chatId, text, mentions, sendThreadId, {
         requested_model: selectedModelId,
-        requested_provider: "byo",
       });
       if (group && mentions) {
         if (mentions.length === 1) {
@@ -2886,7 +2885,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           text,
           mentions,
           activeTopic?.id ?? composerTopic?.id ?? null,
-          { requested_model: selectedModelId, requested_provider: "byo" },
+          { requested_model: selectedModelId },
         );
         if (group && mentions) {
           if (mentions.length === 1) {
@@ -3098,9 +3097,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
           const officialIds = Array.isArray(row.official_models)
             ? row.official_models.filter((m): m is string => typeof m === "string" && !!m.trim())
             : [];
-          // Official hop is frozen (P7). Leftover official_models must not
-          // switch the composer or send path back to Host-held keys.
-          const listedOfficial = false;
+          const listedOfficial =
+            row.host_inference_ready !== false &&
+            !!listed &&
+            officialIds.some((id) => sameModelId(id, listed));
           setComposerModel({
             listed_model_id: listed,
             runtime_model_id: runtime,
@@ -4797,7 +4797,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           : [listed].filter(Boolean);
                         const seen = new Set<string>();
                         const out: string[] = [];
-                        for (const id of [listed, ...fromApi]) {
+                        // Official shelf stays in Settings. Chat lists machine self-report
+                        // (plus the listing id only when it is a BYO/Store SKU).
+                        const source = official ? fromApi : [listed, ...fromApi];
+                        for (const id of source) {
                           if (!id || !id.trim()) continue;
                           const k = id.toLowerCase();
                           if (seen.has(k)) continue;
@@ -4809,6 +4812,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       const visible = filterComposerModels(options, composerMenuQuery);
                       const value =
                         options.find((id) => sameModelId(id, selectedModelId)) ||
+                        (official && selectedModelId ? selectedModelId : "") ||
                         options.find((id) => sameModelId(id, listed)) ||
                         options[0] ||
                         "";

@@ -364,6 +364,7 @@ export type RanchMessages = {
   myAgentsProviderOther: string;
   myAgentsProviderOfficialOpenRouter: string;
   myAgentsProviderOpenRouter: string;
+  myAgentsOfficialHostHint: string;
   myAgentsNeedStoreKey: string;
   myAgentsOpenRouterRuntimeRequired: string;
   myAgentsBuyStoreKey: string;
@@ -912,10 +913,10 @@ const en: RanchMessages = {
   myAgentsInferencePathByoHint:
     "This agent calls models with its own key. Usage is self-reported — Host cannot verify. Official hosted inference is not available yet.",
   myAgentsInferencePathByoHintReady:
-    "Chat picks a model. OpenRouter here is a Store key on the agent — not Interfaze’s official hop.",
+    "Chat picks a model. Official · OpenRouter is Interfaze’s key. OpenRouter here is a Store key on the agent.",
   myAgentsProviderLabel: "Provider",
   myAgentsProviderHint:
-    "Provider follows the agent runtime. Host cannot see the key — only the heartbeat model. OpenRouter can be saved only after the agent reports an OpenRouter model (write a Store key, then Refresh status). Catalog prefixes are not providers.",
+    "Official · OpenRouter is Interfaze’s Host-held key (this Host’s shelf). OpenRouter is a Store/BYO key on the agent. Chat still picks a model only — path is inferred. BYO vendors follow the heartbeat.",
   myAgentsProviderByo: "Mine",
   myAgentsProviderOfficial: "Official · OpenRouter",
   myAgentsProviderMine: "Mine",
@@ -923,6 +924,8 @@ const en: RanchMessages = {
   myAgentsProviderOther: "Other",
   myAgentsProviderOfficialOpenRouter: "Official · OpenRouter",
   myAgentsProviderOpenRouter: "OpenRouter",
+  myAgentsOfficialHostHint:
+    "Official hops use Interfaze’s Host OpenRouter key. Quotes are published Catalog, not Store sync. This Host’s CN-billed key cannot complete GPT, Claude, or Gemini. The machine default stays on the agent’s own key.",
   myAgentsNeedStoreKey:
     "OpenRouter needs a key on this agent. Host cannot see the key — we only read the heartbeat model. If it doesn’t have one yet, buy Store credits, write the key into the runtime, then Refresh status.",
   myAgentsOpenRouterRuntimeRequired:
@@ -932,7 +935,7 @@ const en: RanchMessages = {
   myAgentsListingStaleHint:
     "The published listing still says OpenRouter, but this agent is running its own key. That’s leftover — not a real OpenRouter setup. OpenRouter can be saved only after the agent reports an OpenRouter model.",
   myAgentsOfficialSectionHint:
-    "Official hosted inference is frozen. OpenRouter here is a Store/BYO key on the agent — not Interfaze’s key.",
+    "Official · OpenRouter uses Interfaze’s Host-held key and this Host’s shelf. OpenRouter is Store/BYO on the agent.",
   myAgentsMineSectionHint:
     "These models stay on this agent’s own key. Provider follows the live runtime.",
   myAgentsProviderUnlisted: "Authorized, not in this agent’s self-report yet — won’t appear in chat until it reports the model.",
@@ -1486,10 +1489,10 @@ const zh: RanchMessages = {
   myAgentsInferencePathByoHint:
     "这只 agent 用自己的钥匙打模型。用量自报，平台未核验。官方代打尚未开放。",
   myAgentsInferencePathByoHintReady:
-    "聊天只选模型。这里的 OpenRouter 是写在 agent 上的 Store 钥匙，不是 Interfaze 官方代打。",
+    "聊天只选模型。「官方 · OpenRouter」是 Interfaze 持钥。这里的 OpenRouter 是写在 agent 上的 Store 钥匙。",
   myAgentsProviderLabel: "供应商",
   myAgentsProviderHint:
-    "供应商跟 agent 运行时走。Host 看不见钥匙，只认心跳型号。只有它自报了 OpenRouter 型号（写入 Store 钥匙后点「刷新状态」）才能保存。型号 id 里的货架前缀不是供应商。",
+    "「官方 · OpenRouter」是 Interfaze 持钥、本 Host 货架。「OpenRouter」是写在 agent 上的 Store/自持钥匙。聊天只选模型，路径由挂牌推断。自持厂家跟心跳走。",
   myAgentsProviderByo: "我的",
   myAgentsProviderOfficial: "官方 · OpenRouter",
   myAgentsProviderMine: "我的",
@@ -1497,6 +1500,8 @@ const zh: RanchMessages = {
   myAgentsProviderOther: "其他",
   myAgentsProviderOfficialOpenRouter: "官方 · OpenRouter",
   myAgentsProviderOpenRouter: "OpenRouter",
+  myAgentsOfficialHostHint:
+    "官方跳走 Interfaze 持钥，报价是对外 Catalog，不是 Store 同步价。本 Host 国内卡账户打不了 GPT / Claude / Gemini。机器默认型号仍在 agent 自持钥上。",
   myAgentsNeedStoreKey:
     "OpenRouter 需要这只 agent 自己的钥匙。Host 看不见钥匙，只认心跳型号。还没有的话，去 Store 买额度、写入 runtime，再点「刷新状态」。",
   myAgentsOpenRouterRuntimeRequired:
@@ -1506,7 +1511,7 @@ const zh: RanchMessages = {
   myAgentsListingStaleHint:
     "挂牌还写着 OpenRouter，但这只 agent 正在用自己的钥匙。那是旧挂牌，不是真的 OpenRouter。只有它自报了 OpenRouter 型号才能保存。",
   myAgentsOfficialSectionHint:
-    "官方代打已冻结。这里的 OpenRouter 是写在 agent 上的 Store/自持钥匙，不是 Interfaze 持钥。",
+    "「官方 · OpenRouter」走 Interfaze 持钥、本 Host 货架。「OpenRouter」是写在 agent 上的 Store/自持钥匙。",
   myAgentsMineSectionHint:
     "下列模型走这只 agent 自己的钥匙。供应商跟运行时走。",
   myAgentsProviderUnlisted: "已授权，但 agent 尚未自报——写进自报之前不会出现在聊天下拉。",

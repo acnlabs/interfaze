@@ -484,6 +484,15 @@ export type GatewayClient = {
       priceable?: boolean;
     }>;
   }>;
+  /** Owner-authorized official models (Host table) + this Host's key geo. */
+  getMyAgentOfficialModels: (agentId: string) => Promise<{
+    agent_id: string;
+    model_ids: string[];
+    host_inference_ready: boolean;
+    official_key_geo?: string;
+    official_region?: string;
+    official_default_model_id?: string | null;
+  }>;
   /** Replace Owner-authorized official models. Empty = all hops BYO. */
   updateMyAgentOfficialModels: (
     agentId: string,
@@ -492,6 +501,9 @@ export type GatewayClient = {
     agent_id: string;
     model_ids: string[];
     host_inference_ready: boolean;
+    official_key_geo?: string;
+    official_region?: string;
+    official_default_model_id?: string | null;
   }>;
   /** Rotate ACN API key; plaintext returned once — do not log. */
   rotateMyAgentKey: (agentId: string) => Promise<{
@@ -756,11 +768,23 @@ export function createGatewayClient(
           priceable?: boolean;
         }>;
       }>(`/api/chat/agents/${encodeURIComponent(agentId)}/model-status`),
+    getMyAgentOfficialModels: (agentId) =>
+      request<{
+        agent_id: string;
+        model_ids: string[];
+        host_inference_ready: boolean;
+        official_key_geo?: string;
+        official_region?: string;
+        official_default_model_id?: string | null;
+      }>(`/api/chat/my-agents/${encodeURIComponent(agentId)}/official-models`),
     updateMyAgentOfficialModels: (agentId, modelIds) =>
       request<{
         agent_id: string;
         model_ids: string[];
         host_inference_ready: boolean;
+        official_key_geo?: string;
+        official_region?: string;
+        official_default_model_id?: string | null;
       }>(`/api/chat/my-agents/${encodeURIComponent(agentId)}/official-models`, {
         method: "PUT",
         body: JSON.stringify({ model_ids: modelIds }),
