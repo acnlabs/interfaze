@@ -5025,6 +5025,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               />
                               <ul
                                 role="listbox"
+                                aria-busy={
+                                  composerCatalogLoading && (official || openRouterByo)
+                                }
                                 style={{
                                   margin: 0,
                                   padding: 4,
@@ -5033,66 +5036,80 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   overflowY: "auto",
                                 }}
                               >
-                                {composerCatalogLoading && (official || openRouterByo) && options.length <= 1 ? (
-                                  <li style={{ padding: "8px", fontSize: 12, color: colors.muted }}>
-                                    …
-                                  </li>
-                                ) : visible.length === 0 ? (
+                                {visible.length === 0 &&
+                                !(
+                                  composerCatalogLoading &&
+                                  (official || openRouterByo)
+                                ) ? (
                                   <li style={{ padding: "8px", fontSize: 12, color: colors.muted }}>
                                     {t.myAgentsPricingOfficialEmpty}
                                   </li>
                                 ) : (
-                                  visible.map((id) => {
-                                    const selected = sameModelId(id, value);
-                                    const rowPrice = priceFor(id);
-                                    return (
-                                      <li key={id} role="none">
-                                        <button
-                                          type="button"
-                                          role="option"
-                                          aria-selected={selected}
-                                          onClick={() => {
-                                            setSelectedModelId(id);
-                                            if (active?.chat_id) {
-                                              writeComposerModelPick(active.chat_id, id);
-                                            }
-                                            setComposerMenuOpen(false);
-                                          }}
-                                          style={{
-                                            display: "flex",
-                                            alignItems: "baseline",
-                                            justifyContent: "space-between",
-                                            gap: 12,
-                                            width: "100%",
-                                            padding: "6px 8px",
-                                            border: "none",
-                                            borderRadius: 8,
-                                            background: selected
-                                              ? colors.hover
-                                              : "transparent",
-                                            color: colors.text,
-                                            cursor: "pointer",
-                                            textAlign: "left",
-                                          }}
-                                        >
-                                          <span style={{ fontWeight: 600, fontSize: 13 }}>
-                                            {shortModelLabel(id) || id}
-                                          </span>
-                                          {rowPrice ? (
-                                            <span
-                                              style={{
-                                                color: colors.muted,
-                                                fontSize: 11,
-                                                whiteSpace: "nowrap",
-                                              }}
-                                            >
-                                              {rowPrice}
+                                  <>
+                                    {visible.map((id) => {
+                                      const selected = sameModelId(id, value);
+                                      const rowPrice = priceFor(id);
+                                      return (
+                                        <li key={id} role="none">
+                                          <button
+                                            type="button"
+                                            role="option"
+                                            aria-selected={selected}
+                                            onClick={() => {
+                                              setSelectedModelId(id);
+                                              if (active?.chat_id) {
+                                                writeComposerModelPick(active.chat_id, id);
+                                              }
+                                              setComposerMenuOpen(false);
+                                            }}
+                                            style={{
+                                              display: "flex",
+                                              alignItems: "baseline",
+                                              justifyContent: "space-between",
+                                              gap: 12,
+                                              width: "100%",
+                                              padding: "6px 8px",
+                                              border: "none",
+                                              borderRadius: 8,
+                                              background: selected
+                                                ? colors.hover
+                                                : "transparent",
+                                              color: colors.text,
+                                              cursor: "pointer",
+                                              textAlign: "left",
+                                            }}
+                                          >
+                                            <span style={{ fontWeight: 600, fontSize: 13 }}>
+                                              {shortModelLabel(id) || id}
                                             </span>
-                                          ) : null}
-                                        </button>
+                                            {rowPrice ? (
+                                              <span
+                                                style={{
+                                                  color: colors.muted,
+                                                  fontSize: 11,
+                                                  whiteSpace: "nowrap",
+                                                }}
+                                              >
+                                                {rowPrice}
+                                              </span>
+                                            ) : null}
+                                          </button>
+                                        </li>
+                                      );
+                                    })}
+                                    {composerCatalogLoading &&
+                                    (official || openRouterByo) ? (
+                                      <li
+                                        style={{
+                                          padding: "8px",
+                                          fontSize: 12,
+                                          color: colors.muted,
+                                        }}
+                                      >
+                                        {t.loading}
                                       </li>
-                                    );
-                                  })
+                                    ) : null}
+                                  </>
                                 )}
                               </ul>
                             </div>
