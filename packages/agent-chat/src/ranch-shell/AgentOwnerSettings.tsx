@@ -103,7 +103,7 @@ function providerIdForModel(modelId: string, supported: string[]): string {
   return OPENROUTER_BYO;
 }
 
-/** Settings Provider follows official listing when authorized; else live runtime. */
+/** Settings Provider follows the heartbeat default. Official is one vendor you can switch to, not a second default. */
 function providerIdFromRuntime(
   runtime: string,
   listed: string,
@@ -111,18 +111,17 @@ function providerIdFromRuntime(
   official: string[] = [],
   hostReady = false,
 ): string {
-  const ls = listed.trim();
-  if (hostReady && ls && modelIsOfficial(ls, official)) {
-    return OFFICIAL_OPENROUTER;
-  }
   const rt = (runtime || "").trim();
   if (rt) {
+    if (hostReady && modelIsOfficial(rt, official)) {
+      return OFFICIAL_OPENROUTER;
+    }
     const vendor = modelVendorId(rt);
     if (!vendor) return OTHER_VENDOR;
     if (isKnownByoVendor(vendor, supported)) return vendor;
     return OPENROUTER_BYO;
   }
-  return providerIdForModel(ls, supported);
+  return providerIdForModel(listed, supported);
 }
 
 function runtimeIsOpenRouter(runtime: string, supported: string[]): boolean {
@@ -175,14 +174,13 @@ function resolvePricingModelId(
 ): string {
   const listed = (detail.token_pricing?.model_id || "").trim();
   const runtime = (detail.runtime_model_id || "").trim();
-  if (listed && modelIsOfficial(listed, official)) return listed;
-  // Heartbeat default wins for BYO. Stale Store listing must not impersonate the machine.
+  // Heartbeat is the machine default. Official listing must not replace it.
   if (runtime) return runtime;
+  const preferred = (detail.preferred_model_id || "").trim();
+  if (preferred) return preferred;
   if (listed && !listingIsStaleOpenRouter(listed, runtime, supported, official)) {
     return listed;
   }
-  const preferred = (detail.preferred_model_id || "").trim();
-  if (preferred) return preferred;
   return FALLBACK_MODEL_ID;
 }
 
@@ -299,7 +297,11 @@ function findOfficialEquivalent(fromId: string, officialIds: string[]): string |
 function pickListedId(ids: string[], draft: string): string {
   const needle = draft.trim();
   if (ids.length === 0) return needle;
-  return findOfficialEquivalent(needle, ids) || ids[0];
+  const hit = findOfficialEquivalent(needle, ids);
+  if (hit) return hit;
+  // Keep the heartbeat/draft id until the owner picks another one.
+  if (needle) return needle;
+  return ids[0] ?? "";
 }
 
 function filterModelIds(ids: string[], query: string, keepId: string): string[] {
@@ -1282,17 +1284,24 @@ export function AgentOwnerSettings({
     ? settingsProvider
     : modelsLoading
       ? ""
-      : providerOptions.find((p) => p.id !== OPENROUTER_BYO)?.id ||
+      : providerOptions.find(
+          (p) => p.id !== OPENROUTER_BYO && p.id !== OFFICIAL_OPENROUTER,
+        )?.id ||
+        providerOptions.find((p) => p.id !== OPENROUTER_BYO)?.id ||
         providerOptions[0]?.id ||
         "";
   const officialSelected = activeProvider === OFFICIAL_OPENROUTER;
   const openRouterByoSelected = activeProvider === OPENROUTER_BYO;
-  const vendorModels = officialSelected
+  const vendorModelsBase = officialSelected
     ? officialIds
     : openRouterByoSelected
       ? byoOpenRouterIds
       : modelsForProvider(supportedModels, activeProvider);
-  const displayedModelId = pickListedId(vendorModels, modelIdTrim);
+  const vendorModels =
+    modelIdTrim && !vendorModelsBase.some((id) => sameModelId(id, modelIdTrim))
+      ? [modelIdTrim, ...vendorModelsBase]
+      : vendorModelsBase;
+  const displayedModelId = modelIdTrim || pickListedId(vendorModels, "") || "";
   const officialRow = officialCatalog.find((row) =>
     sameModelId(row.id, displayedModelId),
   );
@@ -1356,14 +1365,21 @@ export function AgentOwnerSettings({
       ? applyMarkup(catalogOut, markupParsed)
       : null;
   const previewReady = inputParsed != null && outputParsed != null;
+  const modelDirty = Boolean(
+    displayedModelId &&
+      (runtimeId
+        ? !sameModelId(displayedModelId, runtimeId)
+        : !listingPublished || !sameModelId(displayedModelId, oldModelId)),
+  );
+  const markupDirty =
+    markupParsed !== null &&
+    (typeof oldMarkup !== "number" || markupParsed !== oldMarkup);
   const pricingDirty =
     displayedModelId.length > 0 &&
     markupParsed !== null &&
-    (!listingPublished ||
-      !sameModelId(displayedModelId, oldModelId) ||
-      markupParsed !== oldMarkup);
+    (modelDirty || markupDirty || !listingPublished);
   const runtimeMismatch = Boolean(
-    runtimeId && !sameModelId(runtimeId, displayedModelId) && !officialSelected,
+    runtimeId && !sameModelId(runtimeId, displayedModelId),
   );
   const modelOnList =
     vendorModels.length > 0 &&
@@ -1396,8 +1412,9 @@ export function AgentOwnerSettings({
     if (modelsBusy) return;
     if (vendorModels.length === 0) return;
     if (vendorModels.some((id) => sameModelId(id, modelIdDraft))) return;
+    if (runtimeId && sameModelId(modelIdDraft, runtimeId)) return;
     setModelIdDraft(pickListedId(vendorModels, modelIdDraft));
-  }, [activeProvider, modelsBusy, vendorModelsKey, modelIdDraft]);
+  }, [activeProvider, modelsBusy, vendorModelsKey, modelIdDraft, runtimeId]);
   const nextOfficial = nextOfficialModels(
     officialSaved,
     displayedModelId,
