@@ -396,12 +396,29 @@ function shouldOfferStoreOpenRouterKey(
 ): boolean {
   if (code === "insufficient_credits") return false;
   if (code === "official_not_authorized" || code === "official_model_unsupported") {
-    return true;
+    return false;
   }
   const blob = `${code || ""} ${message || ""}`;
   return /invalid[- ]api[- ]key|missing[- ]api[- ]key|no api key|openrouter.*(?:key|credit|quota)|api key not/i.test(
     blob,
   );
+}
+
+function requestedModelForSend(
+  selected: string | null,
+  listed: string | null,
+  official: boolean,
+  keyGeo: string | null | undefined,
+): string | null {
+  if (
+    official &&
+    (keyGeo || "").trim() &&
+    selected &&
+    !officialShelfAllows(selected, keyGeo)
+  ) {
+    return listed;
+  }
+  return selected;
 }
 
 function sendFailureCopy(
@@ -419,11 +436,15 @@ function sendFailureCopy(
           ? t.billingUnavailable
           : e.code === "unsupported_model"
             ? t.unsupportedModel
-            : offerStoreKey
-              ? t.needOpenRouterKey
-              : e.code === "model_pricing_unavailable"
-                ? t.modelPricingUnavailable
-                : e.message || t.sendFailed;
+            : e.code === "official_not_authorized"
+              ? t.officialNotAuthorized
+              : e.code === "official_model_unsupported"
+                ? t.officialModelUnsupported
+                : offerStoreKey
+                  ? t.needOpenRouterKey
+                  : e.code === "model_pricing_unavailable"
+                    ? t.modelPricingUnavailable
+                    : e.message || t.sendFailed;
   return { text, offerStoreKey };
 }
 
@@ -2742,7 +2763,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
           ? opts.threadId
           : (activeTopic?.id ?? composerTopic?.id ?? null);
       await client.sendMessage(chatId, text, mentions, sendThreadId, {
-        requested_model: selectedModelId,
+        requested_model: requestedModelForSend(
+          selectedModelId,
+          composerModel?.listed_model_id ?? null,
+          Boolean(composerModel?.official_channel),
+          composerModel?.official_key_geo,
+        ),
       });
       if (group && mentions) {
         if (mentions.length === 1) {
@@ -2891,7 +2917,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
           text,
           mentions,
           activeTopic?.id ?? composerTopic?.id ?? null,
-          { requested_model: selectedModelId },
+          { requested_model: requestedModelForSend(
+            selectedModelId,
+            composerModel?.listed_model_id ?? null,
+            Boolean(composerModel?.official_channel),
+            composerModel?.official_key_geo,
+          ) },
         );
         if (group && mentions) {
           if (mentions.length === 1) {
@@ -3151,7 +3182,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
             catalogPending &&
             stored &&
             !listedChanged &&
-            officialV0SupportsModel(stored)
+            officialV0SupportsModel(stored) &&
+            officialShelfAllows(stored, row.official_key_geo)
           ) {
             setSelectedModelId(stored);
           } else {
@@ -4872,7 +4904,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       const visible = filterComposerModels(options, composerMenuQuery);
                       const value =
                         options.find((id) => sameModelId(id, selectedModelId)) ||
-                        (official && selectedModelId ? selectedModelId : "") ||
                         options.find((id) => sameModelId(id, listed)) ||
                         options[0] ||
                         "";

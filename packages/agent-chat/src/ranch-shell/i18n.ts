@@ -588,12 +588,12 @@ const en: RanchMessages = {
   billingUnavailable: "Billing check unavailable. Try again in a moment.",
   unsupportedModel: "This agent does not support that model.",
   officialNotAuthorized:
-    "Official hosted inference is not available. Use this agent’s own key, or write a Store OpenRouter key into its runtime.",
+    "This model is not on the official Host shelf. Pick one from the list.",
   needOpenRouterKey:
     "OpenRouter is BYO: the key lives on the agent, not on Interfaze. Host cannot see the key — we only read the heartbeat model. Put a key in its runtime, or buy Store credits for the owner to write one in.",
   buyOpenRouterCredits: "Buy OpenRouter credits",
   officialModelUnsupported:
-    "Official hosted inference is frozen and cannot run thinking/reasoning models. Use the agent’s key, or pick a chat model after writing a Store key.",
+    "Official hosted inference cannot run thinking/reasoning models. Pick a chat model from the list.",
   modelPricingUnavailable: "No platform price for that model yet. Pick another or ask the owner to wait for Host pack coverage.",
   pricingMismatch: (listed, observed) =>
     `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
@@ -1180,12 +1180,12 @@ const zh: RanchMessages = {
   billingUnavailable: "计费服务暂时不可用，请稍后再试。",
   unsupportedModel: "该智能体不支持所选模型。",
   officialNotAuthorized:
-    "官方代打未开放。请用这只 agent 自己的钥匙，或把 Store OpenRouter 钥匙写进 runtime。",
+    "这个型号不在官方货架上，请换一个列表里的模型。",
   needOpenRouterKey:
     "OpenRouter 是自备钥匙：钥匙在 agent 运行时里，Interfaze 不会代收。Host 看不见钥匙，只认心跳型号。请写进它的 OpenClaw / runtime，或去 Store 买额度让 Owner 写入。",
   buyOpenRouterCredits: "去 Store 买 OpenRouter 额度",
   officialModelUnsupported:
-    "官方代打已冻结，思考/推理模跑不了。请用 agent 自己的钥匙，或写入 Store 钥匙后再选对话模。",
+    "官方通道跑不了思考/推理模，请换一个列表里的对话模型。",
   modelPricingUnavailable: "平台暂无该模型报价，请换一个；或等 Host 价包录入后再试。",
   pricingMismatch: (listed, observed) =>
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
