@@ -611,6 +611,10 @@ function composerModelStorageKey(chatId: string): string {
   return `interfaze:composerModel:${chatId}`;
 }
 
+function composerListedStorageKey(chatId: string): string {
+  return `interfaze:composerListed:${chatId}`;
+}
+
 function readComposerModelPick(chatId: string): string | null {
   if (typeof window === "undefined") return null;
   try {
@@ -636,6 +640,27 @@ function writeComposerModelPick(chatId: string, modelId: string | null): void {
     const key = composerModelStorageKey(chatId);
     if (!modelId) sessionStorage.removeItem(key);
     else sessionStorage.setItem(key, modelId);
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function readComposerListed(chatId: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(composerListedStorageKey(chatId));
+    return raw && raw.trim() ? raw.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeComposerListed(chatId: string, listed: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    const key = composerListedStorageKey(chatId);
+    if (!listed) sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, listed);
   } catch {
     /* ignore quota / private mode */
   }
@@ -3155,15 +3180,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
             ? supported
             : [listed].filter((m): m is string => !!m && !!m.trim());
           const stored = readComposerModelPick(active.chat_id);
-          const prevListed = composerListedRef.current;
+          const storedListed = readComposerListed(active.chat_id);
+          const prevFromRef =
+            composerListedRef.current?.chatId === active.chat_id
+              ? composerListedRef.current.listed
+              : null;
+          const previousListed = prevFromRef || storedListed;
+          const initializingListed = Boolean(listed && !previousListed);
           const listedChanged = Boolean(
             listed &&
-              prevListed?.chatId === active.chat_id &&
-              !sameModelId(prevListed.listed, listed),
+              (previousListed
+                ? !sameModelId(previousListed, listed)
+                : initializingListed && stored && !sameModelId(stored, listed)),
           );
           composerListedRef.current = listed
             ? { chatId: active.chat_id, listed }
             : null;
+          writeComposerListed(active.chat_id, listed);
           const catalogIds = listedOfficial
             ? composerCatalogRef.current.map((row) => row.id)
             : [];
@@ -3311,10 +3344,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
     if (!composerModel?.official_channel || !active?.chat_id) return;
     if (composerCatalogLoading || composerCatalog.length === 0) return;
     const stored = readComposerModelPick(active.chat_id);
+    const listed = composerModel.listed_model_id ?? null;
+    const storedListed = readComposerListed(active.chat_id);
+    const listedChanged = Boolean(
+      listed && storedListed && !sameModelId(storedListed, listed),
+    );
     const next = pickComposerModelForPath({
       official: true,
       openRouterByo: false,
-      wanted: stored,
+      wanted: listedChanged ? listed : stored,
       listed: composerModel.listed_model_id ?? null,
       runtime: composerModel.runtime_model_id ?? null,
       fallback: composerModel.supported_models,
