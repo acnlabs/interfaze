@@ -543,6 +543,7 @@ export type GatewayClient = {
     q?: string;
     source?: string;
     active_only?: boolean;
+    official_shelf?: boolean;
     limit?: number;
     offset?: number;
   }) => Promise<ModelCatalogList>;
@@ -842,6 +843,7 @@ export function createGatewayClient(
       if (opts?.q?.trim()) params.set("q", opts.q.trim());
       if (opts?.source?.trim()) params.set("source", opts.source.trim());
       if (opts?.active_only === false) params.set("active_only", "false");
+      if (opts?.official_shelf) params.set("official_shelf", "true");
       params.set("limit", String(opts?.limit ?? 100));
       params.set("offset", String(opts?.offset ?? 0));
       return request<ModelCatalogList>(`/api/model-catalog?${params.toString()}`);

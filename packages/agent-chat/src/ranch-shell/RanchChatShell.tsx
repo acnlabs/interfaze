@@ -3251,6 +3251,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           const data = await client.listModelCatalog({
             source: "openrouter",
             active_only: true,
+            official_shelf: official,
             limit: page,
             offset,
           });
@@ -3267,10 +3268,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
             if (acc.some((item) => sameModelId(item.id, id))) continue;
             acc.push({ id, in: quote.input, out: quote.output });
           }
+          if (!cancelled) setComposerCatalog([...acc]);
           if (!data.items.length) break;
           offset += data.items.length;
         }
-        if (!cancelled) setComposerCatalog(acc);
       } catch {
         if (!cancelled) setComposerCatalog([]);
       } finally {
