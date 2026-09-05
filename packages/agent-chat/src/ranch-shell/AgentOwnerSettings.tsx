@@ -908,6 +908,7 @@ export function AgentOwnerSettings({
     Array<{ id: string } & CatalogPair>
   >([]);
   const [officialCatalogLoading, setOfficialCatalogLoading] = useState(false);
+  const [byoCatalogLoading, setByoCatalogLoading] = useState(false);
   const [settingsProvider, setSettingsProvider] = useState(() =>
     providerIdFromRuntime(
       detail.runtime_model_id || "",
@@ -1116,65 +1117,67 @@ export function AgentOwnerSettings({
 
   useEffect(() => {
     let cancelled = false;
-    setOfficialCatalogLoading(true);
-    void (async () => {
-      const page = 500;
-      const byoAcc: Array<{ id: string } & CatalogPair> = [];
-      const officialAcc: Array<{ id: string } & CatalogPair> = [];
+    const page = 500;
+
+    const loadCatalog = async (official: boolean) => {
+      const acc: Array<{ id: string } & CatalogPair> = [];
       let offset = 0;
       let total = Number.POSITIVE_INFINITY;
-      try {
-        while (!cancelled && offset < total && offset < 8000) {
-          const data = await client.listModelCatalog({
+      while (!cancelled && offset < total && offset < 8000) {
+        const data = await client.listModelCatalog({
+          source: "openrouter",
+          active_only: true,
+          official_shelf: official || undefined,
+          limit: page,
+          offset,
+        });
+        total = Number.isFinite(data.total) ? data.total : offset + data.items.length;
+        for (const row of data.items) {
+          const src = (row.source || "openrouter").toLowerCase();
+          if (src && src !== "openrouter") continue;
+          const id = (row.model_id || "").trim();
+          if (!id) continue;
+          const quote = official ? officialCatalogRates(row) : syncCatalogRates(row);
+          if (!quote) continue;
+          if (official && !officialShelfAllows(id, officialKeyGeo)) continue;
+          if (acc.some((item) => sameModelId(item.id, id))) continue;
+          acc.push({
+            id,
+            in: quote.input,
+            out: quote.output,
             source: "openrouter",
-            active_only: true,
-            limit: page,
-            offset,
           });
-          total = Number.isFinite(data.total) ? data.total : offset + data.items.length;
-          for (const row of data.items) {
-            const src = (row.source || "openrouter").toLowerCase();
-            if (src && src !== "openrouter") continue;
-            const id = (row.model_id || "").trim();
-            if (!id) continue;
-            const byoQuote = syncCatalogRates(row);
-            if (byoQuote && !byoAcc.some((item) => sameModelId(item.id, id))) {
-              byoAcc.push({
-                id,
-                in: byoQuote.input,
-                out: byoQuote.output,
-                source: "openrouter",
-              });
-            }
-            const officialQuote = officialCatalogRates(row);
-            if (
-              officialQuote &&
-              hostReady &&
-              officialKeyGeo &&
-              officialShelfAllows(id, officialKeyGeo) &&
-              !officialAcc.some((item) => sameModelId(item.id, id))
-            ) {
-              officialAcc.push({
-                id,
-                in: officialQuote.input,
-                out: officialQuote.output,
-                source: "openrouter",
-              });
-            }
-          }
-          if (!data.items.length) break;
-          offset += data.items.length;
         }
-        if (cancelled) return;
-        setOpenRouterByoCatalog(byoAcc);
-        setOfficialCatalog(officialAcc);
-      } catch {
-        if (!cancelled) {
-          setOpenRouterByoCatalog([]);
+        if (!data.items.length) break;
+        offset += data.items.length;
+      }
+      return acc;
+    };
+
+    setOfficialCatalogLoading(true);
+    setByoCatalogLoading(true);
+    void (async () => {
+      try {
+        if (hostReady && officialKeyGeo) {
+          const officialAcc = await loadCatalog(true);
+          if (!cancelled) setOfficialCatalog(officialAcc);
+        } else if (!cancelled) {
           setOfficialCatalog([]);
         }
+      } catch {
+        if (!cancelled) setOfficialCatalog([]);
       } finally {
         if (!cancelled) setOfficialCatalogLoading(false);
+      }
+    })();
+    void (async () => {
+      try {
+        const byoAcc = await loadCatalog(false);
+        if (!cancelled) setOpenRouterByoCatalog(byoAcc);
+      } catch {
+        if (!cancelled) setOpenRouterByoCatalog([]);
+      } finally {
+        if (!cancelled) setByoCatalogLoading(false);
       }
     })();
     return () => {
@@ -1328,9 +1331,11 @@ export function AgentOwnerSettings({
   })();
   const catalogSourceUrl = catalogSourceHref(catalogSource, displayedModelId);
   const catalogLoading =
-    officialSelected || openRouterByoSelected
+    officialSelected
       ? officialCatalogLoading
-      : supportedModels.length > 0 && catalogReadyKey !== supportedKey;
+      : openRouterByoSelected
+        ? byoCatalogLoading
+        : supportedModels.length > 0 && catalogReadyKey !== supportedKey;
   const catalogError =
     !catalogLoading &&
     displayedModelId.length > 0 &&
@@ -1364,7 +1369,11 @@ export function AgentOwnerSettings({
     vendorModels.length > 0 &&
     vendorModels.some((id) => sameModelId(id, displayedModelId));
   const modelsBusy =
-    officialSelected || openRouterByoSelected ? officialCatalogLoading : modelsLoading;
+    officialSelected
+      ? officialCatalogLoading
+      : openRouterByoSelected
+        ? byoCatalogLoading
+        : modelsLoading;
   const openRouterOnRuntime = runtimeIsOpenRouter(
     detail.runtime_model_id || "",
     supportedModels,
