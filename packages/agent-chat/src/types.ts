@@ -168,6 +168,8 @@ export type ChatMessage = {
   sender_id: string;
   content: string | null;
   created_at: string;
+  /** Mailbox refs (``mbx:{id}``). Parsed from API JSON string or WS array. */
+  attachments?: string[] | null;
   /** Topic/thread id when the message belongs to a Topic. */
   thread_id?: string | null;
   /** Topic title for badges (when provided by Gateway). */

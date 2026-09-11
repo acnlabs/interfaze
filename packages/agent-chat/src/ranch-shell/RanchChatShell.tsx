@@ -26,6 +26,8 @@ import type {
   ThreadSummary,
 } from "../types";
 import { connectChatSocket, type ChatSocket } from "../ws";
+import { MailboxThumbs } from "../MailboxThumbs";
+import { parseMessageAttachments } from "../mailbox";
 import {
   AgentOwnerSettings,
   deliveryLabel,
@@ -2611,6 +2613,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               created_at:
                 typeof d.created_at === "string" ? d.created_at : new Date().toISOString(),
               metadata: parseMessageMetadata(d.metadata),
+              attachments: parseMessageAttachments(d.attachments),
             };
             setMessages((prev) => {
               const next = prev.some((x) => x.message_id === m.message_id) ? prev : [...prev, m];
@@ -4485,6 +4488,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         }}
                       >
                         {m.content}
+                        <MailboxThumbs
+                          chatId={m.chat_id || active?.chat_id || ""}
+                          attachments={m.attachments}
+                          gatewayBaseUrl={gatewayBaseUrl}
+                          getAccessToken={getAccessToken}
+                        />
                       </div>
                       {isUser && (delivery || deliveryByAgent) ? (
                         <DeliveryStatusFooter

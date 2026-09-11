@@ -11,6 +11,8 @@ import type {
 } from "./types";
 import { CHAT_OPEN_EVENT } from "./types";
 import { connectChatSocket, type ChatSocket } from "./ws";
+import { MailboxThumbs } from "./MailboxThumbs";
+import { parseMessageAttachments } from "./mailbox";
 
 const DEFAULT_ACCENT = "#10B981";
 const ZINC_800 = "#27272a";
@@ -279,6 +281,7 @@ export function AgentChatShell(props: AgentChatShellProps) {
               content: typeof d.content === "string" ? d.content : null,
               created_at:
                 typeof d.created_at === "string" ? d.created_at : new Date().toISOString(),
+              attachments: parseMessageAttachments(d.attachments),
             };
             setMessages((prev) =>
               prev.some((x) => x.message_id === m.message_id) ? prev : [...prev, m],
@@ -507,6 +510,12 @@ export function AgentChatShell(props: AgentChatShellProps) {
                       }}
                     >
                       {m.content}
+                      <MailboxThumbs
+                        chatId={m.chat_id || chat?.chat_id || ""}
+                        attachments={m.attachments}
+                        gatewayBaseUrl={gatewayBaseUrl}
+                        getAccessToken={getAccessToken}
+                      />
                     </div>
                   </div>
                 );
@@ -819,6 +828,12 @@ export function AgentChatShell(props: AgentChatShellProps) {
                 {m.sender_type}:{m.sender_id.slice(0, 24)}
               </div>
               {m.content}
+              <MailboxThumbs
+                chatId={m.chat_id || chat?.chat_id || ""}
+                attachments={m.attachments}
+                gatewayBaseUrl={gatewayBaseUrl}
+                getAccessToken={getAccessToken}
+              />
             </div>
           ))}
         </div>
