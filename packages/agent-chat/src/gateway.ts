@@ -1,4 +1,5 @@
 import type { ChatMessage, ChatParticipant, ChatSummary, ThreadSummary } from "./types";
+import { normalizeChatMessage } from "./mailbox";
 
 export class ChatGatewayError extends Error {
   constructor(
@@ -1107,8 +1108,12 @@ export function createGatewayClient(
         `/api/chat/agent-create-jobs/${encodeURIComponent(jobId)}/retry-bind`,
         { method: "POST", body: "{}" },
       ),
-    listMessages: (chatId) =>
-      request<ChatMessage[]>(`/api/chats/${encodeURIComponent(chatId)}/messages?limit=50`),
+    listMessages: async (chatId) => {
+      const rows = await request<ChatMessage[]>(
+        `/api/chats/${encodeURIComponent(chatId)}/messages?limit=50`,
+      );
+      return rows.map((row) => normalizeChatMessage(row));
+    },
     listParticipants: (chatId) =>
       request<ChatParticipant[]>(`/api/chats/${encodeURIComponent(chatId)}/participants`),
     sendMessage: (chatId, content, mentions, threadId, opts) =>
