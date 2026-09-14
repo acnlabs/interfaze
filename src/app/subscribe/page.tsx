@@ -92,7 +92,8 @@ function SubscribeInner() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  const [paying, setPaying] = useState(false);
+  const [paying, setPaying] = useState<"LOGIN" | "BILLING" | "CAPTURE" | null>(null);
+  const payingLock = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [inIframe, setInIframe] = useState(false);
@@ -150,13 +151,15 @@ function SubscribeInner() {
 
   const startPaypalCheckout = useCallback(
     async (landingPage: "LOGIN" | "BILLING") => {
-      if (!plan || !planCode) return;
+      if (!plan || !planCode || payingLock.current) return;
+      payingLock.current = true;
       setError(null);
-      setPaying(true);
+      setPaying(landingPage);
       try {
         const token = await tokenGetter();
         if (!token) {
-          setPaying(false);
+          payingLock.current = false;
+          setPaying(null);
           promptSignIn(cleanSubscribePath());
           return;
         }
@@ -196,7 +199,8 @@ function SubscribeInner() {
         const topWin = window.top || window;
         topWin.location.assign(body.approve_url);
       } catch (e) {
-        setPaying(false);
+        payingLock.current = false;
+        setPaying(null);
         setError(e instanceof Error ? e.message : "PayPal create failed");
       }
     },
@@ -235,7 +239,7 @@ function SubscribeInner() {
     if (paypalCaptureInFlightRef.current === paypalOrderId) return;
     paypalCaptureInFlightRef.current = paypalOrderId;
     let cancelled = false;
-    setPaying(true);
+    setPaying("CAPTURE");
     void (async () => {
       try {
         const token = await tokenGetter();
@@ -282,7 +286,7 @@ function SubscribeInner() {
         if (paypalCaptureInFlightRef.current === paypalOrderId) {
           paypalCaptureInFlightRef.current = null;
         }
-        if (!cancelled) setPaying(false);
+        if (!cancelled) setPaying(null);
       }
     })();
     return () => {
@@ -425,18 +429,28 @@ function SubscribeInner() {
                 <button
                   type="button"
                   style={paypalBtnStyle}
-                  disabled={Boolean(paying)}
-                  onClick={() => void startPaypalCheckout("LOGIN")}
+                  disabled={paying !== null}
+                  aria-busy={paying === "LOGIN"}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void startPaypalCheckout("LOGIN");
+                  }}
                 >
-                  {paying ? "Redirecting…" : "Pay with PayPal"}
+                  {paying === "LOGIN" ? "Redirecting…" : "Pay with PayPal"}
                 </button>
                 <button
                   type="button"
                   style={cardBtnStyle}
-                  disabled={Boolean(paying)}
-                  onClick={() => void startPaypalCheckout("BILLING")}
+                  disabled={paying !== null}
+                  aria-busy={paying === "BILLING"}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void startPaypalCheckout("BILLING");
+                  }}
                 >
-                  {paying ? "Redirecting…" : "Debit or Credit Card"}
+                  {paying === "BILLING" ? "Redirecting…" : "Debit or Credit Card"}
                 </button>
               </>
             ) : (
@@ -537,6 +551,9 @@ const btnStyle: CSSProperties = {
 
 const paypalBtnStyle: CSSProperties = {
   ...btnStyle,
+  marginTop: 0,
+  position: "relative",
+  isolation: "isolate",
   background: "#ffc439",
   border: "1px solid #ffc439",
   color: "#003087",
@@ -544,6 +561,9 @@ const paypalBtnStyle: CSSProperties = {
 
 const cardBtnStyle: CSSProperties = {
   ...btnStyle,
+  marginTop: 0,
+  position: "relative",
+  isolation: "isolate",
   background: "transparent",
   border: `1px solid ${planSheetColors.border}`,
   color: planSheetColors.text,
