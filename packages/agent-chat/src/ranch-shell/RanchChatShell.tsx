@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 import {
   ChatGatewayError,
@@ -43,6 +44,12 @@ import {
   AccountWalletPanel,
   ChatCollabBudgetSection,
 } from "./AccountPanels";
+import {
+  accountPanelHref,
+  readAccountPanelFromUrl,
+  writeAccountPanelToUrl,
+  type AccountDeepLinkPanel,
+} from "./accountDeepLink";
 import { CreateAgentDialog } from "./CreateAgentDialog";
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
@@ -1541,6 +1548,22 @@ function AccountFooter({
     fn?.();
   };
 
+  const menuLinkStyle: CSSProperties = {
+    ...menuItemStyle,
+    textDecoration: "none",
+    boxSizing: "border-box",
+  };
+
+  const accountLinkClick =
+    (fn?: () => void) => (e: ReactMouseEvent<HTMLAnchorElement>) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+        setMenuOpen(false);
+        return;
+      }
+      e.preventDefault();
+      runAndClose(fn);
+    };
+
   const hasUpper =
     !!(onProfile || onManage || onWallet || onKeys || onPlanUsage || onDiscoverAgents);
 
@@ -1581,59 +1604,59 @@ function AccountFooter({
           }}
         >
           {onProfile ? (
-            <button
-              type="button"
+            <a
+              href={accountPanelHref("profile")}
               role="menuitem"
-              style={menuItemStyle}
-              onClick={() => runAndClose(onProfile)}
+              style={menuLinkStyle}
+              onClick={accountLinkClick(onProfile)}
               {...hoverHandlers}
             >
               <span style={{ flex: 1 }}>{t.accountProfile}</span>
-            </button>
+            </a>
           ) : null}
           {onManage ? (
-            <button
-              type="button"
+            <a
+              href={accountPanelHref("manage")}
               role="menuitem"
-              style={menuItemStyle}
-              onClick={() => runAndClose(onManage)}
+              style={menuLinkStyle}
+              onClick={accountLinkClick(onManage)}
               {...hoverHandlers}
             >
               <span style={{ flex: 1 }}>{t.accountManage}</span>
-            </button>
+            </a>
           ) : null}
           {onWallet ? (
-            <button
-              type="button"
+            <a
+              href={accountPanelHref("wallet")}
               role="menuitem"
-              style={menuItemStyle}
-              onClick={() => runAndClose(onWallet)}
+              style={menuLinkStyle}
+              onClick={accountLinkClick(onWallet)}
               {...hoverHandlers}
             >
               <span style={{ flex: 1 }}>{t.accountWallet}</span>
-            </button>
+            </a>
           ) : null}
           {onKeys ? (
-            <button
-              type="button"
+            <a
+              href={accountPanelHref("keys")}
               role="menuitem"
-              style={menuItemStyle}
-              onClick={() => runAndClose(onKeys)}
+              style={menuLinkStyle}
+              onClick={accountLinkClick(onKeys)}
               {...hoverHandlers}
             >
               <span style={{ flex: 1 }}>{t.accountKeys}</span>
-            </button>
+            </a>
           ) : null}
           {onPlanUsage ? (
-            <button
-              type="button"
+            <a
+              href={accountPanelHref("plan")}
               role="menuitem"
-              style={menuItemStyle}
-              onClick={() => runAndClose(onPlanUsage)}
+              style={menuLinkStyle}
+              onClick={accountLinkClick(onPlanUsage)}
               {...hoverHandlers}
             >
               <span style={{ flex: 1 }}>{t.accountPlanUsage}</span>
-            </button>
+            </a>
           ) : null}
           {(onProfile || onManage || onWallet || onKeys || onPlanUsage) && onDiscoverAgents ? (
             <div style={{ height: 1, background: colors.border, margin: "2px 0" }} />
@@ -1906,16 +1929,37 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setShowMyAgents(false);
   };
 
+  const applyAccountPanel = (panel: AccountDeepLinkPanel | null) => {
+    closeAccountSurfaces();
+    if (panel === "plan") setShowAccountPlan(true);
+    else if (panel === "wallet") setShowAccountWallet(true);
+    else if (panel === "keys") setShowAccountKeys(true);
+    else if (panel === "manage") setShowAccountManage(true);
+    else if (panel === "profile") setShowAccountProfile(true);
+  };
+
+  const openAccountPanel = (panel: AccountDeepLinkPanel) => {
+    setPickerMode(null);
+    applyAccountPanel(panel);
+    writeAccountPanelToUrl(panel, "push");
+  };
+
+  const closeAccountPanel = () => {
+    closeAccountSurfaces();
+    writeAccountPanelToUrl(null, "replace");
+  };
+
   // Deep-link back from plan checkout (PayPal full-page return).
   useEffect(() => {
     if (!initialAccountPanel) return;
-    closeAccountSurfaces();
-    if (initialAccountPanel === "plan") setShowAccountPlan(true);
-    else if (initialAccountPanel === "wallet") setShowAccountWallet(true);
-    else if (initialAccountPanel === "keys") setShowAccountKeys(true);
-    else if (initialAccountPanel === "manage") setShowAccountManage(true);
-    else if (initialAccountPanel === "profile") setShowAccountProfile(true);
+    applyAccountPanel(initialAccountPanel);
   }, [initialAccountPanel]);
+
+  useEffect(() => {
+    const onPop = () => applyAccountPanel(readAccountPanelFromUrl());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   useEffect(() => {
     if (!initialCreateAgent) return;
@@ -3967,33 +4011,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
           <AccountFooter
             account={account}
             onLogout={onLogout}
-            onProfile={() => {
-              setPickerMode(null);
-              closeAccountSurfaces();
-              setShowAccountProfile(true);
-            }}
-            onManage={() => {
-              setPickerMode(null);
-              closeAccountSurfaces();
-              setShowAccountManage(true);
-            }}
-            onWallet={() => {
-              setPickerMode(null);
-              closeAccountSurfaces();
-              setShowAccountWallet(true);
-            }}
-            onKeys={() => {
-              setPickerMode(null);
-              closeAccountSurfaces();
-              setShowAccountKeys(true);
-            }}
-            onPlanUsage={() => {
-              setPickerMode(null);
-              closeAccountSurfaces();
-              setShowAccountPlan(true);
-            }}
+            onProfile={() => openAccountPanel("profile")}
+            onManage={() => openAccountPanel("manage")}
+            onWallet={() => openAccountPanel("wallet")}
+            onKeys={() => openAccountPanel("keys")}
+            onPlanUsage={() => openAccountPanel("plan")}
             onDiscoverAgents={() => {
-              closeAccountSurfaces();
+              closeAccountPanel();
               setPickerMode("direct");
             }}
             t={t}
@@ -4004,14 +4028,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
           <AccountProfilePanel
             account={account}
             messages={t}
-            onClose={() => setShowAccountProfile(false)}
+            onClose={() => closeAccountPanel()}
           />
         ) : null}
 
         {showAccountManage ? (
           <AccountManagePanel
             messages={t}
-            onClose={() => setShowAccountManage(false)}
+            onClose={() => closeAccountPanel()}
             onOpenAgents={() => {
               setShowAccountManage(false);
               setShowMyAgents(true);
@@ -4024,7 +4048,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             client={client}
             messages={t}
             agentPlanetBaseUrl={agentPlanetBaseUrl}
-            onClose={() => setShowAccountWallet(false)}
+            onClose={() => closeAccountPanel()}
           />
         ) : null}
 
@@ -4033,7 +4057,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             client={client}
             messages={t}
             agentPlanetBaseUrl={agentPlanetBaseUrl}
-            onClose={() => setShowAccountKeys(false)}
+            onClose={() => closeAccountPanel()}
           />
         ) : null}
 
@@ -4044,7 +4068,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             locale={uiLocale}
             agentPlanetBaseUrl={agentPlanetBaseUrl}
             interfazeBaseUrl={interfazeBaseUrl}
-            onClose={() => setShowAccountPlan(false)}
+            onClose={() => closeAccountPanel()}
           />
         ) : null}
 
@@ -4072,11 +4096,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               applyOwnedAgentProfileUpdate(row, previousName);
             }}
             onAgentRemoved={applyOwnedAgentRemoved}
-            onOpenKeys={() => {
-              setShowMyAgents(false);
-              closeAccountSurfaces();
-              setShowAccountKeys(true);
-            }}
+            onOpenKeys={() => openAccountPanel("keys")}
           />
         ) : null}
       </div>
@@ -5623,10 +5643,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           busy={busy}
                           onUpdated={applyOwnedAgentProfileUpdate}
                           onRemoved={applyOwnedAgentRemoved}
-                          onOpenKeys={() => {
-                            closeAccountSurfaces();
-                            setShowAccountKeys(true);
-                          }}
+                          onOpenKeys={() => openAccountPanel("keys")}
                         />
                       ) : (
                         <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>

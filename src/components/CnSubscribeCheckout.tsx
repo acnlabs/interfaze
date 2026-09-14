@@ -28,6 +28,7 @@ import {
 } from "@/lib/embedParent";
 import { getAgentPlanetBaseUrl } from "@/lib/region";
 import { planCheckoutReturnHref, safeReturnTo } from "@/lib/safeReturnTo";
+import { PlanCatalog, subscribeHref } from "@/components/PlanCatalog";
 import {
   clearPlanCheckoutStash,
   getPendingPlanCheckout,
@@ -109,6 +110,8 @@ function CnSubscribeInner() {
       setSuccess(null);
       setNativeQr(null);
       setNativeOrderId(null);
+    } else {
+      setPlanCode(null);
     }
   }, [searchParams]);
 
@@ -266,17 +269,8 @@ function CnSubscribeInner() {
 
   if (!plan || !planCode) {
     return (
-      <main style={pageStyle(embed)}>
-        {!embed ? <Header /> : null}
-        <div style={cardStyle}>
-          <h1 style={titleStyle}>界面订阅</h1>
-          <p style={muted}>请从账户「方案与用量」选择 Pro / Max。</p>
-          {!embed ? (
-            <Link href="/" style={linkStyle}>
-              返回界面
-            </Link>
-          ) : null}
-        </div>
+      <main style={{ ...pageStyle(embed), padding: 0 }}>
+        <PlanCatalog market="cn" searchParams={searchParams} embed={embed} />
       </main>
     );
   }
@@ -433,6 +427,10 @@ function CnSubscribeInner() {
         ) : null}
         {!embed ? (
           <p style={{ ...muted, marginTop: 20 }}>
+            <Link href={subscribeHref(searchParams)} style={linkStyle}>
+              全部方案
+            </Link>
+            {" · "}
             需要充值星币？{" "}
             <a href={`${getAgentPlanetBaseUrl()}/wallet?recharge=1`} style={linkStyle}>
               打开钱包
@@ -457,9 +455,20 @@ function CnSubscribeInner() {
 
 function Header() {
   return (
-    <div style={{ marginBottom: 24 }}>
+    <div
+      style={{
+        marginBottom: 8,
+        padding: "12px 20px 0",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}
+    >
       <Link href="/" style={{ ...linkStyle, fontSize: 14, fontWeight: 600 }}>
         界面
+      </Link>
+      <Link href="/subscribe" style={linkStyle}>
+        方案
       </Link>
     </div>
   );

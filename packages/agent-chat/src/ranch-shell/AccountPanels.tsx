@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type {
   AccountKey,
   ChatCollabBudget,
@@ -63,6 +64,42 @@ function PanelChrome({
       </div>
       <div style={{ flex: 1, overflow: "auto", padding: 16 }}>{children}</div>
     </div>
+  );
+}
+
+/** Covers the whole chat viewport — not the 360px account sidebar. */
+function ViewportOverlay({
+  label,
+  zIndex,
+  onBackdrop,
+  children,
+}: {
+  label: string;
+  zIndex: number;
+  onBackdrop?: () => void;
+  children: ReactNode;
+}) {
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex,
+        background: "rgba(0,0,0,0.62)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+      }}
+      onClick={onBackdrop}
+    >
+      {children}
+    </div>,
+    document.body,
   );
 }
 
@@ -254,8 +291,6 @@ export function AccountPlanUsagePanel({
   const [buyBusy, setBuyBusy] = useState<string | null>(null);
   const [buyMsg, setBuyMsg] = useState<string | null>(null);
   const [buyMsgTone, setBuyMsgTone] = useState<"muted" | "ok" | "danger">("muted");
-  const [confirmTier, setConfirmTier] = useState<PlanCatalogEntry | null>(null);
-  const [confirmIsRenew, setConfirmIsRenew] = useState(false);
   /** In-shell Interfaze /subscribe embed (QR / PayPal). */
   const [checkoutEmbedUrl, setCheckoutEmbedUrl] = useState<string | null>(null);
   type CheckoutWatch = {
@@ -282,10 +317,6 @@ export function AccountPlanUsagePanel({
     return fromProp || "https://interfaze.io";
   })();
 
-  function clearConfirm() {
-    setConfirmTier(null);
-    setConfirmIsRenew(false);
-  }
 
   function buildSubscribeUrl(code: string, renew: boolean, embed: boolean): string {
     const u = new URL(`${subscribeBase}/subscribe`);
@@ -452,27 +483,22 @@ export function AccountPlanUsagePanel({
 
   function requestBuyPlan(tier: PlanCatalogEntry, opts?: { renew?: boolean }) {
     if (buyBusy) return;
+    const code = tier.code.toLowerCase() === "ultra" ? "max" : tier.code.toLowerCase();
+    const wasRenew = Boolean(opts?.renew);
     setBuyMsg(null);
     setBuyMsgTone("muted");
-    setConfirmIsRenew(Boolean(opts?.renew));
-    setConfirmTier(tier);
-  }
-
-  function tierFiatLabel(tier: PlanCatalogEntry): string {
-    if (tier.fiat_amount != null && tier.fiat_amount > 0) {
-      const n = String(tier.fiat_amount);
-      if ((tier.fiat_currency || "").toUpperCase() === "CNY") {
-        return fmtTpl(t.accountPlanPriceFiatCny, { n });
+    const useWeChat =
+      prefersInPanelCheckout(subscribeBase) ||
+      (tier.fiat_currency || "").toUpperCase() === "CNY";
+    if (!useWeChat) {
+      if (typeof window !== "undefined") {
+        window.location.assign(buildSubscribeUrl(code, wasRenew, false));
       }
-      return fmtTpl(t.accountPlanPriceFiatUsd, { n });
+      return;
     }
-    if (tier.price_credits != null && tier.price_credits > 0) {
-      return fmtTpl(t.accountPlanPriceCredits, { n: fmtCredits(tier.price_credits) });
-    }
-    return "—";
+    void openWeChatCheckout(code, wasRenew);
   }
 
-  /** CN WeChat Native QR works in-panel; Global PayPal must be top-level (popups break in iframes). */
   function prefersInPanelCheckout(url: string): boolean {
     try {
       const h = new URL(url).hostname.toLowerCase();
@@ -482,13 +508,22 @@ export function AccountPlanUsagePanel({
     }
   }
 
-  async function confirmBuyPlan() {
-    if (!confirmTier) return;
-    const code = confirmTier.code.toLowerCase() === "ultra" ? "max" : confirmTier.code.toLowerCase();
-    const wasRenew = confirmIsRenew;
+  async function openWeChatCheckout(code: string, wasRenew: boolean) {
     setBuyBusy(code);
     setBuyMsg(null);
     setBuyMsgTone("muted");
+    const watch: CheckoutWatch = {
+      code,
+      priorCode: (data?.plan.code || "free").toLowerCase(),
+      paidUntil: data?.plan.paid_until ?? null,
+      wasRenew,
+      watchUntil: Date.now() + 15 * 60 * 1000,
+    };
+    const now = Date.now();
+    checkoutWatchesRef.current = [
+      ...checkoutWatchesRef.current.filter((w) => now <= w.watchUntil),
+      watch,
+    ].slice(-4);
     try {
       let checkoutUrl = buildSubscribeUrl(code, wasRenew, false);
       try {
@@ -508,19 +543,6 @@ export function AccountPlanUsagePanel({
       } catch {
         // Fall back to Interfaze /subscribe constructed above.
       }
-      const watch: CheckoutWatch = {
-        code,
-        priorCode: (data?.plan.code || "free").toLowerCase(),
-        paidUntil: data?.plan.paid_until ?? null,
-        wasRenew,
-        watchUntil: Date.now() + 15 * 60 * 1000,
-      };
-      const now = Date.now();
-      checkoutWatchesRef.current = [
-        ...checkoutWatchesRef.current.filter((w) => now <= w.watchUntil),
-        watch,
-      ].slice(-4);
-      clearConfirm();
       setBuyMsgTone("muted");
       setBuyMsg(t.accountPlanCheckoutPending);
 
@@ -532,7 +554,6 @@ export function AccountPlanUsagePanel({
         }
         setCheckoutEmbedUrl(u.toString());
       } else if (typeof window !== "undefined") {
-        // Global PayPal: navigate (same origin) or open tab — never iframe.
         try {
           const dest = new URL(checkoutUrl, window.location.origin);
           if (dest.origin === window.location.origin) {
@@ -553,6 +574,7 @@ export function AccountPlanUsagePanel({
     }
   }
 
+
   useEffect(() => {
     if (!checkoutEmbedUrl) return;
     const expectedOrigin = allowedCheckoutOrigin(checkoutEmbedUrl);
@@ -570,6 +592,19 @@ export function AccountPlanUsagePanel({
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
   }, [checkoutEmbedUrl, refreshAfterCheckout]);
+
+  useEffect(() => {
+    const onPaid = () => {
+      void client
+        .getPlanUsage()
+        .then(applyPlanUsage)
+        .catch(() => {
+          /* ignore */
+        });
+    };
+    window.addEventListener(PLAN_ACTIVATED_MSG, onPaid);
+    return () => window.removeEventListener(PLAN_ACTIVATED_MSG, onPaid);
+  }, [client, applyPlanUsage]);
 
   const catalog: PlanCatalogEntry[] =
     data?.catalog && data.catalog.length > 0
@@ -835,31 +870,18 @@ export function AccountPlanUsagePanel({
       )}
 
       {adjustOpen ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={t.accountPlanAdjustTitle}
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 50,
-            background: "rgba(0,0,0,0.55)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
-          onClick={() => {
+        <ViewportOverlay
+          label={t.accountPlanAdjustTitle}
+          zIndex={10050}
+          onBackdrop={() => {
             if (buyBusy) return;
-            clearConfirm();
-            // Keep checkout watch + success/pending message across dismiss.
             setAdjustOpen(false);
           }}
         >
           <div
             style={{
-              width: "min(360px, 100%)",
-              maxHeight: "90%",
+              width: "min(920px, calc(100vw - 32px))",
+              maxHeight: "min(90vh, 900px)",
               overflow: "auto",
               background: "#141a22",
               borderRadius: 14,
@@ -884,7 +906,6 @@ export function AccountPlanUsagePanel({
                 style={{ ...btnGhost, width: 28, height: 28, padding: 0 }}
                 onClick={() => {
                   if (buyBusy) return;
-                  clearConfirm();
                   setAdjustOpen(false);
                 }}
                 aria-label={t.close}
@@ -892,7 +913,14 @@ export function AccountPlanUsagePanel({
                 ×
               </button>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: 12,
+                alignItems: "stretch",
+              }}
+            >
               {catalog.map((tier) => {
                 const isCurrent = tier.code.toLowerCase() === currentCode;
                 const tierLabel =
@@ -1016,13 +1044,13 @@ export function AccountPlanUsagePanel({
                     {isCurrent && tier.purchasable ? (
                       <button
                         type="button"
-                        disabled={busy || buyBusy != null || confirmTier != null}
+                        disabled={busy || buyBusy != null}
                         style={{
                           ...btnPrimary,
                           width: "100%",
                           marginTop: 16,
                           padding: "9px 12px",
-                          opacity: busy || buyBusy != null || confirmTier != null ? 0.7 : 1,
+                          opacity: busy || buyBusy != null ? 0.7 : 1,
                         }}
                         onClick={() => requestBuyPlan(tier, { renew: true })}
                       >
@@ -1047,13 +1075,13 @@ export function AccountPlanUsagePanel({
                     ) : tier.purchasable ? (
                       <button
                         type="button"
-                        disabled={busy || buyBusy != null || confirmTier != null}
+                        disabled={busy || buyBusy != null}
                         style={{
                           ...btnPrimary,
                           width: "100%",
                           marginTop: 16,
                           padding: "9px 12px",
-                          opacity: busy || buyBusy != null || confirmTier != null ? 0.7 : 1,
+                          opacity: busy || buyBusy != null ? 0.7 : 1,
                         }}
                         onClick={() => requestBuyPlan(tier)}
                       >
@@ -1064,7 +1092,7 @@ export function AccountPlanUsagePanel({
                 );
               })}
             </div>
-            {buyMsg && !confirmTier ? (
+            {buyMsg ? (
               <div style={{ marginTop: 12, textAlign: "center" }}>
                 <p
                   style={{
@@ -1099,139 +1127,15 @@ export function AccountPlanUsagePanel({
               </div>
             ) : null}
 
-            {confirmTier ? (
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-label={t.accountPlanBuyConfirmTitle}
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  zIndex: 2,
-                  background: "rgba(0,0,0,0.62)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: 16,
-                  borderRadius: 14,
-                }}
-              >
-                <div
-                  style={{
-                    width: "100%",
-                    background: "#1a222d",
-                    borderRadius: 12,
-                    border: `1px solid ${colors.border}`,
-                    padding: "16px 14px 14px",
-                  }}
-                >
-                  <strong style={{ fontSize: 15 }}>{t.accountPlanBuyConfirmTitle}</strong>
-                  <p
-                    style={{
-                      margin: "10px 0 0",
-                      fontSize: 13,
-                      color: colors.muted,
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {fmtTpl(
-                      confirmIsRenew
-                        ? t.accountPlanBuyConfirmRenewBody
-                        : t.accountPlanBuyConfirmBody,
-                      {
-                        plan:
-                          locale === "zh"
-                            ? confirmTier.label_zh || confirmTier.label
-                            : confirmTier.label,
-                        price: tierFiatLabel(confirmTier),
-                        pack: fmtCredits(confirmTier.dialog_allowance_credits ?? 0),
-                      },
-                    )}
-                  </p>
-                  {buyMsg && buyMsgTone === "danger" ? (
-                    <div style={{ marginTop: 12 }}>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: 12,
-                          color: colors.danger,
-                          lineHeight: 1.45,
-                        }}
-                      >
-                        {buyMsg}
-                      </p>
-                      {buyMsg === t.accountPlanNeedCredits ? (
-                        <a
-                          href={rechargeUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            display: "inline-block",
-                            marginTop: 8,
-                            fontSize: 12,
-                            color: colors.accent,
-                          }}
-                        >
-                          {t.accountPlanOpenWallet}
-                        </a>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 8,
-                      marginTop: 16,
-                      justifyContent: "flex-end",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      disabled={buyBusy != null}
-                      style={{ ...btnGhost, padding: "8px 12px" }}
-                      onClick={() => {
-                        clearConfirm();
-                        setBuyMsg(null);
-                      }}
-                    >
-                      {t.accountPlanBuyCancel}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={buyBusy != null}
-                      style={{
-                        ...btnPrimary,
-                        padding: "8px 12px",
-                        opacity: buyBusy != null ? 0.7 : 1,
-                      }}
-                      onClick={() => void confirmBuyPlan()}
-                    >
-                      {buyBusy ? t.accountPlanBuyBusy : t.accountPlanBuyConfirm}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
           </div>
-        </div>
+        </ViewportOverlay>
       ) : null}
 
       {checkoutEmbedUrl ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={locale === "zh" ? "界面订阅" : "Interfaze Subscribe"}
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 60,
-            background: "rgba(0,0,0,0.65)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 12,
-          }}
-          onClick={() => setCheckoutEmbedUrl(null)}
+        <ViewportOverlay
+          label={locale === "zh" ? "界面订阅" : "Interfaze Subscribe"}
+          zIndex={10060}
+          onBackdrop={() => setCheckoutEmbedUrl(null)}
         >
           <div
             style={{
@@ -1286,7 +1190,7 @@ export function AccountPlanUsagePanel({
               style={{ flex: 1, width: "100%", border: 0, background: "#0a0a0a" }}
             />
           </div>
-        </div>
+        </ViewportOverlay>
       ) : null}
     </PanelChrome>
   );

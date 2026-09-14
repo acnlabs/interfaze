@@ -582,6 +582,14 @@ export type GatewayClient = {
     fiat_currency: string | null;
     period_days: number;
   }>;
+  createPaypalOrder: (input: {
+    amount: number;
+    currency: string;
+    return_url: string;
+    cancel_url: string;
+    plan_code?: string;
+    landing_page?: "LOGIN" | "BILLING" | "NO_PREFERENCE";
+  }) => Promise<{ order_id: string; approve_url: string | null }>;
   /** Account default collaboration tank size (preference; no lock). */
   getCollabCap: () => Promise<{ cap_credits: number }>;
   putCollabCap: (capCredits: number) => Promise<{ cap_credits: number }>;
@@ -938,6 +946,14 @@ export function createGatewayClient(
         period_days: number;
       }>(`/api/chat/plan-usage/checkout?${params}`);
     },
+    createPaypalOrder: (input) =>
+      request<{ order_id: string; approve_url: string | null }>(
+        "/api/users/me/wallet/paypal/create-order",
+        {
+          method: "POST",
+          body: JSON.stringify(input),
+        },
+      ),
     listHumanWalletTransactions: (page = 1, pageSize = 20) => {
       const params = new URLSearchParams();
       params.set("page", String(page));
