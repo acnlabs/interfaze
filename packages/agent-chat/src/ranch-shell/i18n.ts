@@ -57,6 +57,8 @@ export type RanchMessages = {
   pricingMismatch: (listed: string, observed: string) => string;
   /** Agent bubble footer: this hop's token burn, in/out separately. */
   agentHopUsage: (input: number, output: number) => string;
+  pieceHeld: (amount: number) => string;
+  pieceCaptured: string;
   /** Composer chip: current runtime / listing model (M1). */
   composerProviderLabel: string;
   composerModelLabel: string;
@@ -393,6 +395,13 @@ export type RanchMessages = {
   myAgentsSavePricing: string;
   myAgentsPricingSaved: string;
   myAgentsPricingFailed: string;
+  myAgentsSectionPieceSku: string;
+  myAgentsPieceSkuHint: string;
+  myAgentsPieceSkuLabel: string;
+  myAgentsPieceSkuOff: string;
+  myAgentsSavePieceSku: string;
+  myAgentsPieceSkuSaved: string;
+  myAgentsPieceSkuFailed: string;
   myAgentsPricingSyncing: string;
   myAgentsPricingNoAck: string;
   myAgentsNameHint: string;
@@ -603,6 +612,8 @@ const en: RanchMessages = {
     `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
   agentHopUsage: (input, output) =>
     `in ${input.toLocaleString("en-US")} · out ${output.toLocaleString("en-US")}`,
+  pieceHeld: (amount) => `${amount} Credits settling`,
+  pieceCaptured: "Stills settled",
   composerProviderLabel: "Provider",
   composerModelLabel: "Model",
   composerModelUnknown: "—",
@@ -968,6 +979,15 @@ const en: RanchMessages = {
   myAgentsSavePricing: "Save default model & markup",
   myAgentsPricingSaved: "Pricing saved",
   myAgentsPricingFailed: "Couldn’t save pricing.",
+  myAgentsSectionPieceSku: "Per image",
+  myAgentsPieceSkuHint:
+    "Credits charged per still in this chat when the file lands. 0 = not selling stills. Dislike is not a refund; dialog tokens still settle separately.",
+  myAgentsPieceSkuLabel: "Credits per still",
+  myAgentsPieceSkuOff:
+    "0 = not selling stills. Images can still land in this chat; they just won’t occupy the wallet.",
+  myAgentsSavePieceSku: "Save per-image price",
+  myAgentsPieceSkuSaved: "Per-image price saved",
+  myAgentsPieceSkuFailed: "Couldn’t save per-image price.",
   myAgentsPricingSyncing: "Syncing to the agent…",
   myAgentsPricingNoAck: "The agent did not confirm the new default. Nothing was saved.",
   myAgentsNameHint: "2–100 characters, at least one letter",
@@ -1199,6 +1219,8 @@ const zh: RanchMessages = {
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
   agentHopUsage: (input, output) =>
     `入 ${input.toLocaleString("zh-CN")} · 出 ${output.toLocaleString("zh-CN")}`,
+  pieceHeld: (amount) => `按张结算中 ${amount} Credits`,
+  pieceCaptured: "按张已入账",
   composerProviderLabel: "供应商",
   composerModelLabel: "模型",
   composerModelUnknown: "—",
@@ -1547,6 +1569,14 @@ const zh: RanchMessages = {
   myAgentsSavePricing: "保存默认模型与上浮",
   myAgentsPricingSaved: "定价已保存",
   myAgentsPricingFailed: "保存定价失败。",
+  myAgentsSectionPieceSku: "按张",
+  myAgentsPieceSkuHint:
+    "图进这场对话即按张成交。0 = 不卖按张。不满意不退；没出货不占。对话 token 仍另结。",
+  myAgentsPieceSkuLabel: "每张 Credits",
+  myAgentsPieceSkuOff: "0 = 不卖按张。图仍可进这场对话，只是不占钱包。",
+  myAgentsSavePieceSku: "保存按张价",
+  myAgentsPieceSkuSaved: "按张价已保存",
+  myAgentsPieceSkuFailed: "保存按张价失败。",
   myAgentsPricingSyncing: "正在同步到机上…",
   myAgentsPricingNoAck: "机上没有回执，未保存。",
   myAgentsNameHint: "2–100 字，至少含一个字母",

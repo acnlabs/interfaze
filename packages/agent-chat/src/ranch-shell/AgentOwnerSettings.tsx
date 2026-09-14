@@ -57,6 +57,23 @@ function formatTagsInput(tags: string[] | null | undefined): string {
   return (tags ?? []).join(", ");
 }
 
+const MAX_IMAGE_PIECE_CREDITS = 100_000;
+
+function parseImageCredits(raw: string): number | null {
+  const v = raw.trim();
+  if (!/^\d+$/.test(v)) return null;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 0 || n > MAX_IMAGE_PIECE_CREDITS) return null;
+  return n;
+}
+
+function imageCreditsFromDetail(d: MyAgentSummary): number {
+  const n = d.image_credits;
+  return typeof n === "number" && Number.isFinite(n) && n >= 0
+    ? Math.min(MAX_IMAGE_PIECE_CREDITS, Math.floor(n))
+    : 0;
+}
+
 const FALLBACK_MODEL_ID = "openai/gpt-4o-mini";
 const DEFAULT_MARKUP_PERCENT = 50;
 
@@ -930,6 +947,15 @@ export function AgentOwnerSettings({
   const [savingPricing, setSavingPricing] = useState(false);
   const [pricingMsg, setPricingMsg] = useState<string | null>(null);
   const [pricingError, setPricingError] = useState<string | null>(null);
+  const [imageCreditsDraft, setImageCreditsDraft] = useState(() =>
+    String(imageCreditsFromDetail(detail)),
+  );
+  const [imageCreditsSaved, setImageCreditsSaved] = useState(() =>
+    imageCreditsFromDetail(detail),
+  );
+  const [savingPieceSku, setSavingPieceSku] = useState(false);
+  const [pieceSkuMsg, setPieceSkuMsg] = useState<string | null>(null);
+  const [pieceSkuError, setPieceSkuError] = useState<string | null>(null);
   const [refreshingRuntime, setRefreshingRuntime] = useState(false);
   type DeliveryChoice = "direct" | "relay" | "none";
   const deliveryFromDetail = (d: string | null | undefined): DeliveryChoice => {
@@ -1015,6 +1041,29 @@ export function AgentOwnerSettings({
     detail.host_inference_ready,
     (detail.official_models ?? []).join("\u0001"),
   ]);
+
+  useEffect(() => {
+    const fromDetail = imageCreditsFromDetail(detail);
+    setImageCreditsDraft(String(fromDetail));
+    setImageCreditsSaved(fromDetail);
+    setPieceSkuMsg(null);
+    setPieceSkuError(null);
+    let cancelled = false;
+    void client
+      .getMyAgentPieceSku(detail.agent_id)
+      .then((row) => {
+        if (cancelled) return;
+        const n = parseImageCredits(String(row.image_credits ?? 0)) ?? 0;
+        setImageCreditsDraft(String(n));
+        setImageCreditsSaved(n);
+      })
+      .catch(() => {
+        /* Host without SKU route: keep draft from detail. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, detail.agent_id, detail.image_credits]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1407,6 +1456,11 @@ export function AgentOwnerSettings({
     !modelsBusy &&
     !savingPricing &&
     !busy;
+  const imageCreditsParsed = parseImageCredits(imageCreditsDraft);
+  const pieceSkuDirty =
+    imageCreditsParsed !== null && imageCreditsParsed !== imageCreditsSaved;
+  const canSavePieceSku =
+    pieceSkuDirty && imageCreditsParsed !== null && !savingPieceSku && !busy;
   const vendorModelsKey = vendorModels.join("\u0001");
   useEffect(() => {
     if (modelsBusy) return;
@@ -1652,6 +1706,33 @@ export function AgentOwnerSettings({
         return null;
       })
       .finally(() => setSavingPricing(false));
+  };
+
+  const runSavePieceSku = (): Promise<{ agent_id: string; image_credits: number } | null> => {
+    if (!canSavePieceSku || imageCreditsParsed === null) return Promise.resolve(null);
+    setSavingPieceSku(true);
+    setPieceSkuError(null);
+    setPieceSkuMsg(null);
+    return client
+      .updateMyAgentPieceSku(detail.agent_id, imageCreditsParsed)
+      .then((row) => {
+        const n = parseImageCredits(String(row.image_credits ?? 0)) ?? imageCreditsParsed;
+        setImageCreditsDraft(String(n));
+        setImageCreditsSaved(n);
+        setPieceSkuMsg(t.myAgentsPieceSkuSaved);
+        window.setTimeout(() => setPieceSkuMsg(null), 2000);
+        onUpdated?.({ ...detail, image_credits: n });
+        return row;
+      })
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof ChatGatewayError && err.message.trim()
+            ? err.message.trim()
+            : t.myAgentsPieceSkuFailed;
+        setPieceSkuError(msg);
+        return null;
+      })
+      .finally(() => setSavingPieceSku(false));
   };
 
   const runSaveOfficial = (): Promise<{
@@ -2462,6 +2543,56 @@ export function AgentOwnerSettings({
             {pricingMsg || officialMsg}
           </p>
         ) : null}
+      </section>
+
+      <section>
+        <h3 style={{ ...sectionTitle, display: "flex", alignItems: "center" }}>
+          {t.myAgentsSectionPieceSku}
+          <FieldHint text={t.myAgentsPieceSkuHint} />
+        </h3>
+        <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+          {t.myAgentsPieceSkuOff}
+        </p>
+        <label style={{ display: "block", marginBottom: 10 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: colors.muted,
+              marginBottom: 4,
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            {t.myAgentsPieceSkuLabel}
+          </div>
+          <input
+            value={imageCreditsDraft}
+            onChange={(e) => setImageCreditsDraft(e.target.value)}
+            style={inputStyle}
+            inputMode="numeric"
+            disabled={busy || savingPieceSku}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
+        {pieceSkuError ? (
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>{pieceSkuError}</p>
+        ) : null}
+        {pieceSkuMsg ? (
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>{pieceSkuMsg}</p>
+        ) : null}
+        <button
+          type="button"
+          style={{
+            ...btnGhost,
+            opacity: canSavePieceSku ? 1 : 0.45,
+            cursor: canSavePieceSku ? "pointer" : "default",
+          }}
+          disabled={!canSavePieceSku}
+          onClick={() => void runSavePieceSku()}
+        >
+          {savingPieceSku ? "…" : t.myAgentsSavePieceSku}
+        </button>
       </section>
 
       {showConnectSection ? (

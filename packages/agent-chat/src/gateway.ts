@@ -366,6 +366,11 @@ export type MyAgentSummary = {
   host_inference_ready?: boolean | null;
   /** Owner-authorized official model ids (Host table). */
   official_models?: string[] | null;
+  /**
+   * Community per-image hang牌 in Credits. 0 / omitted = not selling stills.
+   * Dialog tokens still settle on L2 separately.
+   */
+  image_credits?: number | null;
   /** Present after a successful delivery PATCH when ACN returns follow-up copy. */
   next_step_hint?: string | null;
 };
@@ -537,6 +542,14 @@ export type GatewayClient = {
       markup_percent?: number;
     },
   ) => Promise<MyAgentSummary>;
+  /** Owner per-image hang牌. 0 = not selling pieces. */
+  getMyAgentPieceSku: (
+    agentId: string,
+  ) => Promise<{ agent_id: string; image_credits: number }>;
+  updateMyAgentPieceSku: (
+    agentId: string,
+    imageCredits: number,
+  ) => Promise<{ agent_id: string; image_credits: number }>;
   /** Public Host Model Catalog (L1) row for a model id. */
   getModelCatalogItem: (modelId: string) => Promise<ModelCatalogItem>;
   /** Public Host Model Catalog list (OpenRouter + host_pack). */
@@ -837,6 +850,18 @@ export function createGatewayClient(
         {
           method: "PUT",
           body: JSON.stringify(pricing),
+        },
+      ),
+    getMyAgentPieceSku: (agentId) =>
+      request<{ agent_id: string; image_credits: number }>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/piece-sku`,
+      ),
+    updateMyAgentPieceSku: (agentId, imageCredits) =>
+      request<{ agent_id: string; image_credits: number }>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/piece-sku`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ image_credits: imageCredits }),
         },
       ),
     getModelCatalogItem: (modelId) => {

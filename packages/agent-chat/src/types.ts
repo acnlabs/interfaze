@@ -187,8 +187,22 @@ export type ChatMessage = {
       model_id?: string;
       meter_source?: string;
     };
+    piece?: PieceHold | null;
     [key: string]: unknown;
   } | null;
+};
+
+export type PieceHold = {
+  hold_id: string;
+  hop_id?: string;
+  claimed?: number;
+  attachments?: number;
+  billable?: number;
+  unit_credits?: number;
+  amount?: number;
+  status: string;
+  occupied: boolean;
+  reject_deadline?: string | null;
 };
 
 /** Chat Topic (API name: Thread). Response field is ``id``, not ``thread_id``. */
