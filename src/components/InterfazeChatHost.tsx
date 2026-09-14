@@ -18,6 +18,7 @@ import {
   startWeChatLogin,
 } from "@/lib/auth/cn";
 import { getGatewayBaseUrl } from "@/lib/gateway";
+import { usePaypalPlanReturn } from "@/lib/paypalPlanReturn";
 import { currentReturnTo, takeOpenAgentId, clearOpenAgentId } from "@/lib/openAgentDeepLink";
 import { getAgentPlanetBaseUrl, getAppOrigin, isCnRegion } from "@/lib/region";
 
@@ -56,14 +57,6 @@ function useAccountDeepLink() {
       return;
     }
     setInitialAccountPanel(panel);
-    sp.delete("account");
-    sp.delete("checkout");
-    const q = sp.toString();
-    window.history.replaceState(
-      null,
-      "",
-      q ? `${window.location.pathname}?${q}` : window.location.pathname,
-    );
   }, []);
 
   return initialAccountPanel;
@@ -246,7 +239,7 @@ function GlobalChatHost() {
   const { getAccessTokenSilently, isAuthenticated, user, logout, loginWithRedirect } = useAuth0();
   const gatewayBaseUrl = getGatewayBaseUrl();
   const [directoryAgents, setDirectoryAgents] = useState<AgentDirectoryItem[]>([]);
-  const initialAccountPanel = useAccountDeepLink();
+  const deepLinkPanel = useAccountDeepLink();
   const initialOpenAgentId = useClaimedAgentDeepLink();
   const initialCreateAgent = useCreateAgentDeepLink();
   const reauthStarted = useRef(false);
@@ -295,6 +288,13 @@ function GlobalChatHost() {
       return null;
     }
   }, [getAccessTokenSilently, isAuthenticated]);
+
+  const paypalPanel = usePaypalPlanReturn({
+    getAccessToken: tokenGetter,
+    gatewayBaseUrl,
+    enabled: isAuthenticated,
+  });
+  const initialAccountPanel = paypalPanel ?? deepLinkPanel;
 
   useEffect(() => {
     if (!isAuthenticated || !isAuth0Configured()) return;

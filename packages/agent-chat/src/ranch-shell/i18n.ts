@@ -243,6 +243,10 @@ export type RanchMessages = {
   accountPlanBuyConfirmBody: string;
   accountPlanBuyConfirmRenewBody: string;
   accountPlanBuyConfirm: string;
+  accountPlanPayPaypal: string;
+  accountPlanPayCard: string;
+  accountPlanPayAlipay: string;
+  accountPlanPayAlipayWithCny: string;
   accountPlanBuyCancel: string;
   accountPlanBuySuccess: string;
   accountPlanBuySuccessRenew: string;
@@ -781,7 +785,7 @@ const en: RanchMessages = {
   accountPlanFreeBlurb:
     "No subscription fee and no included pack — pay as you go from your Wallet.",
   accountPlanProBlurb:
-    "Pay with cash to subscribe for 30 days. Includes a matching dialog usage pack for billable chats (official + marketplace); your own agents stay free. Usage beyond the pack uses Wallet Credits. Access ends when the period expires — renew anytime.",
+    "Pay with PayPal for 30 days. Includes a matching dialog usage pack for billable chats (official + marketplace); your own agents stay free. Usage beyond the pack uses Wallet Credits. Access ends when the period expires — renew anytime.",
   accountPlanUpgrade: "Subscribe",
   accountPlanRenew: "Renew",
   accountPlanExpiresOn: "Access until {date}",
@@ -792,6 +796,10 @@ const en: RanchMessages = {
   accountPlanBuyConfirmRenewBody:
     "You’ll pay {price} to renew {plan} for another 30 days and refresh the included dialog pack ({pack}). Wallet Credits are not charged.",
   accountPlanBuyConfirm: "Continue to pay",
+  accountPlanPayPaypal: "Pay with PayPal",
+  accountPlanPayCard: "Debit or Credit Card",
+  accountPlanPayAlipay: "Pay with Alipay",
+  accountPlanPayAlipayWithCny: "Pay with Alipay · ¥{n}",
   accountPlanBuyCancel: "Cancel",
   accountPlanBuySuccess: "You’re on {plan} until {date}.",
   accountPlanBuySuccessRenew: "Renewed {plan} until {date}.",
@@ -1371,6 +1379,10 @@ const zh: RanchMessages = {
   accountPlanBuyConfirmRenewBody:
     "将支付 {price} 为 {plan} 续费 30 天，并刷新含包（{pack}）。订阅不扣钱包星币。",
   accountPlanBuyConfirm: "去支付",
+  accountPlanPayPaypal: "PayPal 支付",
+  accountPlanPayCard: "借记卡 / 信用卡",
+  accountPlanPayAlipay: "支付宝支付",
+  accountPlanPayAlipayWithCny: "支付宝支付 · ¥{n}",
   accountPlanBuyCancel: "取消",
   accountPlanBuySuccess: "已开通 {plan}，有效至 {date}。",
   accountPlanBuySuccessRenew: "已续费 {plan}，有效至 {date}。",
