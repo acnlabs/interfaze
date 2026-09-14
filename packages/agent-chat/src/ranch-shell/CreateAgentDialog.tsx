@@ -10,6 +10,7 @@ import {
   type GatewayClient,
 } from "../gateway";
 import type { RanchMessages } from "./i18n";
+import { buildWalletCheckoutUrl } from "./interfazeHost";
 import { btnGhost, btnPrimary, colors } from "./styles";
 
 function machinesFrom(avail: AgentCreateAvailability | null): AgentCreateMachine[] {
@@ -48,6 +49,7 @@ type Props = {
   client: GatewayClient;
   messages: RanchMessages;
   agentPlanetBaseUrl: string;
+  interfazeBaseUrl?: string;
   busy?: boolean;
   onClose: () => void;
   onReady: (agentId: string) => void;
@@ -60,7 +62,8 @@ function sleep(ms: number): Promise<void> {
 export function CreateAgentDialog({
   client,
   messages: t,
-  agentPlanetBaseUrl,
+  agentPlanetBaseUrl: _agentPlanetBaseUrl,
+  interfazeBaseUrl,
   busy,
   onClose,
   onReady,
@@ -112,7 +115,10 @@ export function CreateAgentDialog({
   const machine = machines.find((row) => row.tier_id === tierId) ?? machines[0];
   const key = keys.find((row) => row.product_id === keyProductId) ?? keys[0];
   const totalCredits = (machine?.machine_credits ?? 0) + (key?.key_credits ?? 0);
-  const rechargeUrl = `${agentPlanetBaseUrl.replace(/\/+$/, "")}/wallet`;
+  const rechargeUrl = buildWalletCheckoutUrl({
+    interfazeBaseUrl,
+    returnTo: "/?account=wallet",
+  });
   const locked = acting || !!job;
 
   const pollUntilSettled = async (jobId: string) => {
@@ -366,7 +372,7 @@ export function CreateAgentDialog({
             ) : null}
             {job?.status === "pending_payment" ? (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <a href={rechargeUrl} target="_blank" rel="noopener noreferrer" style={btnPrimary}>
+                <a href={rechargeUrl} style={btnPrimary}>
                   {t.createAgentRecharge}
                 </a>
                 <button type="button" style={btnGhost} disabled={acting} onClick={() => void retryPay()}>
