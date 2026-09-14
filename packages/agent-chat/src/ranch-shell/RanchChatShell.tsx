@@ -2660,7 +2660,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
               attachments: parseMessageAttachments(d.attachments),
             };
             setMessages((prev) => {
-              const next = prev.some((x) => x.message_id === m.message_id) ? prev : [...prev, m];
+              const idx = prev.findIndex((x) => x.message_id === m.message_id);
+              const next =
+                idx >= 0
+                  ? prev.map((x, i) => (i === idx ? { ...x, ...m } : x))
+                  : [...prev, m];
               if (m.sender_type === "agent") {
                 queueMicrotask(() => noteAgentActivity(chatId, next));
               }
@@ -4514,6 +4518,35 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           gatewayBaseUrl={gatewayBaseUrl}
                           getAccessToken={getAccessToken}
                         />
+                        {!isUser
+                          ? (() => {
+                              const raw = m.metadata?.piece;
+                              if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+                                return null;
+                              }
+                              const rec = raw as { status?: unknown; amount?: unknown };
+                              const status = typeof rec.status === "string" ? rec.status : "";
+                              const amount = Number(rec.amount);
+                              let line: string | null = null;
+                              if (status === "captured") line = t.pieceCaptured;
+                              else if (status === "held" && Number.isFinite(amount) && amount > 0) {
+                                line = t.pieceHeld(amount);
+                              }
+                              if (!line) return null;
+                              return (
+                                <div
+                                  style={{
+                                    marginTop: 6,
+                                    fontSize: 11,
+                                    lineHeight: 1.35,
+                                    color: colors.muted,
+                                  }}
+                                >
+                                  {line}
+                                </div>
+                              );
+                            })()
+                          : null}
                       </div>
                       {isUser && (delivery || deliveryByAgent) ? (
                         <DeliveryStatusFooter
