@@ -398,6 +398,10 @@ export type RanchMessages = {
   myAgentsSectionPieceSku: string;
   myAgentsPieceSkuHint: string;
   myAgentsPieceSkuLabel: string;
+  myAgentsPieceSkuLabelImage: string;
+  myAgentsPieceSkuLabelVideo: string;
+  myAgentsPieceSkuLabelAudio: string;
+  myAgentsPieceSkuLabelFile: string;
   myAgentsPieceSkuOff: string;
   myAgentsSavePieceSku: string;
   myAgentsPieceSkuSaved: string;
@@ -979,15 +983,19 @@ const en: RanchMessages = {
   myAgentsSavePricing: "Save default model & markup",
   myAgentsPricingSaved: "Pricing saved",
   myAgentsPricingFailed: "Couldn’t save pricing.",
-  myAgentsSectionPieceSku: "Per image",
+  myAgentsSectionPieceSku: "Per file",
   myAgentsPieceSkuHint:
-    "Credits charged per still in this chat when the file lands. 0 = not selling stills. Dislike is not a refund; dialog tokens still settle separately.",
+    "Credits charged when that kind of file lands in this chat. 0 = not selling that kind (file still arrives). Dislike is not a refund; dialog tokens still settle separately.",
   myAgentsPieceSkuLabel: "Credits per still",
+  myAgentsPieceSkuLabelImage: "Credits per still",
+  myAgentsPieceSkuLabelVideo: "Credits per video",
+  myAgentsPieceSkuLabelAudio: "Credits per audio",
+  myAgentsPieceSkuLabelFile: "Credits per other file",
   myAgentsPieceSkuOff:
-    "0 = not selling stills. Images can still land in this chat; they just won’t occupy the wallet.",
-  myAgentsSavePieceSku: "Save per-image price",
-  myAgentsPieceSkuSaved: "Per-image price saved",
-  myAgentsPieceSkuFailed: "Couldn’t save per-image price.",
+    "0 = not selling that kind. Files can still land in this chat; they just won’t occupy the wallet.",
+  myAgentsSavePieceSku: "Save per-file prices",
+  myAgentsPieceSkuSaved: "Per-file prices saved",
+  myAgentsPieceSkuFailed: "Couldn’t save per-file prices.",
   myAgentsPricingSyncing: "Syncing to the agent…",
   myAgentsPricingNoAck: "The agent did not confirm the new default. Nothing was saved.",
   myAgentsNameHint: "2–100 characters, at least one letter",
@@ -1569,14 +1577,18 @@ const zh: RanchMessages = {
   myAgentsSavePricing: "保存默认模型与上浮",
   myAgentsPricingSaved: "定价已保存",
   myAgentsPricingFailed: "保存定价失败。",
-  myAgentsSectionPieceSku: "按张",
+  myAgentsSectionPieceSku: "按件",
   myAgentsPieceSkuHint:
-    "图进这场对话即按张成交。0 = 不卖按张。不满意不退；没出货不占。对话 token 仍另结。",
+    "货进这场对话即按件成交。图、视频、音频、其他文件分开挂。0 = 那种不卖（货仍进气泡）。不满意不退；没出货不占。对话 token 仍另结。",
   myAgentsPieceSkuLabel: "每张 Credits",
-  myAgentsPieceSkuOff: "0 = 不卖按张。图仍可进这场对话，只是不占钱包。",
-  myAgentsSavePieceSku: "保存按张价",
-  myAgentsPieceSkuSaved: "按张价已保存",
-  myAgentsPieceSkuFailed: "保存按张价失败。",
+  myAgentsPieceSkuLabelImage: "每张 Credits",
+  myAgentsPieceSkuLabelVideo: "每条视频 Credits",
+  myAgentsPieceSkuLabelAudio: "每条音频 Credits",
+  myAgentsPieceSkuLabelFile: "每份其他文件 Credits",
+  myAgentsPieceSkuOff: "0 = 那种不卖。货仍可进这场对话，只是不占钱包。",
+  myAgentsSavePieceSku: "保存按件价",
+  myAgentsPieceSkuSaved: "按件价已保存",
+  myAgentsPieceSkuFailed: "保存按件价失败。",
   myAgentsPricingSyncing: "正在同步到机上…",
   myAgentsPricingNoAck: "机上没有回执，未保存。",
   myAgentsNameHint: "2–100 字，至少含一个字母",

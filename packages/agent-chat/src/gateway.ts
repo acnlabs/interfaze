@@ -367,12 +367,23 @@ export type MyAgentSummary = {
   /** Owner-authorized official model ids (Host table). */
   official_models?: string[] | null;
   /**
-   * Community per-image hang牌 in Credits. 0 / omitted = not selling stills.
+   * Community hang牌 in Credits. 0 / omitted = not selling that kind.
    * Dialog tokens still settle on L2 separately.
    */
   image_credits?: number | null;
+  video_credits?: number | null;
+  audio_credits?: number | null;
+  file_credits?: number | null;
   /** Present after a successful delivery PATCH when ACN returns follow-up copy. */
   next_step_hint?: string | null;
+};
+
+export type PieceSku = {
+  agent_id: string;
+  image_credits: number;
+  video_credits: number;
+  audio_credits: number;
+  file_credits: number;
 };
 
 export type ModelCatalogItem = {
@@ -542,14 +553,17 @@ export type GatewayClient = {
       markup_percent?: number;
     },
   ) => Promise<MyAgentSummary>;
-  /** Owner per-image hang牌. 0 = not selling pieces. */
-  getMyAgentPieceSku: (
-    agentId: string,
-  ) => Promise<{ agent_id: string; image_credits: number }>;
+  /** Owner hang牌. 0 = not selling that kind. */
+  getMyAgentPieceSku: (agentId: string) => Promise<PieceSku>;
   updateMyAgentPieceSku: (
     agentId: string,
-    imageCredits: number,
-  ) => Promise<{ agent_id: string; image_credits: number }>;
+    sku: Partial<
+      Pick<
+        PieceSku,
+        "image_credits" | "video_credits" | "audio_credits" | "file_credits"
+      >
+    >,
+  ) => Promise<PieceSku>;
   /** Public Host Model Catalog (L1) row for a model id. */
   getModelCatalogItem: (modelId: string) => Promise<ModelCatalogItem>;
   /** Public Host Model Catalog list (OpenRouter + host_pack). */
@@ -853,15 +867,15 @@ export function createGatewayClient(
         },
       ),
     getMyAgentPieceSku: (agentId) =>
-      request<{ agent_id: string; image_credits: number }>(
+      request<PieceSku>(
         `/api/chat/my-agents/${encodeURIComponent(agentId)}/piece-sku`,
       ),
-    updateMyAgentPieceSku: (agentId, imageCredits) =>
-      request<{ agent_id: string; image_credits: number }>(
+    updateMyAgentPieceSku: (agentId, sku) =>
+      request<PieceSku>(
         `/api/chat/my-agents/${encodeURIComponent(agentId)}/piece-sku`,
         {
           method: "PUT",
-          body: JSON.stringify({ image_credits: imageCredits }),
+          body: JSON.stringify(sku),
         },
       ),
     getModelCatalogItem: (modelId) => {

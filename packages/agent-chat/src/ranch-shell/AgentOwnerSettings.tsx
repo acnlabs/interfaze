@@ -18,6 +18,7 @@ import {
   type GatewayClient,
   type MyAgentAllowlistEntry,
   type MyAgentSummary,
+  type PieceSku,
 } from "../gateway";
 import { copyText } from "./connectPrompt";
 import type { RanchMessages } from "./i18n";
@@ -57,21 +58,29 @@ function formatTagsInput(tags: string[] | null | undefined): string {
   return (tags ?? []).join(", ");
 }
 
-const MAX_IMAGE_PIECE_CREDITS = 100_000;
+const MAX_PIECE_CREDITS = 100_000;
 
-function parseImageCredits(raw: string): number | null {
+function parsePieceCredits(raw: string): number | null {
   const v = raw.trim();
   if (!/^\d+$/.test(v)) return null;
   const n = Number(v);
-  if (!Number.isInteger(n) || n < 0 || n > MAX_IMAGE_PIECE_CREDITS) return null;
+  if (!Number.isInteger(n) || n < 0 || n > MAX_PIECE_CREDITS) return null;
   return n;
 }
 
-function imageCreditsFromDetail(d: MyAgentSummary): number {
-  const n = d.image_credits;
-  return typeof n === "number" && Number.isFinite(n) && n >= 0
-    ? Math.min(MAX_IMAGE_PIECE_CREDITS, Math.floor(n))
+function skuNumber(v: unknown): number {
+  return typeof v === "number" && Number.isFinite(v) && v >= 0
+    ? Math.min(MAX_PIECE_CREDITS, Math.floor(v))
     : 0;
+}
+
+function skuFromDetail(d: MyAgentSummary): Omit<PieceSku, "agent_id"> {
+  return {
+    image_credits: skuNumber(d.image_credits),
+    video_credits: skuNumber(d.video_credits),
+    audio_credits: skuNumber(d.audio_credits),
+    file_credits: skuNumber(d.file_credits),
+  };
 }
 
 const FALLBACK_MODEL_ID = "openai/gpt-4o-mini";
@@ -947,12 +956,16 @@ export function AgentOwnerSettings({
   const [savingPricing, setSavingPricing] = useState(false);
   const [pricingMsg, setPricingMsg] = useState<string | null>(null);
   const [pricingError, setPricingError] = useState<string | null>(null);
-  const [imageCreditsDraft, setImageCreditsDraft] = useState(() =>
-    String(imageCreditsFromDetail(detail)),
-  );
-  const [imageCreditsSaved, setImageCreditsSaved] = useState(() =>
-    imageCreditsFromDetail(detail),
-  );
+  const [skuDraft, setSkuDraft] = useState(() => {
+    const s = skuFromDetail(detail);
+    return {
+      image_credits: String(s.image_credits),
+      video_credits: String(s.video_credits),
+      audio_credits: String(s.audio_credits),
+      file_credits: String(s.file_credits),
+    };
+  });
+  const [skuSaved, setSkuSaved] = useState(() => skuFromDetail(detail));
   const [savingPieceSku, setSavingPieceSku] = useState(false);
   const [pieceSkuMsg, setPieceSkuMsg] = useState<string | null>(null);
   const [pieceSkuError, setPieceSkuError] = useState<string | null>(null);
@@ -1043,9 +1056,14 @@ export function AgentOwnerSettings({
   ]);
 
   useEffect(() => {
-    const fromDetail = imageCreditsFromDetail(detail);
-    setImageCreditsDraft(String(fromDetail));
-    setImageCreditsSaved(fromDetail);
+    const fromDetail = skuFromDetail(detail);
+    setSkuDraft({
+      image_credits: String(fromDetail.image_credits),
+      video_credits: String(fromDetail.video_credits),
+      audio_credits: String(fromDetail.audio_credits),
+      file_credits: String(fromDetail.file_credits),
+    });
+    setSkuSaved(fromDetail);
     setPieceSkuMsg(null);
     setPieceSkuError(null);
     let cancelled = false;
@@ -1053,9 +1071,19 @@ export function AgentOwnerSettings({
       .getMyAgentPieceSku(detail.agent_id)
       .then((row) => {
         if (cancelled) return;
-        const n = parseImageCredits(String(row.image_credits ?? 0)) ?? 0;
-        setImageCreditsDraft(String(n));
-        setImageCreditsSaved(n);
+        const next = {
+          image_credits: skuNumber(row.image_credits),
+          video_credits: skuNumber(row.video_credits),
+          audio_credits: skuNumber(row.audio_credits),
+          file_credits: skuNumber(row.file_credits),
+        };
+        setSkuDraft({
+          image_credits: String(next.image_credits),
+          video_credits: String(next.video_credits),
+          audio_credits: String(next.audio_credits),
+          file_credits: String(next.file_credits),
+        });
+        setSkuSaved(next);
       })
       .catch(() => {
         /* Host without SKU route: keep draft from detail. */
@@ -1063,7 +1091,14 @@ export function AgentOwnerSettings({
     return () => {
       cancelled = true;
     };
-  }, [client, detail.agent_id, detail.image_credits]);
+  }, [
+    client,
+    detail.agent_id,
+    detail.image_credits,
+    detail.video_credits,
+    detail.audio_credits,
+    detail.file_credits,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1456,11 +1491,22 @@ export function AgentOwnerSettings({
     !modelsBusy &&
     !savingPricing &&
     !busy;
-  const imageCreditsParsed = parseImageCredits(imageCreditsDraft);
+  const skuParsed = {
+    image_credits: parsePieceCredits(skuDraft.image_credits),
+    video_credits: parsePieceCredits(skuDraft.video_credits),
+    audio_credits: parsePieceCredits(skuDraft.audio_credits),
+    file_credits: parsePieceCredits(skuDraft.file_credits),
+  };
   const pieceSkuDirty =
-    imageCreditsParsed !== null && imageCreditsParsed !== imageCreditsSaved;
-  const canSavePieceSku =
-    pieceSkuDirty && imageCreditsParsed !== null && !savingPieceSku && !busy;
+    skuParsed.image_credits !== null &&
+    skuParsed.video_credits !== null &&
+    skuParsed.audio_credits !== null &&
+    skuParsed.file_credits !== null &&
+    (skuParsed.image_credits !== skuSaved.image_credits ||
+      skuParsed.video_credits !== skuSaved.video_credits ||
+      skuParsed.audio_credits !== skuSaved.audio_credits ||
+      skuParsed.file_credits !== skuSaved.file_credits);
+  const canSavePieceSku = pieceSkuDirty && !savingPieceSku && !busy;
   const vendorModelsKey = vendorModels.join("\u0001");
   useEffect(() => {
     if (modelsBusy) return;
@@ -1708,20 +1754,44 @@ export function AgentOwnerSettings({
       .finally(() => setSavingPricing(false));
   };
 
-  const runSavePieceSku = (): Promise<{ agent_id: string; image_credits: number } | null> => {
-    if (!canSavePieceSku || imageCreditsParsed === null) return Promise.resolve(null);
+  const runSavePieceSku = (): Promise<PieceSku | null> => {
+    if (
+      !canSavePieceSku ||
+      skuParsed.image_credits === null ||
+      skuParsed.video_credits === null ||
+      skuParsed.audio_credits === null ||
+      skuParsed.file_credits === null
+    ) {
+      return Promise.resolve(null);
+    }
+    const body = {
+      image_credits: skuParsed.image_credits,
+      video_credits: skuParsed.video_credits,
+      audio_credits: skuParsed.audio_credits,
+      file_credits: skuParsed.file_credits,
+    };
     setSavingPieceSku(true);
     setPieceSkuError(null);
     setPieceSkuMsg(null);
     return client
-      .updateMyAgentPieceSku(detail.agent_id, imageCreditsParsed)
+      .updateMyAgentPieceSku(detail.agent_id, body)
       .then((row) => {
-        const n = parseImageCredits(String(row.image_credits ?? 0)) ?? imageCreditsParsed;
-        setImageCreditsDraft(String(n));
-        setImageCreditsSaved(n);
+        const next = {
+          image_credits: skuNumber(row.image_credits),
+          video_credits: skuNumber(row.video_credits),
+          audio_credits: skuNumber(row.audio_credits),
+          file_credits: skuNumber(row.file_credits),
+        };
+        setSkuDraft({
+          image_credits: String(next.image_credits),
+          video_credits: String(next.video_credits),
+          audio_credits: String(next.audio_credits),
+          file_credits: String(next.file_credits),
+        });
+        setSkuSaved(next);
         setPieceSkuMsg(t.myAgentsPieceSkuSaved);
         window.setTimeout(() => setPieceSkuMsg(null), 2000);
-        onUpdated?.({ ...detail, image_credits: n });
+        onUpdated?.({ ...detail, ...next });
         return row;
       })
       .catch((err: unknown) => {
@@ -2553,28 +2623,39 @@ export function AgentOwnerSettings({
         <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
           {t.myAgentsPieceSkuOff}
         </p>
-        <label style={{ display: "block", marginBottom: 10 }}>
-          <div
-            style={{
-              fontSize: 12,
-              color: colors.muted,
-              marginBottom: 4,
-              display: "flex",
-              alignItems: "center",
-            }}
-          >
-            {t.myAgentsPieceSkuLabel}
-          </div>
-          <input
-            value={imageCreditsDraft}
-            onChange={(e) => setImageCreditsDraft(e.target.value)}
-            style={inputStyle}
-            inputMode="numeric"
-            disabled={busy || savingPieceSku}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </label>
+        {(
+          [
+            ["image_credits", t.myAgentsPieceSkuLabelImage],
+            ["video_credits", t.myAgentsPieceSkuLabelVideo],
+            ["audio_credits", t.myAgentsPieceSkuLabelAudio],
+            ["file_credits", t.myAgentsPieceSkuLabelFile],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key} style={{ display: "block", marginBottom: 10 }}>
+            <div
+              style={{
+                fontSize: 12,
+                color: colors.muted,
+                marginBottom: 4,
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              {label}
+            </div>
+            <input
+              value={skuDraft[key]}
+              onChange={(e) =>
+                setSkuDraft((prev) => ({ ...prev, [key]: e.target.value }))
+              }
+              style={inputStyle}
+              inputMode="numeric"
+              disabled={busy || savingPieceSku}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </label>
+        ))}
         {pieceSkuError ? (
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>{pieceSkuError}</p>
         ) : null}
