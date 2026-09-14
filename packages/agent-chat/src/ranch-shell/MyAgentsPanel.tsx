@@ -15,7 +15,7 @@ import { btnGhost, btnPrimary, colors } from "./styles";
 type Props = {
   client: GatewayClient;
   connectGuideUrl?: string;
-  /** AgentPlanet origin for wallet recharge deep-link. Default https://agentplanet.org */
+  /** AgentPlanet origin for Store / OpenRouter deep-links. Default https://agentplanet.org */
   agentPlanetBaseUrl?: string;
   /** Public Interfaze origin for gift accept links. Default https://interfaze.io */
   interfazeBaseUrl?: string;
@@ -276,6 +276,7 @@ export function MyAgentsPanel({
                 agentId={detail.agent_id.replace(/^acn:/i, "")}
                 messages={t}
                 agentPlanetBaseUrl={agentPlanetBaseUrl}
+                interfazeBaseUrl={interfazeBaseUrl}
                 busy={busy}
               />
               <button

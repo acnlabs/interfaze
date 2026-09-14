@@ -26,7 +26,6 @@ import {
   resolveEmbedParentOrigin,
   withEmbedParentOrigin,
 } from "@/lib/embedParent";
-import { getAgentPlanetBaseUrl } from "@/lib/region";
 import { planCheckoutReturnHref, safeReturnTo } from "@/lib/safeReturnTo";
 import { PlanCatalog, subscribeHref } from "@/components/PlanCatalog";
 import {
@@ -432,7 +431,7 @@ function CnSubscribeInner() {
             </Link>
             {" · "}
             需要充值星币？{" "}
-            <a href={`${getAgentPlanetBaseUrl()}/wallet?recharge=1`} style={linkStyle}>
+            <a href={"/wallet?return_to=" + encodeURIComponent("/?account=wallet")} style={linkStyle}>
               打开钱包
             </a>
             {" · "}

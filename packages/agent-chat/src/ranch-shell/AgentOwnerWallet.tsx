@@ -12,6 +12,7 @@ import {
 } from "../gateway";
 import { FieldHint } from "./AgentOwnerSettings";
 import type { RanchMessages } from "./i18n";
+import { buildWalletCheckoutUrl } from "./interfazeHost";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 
 /** Match Gateway ``MyAgentWalletAmount.amount`` upper bound. */
@@ -22,6 +23,7 @@ type Props = {
   agentId: string;
   messages: RanchMessages;
   agentPlanetBaseUrl?: string;
+  interfazeBaseUrl?: string;
   busy?: boolean;
 };
 
@@ -101,7 +103,8 @@ export function AgentOwnerWallet({
   client,
   agentId,
   messages: t,
-  agentPlanetBaseUrl = "https://agentplanet.org",
+  agentPlanetBaseUrl: _agentPlanetBaseUrl = "https://agentplanet.org",
+  interfazeBaseUrl,
   busy,
 }: Props) {
   const [wallet, setWallet] = useState<MyAgentWallet | null>(null);
@@ -133,7 +136,10 @@ export function AgentOwnerWallet({
   const [approvalsError, setApprovalsError] = useState<string | null>(null);
   const [actioningId, setActioningId] = useState<string | null>(null);
 
-  const rechargeUrl = `${agentPlanetBaseUrl.replace(/\/+$/, "")}/wallet`;
+  const rechargeUrl = buildWalletCheckoutUrl({
+    interfazeBaseUrl,
+    returnTo: "/?account=wallet",
+  });
 
   const reloadPendingCount = useCallback(async () => {
     try {
@@ -629,8 +635,6 @@ export function AgentOwnerWallet({
                 {t.walletRechargeExternalHint}{" "}
                 <a
                   href={rechargeUrl}
-                  target="_blank"
-                  rel="noreferrer"
                   style={{ color: colors.accent }}
                 >
                   {t.walletRechargeExternal}

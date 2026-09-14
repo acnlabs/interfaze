@@ -4051,7 +4051,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           <AccountWalletPanel
             client={client}
             messages={t}
-            agentPlanetBaseUrl={agentPlanetBaseUrl}
+            interfazeBaseUrl={interfazeBaseUrl}
             onClose={() => closeAccountPanel()}
           />
         ) : null}
@@ -5695,6 +5695,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         agentId={active.agent_id.replace(/^acn:/i, "")}
                         messages={t}
                         agentPlanetBaseUrl={agentPlanetBaseUrl}
+                        interfazeBaseUrl={interfazeBaseUrl}
                         busy={busy}
                       />
                     </div>
@@ -6353,6 +6354,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           client={client}
           messages={t}
           agentPlanetBaseUrl={agentPlanetBaseUrl ?? "https://agentplanet.org"}
+          interfazeBaseUrl={interfazeBaseUrl}
           busy={busy}
           onClose={() => setShowCreateDialog(false)}
           onReady={(agentId) => {

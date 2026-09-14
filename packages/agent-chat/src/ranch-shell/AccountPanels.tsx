@@ -14,6 +14,12 @@ import type {
 import type { RanchChatAccount } from "../types";
 import type { RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors } from "./styles";
+import {
+  buildWalletCheckoutUrl,
+  isInterfazeHostname,
+  prefersInPanelCheckout,
+  resolveInterfazeOrigin,
+} from "./interfazeHost";
 
 const sectionTitle: CSSProperties = {
   margin: "0 0 8px",
@@ -235,19 +241,6 @@ function periodMeta(
   return { dateLabel, daysLeft };
 }
 
-/** Exact Interfaze hosts (avoid `startsWith("interfaze.")` typosquat). */
-function isInterfazeHostname(hostname: string): boolean {
-  const h = hostname.toLowerCase();
-  return (
-    h === "interfaze.io" ||
-    h.endsWith(".interfaze.io") ||
-    h === "interfaze.acnlabs.cn" ||
-    h.endsWith(".interfaze.acnlabs.cn") ||
-    h === "localhost" ||
-    h === "127.0.0.1"
-  );
-}
-
 function isTrustedCheckoutOrigin(origin: string, subscribeBase: string): boolean {
   const trusted = new Set<string>(["https://interfaze.io", "https://interfaze.acnlabs.cn"]);
   try {
@@ -263,12 +256,14 @@ function isTrustedCheckoutOrigin(origin: string, subscribeBase: string): boolean
 
 /** postMessage from /subscribe?embed=1 when plan activates. */
 export const PLAN_ACTIVATED_MSG = "interfaze:plan-activated";
+/** postMessage from /wallet?embed=1 when Credits land. */
+export const WALLET_CREDITED_MSG = "interfaze:wallet-credited";
 
 export function AccountPlanUsagePanel({
   client,
   messages: t,
   locale = "en",
-  agentPlanetBaseUrl = "https://agentplanet.org",
+  agentPlanetBaseUrl: _agentPlanetBaseUrl = "https://agentplanet.org",
   interfazeBaseUrl = "https://interfaze.io",
   onClose,
 }: {
@@ -302,20 +297,11 @@ export function AccountPlanUsagePanel({
   };
   /** Open checkouts may overlap; keep a short watch list (not a single overwrite). */
   const checkoutWatchesRef = useRef<CheckoutWatch[]>([]);
-  const rechargeUrl = `${agentPlanetBaseUrl.replace(/\/$/, "")}/wallet?recharge=1`;
-  /**
-   * Prefer Host-injected interfazeBaseUrl. If already on an Interfaze host,
-   * use same origin (WeChat /subscribe). Do not fall back to AgentPlanet origin —
-   * plan checkout lives on Interfaze, not Host wallet.
-   */
-  const subscribeBase = (() => {
-    const fromProp = (interfazeBaseUrl || "").replace(/\/$/, "");
-    if (typeof window !== "undefined") {
-      const { hostname, origin } = window.location;
-      if (isInterfazeHostname(hostname)) return origin;
-    }
-    return fromProp || "https://interfaze.io";
-  })();
+  const subscribeBase = resolveInterfazeOrigin(interfazeBaseUrl);
+  const rechargeUrl = buildWalletCheckoutUrl({
+    interfazeBaseUrl,
+    returnTo: "/?account=wallet",
+  });
 
 
   function buildSubscribeUrl(code: string, renew: boolean, embed: boolean): string {
@@ -497,15 +483,6 @@ export function AccountPlanUsagePanel({
       return;
     }
     void openWeChatCheckout(code, wasRenew);
-  }
-
-  function prefersInPanelCheckout(url: string): boolean {
-    try {
-      const h = new URL(url).hostname.toLowerCase();
-      return h === "interfaze.acnlabs.cn" || h.endsWith(".interfaze.acnlabs.cn");
-    } catch {
-      return false;
-    }
   }
 
   async function openWeChatCheckout(code: string, wasRenew: boolean) {
@@ -1112,8 +1089,6 @@ export function AccountPlanUsagePanel({
                 {buyMsg === t.accountPlanNeedCredits ? (
                   <a
                     href={rechargeUrl}
-                    target="_blank"
-                    rel="noreferrer"
                     style={{
                       display: "inline-block",
                       marginTop: 8,
@@ -1380,32 +1355,36 @@ export function ChatCollabBudgetSection({
 export function AccountWalletPanel({
   client,
   messages: t,
-  agentPlanetBaseUrl = "https://agentplanet.org",
+  interfazeBaseUrl = "https://interfaze.io",
   onClose,
 }: {
   client: GatewayClient;
   messages: RanchMessages;
-  agentPlanetBaseUrl?: string;
+  interfazeBaseUrl?: string;
   onClose: () => void;
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [wallet, setWallet] = useState<HumanWallet | null>(null);
   const [txs, setTxs] = useState<MyAgentWalletTx[]>([]);
+  const [checkoutEmbedUrl, setCheckoutEmbedUrl] = useState<string | null>(null);
+  const baselineBalanceRef = useRef<number | null>(null);
+
+  const reload = useCallback(async () => {
+    const [w, list] = await Promise.all([
+      client.getHumanWallet(),
+      client.listHumanWalletTransactions(1, 10),
+    ]);
+    setWallet(w);
+    setTxs(list.transactions || []);
+    return w;
+  }, [client]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    void Promise.all([
-      client.getHumanWallet(),
-      client.listHumanWalletTransactions(1, 10),
-    ])
-      .then(([w, list]) => {
-        if (cancelled) return;
-        setWallet(w);
-        setTxs(list.transactions || []);
-      })
+    void reload()
       .catch(() => {
         if (!cancelled) setError(t.accountWalletLoadFailed);
       })
@@ -1415,9 +1394,67 @@ export function AccountWalletPanel({
     return () => {
       cancelled = true;
     };
-  }, [client, t.accountWalletLoadFailed]);
+  }, [reload, t.accountWalletLoadFailed]);
 
-  const rechargeUrl = `${agentPlanetBaseUrl.replace(/\/$/, "")}/wallet`;
+  const rechargeUrl = buildWalletCheckoutUrl({
+    interfazeBaseUrl,
+    returnTo: "/?account=wallet",
+  });
+
+  function openRecharge() {
+    baselineBalanceRef.current = wallet?.balance ?? null;
+    if (prefersInPanelCheckout(rechargeUrl)) {
+      setCheckoutEmbedUrl(
+        buildWalletCheckoutUrl({
+          interfazeBaseUrl,
+          embed: true,
+          returnTo: "/?account=wallet",
+        }),
+      );
+      return;
+    }
+    if (typeof window === "undefined") return;
+    window.location.assign(rechargeUrl);
+  }
+
+  useEffect(() => {
+    if (!checkoutEmbedUrl) return;
+    let origin = "";
+    try {
+      origin = new URL(checkoutEmbedUrl).origin;
+    } catch {
+      return;
+    }
+    const onMsg = (ev: MessageEvent) => {
+      if (ev.origin !== origin) return;
+      const data = ev.data;
+      if (!data || typeof data !== "object") return;
+      if ((data as { type?: string }).type !== WALLET_CREDITED_MSG) return;
+      setCheckoutEmbedUrl(null);
+      void reload().catch(() => undefined);
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [checkoutEmbedUrl, reload]);
+
+  useEffect(() => {
+    if (!checkoutEmbedUrl) return;
+    const baseline = baselineBalanceRef.current;
+    const tick = async () => {
+      try {
+        const w = await client.getHumanWallet();
+        setWallet(w);
+        if (baseline != null && w.balance > baseline) {
+          setCheckoutEmbedUrl(null);
+          void reload().catch(() => undefined);
+        }
+      } catch {
+        /* keep watching */
+      }
+    };
+    const id = window.setInterval(tick, 4000);
+    return () => window.clearInterval(id);
+  }, [checkoutEmbedUrl, client, reload]);
 
   return (
     <PanelChrome title={t.accountWallet} onClose={onClose} closeLabel={t.close}>
@@ -1437,20 +1474,20 @@ export function AccountWalletPanel({
           <p style={{ margin: "0 0 16px", fontSize: 12, color: colors.muted }}>
             {t.walletBalance}
           </p>
-          <a
-            href={rechargeUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={openRecharge}
             style={{
               ...btnPrimary,
               display: "inline-block",
-              textDecoration: "none",
               textAlign: "center",
-              marginBottom: 24,
+              marginBottom: 8,
+              border: 0,
+              cursor: "pointer",
             }}
           >
             {t.walletRechargeExternal}
-          </a>
+          </button>
           <p style={{ margin: "0 0 16px", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
             {t.walletRechargeExternalHint}
           </p>
@@ -1499,6 +1536,65 @@ export function AccountWalletPanel({
           )}
         </>
       )}
+      {checkoutEmbedUrl ? (
+        <ViewportOverlay
+          label={t.walletRechargeExternal}
+          zIndex={10060}
+          onBackdrop={() => setCheckoutEmbedUrl(null)}
+        >
+          <div
+            style={{
+              width: "min(420px, 100%)",
+              height: "min(640px, 92%)",
+              background: "#0a0a0a",
+              borderRadius: 14,
+              border: `1px solid ${colors.border}`,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 12px",
+                borderBottom: `1px solid ${colors.border}`,
+              }}
+            >
+              <strong style={{ fontSize: 14 }}>{t.walletRechargeExternal}</strong>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <a
+                  href={checkoutEmbedUrl.replace(/([?&])embed=1&?/, "$1").replace(/[?&]$/, "")}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: 12, color: colors.muted }}
+                >
+                  {t.accountPlanOpenWallet}
+                </a>
+                <button
+                  type="button"
+                  style={{ ...btnGhost, width: 28, height: 28, padding: 0 }}
+                  onClick={() => setCheckoutEmbedUrl(null)}
+                  aria-label={t.close}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <iframe
+              title={t.walletRechargeExternal}
+              src={checkoutEmbedUrl}
+              allow="payment"
+              referrerPolicy="strict-origin-when-cross-origin"
+              style={{ flex: 1, width: "100%", border: 0, background: "#0a0a0a" }}
+            />
+          </div>
+        </ViewportOverlay>
+      ) : null}
     </PanelChrome>
   );
 }

@@ -34,7 +34,6 @@ import {
   planSheetColors,
   subscribeHref,
 } from "@/components/PlanCatalog";
-import { getAgentPlanetBaseUrl } from "@/lib/region";
 
 const PLAN_USD: Record<string, { label: string; amountUsd: number }> = {
   pro: { label: "Pro", amountUsd: 20 },
@@ -473,7 +472,7 @@ function SubscribeInner() {
             </button>
             {" · "}
             Need Credits top-up?{" "}
-            <a href={`${getAgentPlanetBaseUrl()}/wallet?recharge=1`} style={linkStyle}>
+            <a href={"/wallet?return_to=" + encodeURIComponent("/?account=wallet")} style={linkStyle}>
               Open Wallet
             </a>
           </p>

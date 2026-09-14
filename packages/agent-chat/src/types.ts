@@ -113,7 +113,7 @@ export type RanchChatShellProps = {
    */
   connectGuideUrl?: string;
   /**
-   * AgentPlanet origin for wallet recharge / external manage deep-links.
+   * AgentPlanet origin for Store / OpenRouter deep-links (not wallet recharge).
    * Default: https://agentplanet.org
    */
   agentPlanetBaseUrl?: string;
