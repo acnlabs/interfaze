@@ -203,6 +203,15 @@ export type PieceHold = {
   status: string;
   occupied: boolean;
   reject_deadline?: string | null;
+  lines?: Array<{
+    kind: string;
+    claimed?: number;
+    attachments?: number;
+    billable?: number;
+    unit_credits?: number;
+    amount?: number;
+    status?: string;
+  }>;
 };
 
 /** Chat Topic (API name: Thread). Response field is ``id``, not ``thread_id``. */
