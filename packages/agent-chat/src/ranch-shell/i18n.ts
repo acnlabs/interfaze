@@ -207,6 +207,8 @@ export type RanchMessages = {
   accountWalletLoadFailed: string;
   accountWalletEmptyTx: string;
   accountWalletRecent: string;
+  accountWalletAgentWallets: string;
+  accountWalletNoAgents: string;
   accountPlanUsage: string;
   accountPlanUsageLoadFailed: string;
   accountPlanCurrent: string;
@@ -768,6 +770,8 @@ const en: RanchMessages = {
   accountWalletLoadFailed: "Couldn’t load wallet.",
   accountWalletEmptyTx: "No transactions yet.",
   accountWalletRecent: "Recent activity",
+  accountWalletAgentWallets: "Agent wallets",
+  accountWalletNoAgents: "No agents yet.",
   accountPlanUsage: "Plan & Usage",
   accountPlanUsageLoadFailed: "Couldn’t load plan & usage.",
   accountPlanCurrent: "Current plan",
@@ -1367,6 +1371,8 @@ const zh: RanchMessages = {
   accountWalletLoadFailed: "无法加载钱包。",
   accountWalletEmptyTx: "暂无流水。",
   accountWalletRecent: "最近流水",
+  accountWalletAgentWallets: "Agent 钱包",
+  accountWalletNoAgents: "还没有 Agent。",
   accountPlanUsage: "方案与用量",
   accountPlanUsageLoadFailed: "无法加载方案与用量。",
   accountPlanCurrent: "当前方案",
