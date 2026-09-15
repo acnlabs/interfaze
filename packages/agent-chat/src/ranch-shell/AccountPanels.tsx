@@ -15,7 +15,7 @@ import type {
 import type { RanchChatAccount } from "../types";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import type { RanchMessages } from "./i18n";
-import { btnGhost, btnPrimary, colors } from "./styles";
+import { btnGhost, btnIcon, btnPrimary, colors } from "./styles";
 import {
   buildWalletCheckoutUrl,
   isInterfazeHostname,
@@ -23,14 +23,168 @@ import {
   resolveInterfazeOrigin,
 } from "./interfazeHost";
 
-const sectionTitle: CSSProperties = {
-  margin: "0 0 8px",
-  fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  color: colors.muted,
+/** Shared card container for all account panel sections. */
+const card: CSSProperties = {
+  background: colors.panel,
+  border: `1px solid ${colors.border}`,
+  borderRadius: 14,
+  padding: 16,
 };
+
+const sectionTitle: CSSProperties = {
+  marginTop: 0,
+  marginRight: 0,
+  marginBottom: 10,
+  marginLeft: 0,
+  fontSize: 13,
+  fontWeight: 650,
+  letterSpacing: "0.01em",
+  color: colors.text,
+};
+
+const sectionHint: CSSProperties = {
+  marginTop: 0,
+  marginRight: 0,
+  marginBottom: 14,
+  marginLeft: 0,
+  fontSize: 12,
+  color: colors.muted,
+  lineHeight: 1.55,
+};
+
+/** Panel actions are one size up from the compact shell chrome buttons. */
+const btnPrimaryLg: CSSProperties = {
+  ...btnPrimary,
+  padding: "9px 16px",
+  fontSize: 13,
+  borderRadius: 10,
+};
+
+const btnGhostLg: CSSProperties = {
+  ...btnGhost,
+  padding: "9px 16px",
+  fontSize: 13,
+  borderRadius: 10,
+};
+
+function useHover(): [boolean, { onMouseEnter: () => void; onMouseLeave: () => void }] {
+  const [hover, setHover] = useState(false);
+  return [hover, { onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) }];
+}
+
+function Badge({
+  tone = "neutral",
+  children,
+}: {
+  tone?: "neutral" | "accent" | "ok";
+  children: ReactNode;
+}) {
+  const palette: CSSProperties =
+    tone === "accent"
+      ? { background: colors.accentSoft, color: "#7aa2f7" }
+      : tone === "ok"
+        ? { background: "rgba(16,185,129,0.14)", color: "#34d399" }
+        : { background: "rgba(255,255,255,0.07)", color: colors.muted };
+  return (
+    <span
+      style={{
+        ...palette,
+        fontSize: 11,
+        fontWeight: 600,
+        padding: "3px 9px",
+        borderRadius: 999,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function AvatarDot({ label, size = 34 }: { label: string; size?: number }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 999,
+        flexShrink: 0,
+        background: colors.accentSoft,
+        color: "#7aa2f7",
+        display: "grid",
+        placeItems: "center",
+        fontSize: Math.round(size * 0.42),
+        fontWeight: 700,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+/** List row with hover feedback and optional chevron; used inside padded cards. */
+function RowButton({
+  onClick,
+  disabled = false,
+  children,
+}: {
+  onClick?: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  const [hover, hoverProps] = useHover();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      {...hoverProps}
+      style={{
+        width: "100%",
+        border: 0,
+        background: hover && !disabled ? colors.hover : "transparent",
+        color: disabled ? colors.muted : colors.text,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "10px 12px",
+        borderRadius: 10,
+        cursor: disabled ? "not-allowed" : "pointer",
+        textAlign: "left",
+        transition: "background 120ms ease",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function EmptyText({ children }: { children: ReactNode }) {
+  return <p style={{ margin: 0, fontSize: 13, color: colors.muted, lineHeight: 1.55 }}>{children}</p>;
+}
+
+function StatChip({ label, value }: { label: string; value: string }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        flexDirection: "column",
+        gap: 2,
+        padding: "8px 12px",
+        borderRadius: 10,
+        background: "rgba(255,255,255,0.04)",
+        border: `1px solid ${colors.border}`,
+        minWidth: 88,
+      }}
+    >
+      <span style={{ fontSize: 11, color: colors.muted }}>{label}</span>
+      <span style={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+        {value}
+      </span>
+    </span>
+  );
+}
 
 function PanelChrome({
   title,
@@ -58,19 +212,23 @@ function PanelChrome({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
-          padding: "10px 12px",
+          gap: 10,
+          padding: "12px 16px",
           borderBottom: `1px solid ${colors.border}`,
           flexShrink: 0,
+          background: "rgba(15,20,25,0.85)",
+          backdropFilter: "blur(8px)",
         }}
       >
-        <button type="button" style={btnGhost} onClick={onClose} aria-label={closeLabel}>
+        <button type="button" style={btnIcon} onClick={onClose} aria-label={closeLabel}>
           ←
         </button>
-        <strong style={{ fontSize: 14, flex: 1 }}>{title}</strong>
-        <span style={{ width: 40 }} />
+        <strong style={{ fontSize: 16, fontWeight: 650, flex: 1, letterSpacing: "-0.01em" }}>
+          {title}
+        </strong>
+        <span style={{ width: 28 }} />
       </div>
-      <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
+      <div style={{ flex: 1, overflow: "auto", padding: "20px 20px 32px" }}>
         <div style={{ maxWidth: 680, width: "100%", margin: "0 auto" }}>{children}</div>
       </div>
     </div>
@@ -128,70 +286,46 @@ export function AccountProfilePanel({
 
   return (
     <PanelChrome title={t.accountProfile} onClose={onClose} closeLabel={t.close}>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+      <div style={{ ...card, display: "flex", alignItems: "center", gap: 16, padding: 20 }}>
         {account.picture ? (
           <img
             src={account.picture}
             alt=""
-            width={72}
-            height={72}
+            width={64}
+            height={64}
             style={{
-              width: 72,
-              height: 72,
+              width: 64,
+              height: 64,
               borderRadius: 999,
               objectFit: "cover",
               background: colors.border,
+              flexShrink: 0,
             }}
           />
         ) : (
-          <span
-            aria-hidden
-            style={{
-              width: 72,
-              height: 72,
-              borderRadius: 999,
-              background: colors.accentSoft,
-              color: colors.accent,
-              display: "grid",
-              placeItems: "center",
-              fontSize: 28,
-              fontWeight: 700,
-            }}
-          >
-            {initial}
-          </span>
+          <AvatarDot label={initial} size={64} />
         )}
-        <div style={{ textAlign: "center", width: "100%" }}>
-          <p style={{ margin: 0, fontSize: 16, fontWeight: 650 }}>
+        <div style={{ minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: 17, fontWeight: 650, letterSpacing: "-0.01em" }}>
             {name || t.account}
           </p>
           {email ? (
-            <p style={{ margin: "6px 0 0", fontSize: 13, color: colors.muted }}>{email}</p>
+            <p style={{ margin: "5px 0 0", fontSize: 13, color: colors.muted }}>{email}</p>
           ) : null}
         </div>
       </div>
-      <div style={{ marginTop: 28 }}>
-        <h3 style={sectionTitle}>{t.accountProfile}</h3>
-        <p style={{ margin: 0, fontSize: 12, color: colors.muted, lineHeight: 1.55 }}>
-          {t.accountProfileHint}
-        </p>
-      </div>
+      <p style={{ ...sectionHint, marginTop: 16, marginBottom: 0 }}>{t.accountProfileHint}</p>
     </PanelChrome>
   );
 }
 
 const planCard: CSSProperties = {
-  background: "#1a222d",
-  borderRadius: 12,
-  padding: "16px 16px 14px",
-  border: `1px solid ${colors.border}`,
+  ...card,
+  padding: "18px 18px 16px",
 };
 
 const planSectionLabel: CSSProperties = {
-  margin: "0 0 10px",
-  fontSize: 13,
-  fontWeight: 500,
-  color: colors.muted,
+  ...sectionTitle,
 };
 
 function UsageBar({
@@ -205,11 +339,11 @@ function UsageBar({
   return (
     <div
       style={{
-        height: 5,
+        height: 8,
         borderRadius: 999,
         background: "rgba(255,255,255,0.08)",
         overflow: "hidden",
-        marginTop: 8,
+        marginTop: 10,
       }}
     >
       <div
@@ -217,7 +351,10 @@ function UsageBar({
           width: `${pct}%`,
           height: "100%",
           borderRadius: 999,
-          background: tone === "accent" ? "#7aa2f7" : "rgba(232,238,245,0.55)",
+          background:
+            tone === "accent"
+              ? "linear-gradient(90deg, #3b82f6, #7aa2f7)"
+              : "rgba(232,238,245,0.55)",
           transition: "width 240ms ease",
         }}
       />
@@ -611,13 +748,22 @@ export function AccountPlanUsagePanel({
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
           <section>
-            <h3 style={{ ...sectionTitle, marginBottom: 10 }}>{t.accountPlanCurrent}</h3>
-            <div style={planCard}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>
+            <h3 style={sectionTitle}>{t.accountPlanCurrent}</h3>
+            <div
+              style={{
+                ...planCard,
+                padding: 20,
+                background:
+                  "linear-gradient(135deg, rgba(59,130,246,0.14) 0%, rgba(16,185,129,0.05) 100%), #151b23",
+                border: "1px solid rgba(59,130,246,0.22)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" }}>
                   {planLabel}
                 </span>
-                <span style={{ fontSize: 14, color: colors.muted }}>
+                <Badge tone="accent">{t.accountPlanCurrent}</Badge>
+                <span style={{ fontSize: 13, color: colors.muted }}>
                   {currentCode === "free" ? t.accountPlanPayg : t.accountPlanIncludedUsage}
                 </span>
               </div>
@@ -632,10 +778,10 @@ export function AccountPlanUsagePanel({
                       daysLeft > 0 ? ` (${fmtTpl(t.accountPlanDaysLeft, { n: daysLeft })})` : ""
                     }`}
               </p>
-              <div style={{ marginTop: 14 }}>
+              <div style={{ marginTop: 16 }}>
                 <button
                   type="button"
-                  style={{ ...btnGhost, padding: "7px 12px", fontSize: 13 }}
+                  style={btnGhostLg}
                   onClick={() => {
                     const now = Date.now();
                     checkoutWatchesRef.current = checkoutWatchesRef.current.filter(
@@ -940,23 +1086,15 @@ export function AccountPlanUsagePanel({
                     style={{
                       ...planCard,
                       position: "relative",
-                      background: isCurrent ? "#1e2733" : "#161c24",
+                      background: isCurrent ? "#1a2330" : colors.panel,
+                      border: isCurrent
+                        ? "1px solid rgba(59,130,246,0.45)"
+                        : `1px solid ${colors.border}`,
                     }}
                   >
                     {isCurrent ? (
-                      <span
-                        style={{
-                          position: "absolute",
-                          top: 12,
-                          right: 12,
-                          fontSize: 11,
-                          padding: "3px 8px",
-                          borderRadius: 999,
-                          background: "rgba(255,255,255,0.08)",
-                          color: colors.muted,
-                        }}
-                      >
-                        {t.accountPlanCurrent}
+                      <span style={{ position: "absolute", top: 12, right: 12 }}>
+                        <Badge tone="accent">{t.accountPlanCurrent}</Badge>
                       </span>
                     ) : null}
                     <p style={{ margin: 0, fontSize: 15, fontWeight: 650 }}>{tierLabel}</p>
@@ -1230,16 +1368,14 @@ export function ChatCollabBudgetSection({
   return (
     <div>
       <h3 style={sectionTitle}>{t.collabBudget}</h3>
-      <p style={{ margin: "0 0 12px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-        {t.collabBudgetHint}
-      </p>
+      <p style={sectionHint}>{t.collabBudgetHint}</p>
       {err ? (
-        <p style={{ color: colors.danger, fontSize: 12, margin: "0 0 8px" }}>{err}</p>
+        <p style={{ color: colors.danger, fontSize: 12, margin: "0 0 10px" }}>{err}</p>
       ) : null}
-      <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
+      <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
         {t.collabAccountCap}
       </label>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: chatId ? 16 : 0 }}>
         <input
           type="number"
           min={0}
@@ -1247,8 +1383,8 @@ export function ChatCollabBudgetSection({
           onChange={(e) => setCapDraft(e.target.value)}
           style={{
             flex: 1,
-            padding: "8px 10px",
-            borderRadius: 8,
+            padding: "9px 12px",
+            borderRadius: 10,
             border: `1px solid ${colors.border}`,
             background: colors.bg,
             color: colors.text,
@@ -1257,7 +1393,7 @@ export function ChatCollabBudgetSection({
         />
         <button
           type="button"
-          style={btnPrimary}
+          style={btnPrimaryLg}
           disabled={busy}
           onClick={() => {
             const n = Math.max(0, Math.trunc(Number(capDraft) || 0));
@@ -1276,27 +1412,29 @@ export function ChatCollabBudgetSection({
         </button>
       </div>
       {chatId ? (
-        <>
-          <p style={{ margin: "0 0 4px", fontSize: 12, color: colors.muted }}>
-            {t.collabRemaining}:{" "}
-            <strong style={{ color: colors.text }}>
-              {fmtCredits(budget?.remaining_credits ?? 0)}
-            </strong>
-          </p>
-          <p style={{ margin: "0 0 10px", fontSize: 11, color: colors.muted }}>
-            {budget?.can_auto ? t.collabAutoOn : t.collabAutoOff}
-            {cap > 0 ? ` · ${t.collabAccountCap} ${cap}` : ""}
-          </p>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+        <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: 14 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+            <StatChip
+              label={t.collabRemaining}
+              value={fmtCredits(budget?.remaining_credits ?? 0)}
+            />
+            <StatChip label={t.collabAccountCap} value={fmtCredits(cap)} />
+            <span style={{ alignSelf: "center" }}>
+              <Badge tone={budget?.can_auto ? "ok" : "neutral"}>
+                {budget?.can_auto ? t.collabAutoOn : t.collabAutoOff}
+              </Badge>
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <input
               type="number"
               min={1}
               value={addDraft}
               onChange={(e) => setAddDraft(e.target.value)}
               style={{
-                width: 88,
-                padding: "8px 10px",
-                borderRadius: 8,
+                width: 96,
+                padding: "9px 12px",
+                borderRadius: 10,
                 border: `1px solid ${colors.border}`,
                 background: colors.bg,
                 color: colors.text,
@@ -1305,7 +1443,7 @@ export function ChatCollabBudgetSection({
             />
             <button
               type="button"
-              style={btnPrimary}
+              style={btnPrimaryLg}
               disabled={busy}
               onClick={() => {
                 const n = Math.max(1, Math.trunc(Number(addDraft) || 0));
@@ -1321,7 +1459,7 @@ export function ChatCollabBudgetSection({
             </button>
             <button
               type="button"
-              style={btnGhost}
+              style={btnGhostLg}
               disabled={busy || cap <= 0}
               onClick={() => {
                 setBusy(true);
@@ -1336,7 +1474,7 @@ export function ChatCollabBudgetSection({
             </button>
             <button
               type="button"
-              style={btnGhost}
+              style={btnGhostLg}
               disabled={busy || !(budget && budget.remaining_credits > 0)}
               onClick={() => {
                 setBusy(true);
@@ -1350,7 +1488,7 @@ export function ChatCollabBudgetSection({
               {t.collabRelease}
             </button>
           </div>
-        </>
+        </div>
       ) : null}
     </div>
   );
@@ -1517,132 +1655,187 @@ export function AccountWalletPanel({
 
   return (
     <PanelChrome title={t.accountWallet} onClose={onClose} closeLabel={t.close}>
-      <p style={{ margin: "0 0 16px", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
-        {t.accountWalletHint}
-      </p>
+      <p style={sectionHint}>{t.accountWalletHint}</p>
       {loading ? (
-        <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
+        <EmptyText>{t.loading}</EmptyText>
       ) : error ? (
         <p style={{ color: colors.danger, fontSize: 13 }}>{error}</p>
       ) : (
-        <>
-          <h3 style={sectionTitle}>{t.walletTab}</h3>
-          <p style={{ margin: "0 0 4px", fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em" }}>
-            {fmtCredits(wallet?.balance ?? 0)}
-          </p>
-          <p style={{ margin: "0 0 16px", fontSize: 12, color: colors.muted }}>
-            {t.walletBalance}
-          </p>
-          <button
-            type="button"
-            onClick={openRecharge}
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div
             style={{
-              ...btnPrimary,
-              display: "inline-block",
-              textAlign: "center",
-              marginBottom: 8,
-              border: 0,
-              cursor: "pointer",
+              ...card,
+              padding: 20,
+              background:
+                "linear-gradient(135deg, rgba(59,130,246,0.16) 0%, rgba(16,185,129,0.06) 100%), #151b23",
+              border: "1px solid rgba(59,130,246,0.25)",
             }}
           >
-            {t.walletRechargeExternal}
-          </button>
-          <p style={{ margin: "0 0 16px", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
-            {t.walletRechargeExternalHint}
-          </p>
-          <div style={{ marginBottom: 24 }}>
+            <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>{t.walletBalance}</p>
+            <p
+              style={{
+                margin: "6px 0 0",
+                fontSize: 38,
+                fontWeight: 750,
+                letterSpacing: "-0.03em",
+                lineHeight: 1.1,
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {fmtCredits(wallet?.balance ?? 0)}
+            </p>
+            <button
+              type="button"
+              onClick={openRecharge}
+              style={{
+                ...btnPrimaryLg,
+                width: "100%",
+                marginTop: 18,
+                padding: "11px 16px",
+                border: 0,
+                cursor: "pointer",
+              }}
+            >
+              {t.walletRechargeExternal}
+            </button>
+            <p
+              style={{
+                margin: "10px 0 0",
+                fontSize: 11,
+                color: colors.muted,
+                lineHeight: 1.45,
+                textAlign: "center",
+              }}
+            >
+              {t.walletRechargeExternalHint}
+            </p>
+          </div>
+
+          <div style={card}>
             <ChatCollabBudgetSection client={client} messages={t} />
           </div>
-          <h3 style={sectionTitle}>{t.accountWalletAgentWallets}</h3>
-          {agentWalletsLoading ? (
-            <p style={{ margin: "0 0 24px", fontSize: 12, color: colors.muted }}>{t.loading}</p>
-          ) : agentRows.length === 0 ? (
-            <p style={{ margin: "0 0 24px", fontSize: 12, color: colors.muted }}>
-              {t.accountWalletNoAgents}
-            </p>
-          ) : (
-            <ul style={{ listStyle: "none", margin: "0 0 24px", padding: 0 }}>
-              {agentRows.map(({ agent, balance }) => (
-                <li key={agent.agent_id}>
-                  <button
-                    type="button"
-                    onClick={() => setAgentWalletId(agent.agent_id)}
-                    style={{
-                      width: "100%",
-                      padding: "10px 0",
-                      border: 0,
-                      borderBottom: `1px solid ${colors.border}`,
-                      background: "transparent",
-                      color: colors.text,
-                      display: "flex",
-                      gap: 10,
-                      alignItems: "baseline",
-                      cursor: "pointer",
-                      textAlign: "left",
-                    }}
-                  >
-                    <span
+
+          <section>
+            <h3 style={sectionTitle}>{t.accountWalletAgentWallets}</h3>
+            {agentWalletsLoading ? (
+              <EmptyText>{t.loading}</EmptyText>
+            ) : agentRows.length === 0 ? (
+              <EmptyText>{t.accountWalletNoAgents}</EmptyText>
+            ) : (
+              <div style={{ ...card, padding: 6 }}>
+                {agentRows.map(({ agent, balance }) => {
+                  const name = (agent.name || "").trim() || agent.agent_id;
+                  return (
+                    <RowButton
+                      key={agent.agent_id}
+                      onClick={() => setAgentWalletId(agent.agent_id)}
+                    >
+                      <AvatarDot label={name.slice(0, 1).toUpperCase()} />
+                      <span
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          fontSize: 14,
+                          fontWeight: 600,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {name}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 700,
+                          fontVariantNumeric: "tabular-nums",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {balance == null ? "—" : fmtCredits(balance)}
+                      </span>
+                      <span aria-hidden style={{ color: colors.muted, fontSize: 15 }}>
+                        ›
+                      </span>
+                    </RowButton>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section>
+            <h3 style={sectionTitle}>{t.accountWalletRecent}</h3>
+            {txs.length === 0 ? (
+              <EmptyText>{t.accountWalletEmptyTx}</EmptyText>
+            ) : (
+              <div style={{ ...card, padding: 6 }}>
+                {txs.map((tx) => {
+                  const positive = tx.amount > 0;
+                  const negative = tx.amount < 0;
+                  return (
+                    <div
+                      key={tx.transaction_id}
                       style={{
-                        flex: 1,
-                        minWidth: 0,
-                        fontSize: 13,
-                        fontWeight: 600,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
+                        display: "flex",
+                        gap: 12,
+                        alignItems: "center",
+                        padding: "10px 12px",
+                        borderRadius: 10,
                       }}
                     >
-                      {(agent.name || "").trim() || agent.agent_id}
-                    </span>
-                    <span style={{ fontSize: 13, fontWeight: 650, flexShrink: 0 }}>
-                      {balance == null ? "—" : fmtCredits(balance)}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <h3 style={sectionTitle}>{t.accountWalletRecent}</h3>
-          {txs.length === 0 ? (
-            <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>{t.accountWalletEmptyTx}</p>
-          ) : (
-            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-              {txs.map((tx) => (
-                <li
-                  key={tx.transaction_id}
-                  style={{
-                    padding: "10px 0",
-                    borderBottom: `1px solid ${colors.border}`,
-                    display: "flex",
-                    gap: 10,
-                    alignItems: "baseline",
-                  }}
-                >
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>
-                      {tx.type}
-                      {tx.description ? (
-                        <span style={{ fontWeight: 400, color: colors.muted }}> · {tx.description}</span>
-                      ) : null}
-                    </span>
-                    <span style={{ fontSize: 11, color: colors.muted }}>{fmtTxTime(tx.created_at)}</span>
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 650,
-                      color: tx.amount < 0 ? colors.danger : colors.text,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {tx.amount > 0 ? "+" : ""}
-                    {fmtCredits(tx.amount)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
+                      <span
+                        aria-hidden
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 999,
+                          flexShrink: 0,
+                          background: positive ? "#34d399" : negative ? colors.danger : colors.muted,
+                        }}
+                      />
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {tx.type}
+                          {tx.description ? (
+                            <span style={{ fontWeight: 400, color: colors.muted }}>
+                              {" "}
+                              · {tx.description}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span style={{ fontSize: 11, color: colors.muted }}>
+                          {fmtTxTime(tx.created_at)}
+                        </span>
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 700,
+                          fontVariantNumeric: "tabular-nums",
+                          color: positive ? "#34d399" : negative ? colors.danger : colors.text,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {positive ? "+" : ""}
+                        {fmtCredits(tx.amount)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
       )}
       {checkoutEmbedUrl ? (
         <ViewportOverlay
@@ -1751,55 +1944,78 @@ export function AccountKeysPanel({
 
   return (
     <PanelChrome title={t.accountKeys} onClose={onClose} closeLabel={t.close}>
-      <p style={{ margin: "0 0 16px", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
-        {t.accountKeysHint}
-      </p>
+      <p style={sectionHint}>{t.accountKeysHint}</p>
       {loading ? (
-        <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
+        <EmptyText>{t.loading}</EmptyText>
       ) : error ? (
         <p style={{ color: colors.danger, fontSize: 13 }}>{error}</p>
       ) : keys.length === 0 ? (
-        <p style={{ margin: "0 0 16px", fontSize: 13, color: colors.muted }}>{t.accountKeysEmpty}</p>
+        <div style={{ marginBottom: 16 }}>
+          <EmptyText>{t.accountKeysEmpty}</EmptyText>
+        </div>
       ) : (
-        <ul style={{ listStyle: "none", margin: "0 0 20px", padding: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
           {keys.map((key) => {
             const written = key.written_agent_name || key.written_agent_id;
             return (
-              <li
+              <div
                 key={key.order_id}
-                style={{
-                  padding: "12px 0",
-                  borderBottom: `1px solid ${colors.border}`,
-                }}
+                style={{ ...card, display: "flex", gap: 12, alignItems: "flex-start" }}
               >
-                <span style={{ display: "block", fontSize: 14, fontWeight: 600 }}>
-                  OpenRouter
+                <span
+                  aria-hidden
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 10,
+                    flexShrink: 0,
+                    background: colors.accentSoft,
+                    color: "#7aa2f7",
+                    display: "grid",
+                    placeItems: "center",
+                    fontSize: 12,
+                    fontWeight: 800,
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  OR
                 </span>
-                <span style={{ display: "block", marginTop: 4, fontSize: 12, color: colors.muted }}>
-                  {fmtTpl(t.accountPlanPriceCredits, { n: fmtCredits(key.credits_spent) })}
-                  {key.status ? ` · ${key.status}` : ""}
-                </span>
-                <span style={{ display: "block", marginTop: 4, fontSize: 12, color: colors.muted }}>
-                  {written
-                    ? fmtTpl(t.accountKeysWrittenTo, { name: written })
-                    : t.accountKeysNotWritten}
-                </span>
-                {key.created_at ? (
-                  <span style={{ display: "block", marginTop: 4, fontSize: 11, color: colors.muted }}>
-                    {fmtTxTime(key.created_at)}
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 14, fontWeight: 650 }}>OpenRouter</span>
+                    {key.status ? <Badge>{key.status}</Badge> : null}
                   </span>
-                ) : null}
-              </li>
+                  <span
+                    style={{ display: "block", marginTop: 5, fontSize: 12, color: colors.muted }}
+                  >
+                    {fmtTpl(t.accountPlanPriceCredits, { n: fmtCredits(key.credits_spent) })}
+                  </span>
+                  <span
+                    style={{ display: "block", marginTop: 3, fontSize: 12, color: colors.muted }}
+                  >
+                    {written
+                      ? fmtTpl(t.accountKeysWrittenTo, { name: written })
+                      : t.accountKeysNotWritten}
+                  </span>
+                  {key.created_at ? (
+                    <span
+                      style={{ display: "block", marginTop: 3, fontSize: 11, color: colors.muted }}
+                    >
+                      {fmtTxTime(key.created_at)}
+                    </span>
+                  ) : null}
+                </span>
+              </div>
             );
           })}
-        </ul>
+        </div>
       )}
       <a
         href={storeUrl}
         target="_blank"
         rel="noopener noreferrer"
         style={{
-          ...btnPrimary,
+          ...btnPrimaryLg,
           display: "inline-block",
           textDecoration: "none",
           textAlign: "center",
@@ -1853,103 +2069,51 @@ export function AccountManagePanel({
   ];
 
   return (
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 40,
-        background: colors.bg,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "10px 12px",
-          borderBottom: `1px solid ${colors.border}`,
-          flexShrink: 0,
-        }}
-      >
-        <button type="button" style={btnGhost} onClick={onClose} aria-label={t.close}>
-          ←
-        </button>
-        <strong style={{ fontSize: 14, flex: 1 }}>{t.accountManage}</strong>
-        <span style={{ width: 40 }} />
-      </div>
-      <div style={{ flex: 1, overflow: "auto", padding: "16px 0" }}>
-        <div style={{ padding: "0 14px 10px" }}>
-          <p style={sectionTitle}>{t.hubManageSection}</p>
-          <p style={{ margin: 0, fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
-            {t.hubManageIntro}
-          </p>
-        </div>
-        <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-          {items.map((item) => {
-            const disabled = !!item.comingSoon || !item.onSelect;
-            return (
-              <li key={item.key}>
-                <button
-                  type="button"
-                  disabled={disabled}
-                  aria-disabled={disabled || undefined}
-                  title={item.comingSoon ? t.comingSoon : undefined}
-                  onClick={() => item.onSelect?.()}
+    <PanelChrome title={t.accountManage} onClose={onClose} closeLabel={t.close}>
+      <p style={sectionHint}>{t.hubManageIntro}</p>
+      <div style={{ ...card, padding: 6 }}>
+        {items.map((item) => {
+          const disabled = !!item.comingSoon || !item.onSelect;
+          return (
+            <RowButton
+              key={item.key}
+              disabled={disabled}
+              onClick={() => item.onSelect?.()}
+            >
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span
                   style={{
-                    width: "100%",
-                    textAlign: "left",
-                    border: "none",
-                    borderBottom: `1px solid ${colors.border}`,
-                    background: "transparent",
-                    color: disabled ? colors.muted : colors.text,
-                    padding: "12px 14px",
-                    cursor: disabled ? "not-allowed" : "pointer",
                     display: "flex",
                     alignItems: "center",
-                    gap: 10,
-                    opacity: disabled ? 0.8 : 1,
+                    gap: 8,
+                    fontSize: 14,
+                    fontWeight: 600,
                   }}
                 >
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        fontSize: 14,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {item.label}
-                      {item.comingSoon ? (
-                        <span style={{ fontSize: 11, fontWeight: 500, color: colors.muted }}>
-                          {t.comingSoon}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span
-                      style={{
-                        display: "block",
-                        marginTop: 3,
-                        fontSize: 11,
-                        color: colors.muted,
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      {item.hint}
-                    </span>
-                  </span>
-                  {!disabled ? (
-                    <span style={{ color: colors.muted, fontSize: 14 }}>›</span>
-                  ) : null}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+                  {item.label}
+                  {item.comingSoon ? <Badge>{t.comingSoon}</Badge> : null}
+                </span>
+                <span
+                  style={{
+                    display: "block",
+                    marginTop: 3,
+                    fontSize: 12,
+                    color: colors.muted,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {item.hint}
+                </span>
+              </span>
+              {!disabled ? (
+                <span aria-hidden style={{ color: colors.muted, fontSize: 15 }}>
+                  ›
+                </span>
+              ) : null}
+            </RowButton>
+          );
+        })}
       </div>
-    </div>
+    </PanelChrome>
   );
 }
