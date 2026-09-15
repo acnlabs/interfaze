@@ -7,8 +7,10 @@ import type {
   ChatCollabBudget,
   GatewayClient,
   HumanWallet,
+  InvoiceRequestRecord,
   MyAgentSummary,
   MyAgentWalletTx,
+  PaymentOrder,
   PlanCatalogEntry,
   PlanUsage,
 } from "../gateway";
@@ -18,6 +20,7 @@ import type { RanchMessages } from "./i18n";
 import { btnGhost, btnIcon, btnPrimary, colors } from "./styles";
 import {
   buildWalletCheckoutUrl,
+  isCnInterfazeOrigin,
   isInterfazeHostname,
   prefersInPanelCheckout,
   resolveInterfazeOrigin,
@@ -1495,6 +1498,286 @@ export function ChatCollabBudgetSection({
   );
 }
 
+function fmtFiatCents(cents: number, currency: string): string {
+  const v = (cents / 100).toFixed(2);
+  return currency === "USD" ? `$${v}` : `¥${v}`;
+}
+
+function paymentChannelLabel(channel: string): string {
+  switch (channel) {
+    case "paypal":
+      return "PayPal";
+    case "alipay":
+      return "支付宝";
+    case "wechat_wxpay":
+    case "wechat_xpay":
+      return "微信支付";
+    default:
+      return channel;
+  }
+}
+
+/** 收据与发票区块：收款订单列表 + 收据下载 + CN 发票申请。 */
+function WalletBillingDocsSection({
+  client,
+  messages: t,
+  interfazeBaseUrl,
+}: {
+  client: GatewayClient;
+  messages: RanchMessages;
+  interfazeBaseUrl?: string;
+}) {
+  const isCn = isCnInterfazeOrigin(resolveInterfazeOrigin(interfazeBaseUrl));
+  const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [orders, setOrders] = useState<PaymentOrder[]>([]);
+  const [requests, setRequests] = useState<InvoiceRequestRecord[]>([]);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [formOrderId, setFormOrderId] = useState<string | null>(null);
+  const [titleType, setTitleType] = useState<"personal" | "business">("personal");
+  const [title, setTitle] = useState("");
+  const [taxNo, setTaxNo] = useState("");
+  const [email, setEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([client.listPaymentOrders(), client.listInvoiceRequests()])
+      .then(([os, rs]) => {
+        if (cancelled) return;
+        setOrders(os);
+        setRequests(rs);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+
+  const paidOrders = orders.filter((o) => o.status === "paid");
+  const reqByOrder = new Map(requests.map((r) => [r.payment_order_id, r]));
+
+  const inputStyle: CSSProperties = {
+    width: "100%",
+    padding: "9px 12px",
+    borderRadius: 10,
+    border: `1px solid ${colors.border}`,
+    background: colors.bg,
+    color: colors.text,
+    fontSize: 13,
+    boxSizing: "border-box",
+  };
+
+  const downloadReceipt = (orderId: string) => {
+    setDownloading(orderId);
+    void client
+      .fetchReceiptPdf(orderId)
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `receipt-${orderId}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      })
+      .catch(() => setLoadFailed(true))
+      .finally(() => setDownloading(null));
+  };
+
+  const submitInvoice = (orderId: string) => {
+    setSubmitting(true);
+    setFormError(false);
+    void client
+      .createInvoiceRequest({
+        payment_order_id: orderId,
+        title_type: titleType,
+        title: title.trim(),
+        tax_no: titleType === "business" ? taxNo.trim() : null,
+        email: email.trim(),
+      })
+      .then(({ request }) => {
+        setRequests((prev) => [request, ...prev]);
+        setFormOrderId(null);
+        setTitle("");
+        setTaxNo("");
+      })
+      .catch(() => setFormError(true))
+      .finally(() => setSubmitting(false));
+  };
+
+  return (
+    <section>
+      <h3 style={sectionTitle}>{t.walletBillingDocs}</h3>
+      <p style={sectionHint}>{t.walletBillingDocsHint}</p>
+      {loading ? (
+        <EmptyText>{t.loading}</EmptyText>
+      ) : loadFailed ? (
+        <p style={{ color: colors.danger, fontSize: 13, margin: 0 }}>
+          {t.walletBillingDocsLoadFailed}
+        </p>
+      ) : paidOrders.length === 0 ? (
+        <EmptyText>{t.walletBillingDocsEmpty}</EmptyText>
+      ) : (
+        <div style={{ ...card, padding: 6 }}>
+          {paidOrders.map((order) => {
+            const req = reqByOrder.get(order.order_id);
+            const formOpen = formOrderId === order.order_id;
+            const typeLabel =
+              order.order_type === "plan" && order.plan_code
+                ? `Interfaze ${order.plan_code.toUpperCase()}`
+                : txTypeLabel("recharge", t);
+            return (
+              <div key={order.order_id} style={{ padding: "10px 12px" }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>
+                      {typeLabel}
+                    </span>
+                    <span
+                      style={{
+                        display: "block",
+                        marginTop: 2,
+                        fontSize: 11,
+                        color: colors.muted,
+                      }}
+                    >
+                      {paymentChannelLabel(order.channel)} · {fmtTxTimeShort(order.paid_at || order.created_at)}
+                    </span>
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      fontVariantNumeric: "tabular-nums",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {fmtFiatCents(order.charge_cents, order.currency)}
+                  </span>
+                  <button
+                    type="button"
+                    style={{ ...btnGhost, flexShrink: 0, fontSize: 12, padding: "5px 10px" }}
+                    disabled={downloading === order.order_id}
+                    onClick={() => downloadReceipt(order.order_id)}
+                  >
+                    {t.walletDownloadReceipt}
+                  </button>
+                  {isCn ? (
+                    req ? (
+                      <Badge tone={req.status === "issued" ? "ok" : "accent"}>
+                        {req.status === "issued"
+                          ? t.walletInvoiceStatusIssued
+                          : t.walletInvoiceStatusPending}
+                      </Badge>
+                    ) : (
+                      <button
+                        type="button"
+                        style={{ ...btnGhost, flexShrink: 0, fontSize: 12, padding: "5px 10px" }}
+                        onClick={() => {
+                          setFormOrderId(formOpen ? null : order.order_id);
+                          setFormError(false);
+                        }}
+                      >
+                        {t.walletRequestInvoice}
+                      </button>
+                    )
+                  ) : null}
+                </div>
+                {formOpen ? (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      padding: 12,
+                      borderRadius: 10,
+                      border: `1px solid ${colors.border}`,
+                      background: colors.bg,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {(["personal", "business"] as const).map((kind) => (
+                        <button
+                          key={kind}
+                          type="button"
+                          onClick={() => setTitleType(kind)}
+                          style={{
+                            ...btnGhost,
+                            fontSize: 12,
+                            padding: "5px 12px",
+                            ...(titleType === kind
+                              ? { borderColor: colors.accent, color: colors.text }
+                              : {}),
+                          }}
+                        >
+                          {kind === "personal"
+                            ? t.walletInvoiceTitleTypePersonal
+                            : t.walletInvoiceTitleTypeBusiness}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder={t.walletInvoiceTitlePlaceholder}
+                      style={inputStyle}
+                    />
+                    {titleType === "business" ? (
+                      <input
+                        value={taxNo}
+                        onChange={(e) => setTaxNo(e.target.value)}
+                        placeholder={t.walletInvoiceTaxNoPlaceholder}
+                        style={inputStyle}
+                      />
+                    ) : null}
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder={t.walletInvoiceEmailPlaceholder}
+                      style={inputStyle}
+                    />
+                    {formError ? (
+                      <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>
+                        {t.walletInvoiceFailed}
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      style={{ ...btnPrimaryLg, border: 0, cursor: "pointer" }}
+                      disabled={
+                        submitting ||
+                        title.trim().length < 2 ||
+                        email.trim().length < 5 ||
+                        (titleType === "business" && !taxNo.trim())
+                      }
+                      onClick={() => submitInvoice(order.order_id)}
+                    >
+                      {submitting ? t.walletInvoiceSubmitting : t.walletInvoiceSubmit}
+                    </button>
+                  </div>
+                ) : null}
+                {req && req.status === "pending" ? (
+                  <p style={{ margin: "6px 0 0", fontSize: 11, color: colors.muted }}>
+                    {t.walletInvoiceSubmitted}
+                  </p>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function AccountWalletPanel({
   client,
   messages: t,
@@ -1833,6 +2116,12 @@ export function AccountWalletPanel({
               </div>
             )}
           </section>
+
+          <WalletBillingDocsSection
+            client={client}
+            messages={t}
+            interfazeBaseUrl={interfazeBaseUrl}
+          />
         </div>
       )}
       {checkoutEmbedUrl ? (

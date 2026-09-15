@@ -145,6 +145,44 @@ export type AccountKeyList = {
   keys: AccountKey[];
 };
 
+/** Unified fiat payment order (receipt/invoice source of truth). */
+export type PaymentOrder = {
+  order_id: string;
+  order_type: "recharge" | "plan" | string;
+  channel: "paypal" | "alipay" | "wechat_wxpay" | "wechat_xpay" | string;
+  face_cents: number;
+  fee_cents: number;
+  charge_cents: number;
+  currency: "USD" | "CNY" | string;
+  credits: number;
+  plan_code?: string | null;
+  status: "created" | "paid" | "failed" | string;
+  created_at: string;
+  paid_at?: string | null;
+};
+
+/** CN fapiao request record (manual fulfillment). */
+export type InvoiceRequestRecord = {
+  request_id: string;
+  payment_order_id: string;
+  title_type: "personal" | "business" | string;
+  title: string;
+  tax_no?: string | null;
+  email: string;
+  status: "pending" | "issued" | "rejected" | string;
+  created_at: string;
+  issued_at?: string | null;
+  order?: PaymentOrder | null;
+};
+
+export type InvoiceRequestCreateBody = {
+  payment_order_id: string;
+  title_type: "personal" | "business";
+  title: string;
+  tax_no?: string | null;
+  email: string;
+};
+
 /** Catalog tier from GET /api/chat/plan-usage. */
 export type PlanCatalogEntry = {
   code: string;
@@ -587,6 +625,15 @@ export type GatewayClient = {
   ) => Promise<MyAgentSummary>;
   /** Signed-in human Credits wallet. */
   getHumanWallet: () => Promise<HumanWallet>;
+  /** Unified fiat payment orders (receipts/invoices source). */
+  listPaymentOrders: () => Promise<PaymentOrder[]>;
+  /** Authenticated receipt PDF download — returns a Blob for save-as. */
+  fetchReceiptPdf: (orderId: string) => Promise<Blob>;
+  /** CN fapiao request (manual fulfillment). */
+  createInvoiceRequest: (body: InvoiceRequestCreateBody) => Promise<{
+    request: InvoiceRequestRecord;
+  }>;
+  listInvoiceRequests: () => Promise<InvoiceRequestRecord[]>;
   /** Store model-quota orders for this human. Never returns plaintext keys. */
   getMyKeys: () => Promise<AccountKeyList>;
   listHumanWalletTransactions: (
@@ -913,6 +960,38 @@ export function createGatewayClient(
         },
       ),
     getHumanWallet: () => request<HumanWallet>("/api/chat/wallet"),
+    listPaymentOrders: async () => {
+      const data = await request<{ orders?: PaymentOrder[] }>(
+        "/api/users/me/payment-orders",
+      );
+      return data.orders ?? [];
+    },
+    fetchReceiptPdf: async (orderId) => {
+      const token = await getAccessToken();
+      if (!token) {
+        throw new ChatGatewayError(401, "not_authenticated", "Not authenticated");
+      }
+      const res = await fetch(
+        joinUrl(
+          gatewayBaseUrl,
+          `/api/users/me/payment-orders/${encodeURIComponent(orderId)}/receipt.pdf`,
+        ),
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) throw await parseError(res);
+      return await res.blob();
+    },
+    createInvoiceRequest: (body) =>
+      request<{ request: InvoiceRequestRecord }>("/api/users/me/invoice-requests", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    listInvoiceRequests: async () => {
+      const data = await request<{ requests?: InvoiceRequestRecord[] }>(
+        "/api/users/me/invoice-requests",
+      );
+      return data.requests ?? [];
+    },
     getMyKeys: async () => {
       try {
         return await request<AccountKeyList>("/api/chat/my-keys");
