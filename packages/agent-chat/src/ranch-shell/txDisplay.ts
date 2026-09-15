@@ -25,9 +25,12 @@ export function cleanTxDescription(desc: string | null | undefined): string {
   if (!desc) return "";
   return desc
     .replace(/order=[0-9a-f-]{36}/gi, "")
+    .replace(/\b[\w-]*recharge:[^\s]+/gi, "")
+    .replace(/\bcampaign_vault:\S*/gi, "")
     .replace(/\b[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\b/gi, "")
     .replace(/\(\s*\)/g, "")
     .replace(/\s{2,}/g, " ")
+    .replace(/^[·:\s]+/, "")
     .replace(/\s*([·:])\s*$/, "")
     .trim();
 }
