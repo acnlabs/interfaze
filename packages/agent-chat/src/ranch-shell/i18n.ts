@@ -617,7 +617,7 @@ const en: RanchMessages = {
   agentHopUsage: (input, output) =>
     `in ${input.toLocaleString("en-US")} · out ${output.toLocaleString("en-US")}`,
   pieceHeld: (amount) => `${amount} Credits settling`,
-  pieceCaptured: "Stills settled",
+  pieceCaptured: "Settled",
   composerProviderLabel: "Provider",
   composerModelLabel: "Model",
   composerModelUnknown: "—",
@@ -1227,8 +1227,8 @@ const zh: RanchMessages = {
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
   agentHopUsage: (input, output) =>
     `入 ${input.toLocaleString("zh-CN")} · 出 ${output.toLocaleString("zh-CN")}`,
-  pieceHeld: (amount) => `按张结算中 ${amount} Credits`,
-  pieceCaptured: "按张已入账",
+  pieceHeld: (amount) => `按件结算中 ${amount} Credits`,
+  pieceCaptured: "已入账",
   composerProviderLabel: "供应商",
   composerModelLabel: "模型",
   composerModelUnknown: "—",
