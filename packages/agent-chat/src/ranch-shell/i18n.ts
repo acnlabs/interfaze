@@ -996,8 +996,8 @@ const en: RanchMessages = {
   myAgentsSectionPieceSku: "Per file",
   myAgentsPieceSkuHint:
     "Credits charged when that kind of file lands in this chat. 0 = not selling that kind (file still arrives). Dislike is not a refund; dialog tokens still settle separately.",
-  myAgentsPieceSkuLabel: "Credits per still",
-  myAgentsPieceSkuLabelImage: "Credits per still",
+  myAgentsPieceSkuLabel: "Credits per image",
+  myAgentsPieceSkuLabelImage: "Credits per image",
   myAgentsPieceSkuLabelVideo: "Credits per video",
   myAgentsPieceSkuLabelAudio: "Credits per audio",
   myAgentsPieceSkuLabelFile: "Credits per other file",
@@ -1598,8 +1598,8 @@ const zh: RanchMessages = {
   myAgentsSectionPieceSku: "按件",
   myAgentsPieceSkuHint:
     "货进这场对话即按件成交。图、视频、音频、其他文件分开挂。0 = 那种不卖（货仍进气泡）。不满意不退；没出货不占。对话 token 仍另结。",
-  myAgentsPieceSkuLabel: "每张 Credits",
-  myAgentsPieceSkuLabelImage: "每张 Credits",
+  myAgentsPieceSkuLabel: "每张图 Credits",
+  myAgentsPieceSkuLabelImage: "每张图 Credits",
   myAgentsPieceSkuLabelVideo: "每条视频 Credits",
   myAgentsPieceSkuLabelAudio: "每条音频 Credits",
   myAgentsPieceSkuLabelFile: "每份其他文件 Credits",
