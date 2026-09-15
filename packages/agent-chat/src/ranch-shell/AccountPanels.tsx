@@ -1404,33 +1404,41 @@ export function AccountWalletPanel({
   }, [reload, t.accountWalletLoadFailed]);
 
   // Agent balances load separately so a slow agent wallet never blocks the human wallet.
+  const reloadAgentWallets = useCallback(async () => {
+    const agents = await client.listMyAgents(20);
+    const rows = await Promise.all(
+      agents.map(async (agent) => {
+        try {
+          const w = await client.getMyAgentWallet(agent.agent_id);
+          return { agent, balance: w.balance };
+        } catch {
+          return { agent, balance: null };
+        }
+      }),
+    );
+    setAgentRows(rows);
+  }, [client]);
+
   useEffect(() => {
     let cancelled = false;
     setAgentWalletsLoading(true);
-    void (async () => {
-      try {
-        const agents = await client.listMyAgents(20);
-        const rows = await Promise.all(
-          agents.map(async (agent) => {
-            try {
-              const w = await client.getMyAgentWallet(agent.agent_id);
-              return { agent, balance: w.balance };
-            } catch {
-              return { agent, balance: null };
-            }
-          }),
-        );
-        if (!cancelled) setAgentRows(rows);
-      } catch {
+    void reloadAgentWallets()
+      .catch(() => {
         /* agent wallet list is optional */
-      } finally {
+      })
+      .finally(() => {
         if (!cancelled) setAgentWalletsLoading(false);
-      }
-    })();
+      });
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [reloadAgentWallets]);
+
+  // Detail view may have changed a balance (top-up / withdraw) — refresh on return.
+  function closeAgentWalletDetail() {
+    setAgentWalletId(null);
+    void reloadAgentWallets().catch(() => undefined);
+  }
 
   const rechargeUrl = buildWalletCheckoutUrl({
     interfazeBaseUrl,
@@ -1496,7 +1504,7 @@ export function AccountWalletPanel({
     const row = agentRows.find((r) => r.agent.agent_id === agentWalletId);
     const label = (row?.agent.name || "").trim() || t.accountWalletAgentWallets;
     return (
-      <PanelChrome title={label} onClose={() => setAgentWalletId(null)} closeLabel={t.close}>
+      <PanelChrome title={label} onClose={closeAgentWalletDetail} closeLabel={t.close}>
         <AgentOwnerWallet
           client={client}
           agentId={agentWalletId}
