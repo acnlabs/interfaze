@@ -7,11 +7,13 @@ import type {
   ChatCollabBudget,
   GatewayClient,
   HumanWallet,
+  MyAgentSummary,
   MyAgentWalletTx,
   PlanCatalogEntry,
   PlanUsage,
 } from "../gateway";
 import type { RanchChatAccount } from "../types";
+import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import type { RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors } from "./styles";
 import {
@@ -68,7 +70,9 @@ function PanelChrome({
         <strong style={{ fontSize: 14, flex: 1 }}>{title}</strong>
         <span style={{ width: 40 }} />
       </div>
-      <div style={{ flex: 1, overflow: "auto", padding: 16 }}>{children}</div>
+      <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
+        <div style={{ maxWidth: 680, width: "100%", margin: "0 auto" }}>{children}</div>
+      </div>
     </div>
   );
 }
@@ -1369,6 +1373,9 @@ export function AccountWalletPanel({
   const [txs, setTxs] = useState<MyAgentWalletTx[]>([]);
   const [checkoutEmbedUrl, setCheckoutEmbedUrl] = useState<string | null>(null);
   const baselineBalanceRef = useRef<number | null>(null);
+  const [agentRows, setAgentRows] = useState<{ agent: MyAgentSummary; balance: number | null }[]>([]);
+  const [agentWalletsLoading, setAgentWalletsLoading] = useState(true);
+  const [agentWalletId, setAgentWalletId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     const [w, list] = await Promise.all([
@@ -1395,6 +1402,35 @@ export function AccountWalletPanel({
       cancelled = true;
     };
   }, [reload, t.accountWalletLoadFailed]);
+
+  // Agent balances load separately so a slow agent wallet never blocks the human wallet.
+  useEffect(() => {
+    let cancelled = false;
+    setAgentWalletsLoading(true);
+    void (async () => {
+      try {
+        const agents = await client.listMyAgents(20);
+        const rows = await Promise.all(
+          agents.map(async (agent) => {
+            try {
+              const w = await client.getMyAgentWallet(agent.agent_id);
+              return { agent, balance: w.balance };
+            } catch {
+              return { agent, balance: null };
+            }
+          }),
+        );
+        if (!cancelled) setAgentRows(rows);
+      } catch {
+        /* agent wallet list is optional */
+      } finally {
+        if (!cancelled) setAgentWalletsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
 
   const rechargeUrl = buildWalletCheckoutUrl({
     interfazeBaseUrl,
@@ -1456,6 +1492,21 @@ export function AccountWalletPanel({
     return () => window.clearInterval(id);
   }, [checkoutEmbedUrl, client, reload]);
 
+  if (agentWalletId) {
+    const row = agentRows.find((r) => r.agent.agent_id === agentWalletId);
+    const label = (row?.agent.name || "").trim() || t.accountWalletAgentWallets;
+    return (
+      <PanelChrome title={label} onClose={() => setAgentWalletId(null)} closeLabel={t.close}>
+        <AgentOwnerWallet
+          client={client}
+          agentId={agentWalletId}
+          messages={t}
+          interfazeBaseUrl={interfazeBaseUrl}
+        />
+      </PanelChrome>
+    );
+  }
+
   return (
     <PanelChrome title={t.accountWallet} onClose={onClose} closeLabel={t.close}>
       <p style={{ margin: "0 0 16px", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
@@ -1494,6 +1545,55 @@ export function AccountWalletPanel({
           <div style={{ marginBottom: 24 }}>
             <ChatCollabBudgetSection client={client} messages={t} />
           </div>
+          <h3 style={sectionTitle}>{t.accountWalletAgentWallets}</h3>
+          {agentWalletsLoading ? (
+            <p style={{ margin: "0 0 24px", fontSize: 12, color: colors.muted }}>{t.loading}</p>
+          ) : agentRows.length === 0 ? (
+            <p style={{ margin: "0 0 24px", fontSize: 12, color: colors.muted }}>
+              {t.accountWalletNoAgents}
+            </p>
+          ) : (
+            <ul style={{ listStyle: "none", margin: "0 0 24px", padding: 0 }}>
+              {agentRows.map(({ agent, balance }) => (
+                <li key={agent.agent_id}>
+                  <button
+                    type="button"
+                    onClick={() => setAgentWalletId(agent.agent_id)}
+                    style={{
+                      width: "100%",
+                      padding: "10px 0",
+                      border: 0,
+                      borderBottom: `1px solid ${colors.border}`,
+                      background: "transparent",
+                      color: colors.text,
+                      display: "flex",
+                      gap: 10,
+                      alignItems: "baseline",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {(agent.name || "").trim() || agent.agent_id}
+                    </span>
+                    <span style={{ fontSize: 13, fontWeight: 650, flexShrink: 0 }}>
+                      {balance == null ? "—" : fmtCredits(balance)}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           <h3 style={sectionTitle}>{t.accountWalletRecent}</h3>
           {txs.length === 0 ? (
             <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>{t.accountWalletEmptyTx}</p>

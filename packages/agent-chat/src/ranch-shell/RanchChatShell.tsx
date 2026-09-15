@@ -1961,6 +1961,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
+  // Panels overlay the right pane on desktop — opening a chat must dismiss them.
+  const activeChatId = active?.chat_id ?? null;
+  useEffect(() => {
+    if (!activeChatId) return;
+    closeAccountSurfaces();
+    writeAccountPanelToUrl(null, "replace");
+  }, [activeChatId]);
+
   useEffect(() => {
     if (!initialCreateAgent) return;
     setShowCreateDialog(true);
@@ -3683,6 +3691,88 @@ export function RanchChatShell(props: RanchChatShellProps) {
     Date.now() - stickyMention.setAt <= STICKY_MENTION_TTL_MS &&
     agentIdsRef.current.includes(stickyMention.agentId);
 
+  // Account panels mount in the right pane on desktop (full) and cover the
+  // list column in narrow (side) mode. PanelChrome fills its positioned parent.
+  const accountPanels = (
+    <>
+      {showAccountProfile && account ? (
+        <AccountProfilePanel
+          account={account}
+          messages={t}
+          onClose={() => closeAccountPanel()}
+        />
+      ) : null}
+
+      {showAccountManage ? (
+        <AccountManagePanel
+          messages={t}
+          onClose={() => closeAccountPanel()}
+          onOpenAgents={() => {
+            setShowAccountManage(false);
+            setShowMyAgents(true);
+          }}
+        />
+      ) : null}
+
+      {showAccountWallet ? (
+        <AccountWalletPanel
+          client={client}
+          messages={t}
+          interfazeBaseUrl={interfazeBaseUrl}
+          onClose={() => closeAccountPanel()}
+        />
+      ) : null}
+
+      {showAccountKeys ? (
+        <AccountKeysPanel
+          client={client}
+          messages={t}
+          agentPlanetBaseUrl={agentPlanetBaseUrl}
+          onClose={() => closeAccountPanel()}
+        />
+      ) : null}
+
+      {showAccountPlan ? (
+        <AccountPlanUsagePanel
+          client={client}
+          messages={t}
+          locale={uiLocale}
+          agentPlanetBaseUrl={agentPlanetBaseUrl}
+          interfazeBaseUrl={interfazeBaseUrl}
+          onClose={() => closeAccountPanel()}
+        />
+      ) : null}
+
+      {showMyAgents ? (
+        <MyAgentsPanel
+          client={client}
+          connectGuideUrl={connectGuideUrl}
+          agentPlanetBaseUrl={agentPlanetBaseUrl}
+          interfazeBaseUrl={interfazeBaseUrl}
+          locale={uiLocale}
+          messages={t}
+          busy={busy}
+          onClose={() => {
+            setShowMyAgents(false);
+            setShowAccountManage(true);
+          }}
+          onConnectExisting={() => setShowConnect(true)}
+          onCreateHosted={() => setShowCreateDialog(true)}
+          onOpenChat={(id) => {
+            setShowMyAgents(false);
+            setShowAccountManage(false);
+            void startDirect(id);
+          }}
+          onAgentUpdated={(row, previousName) => {
+            applyOwnedAgentProfileUpdate(row, previousName);
+          }}
+          onAgentRemoved={applyOwnedAgentRemoved}
+          onOpenKeys={() => openAccountPanel("keys")}
+        />
+      ) : null}
+    </>
+  );
+
   return (
     <div style={shellRoot(mode)} data-ranch-chat-shell data-mode={mode}>
       <style>{`
@@ -4028,81 +4118,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           />
         ) : null}
 
-        {showAccountProfile && account ? (
-          <AccountProfilePanel
-            account={account}
-            messages={t}
-            onClose={() => closeAccountPanel()}
-          />
-        ) : null}
-
-        {showAccountManage ? (
-          <AccountManagePanel
-            messages={t}
-            onClose={() => closeAccountPanel()}
-            onOpenAgents={() => {
-              setShowAccountManage(false);
-              setShowMyAgents(true);
-            }}
-          />
-        ) : null}
-
-        {showAccountWallet ? (
-          <AccountWalletPanel
-            client={client}
-            messages={t}
-            interfazeBaseUrl={interfazeBaseUrl}
-            onClose={() => closeAccountPanel()}
-          />
-        ) : null}
-
-        {showAccountKeys ? (
-          <AccountKeysPanel
-            client={client}
-            messages={t}
-            agentPlanetBaseUrl={agentPlanetBaseUrl}
-            onClose={() => closeAccountPanel()}
-          />
-        ) : null}
-
-        {showAccountPlan ? (
-          <AccountPlanUsagePanel
-            client={client}
-            messages={t}
-            locale={uiLocale}
-            agentPlanetBaseUrl={agentPlanetBaseUrl}
-            interfazeBaseUrl={interfazeBaseUrl}
-            onClose={() => closeAccountPanel()}
-          />
-        ) : null}
-
-        {showMyAgents ? (
-          <MyAgentsPanel
-            client={client}
-            connectGuideUrl={connectGuideUrl}
-            agentPlanetBaseUrl={agentPlanetBaseUrl}
-            interfazeBaseUrl={interfazeBaseUrl}
-            locale={uiLocale}
-            messages={t}
-            busy={busy}
-            onClose={() => {
-              setShowMyAgents(false);
-              setShowAccountManage(true);
-            }}
-            onConnectExisting={() => setShowConnect(true)}
-            onCreateHosted={() => setShowCreateDialog(true)}
-            onOpenChat={(id) => {
-              setShowMyAgents(false);
-              setShowAccountManage(false);
-              void startDirect(id);
-            }}
-            onAgentUpdated={(row, previousName) => {
-              applyOwnedAgentProfileUpdate(row, previousName);
-            }}
-            onAgentRemoved={applyOwnedAgentRemoved}
-            onOpenKeys={() => openAccountPanel("keys")}
-          />
-        ) : null}
+        {mode === "full" ? null : accountPanels}
       </div>
 
       {(view === "conversation" || mode === "full") && (
@@ -6250,6 +6266,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               ) : null}
             </>
           )}
+          {mode === "full" ? accountPanels : null}
         </div>
       )}
 
