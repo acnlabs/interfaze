@@ -22,6 +22,7 @@ import {
   prefersInPanelCheckout,
   resolveInterfazeOrigin,
 } from "./interfazeHost";
+import { cleanTxDescription, fmtTxTimeShort, txTypeLabel } from "./txDisplay";
 
 /** Shared card container for all account panel sections. */
 const card: CSSProperties = {
@@ -1773,6 +1774,7 @@ export function AccountWalletPanel({
                 {txs.map((tx) => {
                   const positive = tx.amount > 0;
                   const negative = tx.amount < 0;
+                  const desc = cleanTxDescription(tx.description);
                   return (
                     <div
                       key={tx.transaction_id}
@@ -1795,26 +1797,22 @@ export function AccountWalletPanel({
                         }}
                       />
                       <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>
+                          {txTypeLabel(tx.type, t)}
+                        </span>
                         <span
                           style={{
                             display: "block",
-                            fontSize: 13,
-                            fontWeight: 600,
+                            marginTop: 2,
+                            fontSize: 11,
+                            color: colors.muted,
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {tx.type}
-                          {tx.description ? (
-                            <span style={{ fontWeight: 400, color: colors.muted }}>
-                              {" "}
-                              · {tx.description}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span style={{ fontSize: 11, color: colors.muted }}>
-                          {fmtTxTime(tx.created_at)}
+                          {desc ? `${desc} · ` : ""}
+                          {fmtTxTimeShort(tx.created_at)}
                         </span>
                       </span>
                       <span

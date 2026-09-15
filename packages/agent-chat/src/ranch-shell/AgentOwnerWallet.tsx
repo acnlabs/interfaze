@@ -13,6 +13,7 @@ import {
 import { FieldHint } from "./AgentOwnerSettings";
 import type { RanchMessages } from "./i18n";
 import { buildWalletCheckoutUrl } from "./interfazeHost";
+import { cleanTxDescription, fmtTxTimeShort, txTypeLabel } from "./txDisplay";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 
 /** Match Gateway ``MyAgentWalletAmount.amount`` upper bound. */
@@ -541,26 +542,31 @@ export function AgentOwnerWallet({
               gap: 8,
             }}
           >
-            {txs.map((tx) => (
-              <li
-                key={tx.transaction_id}
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 8,
-                  border: `1px solid ${colors.border}`,
-                  fontSize: 12,
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                  <span style={{ color: colors.text, fontWeight: 600 }}>{tx.type}</span>
-                  <span style={{ color: colors.text }}>{fmtCredits(tx.amount)}</span>
-                </div>
-                <div style={{ marginTop: 4, color: colors.muted }}>
-                  {tx.description || "—"}
-                  {tx.created_at ? ` · ${fmtTxTime(tx.created_at)}` : ""}
-                </div>
-              </li>
-            ))}
+            {txs.map((tx) => {
+              const desc = cleanTxDescription(tx.description);
+              return (
+                <li
+                  key={tx.transaction_id}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: `1px solid ${colors.border}`,
+                    fontSize: 12,
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                    <span style={{ color: colors.text, fontWeight: 600 }}>
+                      {txTypeLabel(tx.type, t)}
+                    </span>
+                    <span style={{ color: colors.text }}>{fmtCredits(tx.amount)}</span>
+                  </div>
+                  <div style={{ marginTop: 4, color: colors.muted }}>
+                    {desc || "—"}
+                    {tx.created_at ? ` · ${fmtTxTimeShort(tx.created_at)}` : ""}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

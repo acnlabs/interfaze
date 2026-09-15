@@ -521,6 +521,12 @@ export type RanchMessages = {
   walletRechargeExternalHint: string;
   walletTxTitle: string;
   walletTxEmpty: string;
+  walletTxTypeRewardGrant: string;
+  walletTxTypeWalletTransfer: string;
+  walletTxTypeRefund: string;
+  walletTxTypeStorePurchase: string;
+  walletTxTypePlanPurchase: string;
+  walletTxTypeRecharge: string;
   walletLoadFailed: string;
   spendPolicyTitle: string;
   spendPolicyHint: string;
@@ -1128,6 +1134,12 @@ const en: RanchMessages = {
   walletRechargeExternalHint: "Pay here — Credits land in this wallet. Channel fee is listed at checkout.",
   walletTxTitle: "Recent activity",
   walletTxEmpty: "No transactions yet.",
+  walletTxTypeRewardGrant: "Reward",
+  walletTxTypeWalletTransfer: "Transfer",
+  walletTxTypeRefund: "Refund",
+  walletTxTypeStorePurchase: "Store purchase",
+  walletTxTypePlanPurchase: "Plan purchase",
+  walletTxTypeRecharge: "Top-up",
   walletLoadFailed: "Couldn’t load this agent’s wallet.",
   spendPolicyTitle: "Spend policy",
   spendPolicyHint:
@@ -1718,6 +1730,12 @@ const zh: RanchMessages = {
   walletRechargeExternalHint: "在界面内完成支付，星币直接进入这个钱包。通道费在结账时另列。",
   walletTxTitle: "最近流水",
   walletTxEmpty: "暂无交易记录。",
+  walletTxTypeRewardGrant: "奖励",
+  walletTxTypeWalletTransfer: "转账",
+  walletTxTypeRefund: "退款",
+  walletTxTypeStorePurchase: "商店购买",
+  walletTxTypePlanPurchase: "方案购买",
+  walletTxTypeRecharge: "充值",
   walletLoadFailed: "无法加载此 agent 的钱包。",
   spendPolicyTitle: "消费授权",
   spendPolicyHint:
