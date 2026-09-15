@@ -531,6 +531,23 @@ export type RanchMessages = {
   walletTxTypeStorePurchase: string;
   walletTxTypePlanPurchase: string;
   walletTxTypeRecharge: string;
+  walletBillingDocs: string;
+  walletBillingDocsHint: string;
+  walletBillingDocsEmpty: string;
+  walletBillingDocsLoadFailed: string;
+  walletDownloadReceipt: string;
+  walletRequestInvoice: string;
+  walletInvoiceStatusPending: string;
+  walletInvoiceStatusIssued: string;
+  walletInvoiceTitleTypePersonal: string;
+  walletInvoiceTitleTypeBusiness: string;
+  walletInvoiceTitlePlaceholder: string;
+  walletInvoiceTaxNoPlaceholder: string;
+  walletInvoiceEmailPlaceholder: string;
+  walletInvoiceSubmit: string;
+  walletInvoiceSubmitting: string;
+  walletInvoiceSubmitted: string;
+  walletInvoiceFailed: string;
   walletLoadFailed: string;
   spendPolicyTitle: string;
   spendPolicyHint: string;
@@ -1148,6 +1165,24 @@ const en: RanchMessages = {
   walletTxTypeStorePurchase: "Store purchase",
   walletTxTypePlanPurchase: "Plan purchase",
   walletTxTypeRecharge: "Top-up",
+  walletBillingDocs: "Receipts & invoices",
+  walletBillingDocsHint:
+    "Download a receipt for any payment. On the CN site you can also request a fapiao — issued manually to your email within 1-3 business days.",
+  walletBillingDocsEmpty: "No payments yet.",
+  walletBillingDocsLoadFailed: "Couldn't load receipts.",
+  walletDownloadReceipt: "Receipt",
+  walletRequestInvoice: "Request fapiao",
+  walletInvoiceStatusPending: "Processing",
+  walletInvoiceStatusIssued: "Issued",
+  walletInvoiceTitleTypePersonal: "Personal",
+  walletInvoiceTitleTypeBusiness: "Business",
+  walletInvoiceTitlePlaceholder: "Invoice title (name or company)",
+  walletInvoiceTaxNoPlaceholder: "Tax ID (统一社会信用代码)",
+  walletInvoiceEmailPlaceholder: "Email to receive the fapiao",
+  walletInvoiceSubmit: "Submit request",
+  walletInvoiceSubmitting: "Submitting…",
+  walletInvoiceSubmitted: "Submitted — the fapiao will be emailed to you after issuance.",
+  walletInvoiceFailed: "Submit failed. Please try again.",
   walletLoadFailed: "Couldn’t load this agent’s wallet.",
   spendPolicyTitle: "Spend policy",
   spendPolicyHint:
@@ -1748,6 +1783,24 @@ const zh: RanchMessages = {
   walletTxTypeStorePurchase: "商店购买",
   walletTxTypePlanPurchase: "方案购买",
   walletTxTypeRecharge: "充值",
+  walletBillingDocs: "收据与发票",
+  walletBillingDocsHint:
+    "每笔收款均可下载英文收据；中国站用户可申请增值税电子普通发票（人工开具，1-3 个工作日内发送到邮箱）。",
+  walletBillingDocsEmpty: "还没有收款记录",
+  walletBillingDocsLoadFailed: "收据记录加载失败",
+  walletDownloadReceipt: "下载收据",
+  walletRequestInvoice: "申请发票",
+  walletInvoiceStatusPending: "开票中",
+  walletInvoiceStatusIssued: "已开具",
+  walletInvoiceTitleTypePersonal: "个人",
+  walletInvoiceTitleTypeBusiness: "企业",
+  walletInvoiceTitlePlaceholder: "发票抬头（姓名或公司全称）",
+  walletInvoiceTaxNoPlaceholder: "税号（统一社会信用代码）",
+  walletInvoiceEmailPlaceholder: "接收发票的邮箱",
+  walletInvoiceSubmit: "提交申请",
+  walletInvoiceSubmitting: "提交中…",
+  walletInvoiceSubmitted: "已提交，发票开具后将发送到你的邮箱",
+  walletInvoiceFailed: "提交失败，请重试",
   walletLoadFailed: "无法加载此 agent 的钱包。",
   spendPolicyTitle: "消费授权",
   spendPolicyHint:
