@@ -1,30 +1,49 @@
-export type ChatWindowKind = "talk" | "body";
+export type ChatWindowKind = "talk" | "body" | "body-pick";
 
 export type TalkWindowPayload = {
   agentId: string;
   hostPath: string;
   hostToken: string;
   hostExpiresAt?: number;
+  bodyId?: string;
   shareToken?: string;
   projectId?: string;
   name?: string;
 };
 
-export type ChatWindow = {
-  chatId: string;
-  kind: ChatWindowKind;
-  title?: string;
-  payload: TalkWindowPayload;
+export type BodyPickItem = {
+  id: string;
+  name: string;
+  origin?: string;
+  live?: boolean;
 };
 
+export type ChatWindow =
+  | {
+      chatId: string;
+      kind: "talk" | "body";
+      title?: string;
+      payload: TalkWindowPayload;
+    }
+  | {
+      chatId: string;
+      kind: "body-pick";
+      title?: string;
+      agentId: string;
+      bodies: BodyPickItem[];
+    };
+
 export type TalkOpenResult = {
-  id: string;
-  shareToken: string;
-  hostPath: string;
+  id?: string;
+  shareToken?: string;
+  hostPath?: string;
   hostToken?: string;
   hostExpiresIn?: number;
   name?: string;
   agentId?: string;
+  bodyId?: string;
+  pick?: boolean;
+  bodies?: BodyPickItem[];
   code?: string;
   error?: string;
 };
@@ -49,4 +68,9 @@ export function studioOriginOf(studioBaseUrl: string): string {
   } catch {
     return "";
   }
+}
+
+export function bodyIdFromHostPath(hostPath: string): string {
+  const match = hostPath.match(/\/b\/([^/]+)\/host\/?$/);
+  return match?.[1] ? decodeURIComponent(match[1]) : "";
 }

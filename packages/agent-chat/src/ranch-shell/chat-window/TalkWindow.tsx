@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { RanchMessages } from "../i18n";
 import { studioOriginOf, talkHostSrc, type TalkWindowPayload } from "./types";
 
@@ -18,12 +18,16 @@ export function TalkWindow({
   t: RanchMessages;
 }) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
-  const src = talkHostSrc({
-    studioBaseUrl,
-    hostPath: payload.hostPath,
-    chatId,
-    hostToken: payload.hostToken,
-  });
+  const src = useMemo(
+    () =>
+      talkHostSrc({
+        studioBaseUrl,
+        hostPath: payload.hostPath,
+        chatId,
+        hostToken: payload.hostToken,
+      }),
+    [studioBaseUrl, payload.hostPath, chatId],
+  );
   const targetOrigin = studioOriginOf(studioBaseUrl);
 
   useEffect(() => {

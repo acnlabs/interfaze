@@ -84,6 +84,11 @@ export type RanchMessages = {
   bodyChatOpening: string;
   bodyChatFailed: string;
   bodyChatClosed: string;
+  bodyChatPick: string;
+  bodyChatLive: string;
+  bodyChatOff: string;
+  bodyChatSim: string;
+  bodyChatRobot: string;
   windowClose: string;
   collapseSidebar: string;
   expandSidebar: string;
@@ -678,6 +683,11 @@ const en: RanchMessages = {
   bodyChatOpening: "Opening body…",
   bodyChatFailed: "Couldn’t open the body.",
   bodyChatClosed: "This agent has no body yet.",
+  bodyChatPick: "Which body?",
+  bodyChatLive: "On",
+  bodyChatOff: "Off",
+  bodyChatSim: "Sim",
+  bodyChatRobot: "Robot",
   windowClose: "Close window",
   collapseSidebar: "Hide sidebar",
   expandSidebar: "Show sidebar",
@@ -1326,6 +1336,11 @@ const zh: RanchMessages = {
   bodyChatOpening: "正在打开身体…",
   bodyChatFailed: "打不开这具身体。",
   bodyChatClosed: "这个 agent 还没有身体。",
+  bodyChatPick: "开哪一具？",
+  bodyChatLive: "开着",
+  bodyChatOff: "还没开",
+  bodyChatSim: "仿真",
+  bodyChatRobot: "真机",
   windowClose: "关闭窗口",
   collapseSidebar: "收起侧栏",
   expandSidebar: "打开侧栏",

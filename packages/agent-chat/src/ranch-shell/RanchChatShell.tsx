@@ -69,7 +69,7 @@ import {
 import { btnGhost, btnIcon, btnPrimary, colors, inputStyle, shellRoot } from "./styles";
 import { ChatWindowPane } from "./chat-window/ChatWindowPane";
 import { openEmbodyHost, openStudioTalk } from "./chat-window/studioTalk";
-import type { ChatWindow, ChatWindowKind } from "./chat-window/types";
+import { bodyIdFromHostPath, type ChatWindow, type ChatWindowKind } from "./chat-window/types";
 
 function formatRelativeTime(iso: string | null | undefined, t: RanchMessages): string {
   if (!iso) return "";
@@ -3544,11 +3544,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const embodyOrigin = (embodyBaseUrl || "").replace(/\/+$/, "");
   const activeWindow = active ? chatWindows[active.chat_id] ?? null : null;
   const talkOpen = activeWindow?.kind === "talk";
-  const bodyOpen = activeWindow?.kind === "body";
+  const bodyOpen = activeWindow?.kind === "body" || activeWindow?.kind === "body-pick";
   const canOpenTalk = Boolean(studioOrigin && active?.agent_id && !groupActive);
   const canOpenBody = Boolean(embodyOrigin && active?.agent_id && !groupActive);
   const windowHostOrigin =
-    activeWindow?.kind === "body" ? embodyOrigin : activeWindow?.kind === "talk" ? studioOrigin : "";
+    activeWindow?.kind === "body" || activeWindow?.kind === "body-pick"
+      ? embodyOrigin
+      : activeWindow?.kind === "talk"
+        ? studioOrigin
+        : "";
 
   const closeChatWindow = useCallback((chatId: string) => {
     setChatWindows((prev) => {
@@ -3589,7 +3593,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         title: opened.data.name || t.faceChat,
         payload: {
           agentId: opened.data.agentId || active.agent_id || "",
-          hostPath: opened.data.hostPath,
+          hostPath: opened.data.hostPath || "",
           hostToken: opened.data.hostToken || "",
           hostExpiresAt:
             typeof expiresIn === "number" ? Date.now() + expiresIn * 1000 : undefined,
@@ -3611,9 +3615,39 @@ export function RanchChatShell(props: RanchChatShellProps) {
     t.faceChatFailed,
   ]);
 
+  const applyOpenedBody = useCallback(
+    (
+      chatId: string,
+      agentId: string,
+      opened: { data: { hostPath?: string; hostToken?: string; hostExpiresIn?: number; name?: string; agentId?: string; bodyId?: string; id?: string } },
+    ) => {
+      const expiresIn = opened.data.hostExpiresIn;
+      const hostPath = opened.data.hostPath || "";
+      setChatWindows((prev) => ({
+        ...prev,
+        [chatId]: {
+          chatId,
+          kind: "body",
+          title: opened.data.name || t.bodyChat,
+          payload: {
+            agentId: opened.data.agentId || agentId,
+            hostPath,
+            hostToken: opened.data.hostToken || "",
+            hostExpiresAt:
+              typeof expiresIn === "number" ? Date.now() + expiresIn * 1000 : undefined,
+            bodyId: opened.data.bodyId || opened.data.id || bodyIdFromHostPath(hostPath),
+            name: opened.data.name,
+          },
+        },
+      }));
+    },
+    [t.bodyChat],
+  );
+
   const toggleBodyWindow = useCallback(async () => {
     if (!active?.chat_id || !active.agent_id || !embodyOrigin) return;
-    if (chatWindows[active.chat_id]?.kind === "body") {
+    const current = chatWindows[active.chat_id];
+    if (current?.kind === "body" || current?.kind === "body-pick") {
       closeChatWindow(active.chat_id);
       return;
     }
@@ -3625,40 +3659,146 @@ export function RanchChatShell(props: RanchChatShellProps) {
       agentId: active.agent_id,
     });
     setWindowBusy(null);
-    if (!opened.ok || !opened.data.hostToken) {
-      setWindowError(
-        !opened.ok && opened.code === "no_body" ? t.bodyChatClosed : t.bodyChatFailed,
-      );
+    if (opened.ok) {
+      const pickBodies = opened.data.pick ? opened.data.bodies : undefined;
+      if (pickBodies?.length) {
+        setChatWindows((prev) => ({
+          ...prev,
+          [active.chat_id]: {
+            chatId: active.chat_id,
+            kind: "body-pick",
+            title: t.bodyChatPick,
+            agentId: opened.data.agentId || active.agent_id || "",
+            bodies: pickBodies,
+          },
+        }));
+        return;
+      }
+      if (!opened.data.hostToken || !opened.data.hostPath) {
+        setWindowError(t.bodyChatFailed);
+        return;
+      }
+      applyOpenedBody(active.chat_id, active.agent_id, opened);
       return;
     }
-    const expiresIn = opened.data.hostExpiresIn;
-    setChatWindows((prev) => ({
-      ...prev,
-      [active.chat_id]: {
-        chatId: active.chat_id,
-        kind: "body",
-        title: opened.data.name || t.bodyChat,
-        payload: {
-          agentId: opened.data.agentId || active.agent_id || "",
-          hostPath: opened.data.hostPath,
-          hostToken: opened.data.hostToken || "",
-          hostExpiresAt:
-            typeof expiresIn === "number" ? Date.now() + expiresIn * 1000 : undefined,
-          name: opened.data.name,
-        },
-      },
-    }));
+    setWindowError(opened.code === "no_body" ? t.bodyChatClosed : t.bodyChatFailed);
   }, [
     active?.agent_id,
     active?.chat_id,
+    applyOpenedBody,
     chatWindows,
     closeChatWindow,
     embodyOrigin,
     getAccessToken,
-    t.bodyChat,
     t.bodyChatClosed,
     t.bodyChatFailed,
+    t.bodyChatPick,
   ]);
+
+  const openPickedBody = useCallback(
+    async (bodyId: string) => {
+      if (!active?.chat_id || !active.agent_id || !embodyOrigin) return;
+      setWindowBusy("body");
+      setWindowError(null);
+      const opened = await openEmbodyHost({
+        embodyBaseUrl: embodyOrigin,
+        getAccessToken,
+        agentId: active.agent_id,
+        bodyId,
+      });
+      setWindowBusy(null);
+      if (!opened.ok || !opened.data.hostToken || !opened.data.hostPath) {
+        setWindowError(
+          !opened.ok && opened.code === "no_body" ? t.bodyChatClosed : t.bodyChatFailed,
+        );
+        return;
+      }
+      applyOpenedBody(active.chat_id, active.agent_id, opened);
+    },
+    [
+      active?.agent_id,
+      active?.chat_id,
+      applyOpenedBody,
+      embodyOrigin,
+      getAccessToken,
+      t.bodyChatClosed,
+      t.bodyChatFailed,
+    ],
+  );
+
+  const hostRefreshKey = Object.values(chatWindows)
+    .map((win) =>
+      win.kind === "body-pick"
+        ? `${win.chatId}:body-pick`
+        : `${win.chatId}:${win.kind}:${win.payload.hostExpiresAt ?? 0}`,
+    )
+    .sort()
+    .join("|");
+
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    let cancelled = false;
+    for (const win of Object.values(chatWindows)) {
+      if (win.kind === "body-pick") continue;
+      const expiresAt = win.payload.hostExpiresAt;
+      if (!expiresAt || !win.payload.hostToken) continue;
+      const delay = Math.max(0, expiresAt - Date.now() - 60_000);
+      timers.push(
+        setTimeout(() => {
+          void (async () => {
+            if (cancelled) return;
+            const opened =
+              win.kind === "body"
+                ? embodyOrigin
+                  ? await openEmbodyHost({
+                      embodyBaseUrl: embodyOrigin,
+                      getAccessToken,
+                      agentId: win.payload.agentId,
+                      bodyId: win.payload.bodyId || bodyIdFromHostPath(win.payload.hostPath),
+                    })
+                  : { ok: false as const, code: "failed" }
+                : studioOrigin
+                  ? await openStudioTalk({
+                      studioBaseUrl: studioOrigin,
+                      getAccessToken,
+                      agentId: win.payload.agentId,
+                    })
+                  : { ok: false as const, code: "failed" };
+            if (cancelled || !opened.ok || !opened.data.hostToken) return;
+            const expiresIn = opened.data.hostExpiresIn;
+            setChatWindows((prev) => {
+              const cur = prev[win.chatId];
+              if (!cur || cur.kind === "body-pick" || cur.kind !== win.kind) return prev;
+              return {
+                ...prev,
+                [win.chatId]: {
+                  ...cur,
+                  payload: {
+                    ...cur.payload,
+                    hostToken: opened.data.hostToken || cur.payload.hostToken,
+                    hostPath: opened.data.hostPath || cur.payload.hostPath,
+                    hostExpiresAt:
+                      typeof expiresIn === "number"
+                        ? Date.now() + expiresIn * 1000
+                        : cur.payload.hostExpiresAt,
+                    bodyId:
+                      opened.data.bodyId ||
+                      opened.data.id ||
+                      cur.payload.bodyId ||
+                      bodyIdFromHostPath(opened.data.hostPath || cur.payload.hostPath),
+                  },
+                },
+              };
+            });
+          })();
+        }, delay),
+      );
+    }
+    return () => {
+      cancelled = true;
+      for (const timer of timers) clearTimeout(timer);
+    };
+  }, [embodyOrigin, getAccessToken, hostRefreshKey, studioOrigin]);
 
   const slashParsed = parseSlashDraft(draft);
   const slashMenuOpen = isSlashMenuDraft(draft);
@@ -6451,6 +6591,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
           window={activeWindow}
           studioBaseUrl={windowHostOrigin}
           onClose={() => closeChatWindow(active.chat_id)}
+          onPickBody={openPickedBody}
+          busy={windowBusy === "body"}
           t={t}
         />
       ) : null}

@@ -34,6 +34,7 @@ export async function openEmbodyHost(args: {
   embodyBaseUrl: string;
   getAccessToken: () => Promise<string | null>;
   agentId: string;
+  bodyId?: string;
 }): Promise<{ ok: true; data: TalkOpenResult } | { ok: false; code: string }> {
   const token = await args.getAccessToken();
   if (!token) return { ok: false, code: "unauthorized" };
@@ -48,12 +49,19 @@ export async function openEmbodyHost(args: {
         Accept: "application/json",
       },
       credentials: "omit",
-      body: JSON.stringify({ intent: "open", agentId: args.agentId }),
+      body: JSON.stringify({
+        intent: "open",
+        agentId: args.agentId,
+        ...(args.bodyId ? { bodyId: args.bodyId } : {}),
+      }),
     });
   } catch {
     return { ok: false, code: "network" };
   }
   const data = (await res.json().catch(() => null)) as TalkOpenResult | null;
+  if (res.ok && data?.pick && Array.isArray(data.bodies) && data.bodies.length) {
+    return { ok: true, data };
+  }
   if (!res.ok || !data?.hostPath || !data.hostToken) {
     return { ok: false, code: data?.code || (res.status === 401 ? "unauthorized" : "failed") };
   }
