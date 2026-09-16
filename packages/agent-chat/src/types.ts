@@ -123,6 +123,16 @@ export type RanchChatShellProps = {
    */
   interfazeBaseUrl?: string;
   /**
+   * ComicLaw Studio origin for the session window (kind=talk).
+   * Empty / omitted hides the face-chat entry.
+   */
+  studioBaseUrl?: string;
+  /**
+   * Embody origin for the body room window (kind=body).
+   * Empty / omitted hides the Body entry. CN omitted (Auth0).
+   */
+  embodyBaseUrl?: string;
+  /**
    * UI locale (BCP-47). Supported: `en` (default), `zh`.
    * Other values fall back to English.
    * When omitted, shell uses stored preference → browser language → `en`.

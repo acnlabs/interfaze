@@ -72,6 +72,19 @@ export type RanchMessages = {
   expand: string;
   collapse: string;
   close: string;
+  /** Open the session-bound window as face chat (kind=talk). */
+  faceChat: string;
+  faceChatOpen: string;
+  faceChatOpening: string;
+  faceChatFailed: string;
+  faceChatClosed: string;
+  /** Open the agent's Embody room (kind=body). */
+  bodyChat: string;
+  bodyChatOpen: string;
+  bodyChatOpening: string;
+  bodyChatFailed: string;
+  bodyChatClosed: string;
+  windowClose: string;
   collapseSidebar: string;
   expandSidebar: string;
   searchChats: string;
@@ -655,6 +668,17 @@ const en: RanchMessages = {
   expand: "Expand",
   collapse: "Collapse",
   close: "Close",
+  faceChat: "Face chat",
+  faceChatOpen: "Face chat on",
+  faceChatOpening: "Opening face chat…",
+  faceChatFailed: "Couldn’t open face chat.",
+  faceChatClosed: "This agent isn’t open for face chat.",
+  bodyChat: "Body",
+  bodyChatOpen: "Body on",
+  bodyChatOpening: "Opening body…",
+  bodyChatFailed: "Couldn’t open the body.",
+  bodyChatClosed: "This agent has no body yet.",
+  windowClose: "Close window",
   collapseSidebar: "Hide sidebar",
   expandSidebar: "Show sidebar",
   searchChats: "Search chats…",
@@ -1292,6 +1316,17 @@ const zh: RanchMessages = {
   expand: "全屏",
   collapse: "收起",
   close: "关闭",
+  faceChat: "面聊",
+  faceChatOpen: "面聊中",
+  faceChatOpening: "正在打开面聊…",
+  faceChatFailed: "打不开面聊。",
+  faceChatClosed: "对方还没开放面聊。",
+  bodyChat: "身体",
+  bodyChatOpen: "身体中",
+  bodyChatOpening: "正在打开身体…",
+  bodyChatFailed: "打不开这具身体。",
+  bodyChatClosed: "这个 agent 还没有身体。",
+  windowClose: "关闭窗口",
   collapseSidebar: "收起侧栏",
   expandSidebar: "打开侧栏",
   searchChats: "搜索会话…",

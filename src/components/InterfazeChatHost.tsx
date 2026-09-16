@@ -20,7 +20,7 @@ import {
 import { getGatewayBaseUrl } from "@/lib/gateway";
 import { usePaypalPlanReturn } from "@/lib/paypalPlanReturn";
 import { currentReturnTo, takeOpenAgentId, clearOpenAgentId } from "@/lib/openAgentDeepLink";
-import { getAgentPlanetBaseUrl, getAppOrigin, isCnRegion } from "@/lib/region";
+import { getAgentPlanetBaseUrl, getAppOrigin, getComicLawStudioUrl, getEmbodyUrl, isCnRegion } from "@/lib/region";
 
 type ReauthOpts = {
   forceLogin?: boolean;
@@ -194,6 +194,8 @@ function CnChatHost() {
       connectGuideUrl="https://github.com/acnlabs/interfaze/blob/main/CONNECT.md"
       agentPlanetBaseUrl={getAgentPlanetBaseUrl()}
       interfazeBaseUrl={getAppOrigin()}
+      studioBaseUrl={getComicLawStudioUrl()}
+      embodyBaseUrl={getEmbodyUrl()}
       account={
         sessionUser
           ? {
@@ -391,6 +393,8 @@ function GlobalChatHost() {
       connectGuideUrl="https://github.com/acnlabs/interfaze/blob/main/CONNECT.md"
       agentPlanetBaseUrl={getAgentPlanetBaseUrl()}
       interfazeBaseUrl={getAppOrigin()}
+      studioBaseUrl={getComicLawStudioUrl()}
+      embodyBaseUrl={getEmbodyUrl()}
       account={
         isAuthenticated && user
           ? {

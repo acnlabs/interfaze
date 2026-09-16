@@ -67,6 +67,9 @@ import {
   type RanchMessages,
 } from "./i18n";
 import { btnGhost, btnIcon, btnPrimary, colors, inputStyle, shellRoot } from "./styles";
+import { ChatWindowPane } from "./chat-window/ChatWindowPane";
+import { openEmbodyHost, openStudioTalk } from "./chat-window/studioTalk";
+import type { ChatWindow, ChatWindowKind } from "./chat-window/types";
 
 function formatRelativeTime(iso: string | null | undefined, t: RanchMessages): string {
   if (!iso) return "";
@@ -1812,6 +1815,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     connectGuideUrl,
     agentPlanetBaseUrl,
     interfazeBaseUrl,
+    studioBaseUrl,
+    embodyBaseUrl,
     locale: localeProp,
     onLocaleChange,
     onOwnedAgentUpdated,
@@ -1892,6 +1897,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [loadingChats, setLoadingChats] = useState(true);
   const [active, setActive] = useState<ChatSummary | null>(null);
+  const [chatWindows, setChatWindows] = useState<Record<string, ChatWindow>>({});
+  const [windowBusy, setWindowBusy] = useState<ChatWindowKind | null>(null);
+  const [windowError, setWindowError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
@@ -3532,6 +3540,126 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const activeOffline =
     active && !isGroupChat(active) && isAgentOffline(active.agent_status);
   const groupActive = !!(active && isGroupChat(active));
+  const studioOrigin = (studioBaseUrl || "").replace(/\/+$/, "");
+  const embodyOrigin = (embodyBaseUrl || "").replace(/\/+$/, "");
+  const activeWindow = active ? chatWindows[active.chat_id] ?? null : null;
+  const talkOpen = activeWindow?.kind === "talk";
+  const bodyOpen = activeWindow?.kind === "body";
+  const canOpenTalk = Boolean(studioOrigin && active?.agent_id && !groupActive);
+  const canOpenBody = Boolean(embodyOrigin && active?.agent_id && !groupActive);
+  const windowHostOrigin =
+    activeWindow?.kind === "body" ? embodyOrigin : activeWindow?.kind === "talk" ? studioOrigin : "";
+
+  const closeChatWindow = useCallback((chatId: string) => {
+    setChatWindows((prev) => {
+      if (!prev[chatId]) return prev;
+      const next = { ...prev };
+      delete next[chatId];
+      return next;
+    });
+    setWindowError(null);
+  }, []);
+
+  const toggleTalkWindow = useCallback(async () => {
+    if (!active?.chat_id || !active.agent_id || !studioOrigin) return;
+    if (chatWindows[active.chat_id]?.kind === "talk") {
+      closeChatWindow(active.chat_id);
+      return;
+    }
+    setWindowBusy("talk");
+    setWindowError(null);
+    const opened = await openStudioTalk({
+      studioBaseUrl: studioOrigin,
+      getAccessToken,
+      agentId: active.agent_id,
+    });
+    setWindowBusy(null);
+    if (!opened.ok || !opened.data.hostToken) {
+      setWindowError(
+        !opened.ok && opened.code === "chat_closed" ? t.faceChatClosed : t.faceChatFailed,
+      );
+      return;
+    }
+    const expiresIn = opened.data.hostExpiresIn;
+    setChatWindows((prev) => ({
+      ...prev,
+      [active.chat_id]: {
+        chatId: active.chat_id,
+        kind: "talk",
+        title: opened.data.name || t.faceChat,
+        payload: {
+          agentId: opened.data.agentId || active.agent_id || "",
+          hostPath: opened.data.hostPath,
+          hostToken: opened.data.hostToken || "",
+          hostExpiresAt:
+            typeof expiresIn === "number" ? Date.now() + expiresIn * 1000 : undefined,
+          shareToken: opened.data.shareToken,
+          projectId: opened.data.id,
+          name: opened.data.name,
+        },
+      },
+    }));
+  }, [
+    active?.agent_id,
+    active?.chat_id,
+    chatWindows,
+    closeChatWindow,
+    getAccessToken,
+    studioOrigin,
+    t.faceChat,
+    t.faceChatClosed,
+    t.faceChatFailed,
+  ]);
+
+  const toggleBodyWindow = useCallback(async () => {
+    if (!active?.chat_id || !active.agent_id || !embodyOrigin) return;
+    if (chatWindows[active.chat_id]?.kind === "body") {
+      closeChatWindow(active.chat_id);
+      return;
+    }
+    setWindowBusy("body");
+    setWindowError(null);
+    const opened = await openEmbodyHost({
+      embodyBaseUrl: embodyOrigin,
+      getAccessToken,
+      agentId: active.agent_id,
+    });
+    setWindowBusy(null);
+    if (!opened.ok || !opened.data.hostToken) {
+      setWindowError(
+        !opened.ok && opened.code === "no_body" ? t.bodyChatClosed : t.bodyChatFailed,
+      );
+      return;
+    }
+    const expiresIn = opened.data.hostExpiresIn;
+    setChatWindows((prev) => ({
+      ...prev,
+      [active.chat_id]: {
+        chatId: active.chat_id,
+        kind: "body",
+        title: opened.data.name || t.bodyChat,
+        payload: {
+          agentId: opened.data.agentId || active.agent_id || "",
+          hostPath: opened.data.hostPath,
+          hostToken: opened.data.hostToken || "",
+          hostExpiresAt:
+            typeof expiresIn === "number" ? Date.now() + expiresIn * 1000 : undefined,
+          name: opened.data.name,
+        },
+      },
+    }));
+  }, [
+    active?.agent_id,
+    active?.chat_id,
+    chatWindows,
+    closeChatWindow,
+    embodyOrigin,
+    getAccessToken,
+    t.bodyChat,
+    t.bodyChatClosed,
+    t.bodyChatFailed,
+  ]);
+
   const slashParsed = parseSlashDraft(draft);
   const slashMenuOpen = isSlashMenuDraft(draft);
   const slashCommands: SlashCmdDef[] = (
@@ -4361,6 +4489,39 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     </div>
                   </button>
                 </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  {canOpenTalk ? (
+                    <button
+                      type="button"
+                      style={{
+                        ...btnGhost,
+                        background: talkOpen ? colors.accentSoft : "transparent",
+                        borderColor: talkOpen ? colors.accent : colors.border,
+                      }}
+                      disabled={!!windowBusy}
+                      onClick={() => void toggleTalkWindow()}
+                      aria-pressed={talkOpen}
+                      title={talkOpen ? t.faceChatOpen : t.faceChat}
+                    >
+                      {windowBusy === "talk" ? t.faceChatOpening : talkOpen ? t.faceChatOpen : t.faceChat}
+                    </button>
+                  ) : null}
+                  {canOpenBody ? (
+                    <button
+                      type="button"
+                      style={{
+                        ...btnGhost,
+                        background: bodyOpen ? colors.accentSoft : "transparent",
+                        borderColor: bodyOpen ? colors.accent : colors.border,
+                      }}
+                      disabled={!!windowBusy}
+                      onClick={() => void toggleBodyWindow()}
+                      aria-pressed={bodyOpen}
+                      title={bodyOpen ? t.bodyChatOpen : t.bodyChat}
+                    >
+                      {windowBusy === "body" ? t.bodyChatOpening : bodyOpen ? t.bodyChatOpen : t.bodyChat}
+                    </button>
+                  ) : null}
                 {mode === "side" ? (
                   <button
                     type="button"
@@ -4379,7 +4540,22 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     ✕
                   </button>
                 ) : null}
+                </div>
               </div>
+
+              {windowError ? (
+                <div
+                  style={{
+                    padding: "8px 14px",
+                    fontSize: 12,
+                    lineHeight: 1.45,
+                    color: colors.danger,
+                    borderBottom: `1px solid ${colors.border}`,
+                  }}
+                >
+                  {windowError}
+                </div>
+              ) : null}
 
               {activeOffline ? (
                 <div
@@ -6269,6 +6445,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
           {mode === "full" ? accountPanels : null}
         </div>
       )}
+
+      {active && activeWindow && windowHostOrigin ? (
+        <ChatWindowPane
+          window={activeWindow}
+          studioBaseUrl={windowHostOrigin}
+          onClose={() => closeChatWindow(active.chat_id)}
+          t={t}
+        />
+      ) : null}
 
       {pickerMode ? (
         <NewChatPicker
