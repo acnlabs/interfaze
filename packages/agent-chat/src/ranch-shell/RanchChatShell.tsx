@@ -1901,6 +1901,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const chatWindowsRef = useRef(chatWindows);
   chatWindowsRef.current = chatWindows;
   const remintingRef = useRef(new Set<string>());
+  const renewHostTicketRef = useRef<
+    (win: Extract<ChatWindow, { kind: "talk" | "body" }>) => Promise<boolean>
+  >(async () => false);
   const [windowBusy, setWindowBusy] = useState<ChatWindowKind | null>(null);
   const [windowError, setWindowError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -3569,7 +3572,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   const toggleTalkWindow = useCallback(async () => {
     if (!active?.chat_id || !active.agent_id || !studioOrigin) return;
-    if (chatWindows[active.chat_id]?.kind === "talk") {
+    const current = chatWindows[active.chat_id];
+    if (current?.kind === "talk") {
+      if (current.expired || remintingRef.current.has(`${current.chatId}:talk`)) {
+        setWindowBusy("talk");
+        setWindowError(null);
+        const ok = await renewHostTicketRef.current(current);
+        setWindowBusy(null);
+        if (!ok) setWindowError(t.faceChatFailed);
+        return;
+      }
       closeChatWindow(active.chat_id);
       return;
     }
@@ -3594,6 +3606,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         chatId: active.chat_id,
         kind: "talk",
         title: opened.data.name || t.faceChat,
+        expired: false,
         payload: {
           agentId: opened.data.agentId || active.agent_id || "",
           hostPath: opened.data.hostPath || "",
@@ -3632,6 +3645,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           chatId,
           kind: "body",
           title: opened.data.name || t.bodyChat,
+          expired: false,
           payload: {
             agentId: opened.data.agentId || agentId,
             hostPath,
@@ -3650,7 +3664,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const renewHostTicket = useCallback(
     async (win: Extract<ChatWindow, { kind: "talk" | "body" }>) => {
       const key = `${win.chatId}:${win.kind}`;
-      if (remintingRef.current.has(key)) return;
+      if (remintingRef.current.has(key)) return true;
       remintingRef.current.add(key);
       try {
         const opened =
@@ -3670,7 +3684,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   agentId: win.payload.agentId,
                 })
               : { ok: false as const, code: "failed" };
-        if (!opened.ok || !opened.data.hostToken) return;
+        if (!opened.ok || !opened.data.hostToken) {
+          setChatWindows((prev) => {
+            const cur = prev[win.chatId];
+            if (!cur || cur.kind === "body-pick" || cur.kind !== win.kind) return prev;
+            return { ...prev, [win.chatId]: { ...cur, expired: true } };
+          });
+          return false;
+        }
         const expiresIn = opened.data.hostExpiresIn;
         setChatWindows((prev) => {
           const cur = prev[win.chatId];
@@ -3679,6 +3700,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             ...prev,
             [win.chatId]: {
               ...cur,
+              expired: false,
               payload: {
                 ...cur.payload,
                 hostToken: opened.data.hostToken || cur.payload.hostToken,
@@ -3696,17 +3718,31 @@ export function RanchChatShell(props: RanchChatShellProps) {
             },
           };
         });
+        return true;
       } finally {
         remintingRef.current.delete(key);
       }
     },
     [embodyOrigin, getAccessToken, studioOrigin],
   );
+  renewHostTicketRef.current = renewHostTicket;
 
   const toggleBodyWindow = useCallback(async () => {
     if (!active?.chat_id || !active.agent_id || !embodyOrigin) return;
     const current = chatWindows[active.chat_id];
-    if (current?.kind === "body" || current?.kind === "body-pick") {
+    if (current?.kind === "body-pick") {
+      closeChatWindow(active.chat_id);
+      return;
+    }
+    if (current?.kind === "body") {
+      if (current.expired || remintingRef.current.has(`${current.chatId}:body`)) {
+        setWindowBusy("body");
+        setWindowError(null);
+        const ok = await renewHostTicket(current);
+        setWindowBusy(null);
+        if (!ok) setWindowError(t.bodyChatFailed);
+        return;
+      }
       closeChatWindow(active.chat_id);
       return;
     }
@@ -3749,6 +3785,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     closeChatWindow,
     embodyOrigin,
     getAccessToken,
+    renewHostTicket,
     t.bodyChatClosed,
     t.bodyChatFailed,
     t.bodyChatPick,

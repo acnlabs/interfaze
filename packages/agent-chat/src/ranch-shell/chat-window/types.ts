@@ -23,6 +23,7 @@ export type ChatWindow =
       chatId: string;
       kind: "talk" | "body";
       title?: string;
+      expired?: boolean;
       payload: TalkWindowPayload;
     }
   | {
