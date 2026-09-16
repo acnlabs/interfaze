@@ -9,12 +9,14 @@ export function TalkWindow({
   studioBaseUrl,
   payload,
   kind = "talk",
+  onExpired,
   t,
 }: {
   chatId: string;
   studioBaseUrl: string;
   payload: TalkWindowPayload;
   kind?: "talk" | "body";
+  onExpired?: () => void;
   t: RanchMessages;
 }) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -43,6 +45,19 @@ export function TalkWindow({
     frame.addEventListener("load", send);
     return () => frame.removeEventListener("load", send);
   }, [chatId, payload.hostToken, targetOrigin]);
+
+  useEffect(() => {
+    if (!targetOrigin || !onExpired) return;
+    const onMessage = (ev: MessageEvent) => {
+      if (ev.origin !== targetOrigin) return;
+      const data = ev.data as { type?: string; chatId?: string };
+      if (data?.type !== "talk:expired") return;
+      if (typeof data.chatId === "string" && data.chatId && data.chatId !== chatId) return;
+      onExpired();
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [chatId, onExpired, targetOrigin]);
 
   return (
     <iframe

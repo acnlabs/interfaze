@@ -95,6 +95,7 @@ export function ChatWindowPane({
   studioBaseUrl,
   onClose,
   onPickBody,
+  onExpired,
   busy,
   t,
 }: {
@@ -102,6 +103,7 @@ export function ChatWindowPane({
   studioBaseUrl: string;
   onClose: () => void;
   onPickBody?: (bodyId: string) => void;
+  onExpired?: () => void;
   busy?: boolean;
   t: RanchMessages;
 }) {
@@ -163,6 +165,7 @@ export function ChatWindowPane({
             studioBaseUrl={studioBaseUrl}
             payload={window.payload}
             kind={window.kind}
+            onExpired={onExpired}
             t={t}
           />
         </div>

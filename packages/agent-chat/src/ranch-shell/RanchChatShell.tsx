@@ -1898,6 +1898,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [loadingChats, setLoadingChats] = useState(true);
   const [active, setActive] = useState<ChatSummary | null>(null);
   const [chatWindows, setChatWindows] = useState<Record<string, ChatWindow>>({});
+  const chatWindowsRef = useRef(chatWindows);
+  chatWindowsRef.current = chatWindows;
+  const remintingRef = useRef(new Set<string>());
   const [windowBusy, setWindowBusy] = useState<ChatWindowKind | null>(null);
   const [windowError, setWindowError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -3644,6 +3647,62 @@ export function RanchChatShell(props: RanchChatShellProps) {
     [t.bodyChat],
   );
 
+  const renewHostTicket = useCallback(
+    async (win: Extract<ChatWindow, { kind: "talk" | "body" }>) => {
+      const key = `${win.chatId}:${win.kind}`;
+      if (remintingRef.current.has(key)) return;
+      remintingRef.current.add(key);
+      try {
+        const opened =
+          win.kind === "body"
+            ? embodyOrigin
+              ? await openEmbodyHost({
+                  embodyBaseUrl: embodyOrigin,
+                  getAccessToken,
+                  agentId: win.payload.agentId,
+                  bodyId: win.payload.bodyId || bodyIdFromHostPath(win.payload.hostPath),
+                })
+              : { ok: false as const, code: "failed" }
+            : studioOrigin
+              ? await openStudioTalk({
+                  studioBaseUrl: studioOrigin,
+                  getAccessToken,
+                  agentId: win.payload.agentId,
+                })
+              : { ok: false as const, code: "failed" };
+        if (!opened.ok || !opened.data.hostToken) return;
+        const expiresIn = opened.data.hostExpiresIn;
+        setChatWindows((prev) => {
+          const cur = prev[win.chatId];
+          if (!cur || cur.kind === "body-pick" || cur.kind !== win.kind) return prev;
+          return {
+            ...prev,
+            [win.chatId]: {
+              ...cur,
+              payload: {
+                ...cur.payload,
+                hostToken: opened.data.hostToken || cur.payload.hostToken,
+                hostPath: opened.data.hostPath || cur.payload.hostPath,
+                hostExpiresAt:
+                  typeof expiresIn === "number"
+                    ? Date.now() + expiresIn * 1000
+                    : cur.payload.hostExpiresAt,
+                bodyId:
+                  opened.data.bodyId ||
+                  opened.data.id ||
+                  cur.payload.bodyId ||
+                  bodyIdFromHostPath(opened.data.hostPath || cur.payload.hostPath),
+              },
+            },
+          };
+        });
+      } finally {
+        remintingRef.current.delete(key);
+      }
+    },
+    [embodyOrigin, getAccessToken, studioOrigin],
+  );
+
   const toggleBodyWindow = useCallback(async () => {
     if (!active?.chat_id || !active.agent_id || !embodyOrigin) return;
     const current = chatWindows[active.chat_id];
@@ -3745,52 +3804,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
       const delay = Math.max(0, expiresAt - Date.now() - 60_000);
       timers.push(
         setTimeout(() => {
-          void (async () => {
-            if (cancelled) return;
-            const opened =
-              win.kind === "body"
-                ? embodyOrigin
-                  ? await openEmbodyHost({
-                      embodyBaseUrl: embodyOrigin,
-                      getAccessToken,
-                      agentId: win.payload.agentId,
-                      bodyId: win.payload.bodyId || bodyIdFromHostPath(win.payload.hostPath),
-                    })
-                  : { ok: false as const, code: "failed" }
-                : studioOrigin
-                  ? await openStudioTalk({
-                      studioBaseUrl: studioOrigin,
-                      getAccessToken,
-                      agentId: win.payload.agentId,
-                    })
-                  : { ok: false as const, code: "failed" };
-            if (cancelled || !opened.ok || !opened.data.hostToken) return;
-            const expiresIn = opened.data.hostExpiresIn;
-            setChatWindows((prev) => {
-              const cur = prev[win.chatId];
-              if (!cur || cur.kind === "body-pick" || cur.kind !== win.kind) return prev;
-              return {
-                ...prev,
-                [win.chatId]: {
-                  ...cur,
-                  payload: {
-                    ...cur.payload,
-                    hostToken: opened.data.hostToken || cur.payload.hostToken,
-                    hostPath: opened.data.hostPath || cur.payload.hostPath,
-                    hostExpiresAt:
-                      typeof expiresIn === "number"
-                        ? Date.now() + expiresIn * 1000
-                        : cur.payload.hostExpiresAt,
-                    bodyId:
-                      opened.data.bodyId ||
-                      opened.data.id ||
-                      cur.payload.bodyId ||
-                      bodyIdFromHostPath(opened.data.hostPath || cur.payload.hostPath),
-                  },
-                },
-              };
-            });
-          })();
+          if (cancelled) return;
+          void renewHostTicket(win);
         }, delay),
       );
     }
@@ -3798,7 +3813,26 @@ export function RanchChatShell(props: RanchChatShellProps) {
       cancelled = true;
       for (const timer of timers) clearTimeout(timer);
     };
-  }, [embodyOrigin, getAccessToken, hostRefreshKey, studioOrigin]);
+  }, [chatWindows, hostRefreshKey, renewHostTicket]);
+
+  useEffect(() => {
+    const poke = () => {
+      if (document.visibilityState === "hidden") return;
+      for (const win of Object.values(chatWindowsRef.current)) {
+        if (win.kind === "body-pick") continue;
+        const expiresAt = win.payload.hostExpiresAt;
+        if (!expiresAt || !win.payload.hostToken) continue;
+        if (expiresAt - Date.now() > 60_000) continue;
+        void renewHostTicket(win);
+      }
+    };
+    document.addEventListener("visibilitychange", poke);
+    window.addEventListener("focus", poke);
+    return () => {
+      document.removeEventListener("visibilitychange", poke);
+      window.removeEventListener("focus", poke);
+    };
+  }, [renewHostTicket]);
 
   const slashParsed = parseSlashDraft(draft);
   const slashMenuOpen = isSlashMenuDraft(draft);
@@ -6592,6 +6626,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
           studioBaseUrl={windowHostOrigin}
           onClose={() => closeChatWindow(active.chat_id)}
           onPickBody={openPickedBody}
+          onExpired={() => {
+            const win = activeWindow;
+            if (win && win.kind !== "body-pick") void renewHostTicket(win);
+          }}
           busy={windowBusy === "body"}
           t={t}
         />
