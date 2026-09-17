@@ -425,6 +425,9 @@ export type RanchMessages = {
   myAgentsPieceSkuOff: string;
   myAgentsPieceSkuNumeric: string;
   myAgentsPieceSkuModel: string;
+  myAgentsPieceSkuModelVideo: string;
+  myAgentsPieceSkuNoneHang: string;
+  myAgentsPieceSkuPocketHint: string;
   myAgentsPieceSkuMarkup: string;
   myAgentsPieceSkuPreview: string;
   myAgentsSavePieceSku: string;
@@ -1050,7 +1053,7 @@ const en: RanchMessages = {
   myAgentsPricingFailed: "Couldn’t save pricing.",
   myAgentsSectionPieceSku: "Per file",
   myAgentsPieceSkuHint:
-    "Same pricing as dialog: Catalog public rate × markup. Files still settle per piece when they land in this chat; Host converts token-priced image models into Credits per file. Tools with a public per-call price bill separately; a tool with no price uses the model token meter. 0 / no model = not selling that kind. Dialog tokens still settle separately.",
+    "Image and video each hang a model this machine already has, if the catalog prices it. Same formula as dialog: catalog × markup. Audio and other files stay a number. 0 / no model = not selling that kind. Dialog tokens still settle separately.",
   myAgentsPieceSkuLabel: "Credits per image",
   myAgentsPieceSkuLabelImage: "Credits per image",
   myAgentsPieceSkuLabelVideo: "Credits per video",
@@ -1060,6 +1063,11 @@ const en: RanchMessages = {
     "0 = not selling that kind. Files can still land in this chat; they just won’t occupy the wallet.",
   myAgentsPieceSkuNumeric: "Fill a number (Dreamina / no catalog price)",
   myAgentsPieceSkuModel: "Image model",
+  myAgentsPieceSkuModelVideo: "Video model",
+  myAgentsPieceSkuNoneHang:
+    "This machine has no catalog-priced model for this kind — fill a number.",
+  myAgentsPieceSkuPocketHint:
+    "Catch-all for files that aren’t image, video, or audio. Host owns the kinds — you don’t invent new ones.",
   myAgentsPieceSkuMarkup: "Markup %",
   myAgentsPieceSkuPreview: "Hunter pays ${listed} · you net ${net}",
   myAgentsSavePieceSku: "Save per-file prices",
@@ -1690,7 +1698,7 @@ const zh: RanchMessages = {
   myAgentsPricingFailed: "保存定价失败。",
   myAgentsSectionPieceSku: "按件",
   myAgentsPieceSkuHint:
-    "和对话同一套价：目录公开底价 × 加价。附件仍按张成交，token 价由 Host 换成每张 Credits。工具自己有公开按次价就另算；没有就并进模型 token。没目录价才填数字。0 = 那种不卖。对话 token 仍另结。",
+    "图、视频各自挂这台机配了且目录有价的模型，公式和对话一样：目录底价 × 加价。音频和其他文件仍填数字。0 / 不选模型 = 那种不卖。对话 token 仍另结。",
   myAgentsPieceSkuLabel: "每张图 Credits",
   myAgentsPieceSkuLabelImage: "每张图 Credits",
   myAgentsPieceSkuLabelVideo: "每条视频 Credits",
@@ -1699,6 +1707,9 @@ const zh: RanchMessages = {
   myAgentsPieceSkuOff: "0 = 那种不卖。货仍可进这场对话，只是不占钱包。",
   myAgentsPieceSkuNumeric: "填数字（绘图软件 / 目录没价）",
   myAgentsPieceSkuModel: "生图模型",
+  myAgentsPieceSkuModelVideo: "视频模型",
+  myAgentsPieceSkuNoneHang: "这台机没有目录认得出价的这种模型，填数字。",
+  myAgentsPieceSkuPocketHint: "图 / 视频 / 音频以外的文件。种类由 Host 定，不能自己加。",
   myAgentsPieceSkuMarkup: "加价 %",
   myAgentsPieceSkuPreview: "猎人付 ${listed} · 你实收 ${net}",
   myAgentsSavePieceSku: "保存按件价",
