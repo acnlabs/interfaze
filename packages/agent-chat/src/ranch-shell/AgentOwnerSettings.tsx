@@ -80,6 +80,38 @@ function skuFromDetail(d: MyAgentSummary): Omit<PieceSku, "agent_id"> {
     video_credits: skuNumber(d.video_credits),
     audio_credits: skuNumber(d.audio_credits),
     file_credits: skuNumber(d.file_credits),
+    image_model_id: typeof d.image_model_id === "string" && d.image_model_id.trim()
+      ? d.image_model_id.trim()
+      : null,
+    image_markup_percent:
+      typeof d.image_markup_percent === "number" && Number.isFinite(d.image_markup_percent)
+        ? d.image_markup_percent
+        : null,
+  };
+}
+
+function skuFromRow(row: PieceSku): Omit<PieceSku, "agent_id"> {
+  return {
+    image_credits: skuNumber(row.image_credits),
+    video_credits: skuNumber(row.video_credits),
+    audio_credits: skuNumber(row.audio_credits),
+    file_credits: skuNumber(row.file_credits),
+    image_model_id:
+      typeof row.image_model_id === "string" && row.image_model_id.trim()
+        ? row.image_model_id.trim()
+        : null,
+    image_markup_percent:
+      typeof row.image_markup_percent === "number" && Number.isFinite(row.image_markup_percent)
+        ? row.image_markup_percent
+        : null,
+    image_unit_usd:
+      typeof row.image_unit_usd === "number" && Number.isFinite(row.image_unit_usd)
+        ? row.image_unit_usd
+        : null,
+    network_usage_fee_rate:
+      typeof row.network_usage_fee_rate === "number" && Number.isFinite(row.network_usage_fee_rate)
+        ? row.network_usage_fee_rate
+        : 0.1,
   };
 }
 
@@ -216,6 +248,16 @@ const CREDIT_TO_USD = 0.01;
 function usdToCredits(usd: number): number {
   if (!Number.isFinite(usd) || usd <= 0) return 0;
   return Math.max(0, Math.ceil(roundUsdPerMillion(usd) / CREDIT_TO_USD - 1e-12));
+}
+
+function listedPieceCredits(unitUsd: number, markupPercent: number, feeRate: number): number {
+  const denom = Math.max(0.01, 1 - Math.min(0.99, Math.max(0, feeRate)));
+  return usdToCredits((unitUsd * (1 + markupPercent / 100)) / denom);
+}
+
+function pieceAgentNet(listed: number, feeRate: number): number {
+  const fee = Math.round(listed * feeRate);
+  return Math.max(0, listed - Math.max(0, Math.min(listed, fee)));
 }
 
 function uniqModelIds(...groups: Array<Array<string | null | undefined> | undefined>): string[] {
@@ -966,6 +1008,16 @@ export function AgentOwnerSettings({
     };
   });
   const [skuSaved, setSkuSaved] = useState(() => skuFromDetail(detail));
+  const [imageModelDraft, setImageModelDraft] = useState(
+    () => skuFromDetail(detail).image_model_id || "",
+  );
+  const [imageMarkupDraft, setImageMarkupDraft] = useState(() => {
+    const mu = skuFromDetail(detail).image_markup_percent;
+    return mu == null ? String(DEFAULT_MARKUP_PERCENT) : String(mu);
+  });
+  const [pieceImageModels, setPieceImageModels] = useState<
+    Array<{ id: string; name: string; unitUsd: number }>
+  >([]);
   const [savingPieceSku, setSavingPieceSku] = useState(false);
   const [pieceSkuMsg, setPieceSkuMsg] = useState<string | null>(null);
   const [pieceSkuError, setPieceSkuError] = useState<string | null>(null);
@@ -1064,6 +1116,12 @@ export function AgentOwnerSettings({
       file_credits: String(fromDetail.file_credits),
     });
     setSkuSaved(fromDetail);
+    setImageModelDraft(fromDetail.image_model_id || "");
+    setImageMarkupDraft(
+      fromDetail.image_markup_percent == null
+        ? String(DEFAULT_MARKUP_PERCENT)
+        : String(fromDetail.image_markup_percent),
+    );
     setPieceSkuMsg(null);
     setPieceSkuError(null);
     let cancelled = false;
@@ -1071,12 +1129,7 @@ export function AgentOwnerSettings({
       .getMyAgentPieceSku(detail.agent_id)
       .then((row) => {
         if (cancelled) return;
-        const next = {
-          image_credits: skuNumber(row.image_credits),
-          video_credits: skuNumber(row.video_credits),
-          audio_credits: skuNumber(row.audio_credits),
-          file_credits: skuNumber(row.file_credits),
-        };
+        const next = skuFromRow(row);
         setSkuDraft({
           image_credits: String(next.image_credits),
           video_credits: String(next.video_credits),
@@ -1084,6 +1137,12 @@ export function AgentOwnerSettings({
           file_credits: String(next.file_credits),
         });
         setSkuSaved(next);
+        setImageModelDraft(next.image_model_id || "");
+        setImageMarkupDraft(
+          next.image_markup_percent == null
+            ? String(DEFAULT_MARKUP_PERCENT)
+            : String(next.image_markup_percent),
+        );
       })
       .catch(() => {
         /* Host without SKU route: keep draft from detail. */
@@ -1098,7 +1157,41 @@ export function AgentOwnerSettings({
     detail.video_credits,
     detail.audio_credits,
     detail.file_credits,
+    detail.image_model_id,
+    detail.image_markup_percent,
   ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void client
+      .listModelCatalog({
+        source: "openrouter",
+        active_only: true,
+        piece_kind: "image",
+        limit: 500,
+      })
+      .then((data) => {
+        if (cancelled) return;
+        const rows: Array<{ id: string; name: string; unitUsd: number }> = [];
+        for (const row of data.items) {
+          const id = (row.model_id || "").trim();
+          const usd = Number(row.piece_unit_usd);
+          if (!id || !Number.isFinite(usd) || usd <= 0) continue;
+          rows.push({
+            id,
+            name: (row.display_name || id).trim() || id,
+            unitUsd: usd,
+          });
+        }
+        setPieceImageModels(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setPieceImageModels([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1497,12 +1590,33 @@ export function AgentOwnerSettings({
     audio_credits: parsePieceCredits(skuDraft.audio_credits),
     file_credits: parsePieceCredits(skuDraft.file_credits),
   };
+  const imageMarkupParsed = (() => {
+    const n = Number(imageMarkupDraft);
+    return Number.isFinite(n) && n >= 0 && n <= 1000 ? n : null;
+  })();
+  const imageModelTrim = imageModelDraft.trim();
+  const pieceImagePicked = pieceImageModels.find((row) =>
+    sameModelId(row.id, imageModelTrim),
+  );
+  const pieceFeeRate =
+    typeof skuSaved.network_usage_fee_rate === "number"
+      ? skuSaved.network_usage_fee_rate
+      : 0.1;
+  const pieceListedPreview =
+    pieceImagePicked && imageMarkupParsed != null
+      ? listedPieceCredits(pieceImagePicked.unitUsd, imageMarkupParsed, pieceFeeRate)
+      : null;
   const pieceSkuDirty =
-    skuParsed.image_credits !== null &&
     skuParsed.video_credits !== null &&
     skuParsed.audio_credits !== null &&
     skuParsed.file_credits !== null &&
-    (skuParsed.image_credits !== skuSaved.image_credits ||
+    (imageModelTrim
+      ? imageMarkupParsed !== null
+      : skuParsed.image_credits !== null) &&
+    (imageModelTrim !== (skuSaved.image_model_id || "") ||
+      (imageModelTrim
+        ? imageMarkupParsed !== (skuSaved.image_markup_percent ?? null)
+        : skuParsed.image_credits !== skuSaved.image_credits) ||
       skuParsed.video_credits !== skuSaved.video_credits ||
       skuParsed.audio_credits !== skuSaved.audio_credits ||
       skuParsed.file_credits !== skuSaved.file_credits);
@@ -1757,31 +1871,37 @@ export function AgentOwnerSettings({
   const runSavePieceSku = (): Promise<PieceSku | null> => {
     if (
       !canSavePieceSku ||
-      skuParsed.image_credits === null ||
       skuParsed.video_credits === null ||
       skuParsed.audio_credits === null ||
       skuParsed.file_credits === null
     ) {
       return Promise.resolve(null);
     }
-    const body = {
-      image_credits: skuParsed.image_credits,
-      video_credits: skuParsed.video_credits,
-      audio_credits: skuParsed.audio_credits,
-      file_credits: skuParsed.file_credits,
-    };
+    const catalogHang = Boolean(imageModelTrim);
+    if (catalogHang && imageMarkupParsed === null) return Promise.resolve(null);
+    if (!catalogHang && skuParsed.image_credits === null) return Promise.resolve(null);
+    const body = catalogHang
+      ? {
+          image_model_id: imageModelTrim,
+          image_markup_percent: imageMarkupParsed ?? 0,
+          video_credits: skuParsed.video_credits,
+          audio_credits: skuParsed.audio_credits,
+          file_credits: skuParsed.file_credits,
+        }
+      : {
+          image_credits: skuParsed.image_credits ?? 0,
+          image_model_id: "",
+          video_credits: skuParsed.video_credits,
+          audio_credits: skuParsed.audio_credits,
+          file_credits: skuParsed.file_credits,
+        };
     setSavingPieceSku(true);
     setPieceSkuError(null);
     setPieceSkuMsg(null);
     return client
       .updateMyAgentPieceSku(detail.agent_id, body)
       .then((row) => {
-        const next = {
-          image_credits: skuNumber(row.image_credits),
-          video_credits: skuNumber(row.video_credits),
-          audio_credits: skuNumber(row.audio_credits),
-          file_credits: skuNumber(row.file_credits),
-        };
+        const next = skuFromRow(row);
         setSkuDraft({
           image_credits: String(next.image_credits),
           video_credits: String(next.video_credits),
@@ -1789,9 +1909,23 @@ export function AgentOwnerSettings({
           file_credits: String(next.file_credits),
         });
         setSkuSaved(next);
+        setImageModelDraft(next.image_model_id || "");
+        setImageMarkupDraft(
+          next.image_markup_percent == null
+            ? String(DEFAULT_MARKUP_PERCENT)
+            : String(next.image_markup_percent),
+        );
         setPieceSkuMsg(t.myAgentsPieceSkuSaved);
         window.setTimeout(() => setPieceSkuMsg(null), 2000);
-        onUpdated?.({ ...detail, ...next });
+        onUpdated?.({
+          ...detail,
+          image_credits: next.image_credits,
+          video_credits: next.video_credits,
+          audio_credits: next.audio_credits,
+          file_credits: next.file_credits,
+          image_model_id: next.image_model_id,
+          image_markup_percent: next.image_markup_percent,
+        });
         return row;
       })
       .catch((err: unknown) => {
@@ -2623,9 +2757,82 @@ export function AgentOwnerSettings({
         <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
           {t.myAgentsPieceSkuOff}
         </p>
+        <label style={{ display: "block", marginBottom: 10 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: colors.muted,
+              marginBottom: 4,
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            {t.myAgentsPieceSkuModel}
+          </div>
+          <select
+            aria-label={t.myAgentsPieceSkuModel}
+            value={imageModelTrim}
+            onChange={(e) => setImageModelDraft(e.target.value)}
+            disabled={busy || savingPieceSku}
+            style={inputStyle}
+          >
+            <option value="">{t.myAgentsPieceSkuNumeric}</option>
+            {imageModelTrim &&
+            !pieceImageModels.some((row) => sameModelId(row.id, imageModelTrim)) ? (
+              <option value={imageModelTrim}>{imageModelTrim}</option>
+            ) : null}
+            {pieceImageModels.map((row) => (
+              <option key={row.id} value={row.id}>
+                {row.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {imageModelTrim ? (
+          <>
+            <label style={{ display: "block", marginBottom: 10 }}>
+              <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+                {t.myAgentsPieceSkuMarkup}
+              </div>
+              <input
+                value={imageMarkupDraft}
+                onChange={(e) => setImageMarkupDraft(e.target.value)}
+                style={inputStyle}
+                inputMode="decimal"
+                disabled={busy || savingPieceSku}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
+            {pieceListedPreview != null ? (
+              <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.text, lineHeight: 1.45 }}>
+                {fillTemplate(t.myAgentsPieceSkuPreview, {
+                  listed: String(pieceListedPreview),
+                  net: String(pieceAgentNet(pieceListedPreview, pieceFeeRate)),
+                })}
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <label style={{ display: "block", marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+              {t.myAgentsPieceSkuLabelImage}
+            </div>
+            <input
+              value={skuDraft.image_credits}
+              onChange={(e) =>
+                setSkuDraft((prev) => ({ ...prev, image_credits: e.target.value }))
+              }
+              style={inputStyle}
+              inputMode="numeric"
+              disabled={busy || savingPieceSku}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </label>
+        )}
         {(
           [
-            ["image_credits", t.myAgentsPieceSkuLabelImage],
             ["video_credits", t.myAgentsPieceSkuLabelVideo],
             ["audio_credits", t.myAgentsPieceSkuLabelAudio],
             ["file_credits", t.myAgentsPieceSkuLabelFile],

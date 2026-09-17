@@ -412,6 +412,10 @@ export type MyAgentSummary = {
   video_credits?: number | null;
   audio_credits?: number | null;
   file_credits?: number | null;
+  image_model_id?: string | null;
+  image_markup_percent?: number | null;
+  video_model_id?: string | null;
+  video_markup_percent?: number | null;
   /** Present after a successful delivery PATCH when ACN returns follow-up copy. */
   next_step_hint?: string | null;
 };
@@ -422,6 +426,15 @@ export type PieceSku = {
   video_credits: number;
   audio_credits: number;
   file_credits: number;
+  network_usage_fee_rate?: number | null;
+  image_model_id?: string | null;
+  image_markup_percent?: number | null;
+  image_source?: string | null;
+  image_unit_usd?: number | null;
+  video_model_id?: string | null;
+  video_markup_percent?: number | null;
+  video_source?: string | null;
+  video_unit_usd?: number | null;
 };
 
 export type ModelCatalogItem = {
@@ -434,6 +447,10 @@ export type ModelCatalogItem = {
   published_output_price_per_million?: number | null;
   currency?: string;
   source?: string | null;
+  modality?: string | null;
+  piece_kind?: string | null;
+  piece_unit?: string | null;
+  piece_unit_usd?: number | null;
 };
 
 export const OFFICIAL_PUBLISH_FACTOR = 1.15;
@@ -598,7 +615,14 @@ export type GatewayClient = {
     sku: Partial<
       Pick<
         PieceSku,
-        "image_credits" | "video_credits" | "audio_credits" | "file_credits"
+        | "image_credits"
+        | "video_credits"
+        | "audio_credits"
+        | "file_credits"
+        | "image_model_id"
+        | "image_markup_percent"
+        | "video_model_id"
+        | "video_markup_percent"
       >
     >,
   ) => Promise<PieceSku>;
@@ -610,6 +634,7 @@ export type GatewayClient = {
     source?: string;
     active_only?: boolean;
     official_shelf?: boolean;
+    piece_kind?: string;
     limit?: number;
     offset?: number;
   }) => Promise<ModelCatalogList>;
@@ -939,6 +964,7 @@ export function createGatewayClient(
       if (opts?.source?.trim()) params.set("source", opts.source.trim());
       if (opts?.active_only === false) params.set("active_only", "false");
       if (opts?.official_shelf) params.set("official_shelf", "true");
+      if (opts?.piece_kind?.trim()) params.set("piece_kind", opts.piece_kind.trim());
       params.set("limit", String(opts?.limit ?? 100));
       params.set("offset", String(opts?.offset ?? 0));
       return request<ModelCatalogList>(`/api/model-catalog?${params.toString()}`);
