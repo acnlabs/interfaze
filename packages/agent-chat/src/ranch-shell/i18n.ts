@@ -423,6 +423,10 @@ export type RanchMessages = {
   myAgentsPieceSkuLabelAudio: string;
   myAgentsPieceSkuLabelFile: string;
   myAgentsPieceSkuOff: string;
+  myAgentsPieceSkuNumeric: string;
+  myAgentsPieceSkuModel: string;
+  myAgentsPieceSkuMarkup: string;
+  myAgentsPieceSkuPreview: string;
   myAgentsSavePieceSku: string;
   myAgentsPieceSkuSaved: string;
   myAgentsPieceSkuFailed: string;
@@ -1046,7 +1050,7 @@ const en: RanchMessages = {
   myAgentsPricingFailed: "Couldn’t save pricing.",
   myAgentsSectionPieceSku: "Per file",
   myAgentsPieceSkuHint:
-    "Credits charged when that kind of file lands in this chat. 0 = not selling that kind (file still arrives). Dislike is not a refund; dialog tokens still settle separately.",
+    "Same pricing as dialog: Catalog public rate × markup. Files still settle per piece when they land in this chat; Host converts token-priced image models into Credits per file. Tools with a public per-call price bill separately; a tool with no price uses the model token meter. 0 / no model = not selling that kind. Dialog tokens still settle separately.",
   myAgentsPieceSkuLabel: "Credits per image",
   myAgentsPieceSkuLabelImage: "Credits per image",
   myAgentsPieceSkuLabelVideo: "Credits per video",
@@ -1054,6 +1058,10 @@ const en: RanchMessages = {
   myAgentsPieceSkuLabelFile: "Credits per other file",
   myAgentsPieceSkuOff:
     "0 = not selling that kind. Files can still land in this chat; they just won’t occupy the wallet.",
+  myAgentsPieceSkuNumeric: "Fill a number (Dreamina / no catalog price)",
+  myAgentsPieceSkuModel: "Image model",
+  myAgentsPieceSkuMarkup: "Markup %",
+  myAgentsPieceSkuPreview: "Hunter pays ${listed} · you net ${net}",
   myAgentsSavePieceSku: "Save per-file prices",
   myAgentsPieceSkuSaved: "Per-file prices saved",
   myAgentsPieceSkuFailed: "Couldn’t save per-file prices.",
@@ -1682,13 +1690,17 @@ const zh: RanchMessages = {
   myAgentsPricingFailed: "保存定价失败。",
   myAgentsSectionPieceSku: "按件",
   myAgentsPieceSkuHint:
-    "货进这场对话即按件成交。图、视频、音频、其他文件分开挂。0 = 那种不卖（货仍进气泡）。不满意不退；没出货不占。对话 token 仍另结。",
+    "和对话同一套价：目录公开底价 × 加价。附件仍按张成交，token 价由 Host 换成每张 Credits。工具自己有公开按次价就另算；没有就并进模型 token。没目录价才填数字。0 = 那种不卖。对话 token 仍另结。",
   myAgentsPieceSkuLabel: "每张图 Credits",
   myAgentsPieceSkuLabelImage: "每张图 Credits",
   myAgentsPieceSkuLabelVideo: "每条视频 Credits",
   myAgentsPieceSkuLabelAudio: "每条音频 Credits",
   myAgentsPieceSkuLabelFile: "每份其他文件 Credits",
   myAgentsPieceSkuOff: "0 = 那种不卖。货仍可进这场对话，只是不占钱包。",
+  myAgentsPieceSkuNumeric: "填数字（绘图软件 / 目录没价）",
+  myAgentsPieceSkuModel: "生图模型",
+  myAgentsPieceSkuMarkup: "加价 %",
+  myAgentsPieceSkuPreview: "猎人付 ${listed} · 你实收 ${net}",
   myAgentsSavePieceSku: "保存按件价",
   myAgentsPieceSkuSaved: "按件价已保存",
   myAgentsPieceSkuFailed: "保存按件价失败。",
