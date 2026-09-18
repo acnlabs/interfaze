@@ -430,6 +430,21 @@ export type RanchMessages = {
   myAgentsPieceSkuPocketHint: string;
   myAgentsPieceSkuMarkup: string;
   myAgentsPieceSkuPreview: string;
+  myAgentsPieceSkuPreviewVideo: string;
+  myAgentsPieceSkuSeconds: string;
+  myAgentsPieceSkuSecondsHint: string;
+  myAgentsPieceSkuPerSecond: string;
+  myAgentsPieceSkuKindImage: string;
+  myAgentsPieceSkuKindVideo: string;
+  myAgentsPieceSkuKindAudio: string;
+  myAgentsPieceSkuKindFile: string;
+  myAgentsPieceSkuFillCredits: string;
+  myAgentsPieceSkuMeterLabel: string;
+  myAgentsPieceSkuMeterFile: string;
+  myAgentsPieceSkuMeterSecond: string;
+  myAgentsPieceSkuMeterNumeric: string;
+  myAgentsPieceSkuMarketFile: string;
+  myAgentsPieceSkuMarketSecond: string;
   myAgentsSavePieceSku: string;
   myAgentsPieceSkuSaved: string;
   myAgentsPieceSkuFailed: string;
@@ -1053,14 +1068,14 @@ const en: RanchMessages = {
   myAgentsPricingFailed: "Couldn’t save pricing.",
   myAgentsSectionPieceSku: "Per file",
   myAgentsPieceSkuHint:
-    "Image and video each hang a model this machine already has, if the catalog prices it. Same formula as dialog: catalog × markup. Audio and other files stay a number. 0 / no model = not selling that kind. Dialog tokens still settle separately.",
+    "Catalog-priced models on this machine use public price × your markup ÷ 0.9. If a kind has no catalog price, fill the hunter listed Credits (image per file, video per second). 0 = not selling that kind. Dialog tokens still settle separately.",
   myAgentsPieceSkuLabel: "Credits per image",
-  myAgentsPieceSkuLabelImage: "Credits per image",
-  myAgentsPieceSkuLabelVideo: "Credits per video",
+  myAgentsPieceSkuLabelImage: "Credits per image (listed)",
+  myAgentsPieceSkuLabelVideo: "Credits per second (listed)",
   myAgentsPieceSkuLabelAudio: "Credits per audio",
   myAgentsPieceSkuLabelFile: "Credits per other file",
   myAgentsPieceSkuOff:
-    "0 = not selling that kind. Files can still land in this chat; they just won’t occupy the wallet.",
+    "Only kinds this machine cannot price from the catalog appear below. Empty / 0 = files still land; they just won’t occupy.",
   myAgentsPieceSkuNumeric: "Fill a number (Dreamina / no catalog price)",
   myAgentsPieceSkuModel: "Image model",
   myAgentsPieceSkuModelVideo: "Video model",
@@ -1070,6 +1085,23 @@ const en: RanchMessages = {
     "Catch-all for files that aren’t image, video, or audio. Host owns the kinds — you don’t invent new ones.",
   myAgentsPieceSkuMarkup: "Markup %",
   myAgentsPieceSkuPreview: "Hunter pays ${listed} · you net ${net}",
+  myAgentsPieceSkuPreviewVideo:
+    "Hunter pays ${listed} for a ${seconds}s clip if we cannot read the file · you net ${net}",
+  myAgentsPieceSkuSeconds: "Fallback seconds",
+  myAgentsPieceSkuSecondsHint:
+    "Used when the landed file has no readable duration (1–120). If we can read the clip, that length bills instead.",
+  myAgentsPieceSkuPerSecond: "Catalog ${usd} / second",
+  myAgentsPieceSkuKindImage: "Image",
+  myAgentsPieceSkuKindVideo: "Video",
+  myAgentsPieceSkuKindAudio: "Audio",
+  myAgentsPieceSkuKindFile: "Other file",
+  myAgentsPieceSkuFillCredits: "Fill Credits",
+  myAgentsPieceSkuMeterLabel: "How it’s billed",
+  myAgentsPieceSkuMeterFile: "Per file",
+  myAgentsPieceSkuMeterSecond: "Per second",
+  myAgentsPieceSkuMeterNumeric: "You set Credits per file",
+  myAgentsPieceSkuMarketFile: "Catalog ${usd} / file",
+  myAgentsPieceSkuMarketSecond: "Catalog ${usd} / second",
   myAgentsSavePieceSku: "Save per-file prices",
   myAgentsPieceSkuSaved: "Per-file prices saved",
   myAgentsPieceSkuFailed: "Couldn’t save per-file prices.",
@@ -1698,13 +1730,13 @@ const zh: RanchMessages = {
   myAgentsPricingFailed: "保存定价失败。",
   myAgentsSectionPieceSku: "按件",
   myAgentsPieceSkuHint:
-    "图、视频各自挂这台机配了且目录有价的模型，公式和对话一样：目录底价 × 加价。音频和其他文件仍填数字。0 / 不选模型 = 那种不卖。对话 token 仍另结。",
+    "这台机目录认得出价的种：公开底价 × 对话加价 ÷ 0.9。没目录的种：填猎人一口价（图按张、视频按秒）。0 = 那种不单独卖。对话 token 仍另结。",
   myAgentsPieceSkuLabel: "每张图 Credits",
-  myAgentsPieceSkuLabelImage: "每张图 Credits",
-  myAgentsPieceSkuLabelVideo: "每条视频 Credits",
+  myAgentsPieceSkuLabelImage: "每张图 Credits（猎人一口价）",
+  myAgentsPieceSkuLabelVideo: "每秒 Credits（猎人一口价）",
   myAgentsPieceSkuLabelAudio: "每条音频 Credits",
   myAgentsPieceSkuLabelFile: "每份其他文件 Credits",
-  myAgentsPieceSkuOff: "0 = 那种不卖。货仍可进这场对话，只是不占钱包。",
+  myAgentsPieceSkuOff: "只露出这台机目录盖不住的种。空 / 0 = 货仍可进，那种不占钱包。",
   myAgentsPieceSkuNumeric: "填数字（绘图软件 / 目录没价）",
   myAgentsPieceSkuModel: "生图模型",
   myAgentsPieceSkuModelVideo: "视频模型",
@@ -1712,6 +1744,22 @@ const zh: RanchMessages = {
   myAgentsPieceSkuPocketHint: "图 / 视频 / 音频以外的文件。种类由 Host 定，不能自己加。",
   myAgentsPieceSkuMarkup: "加价 %",
   myAgentsPieceSkuPreview: "猎人付 ${listed} · 你实收 ${net}",
+  myAgentsPieceSkuPreviewVideo:
+    "读不到文件时长时，猎人付 ${listed}（按 ${seconds} 秒）· 你实收 ${net}",
+  myAgentsPieceSkuSeconds: "读不到时长时按几秒",
+  myAgentsPieceSkuSecondsHint: "文件能读出秒数就按实际秒数成交；读不到才用这一档。1–120。",
+  myAgentsPieceSkuPerSecond: "目录 ${usd} / 秒",
+  myAgentsPieceSkuKindImage: "图",
+  myAgentsPieceSkuKindVideo: "视频",
+  myAgentsPieceSkuKindAudio: "音频",
+  myAgentsPieceSkuKindFile: "其他文件",
+  myAgentsPieceSkuFillCredits: "填 Credits",
+  myAgentsPieceSkuMeterLabel: "计价方式",
+  myAgentsPieceSkuMeterFile: "按件",
+  myAgentsPieceSkuMeterSecond: "按秒",
+  myAgentsPieceSkuMeterNumeric: "你自己填每件 Credits",
+  myAgentsPieceSkuMarketFile: "目录 ${usd} / 张",
+  myAgentsPieceSkuMarketSecond: "目录 ${usd} / 秒",
   myAgentsSavePieceSku: "保存按件价",
   myAgentsPieceSkuSaved: "按件价已保存",
   myAgentsPieceSkuFailed: "保存按件价失败。",

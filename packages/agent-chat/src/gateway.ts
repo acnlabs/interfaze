@@ -416,6 +416,7 @@ export type MyAgentSummary = {
   image_markup_percent?: number | null;
   video_model_id?: string | null;
   video_markup_percent?: number | null;
+  video_seconds?: number | null;
   /** Present after a successful delivery PATCH when ACN returns follow-up copy. */
   next_step_hint?: string | null;
 };
@@ -435,6 +436,7 @@ export type PieceSku = {
   video_markup_percent?: number | null;
   video_source?: string | null;
   video_unit_usd?: number | null;
+  video_seconds?: number | null;
 };
 
 export type ModelCatalogItem = {
@@ -623,6 +625,7 @@ export type GatewayClient = {
         | "image_markup_percent"
         | "video_model_id"
         | "video_markup_percent"
+        | "video_seconds"
       >
     >,
   ) => Promise<PieceSku>;
