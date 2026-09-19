@@ -412,10 +412,6 @@ export type MyAgentSummary = {
   video_credits?: number | null;
   audio_credits?: number | null;
   file_credits?: number | null;
-  image_model_id?: string | null;
-  image_markup_percent?: number | null;
-  video_model_id?: string | null;
-  video_markup_percent?: number | null;
   video_seconds?: number | null;
   /** Present after a successful delivery PATCH when ACN returns follow-up copy. */
   next_step_hint?: string | null;
@@ -428,14 +424,6 @@ export type PieceSku = {
   audio_credits: number;
   file_credits: number;
   network_usage_fee_rate?: number | null;
-  image_model_id?: string | null;
-  image_markup_percent?: number | null;
-  image_source?: string | null;
-  image_unit_usd?: number | null;
-  video_model_id?: string | null;
-  video_markup_percent?: number | null;
-  video_source?: string | null;
-  video_unit_usd?: number | null;
   video_seconds?: number | null;
 };
 
@@ -621,10 +609,6 @@ export type GatewayClient = {
         | "video_credits"
         | "audio_credits"
         | "file_credits"
-        | "image_model_id"
-        | "image_markup_percent"
-        | "video_model_id"
-        | "video_markup_percent"
         | "video_seconds"
       >
     >,

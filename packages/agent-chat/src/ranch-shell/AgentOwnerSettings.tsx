@@ -80,22 +80,6 @@ function skuFromDetail(d: MyAgentSummary): Omit<PieceSku, "agent_id"> {
     video_credits: skuNumber(d.video_credits),
     audio_credits: skuNumber(d.audio_credits),
     file_credits: skuNumber(d.file_credits),
-    image_model_id:
-      typeof d.image_model_id === "string" && d.image_model_id.trim()
-        ? d.image_model_id.trim()
-        : null,
-    image_markup_percent:
-      typeof d.image_markup_percent === "number" && Number.isFinite(d.image_markup_percent)
-        ? d.image_markup_percent
-        : null,
-    video_model_id:
-      typeof d.video_model_id === "string" && d.video_model_id.trim()
-        ? d.video_model_id.trim()
-        : null,
-    video_markup_percent:
-      typeof d.video_markup_percent === "number" && Number.isFinite(d.video_markup_percent)
-        ? d.video_markup_percent
-        : null,
     video_seconds:
       typeof d.video_seconds === "number" && Number.isInteger(d.video_seconds)
         ? Math.min(120, Math.max(1, d.video_seconds))
@@ -109,30 +93,6 @@ function skuFromRow(row: PieceSku): Omit<PieceSku, "agent_id"> {
     video_credits: skuNumber(row.video_credits),
     audio_credits: skuNumber(row.audio_credits),
     file_credits: skuNumber(row.file_credits),
-    image_model_id:
-      typeof row.image_model_id === "string" && row.image_model_id.trim()
-        ? row.image_model_id.trim()
-        : null,
-    image_markup_percent:
-      typeof row.image_markup_percent === "number" && Number.isFinite(row.image_markup_percent)
-        ? row.image_markup_percent
-        : null,
-    image_unit_usd:
-      typeof row.image_unit_usd === "number" && Number.isFinite(row.image_unit_usd)
-        ? row.image_unit_usd
-        : null,
-    video_model_id:
-      typeof row.video_model_id === "string" && row.video_model_id.trim()
-        ? row.video_model_id.trim()
-        : null,
-    video_markup_percent:
-      typeof row.video_markup_percent === "number" && Number.isFinite(row.video_markup_percent)
-        ? row.video_markup_percent
-        : null,
-    video_unit_usd:
-      typeof row.video_unit_usd === "number" && Number.isFinite(row.video_unit_usd)
-        ? row.video_unit_usd
-        : null,
     video_seconds:
       typeof row.video_seconds === "number" && Number.isInteger(row.video_seconds)
         ? Math.min(120, Math.max(1, row.video_seconds))
