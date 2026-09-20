@@ -51,6 +51,11 @@ import {
   type AccountDeepLinkPanel,
 } from "./accountDeepLink";
 import { CreateAgentDialog } from "./CreateAgentDialog";
+import {
+  readPendingCreateJobId,
+  watchAgentCreateJob,
+  writePendingCreateJobId,
+} from "./watchAgentCreateJob";
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
 import { NewComposeMenu } from "./NewComposeMenu";
@@ -1927,6 +1932,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showMembersPanel, setShowMembersPanel] = useState(false);
   const [showMyAgents, setShowMyAgents] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [pendingCreateJobId, setPendingCreateJobId] = useState<string | null>(null);
+  const openedCreateJobsRef = useRef(new Set<string>());
+  const finishHostedCreateRef = useRef<
+    (agentId: string, info?: { name?: string | null; jobId?: string }) => void
+  >(() => {});
+  const onOwnedAgentUpdatedRef = useRef(onOwnedAgentUpdated);
+  onOwnedAgentUpdatedRef.current = onOwnedAgentUpdated;
   const [createMenuAvailable, setCreateMenuAvailable] = useState(false);
   const [showAccountProfile, setShowAccountProfile] = useState(false);
   const [showAccountManage, setShowAccountManage] = useState(false);
@@ -1987,6 +1999,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
     if (!initialCreateAgent) return;
     setShowCreateDialog(true);
   }, [initialCreateAgent]);
+
+  useEffect(() => {
+    const stored = readPendingCreateJobId();
+    if (stored) setPendingCreateJobId(stored);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -2730,6 +2747,39 @@ export function RanchChatShell(props: RanchChatShellProps) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [messages, view, replySlot]);
 
+  useEffect(() => {
+    if (!pendingCreateJobId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const row = await watchAgentCreateJob(client, pendingCreateJobId, {
+          shouldStop: () => cancelled,
+        });
+        if (cancelled || !row) return;
+        if (row.status === "ready" && row.agent_id) {
+          finishHostedCreateRef.current(row.agent_id, {
+            name: row.name ?? null,
+            jobId: row.job_id,
+          });
+          return;
+        }
+        if (row.status === "failed") {
+          writePendingCreateJobId(null);
+          setPendingCreateJobId(null);
+        }
+      } catch (e) {
+        if (cancelled) return;
+        if (e instanceof ChatGatewayError && (e.status === 404 || e.status === 410)) {
+          writePendingCreateJobId(null);
+          setPendingCreateJobId(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingCreateJobId, client]);
+
   const startFreshDirect = async (agentId: string) => {
     setBusy(true);
     setError(null);
@@ -2776,6 +2826,27 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setBusy(false);
     }
   };
+
+  const finishHostedCreate = (
+    agentId: string,
+    info?: { name?: string | null; jobId?: string },
+  ) => {
+    const jobId = info?.jobId;
+    if (jobId) {
+      if (openedCreateJobsRef.current.has(jobId)) return;
+      openedCreateJobsRef.current.add(jobId);
+    }
+    writePendingCreateJobId(null);
+    setPendingCreateJobId(null);
+    onOwnedAgentUpdatedRef.current?.({
+      agent_id: agentId,
+      name: info?.name ?? null,
+      description: null,
+    });
+    setShowCreateDialog(false);
+    void startDirect(agentId);
+  };
+  finishHostedCreateRef.current = finishHostedCreate;
 
   const startGroup = async (groupTitle: string, agentIds: string[]) => {
     setBusy(true);
@@ -6776,9 +6847,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
           interfazeBaseUrl={interfazeBaseUrl}
           busy={busy}
           onClose={() => setShowCreateDialog(false)}
-          onReady={(agentId) => {
-            setShowCreateDialog(false);
-            void startDirect(agentId);
+          onWatchJob={(jobId) => {
+            writePendingCreateJobId(jobId);
+            setPendingCreateJobId(jobId);
+          }}
+          onReady={(agentId, info) => {
+            finishHostedCreate(agentId, info);
           }}
         />
       ) : null}

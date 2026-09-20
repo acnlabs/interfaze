@@ -963,7 +963,7 @@ const en: RanchMessages = {
   createAgentRetryBind: "Retry bind",
   createAgentUnavailable: "Create is not available in this region yet.",
   createAgentFailed: "Could not create this agent.",
-  createAgentSlow: "Still deploying. Open My agents later to check.",
+  createAgentSlow: "Still deploying. You can close this window — the chat will open when it's ready.",
   myAgentsOfflineHint:
     "This agent is registered but offline — start the process that keeps it alive, or check message receiving.",
   myAgentsSectionIdentity: "Profile",
@@ -1628,7 +1628,7 @@ const zh: RanchMessages = {
   createAgentRetryBind: "重试绑定",
   createAgentUnavailable: "这个区域还不能创建。",
   createAgentFailed: "创建失败。",
-  createAgentSlow: "还在部署。稍后再打开「我的 Agents」查看。",
+  createAgentSlow: "还在部署。可以关掉这个窗口，就绪后会自动打开对话。",
   myAgentsOfflineHint:
     "此 agent 已注册但离线——请启动保持在线的进程，或检查收信方式是否已配置。",
   myAgentsSectionIdentity: "资料",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   ChatGatewayError,
   type AgentCreateAvailability,
@@ -12,6 +12,7 @@ import {
 import type { RanchMessages } from "./i18n";
 import { buildWalletCheckoutUrl } from "./interfazeHost";
 import { btnGhost, btnPrimary, colors } from "./styles";
+import { watchAgentCreateJob } from "./watchAgentCreateJob";
 
 function machinesFrom(avail: AgentCreateAvailability | null): AgentCreateMachine[] {
   if (!avail) return [];
@@ -52,12 +53,10 @@ type Props = {
   interfazeBaseUrl?: string;
   busy?: boolean;
   onClose: () => void;
-  onReady: (agentId: string) => void;
+  onReady: (agentId: string, info?: { name?: string | null; jobId?: string }) => void;
+  /** Parent keeps polling after this dialog unmounts. */
+  onWatchJob?: (jobId: string) => void;
 };
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 export function CreateAgentDialog({
   client,
@@ -67,6 +66,7 @@ export function CreateAgentDialog({
   busy,
   onClose,
   onReady,
+  onWatchJob,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [avail, setAvail] = useState<AgentCreateAvailability | null>(null);
@@ -77,6 +77,18 @@ export function CreateAgentDialog({
   const [job, setJob] = useState<AgentCreateJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
+  const cancelledRef = useRef(false);
+  const onReadyRef = useRef(onReady);
+  const onWatchJobRef = useRef(onWatchJob);
+  onReadyRef.current = onReady;
+  onWatchJobRef.current = onWatchJob;
+
+  useEffect(() => {
+    cancelledRef.current = false;
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,21 +133,46 @@ export function CreateAgentDialog({
   });
   const locked = acting || !!job;
 
+  const emitReady = (row: AgentCreateJob) => {
+    if (!row.agent_id) return;
+    onReadyRef.current(row.agent_id, { name: row.name ?? null, jobId: row.job_id });
+  };
+
   const pollUntilSettled = async (jobId: string) => {
-    for (let i = 0; i < 90; i += 1) {
-      const row = await client.getAgentCreateJob(jobId);
-      setJob(row);
-      if (row.status === "ready" && row.agent_id) {
-        onReady(row.agent_id);
-        return;
-      }
-      if (row.status === "failed") {
-        setError(row.error || t.createAgentFailed);
-        return;
-      }
-      await sleep(2000);
+    onWatchJobRef.current?.(jobId);
+    const started = Date.now();
+    let slowShown = false;
+    const row = await watchAgentCreateJob(client, jobId, {
+      shouldStop: () => cancelledRef.current,
+      stopOn: (next) =>
+        next.status === "ready" ||
+        next.status === "failed" ||
+        next.status === "pending_payment",
+      onUpdate: (next) => {
+        setJob(next);
+        if (
+          !slowShown &&
+          Date.now() - started >= 180_000 &&
+          next.status !== "ready" &&
+          next.status !== "failed"
+        ) {
+          slowShown = true;
+          setError(t.createAgentSlow);
+        }
+      },
+    });
+    if (cancelledRef.current) return;
+    if (!row) {
+      setError(t.createAgentSlow);
+      return;
     }
-    setError(t.createAgentSlow);
+    if (row.status === "ready" && row.agent_id) {
+      emitReady(row);
+      return;
+    }
+    if (row.status === "failed") {
+      setError(row.error || t.createAgentFailed);
+    }
   };
 
   const submit = async () => {
@@ -151,7 +188,7 @@ export function CreateAgentDialog({
       });
       setJob(created);
       if (created.status === "ready" && created.agent_id) {
-        onReady(created.agent_id);
+        emitReady(created);
         return;
       }
       await pollUntilSettled(created.job_id);
@@ -200,7 +237,7 @@ export function CreateAgentDialog({
       const bound = await client.retryBindAgentCreateJob(job.job_id);
       setJob(bound);
       if (bound.status === "ready" && bound.agent_id) {
-        onReady(bound.agent_id);
+        emitReady(bound);
         return;
       }
       await pollUntilSettled(bound.job_id);
