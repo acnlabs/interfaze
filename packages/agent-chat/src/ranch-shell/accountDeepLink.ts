@@ -1,8 +1,8 @@
 /** Account surfaces that belong in `/?account=`. */
 
-export type AccountDeepLinkPanel = "plan" | "wallet" | "manage" | "profile" | "keys";
+export type AccountDeepLinkPanel = "plan" | "wallet" | "manage" | "profile" | "keys" | "billing";
 
-const PANELS = new Set<string>(["plan", "wallet", "manage", "profile", "keys"]);
+const PANELS = new Set<string>(["plan", "wallet", "manage", "profile", "keys", "billing"]);
 
 export function readAccountPanelFromUrl(
   search: string = typeof window === "undefined" ? "" : window.location.search,

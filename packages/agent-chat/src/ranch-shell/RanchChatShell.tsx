@@ -42,6 +42,7 @@ import {
   AccountPlanUsagePanel,
   AccountProfilePanel,
   AccountWalletPanel,
+  AccountBillingPanel,
   ChatCollabBudgetSection,
 } from "./AccountPanels";
 import {
@@ -1466,6 +1467,7 @@ function AccountFooter({
   onWallet,
   onKeys,
   onPlanUsage,
+  onBilling,
   onDiscoverAgents,
   t,
 }: {
@@ -1476,6 +1478,7 @@ function AccountFooter({
   onWallet?: () => void;
   onKeys?: () => void;
   onPlanUsage?: () => void;
+  onBilling?: () => void;
   onDiscoverAgents?: () => void;
   t: RanchMessages;
 }) {
@@ -1568,7 +1571,7 @@ function AccountFooter({
     };
 
   const hasUpper =
-    !!(onProfile || onManage || onWallet || onKeys || onPlanUsage || onDiscoverAgents);
+    !!(onProfile || onManage || onWallet || onKeys || onPlanUsage || onBilling || onDiscoverAgents);
 
   return (
     <div
@@ -1639,6 +1642,17 @@ function AccountFooter({
               <span style={{ flex: 1 }}>{t.accountWallet}</span>
             </a>
           ) : null}
+          {onBilling ? (
+            <a
+              href={accountPanelHref("billing")}
+              role="menuitem"
+              style={menuLinkStyle}
+              onClick={accountLinkClick(onBilling)}
+              {...hoverHandlers}
+            >
+              <span style={{ flex: 1 }}>{t.accountBilling}</span>
+            </a>
+          ) : null}
           {onKeys ? (
             <a
               href={accountPanelHref("keys")}
@@ -1661,7 +1675,7 @@ function AccountFooter({
               <span style={{ flex: 1 }}>{t.accountPlanUsage}</span>
             </a>
           ) : null}
-          {(onProfile || onManage || onWallet || onKeys || onPlanUsage) && onDiscoverAgents ? (
+          {(onProfile || onManage || onWallet || onKeys || onPlanUsage || onBilling) && onDiscoverAgents ? (
             <div style={{ height: 1, background: colors.border, margin: "2px 0" }} />
           ) : null}
           {onDiscoverAgents ? (
@@ -1933,6 +1947,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showAccountWallet, setShowAccountWallet] = useState(false);
   const [showAccountKeys, setShowAccountKeys] = useState(false);
   const [showAccountPlan, setShowAccountPlan] = useState(false);
+  const [showAccountBilling, setShowAccountBilling] = useState(false);
 
   const closeAccountSurfaces = () => {
     setShowAccountProfile(false);
@@ -1940,6 +1955,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setShowAccountWallet(false);
     setShowAccountKeys(false);
     setShowAccountPlan(false);
+    setShowAccountBilling(false);
     setShowMyAgents(false);
   };
 
@@ -1950,6 +1966,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     else if (panel === "keys") setShowAccountKeys(true);
     else if (panel === "manage") setShowAccountManage(true);
     else if (panel === "profile") setShowAccountProfile(true);
+    else if (panel === "billing") setShowAccountBilling(true);
   };
 
   const openAccountPanel = (panel: AccountDeepLinkPanel) => {
@@ -4059,6 +4076,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
           messages={t}
           interfazeBaseUrl={interfazeBaseUrl}
           onClose={() => closeAccountPanel()}
+          onOpenBilling={() => openAccountPanel("billing")}
+        />
+      ) : null}
+
+      {showAccountBilling ? (
+        <AccountBillingPanel
+          client={client}
+          messages={t}
+          interfazeBaseUrl={interfazeBaseUrl}
+          onClose={() => closeAccountPanel()}
         />
       ) : null}
 
@@ -4449,6 +4476,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             onWallet={() => openAccountPanel("wallet")}
             onKeys={() => openAccountPanel("keys")}
             onPlanUsage={() => openAccountPanel("plan")}
+            onBilling={() => openAccountPanel("billing")}
             onDiscoverAgents={() => {
               closeAccountPanel();
               setPickerMode("direct");
