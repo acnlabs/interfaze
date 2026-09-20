@@ -18,88 +18,57 @@ import {
   isAuth0Configured,
 } from "@/lib/auth0";
 import {
-  notifyPlanActivated,
+  notifyWalletCredited,
   resolveEmbedParentOrigin,
   withEmbedParentOrigin,
 } from "@/lib/embedParent";
 import { getGatewayBaseUrl } from "@/lib/gateway";
 import { isCnRegion } from "@/lib/region";
-import { planCheckoutReturnHref, safeReturnTo } from "@/lib/safeReturnTo";
-import CnSubscribeCheckout from "@/components/CnSubscribeCheckout";
-import {
-  PlanCatalog,
-  PlanSheet,
-  catalogCloseHref,
-  findCatalogTier,
-  planSheetColors,
-  subscribeHref,
-} from "@/components/PlanCatalog";
+import { safeReturnTo, walletCheckoutReturnHref } from "@/lib/safeReturnTo";
+import CnWalletCheckout from "@/components/CnWalletCheckout";
+import { PlanSheet, catalogCloseHref, planSheetColors } from "@/components/PlanCatalog";
 
-const PLAN_USD: Record<string, { label: string; amountUsd: number }> = {
-  pro: { label: "Pro", amountUsd: 20 },
-  max: { label: "Max", amountUsd: 200 },
-};
-
+const CREDITS_PER_USD = 100;
+const PRESET_AMOUNTS_USD = [10, 25, 50, 100];
 const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? "";
 
-function normalizePlan(raw: string | null | undefined): string {
-  const c = (raw || "").trim().toLowerCase();
-  return c === "ultra" ? "max" : c;
-}
+type RechargeQuote = {
+  channel: string;
+  credit_amount: number;
+  channel_fee: number;
+  charge_amount: number;
+  credits: number;
+  currency: string;
+};
 
-function SubscribeInner() {
+function WalletInner() {
   const searchParams = useSearchParams();
   const { isAuthenticated, isLoading, loginWithRedirect, getAccessTokenSilently } = useAuth0();
-  const urlPlan = normalizePlan(searchParams.get("plan"));
-  const [picked, setPicked] = useState(urlPlan);
-  const planCode = PLAN_USD[picked] ? picked : "";
-  const renew =
-    searchParams.get("renew") === "1" || searchParams.get("renew") === "true";
   const embed = searchParams.get("embed") === "1";
   const parentOriginParam = resolveEmbedParentOrigin(searchParams.get("parent_origin"));
   const afterPayReturnTo = useMemo(
-    () => safeReturnTo(searchParams.get("return_to")),
+    () => safeReturnTo(searchParams.get("return_to"), "/?account=wallet"),
     [searchParams],
   );
-  const exitHref = catalogCloseHref(searchParams);
-  const notifyParent = useCallback(
-    (code: string, paidUntil?: string | null) => {
-      notifyPlanActivated(code, paidUntil, parentOriginParam);
-    },
-    [parentOriginParam],
-  );
-  const plan = planCode ? PLAN_USD[planCode] : undefined;
+  const exitHref = catalogCloseHref(searchParams) || afterPayReturnTo;
   const gateway = getGatewayBaseUrl();
 
-  const selectPlan = useCallback(
-    (code?: string) => {
-      const next = code && PLAN_USD[code] ? code : "";
-      setPicked(next);
-      if (typeof history !== "undefined") {
-        history.replaceState(null, "", subscribeHref(searchParams, next || undefined));
-      }
-    },
-    [searchParams],
-  );
-
-  useEffect(() => {
-    const onPop = () => {
-      const q = new URLSearchParams(window.location.search);
-      setPicked(normalizePlan(q.get("plan")));
-    };
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
-
+  const [selectedUsd, setSelectedUsd] = useState<number | null>(10);
+  const [customUsd, setCustomUsd] = useState("");
+  const [quote, setQuote] = useState<RechargeQuote | null>(null);
   const [paying, setPaying] = useState<"LOGIN" | "BILLING" | "CAPTURE" | null>(null);
   const payingLock = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [inIframe, setInIframe] = useState(false);
-  /** Order ids whose capture already activated a plan (do not re-capture). */
   const paypalCaptureDoneRef = useRef<string | null>(null);
-  /** Order id with an in-flight capture; cleared on cleanup so remount can retry. */
   const paypalCaptureInFlightRef = useRef<string | null>(null);
+
+  const faceUsd = useMemo(() => {
+    const custom = Number(customUsd);
+    if (customUsd.trim() && Number.isFinite(custom) && custom > 0) return Math.round(custom * 100) / 100;
+    return selectedUsd && selectedUsd > 0 ? selectedUsd : 0;
+  }, [customUsd, selectedUsd]);
 
   useEffect(() => {
     setInIframe(window.parent !== window);
@@ -112,28 +81,50 @@ function SubscribeInner() {
     });
   }, [getAccessTokenSilently, isAuthenticated]);
 
-  const cleanSubscribePath = useCallback(() => {
-    const q = new URLSearchParams({ plan: planCode });
-    if (renew) q.set("renew", "1");
+  useEffect(() => {
+    if (faceUsd <= 0) {
+      setQuote(null);
+      return;
+    }
+    let cancelled = false;
+    const params = new URLSearchParams({
+      channel: "paypal",
+      amount: String(faceUsd),
+    });
+    void fetch(`${gateway}/api/users/me/wallet/recharge/quote?${params}`)
+      .then(async (res) => {
+        const body = (await res.json().catch(() => ({}))) as RechargeQuote & { detail?: string };
+        if (!res.ok) throw new Error(body.detail || `Quote failed (${res.status})`);
+        if (!cancelled) setQuote(body);
+      })
+      .catch(() => {
+        if (!cancelled) setQuote(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [faceUsd, gateway]);
+
+  const cleanWalletPath = useCallback(() => {
+    const q = new URLSearchParams();
     if (embed) q.set("embed", "1");
     if (parentOriginParam) q.set("parent_origin", parentOriginParam);
     if (afterPayReturnTo) q.set("return_to", afterPayReturnTo);
-    return `/subscribe?${q.toString()}`;
-  }, [planCode, renew, embed, parentOriginParam, afterPayReturnTo]);
+    const s = q.toString();
+    return s ? `/wallet?${s}` : "/wallet";
+  }, [embed, parentOriginParam, afterPayReturnTo]);
 
   const returnUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
-    const q = new URLSearchParams({ plan: planCode, paypal: "success" });
-    if (renew) q.set("renew", "1");
+    const q = new URLSearchParams({ paypal: "success", return_to: afterPayReturnTo });
     if (embed) q.set("embed", "1");
     if (parentOriginParam) q.set("parent_origin", parentOriginParam);
-    q.set("return_to", afterPayReturnTo);
-    return `${window.location.origin}/subscribe?${q}`;
-  }, [planCode, renew, embed, parentOriginParam, afterPayReturnTo]);
+    return `${window.location.origin}/wallet?${q}`;
+  }, [afterPayReturnTo, embed, parentOriginParam]);
 
   const startPaypalCheckout = useCallback(
     async (landingPage: "LOGIN" | "BILLING") => {
-      if (!plan || !planCode || payingLock.current) return;
+      if (faceUsd <= 0 || payingLock.current) return;
       payingLock.current = true;
       setError(null);
       setPaying(landingPage);
@@ -141,13 +132,11 @@ function SubscribeInner() {
         const token = await tokenGetter();
         if (!token) throw new Error("Not signed in");
         const cancelQ = new URLSearchParams({
-          plan: planCode,
           paypal: "cancel",
           return_to: afterPayReturnTo,
         });
-        if (renew) cancelQ.set("renew", "1");
         const cancelPath = withEmbedParentOrigin(
-          `/subscribe?${cancelQ.toString()}`,
+          `/wallet?${cancelQ.toString()}`,
           parentOriginParam,
         );
         const res = await fetch(`${gateway}/api/users/me/wallet/paypal/create-order`, {
@@ -157,11 +146,10 @@ function SubscribeInner() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            amount: plan.amountUsd,
+            amount: faceUsd,
             currency: "USD",
             return_url: returnUrl,
             cancel_url: `${window.location.origin}${cancelPath}`,
-            plan_code: planCode,
             landing_page: landingPage,
           }),
         });
@@ -181,34 +169,14 @@ function SubscribeInner() {
         setError(e instanceof Error ? e.message : "PayPal create failed");
       }
     },
-    [
-      afterPayReturnTo,
-      gateway,
-      parentOriginParam,
-      plan,
-      planCode,
-      renew,
-      returnUrl,
-      tokenGetter,
-    ],
+    [afterPayReturnTo, faceUsd, gateway, parentOriginParam, returnUrl, tokenGetter],
   );
-
-  // Auth0 may complete in a sibling tab (embed) — refresh session when focus returns.
-  useEffect(() => {
-    if (!embed || isAuthenticated) return;
-    const onFocus = () => {
-      window.location.reload();
-    };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [embed, isAuthenticated]);
 
   const paypalReturn = searchParams.get("paypal");
   const paypalOrderId = (searchParams.get("token") || "").trim();
 
-  // PayPal redirect return (idempotent per order; remount can retry if cancelled mid-flight).
   useEffect(() => {
-    if (!isAuthenticated || paypalReturn !== "success" || !plan) return;
+    if (!isAuthenticated || paypalReturn !== "success") return;
     if (!paypalOrderId) return;
     if (paypalCaptureDoneRef.current === paypalOrderId) return;
     if (paypalCaptureInFlightRef.current === paypalOrderId) return;
@@ -229,32 +197,29 @@ function SubscribeInner() {
         });
         const body = (await res.json().catch(() => ({}))) as {
           status?: string;
-          plan_code?: string;
-          paid_until?: string | null;
+          balance?: number;
+          credits_added?: number;
           detail?: string;
         };
         if (!res.ok) throw new Error(body.detail || `Capture failed (${res.status})`);
-        if (body.status === "plan_activated" && body.plan_code) {
-          paypalCaptureDoneRef.current = paypalOrderId;
-          // Apply even if this effect instance was cleaned up — payment already succeeded.
-          setSuccess(
-            `${body.plan_code.toUpperCase()} active` +
-              (body.paid_until
-                ? ` until ${new Date(body.paid_until).toLocaleDateString()}`
-                : ""),
-          );
-          notifyParent(body.plan_code, body.paid_until);
-          if (typeof history !== "undefined") {
-            history.replaceState(null, "", cleanSubscribePath());
-          }
-        } else {
-          throw new Error("Payment captured but plan was not activated.");
+        if (body.status === "plan_activated") {
+          throw new Error("This payment was for a plan, not Credits. Open Plan & Usage.");
+        }
+        paypalCaptureDoneRef.current = paypalOrderId;
+        setSuccess(
+          body.balance != null
+            ? `Balance ${Math.trunc(body.balance).toLocaleString()} Credits`
+            : "Credits added",
+        );
+        notifyWalletCredited(body.balance ?? null, parentOriginParam);
+        if (typeof history !== "undefined") {
+          history.replaceState(null, "", cleanWalletPath());
         }
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Capture failed");
           if (typeof history !== "undefined") {
-            history.replaceState(null, "", cleanSubscribePath());
+            history.replaceState(null, "", cleanWalletPath());
           }
         }
       } finally {
@@ -266,7 +231,6 @@ function SubscribeInner() {
     })();
     return () => {
       cancelled = true;
-      // Release in-flight claim so a remount can retry; capture API is idempotent per order.
       if (
         paypalCaptureDoneRef.current !== paypalOrderId &&
         paypalCaptureInFlightRef.current === paypalOrderId
@@ -278,47 +242,32 @@ function SubscribeInner() {
     isAuthenticated,
     paypalReturn,
     paypalOrderId,
-    plan,
     gateway,
     tokenGetter,
-    notifyParent,
-    cleanSubscribePath,
+    parentOriginParam,
+    cleanWalletPath,
   ]);
 
-  // Always leave /subscribe after a successful non-embed checkout (PayPal full-page).
+  useEffect(() => {
+    if (paypalReturn === "cancel") {
+      setError("Payment cancelled.");
+      if (typeof history !== "undefined") history.replaceState(null, "", cleanWalletPath());
+    }
+  }, [paypalReturn, cleanWalletPath]);
+
   useEffect(() => {
     if (!success || embed) return;
-    const href = planCheckoutReturnHref(afterPayReturnTo);
+    const href = walletCheckoutReturnHref(afterPayReturnTo);
     const timer = window.setTimeout(() => {
       window.location.replace(href);
     }, 400);
     return () => window.clearTimeout(timer);
   }, [success, embed, afterPayReturnTo]);
 
-  if (!plan) {
-    return (
-      <main style={pageStyle(embed)}>
-        <PlanCatalog
-          market="global"
-          searchParams={searchParams}
-          embed={embed}
-          onSelectPlan={(code) => selectPlan(code)}
-        />
-      </main>
-    );
-  }
-
-  const tier = findCatalogTier("global", planCode);
-
   if (isLoading) {
     return (
       <main style={pageStyle(embed)}>
-        <PlanSheet
-          embed={embed}
-          closeHref={exitHref}
-          title="Checkout"
-          onBack={() => selectPlan(undefined)}
-        >
+        <PlanSheet embed={embed} closeHref={exitHref} title="Add Credits">
           <p style={muted}>Loading…</p>
         </PlanSheet>
       </main>
@@ -331,15 +280,13 @@ function SubscribeInner() {
         <PlanSheet
           embed={embed}
           closeHref={exitHref}
-          title="Checkout"
-          onBack={() => selectPlan(undefined)}
+          title="Add Credits"
           hint={
             paypalReturn === "success" && paypalOrderId
-              ? "Sign in to finish activating your paid plan."
-              : `Sign in to pay $${plan.amountUsd} for 30 days.`
+              ? "Sign in to finish crediting your wallet."
+              : "Sign in to add Credits. 100 Credits = $1. Channel fee is listed separately."
           }
         >
-          {tier ? <TierSummary tier={tier} /> : null}
           {embed && inIframe ? (
             <p style={{ ...muted, marginBottom: 12, fontSize: 12 }}>
               Sign-in opens in a new tab. Return here after Auth0 completes.
@@ -354,19 +301,15 @@ function SubscribeInner() {
                 appState: {
                   returnTo: withEmbedParentOrigin(
                     (() => {
-                      const q = new URLSearchParams({ plan: planCode });
-                      if (renew) q.set("renew", "1");
+                      const q = new URLSearchParams({ return_to: afterPayReturnTo });
                       if (embed) q.set("embed", "1");
-                      q.set("return_to", afterPayReturnTo);
-                      // Keep PayPal capture params across Auth0 re-login.
                       if (paypalReturn) q.set("paypal", paypalReturn);
                       if (paypalOrderId) q.set("token", paypalOrderId);
-                      return `/subscribe?${q.toString()}`;
+                      return `/wallet?${q.toString()}`;
                     })(),
                     parentOriginParam,
                   ),
                 },
-                // Auth0 blocks iframe embeds — open top-level authorize URL in a new tab.
                 openUrl:
                   embed && inIframe
                     ? (url) => {
@@ -389,18 +332,9 @@ function SubscribeInner() {
       <PlanSheet
         embed={embed}
         closeHref={exitHref}
-        title="Checkout"
-        onBack={() => selectPlan(undefined)}
-        hint={
-          `Pay $${plan.amountUsd} USD for 30 days. This does not use Wallet Credits.` +
-          (renew ? " Renew stacks another 30 days from your current period." : "")
-        }
+        title="Add Credits"
+        hint="Credits land in this wallet. 100 Credits = $1. PayPal channel fee is extra — not a markup."
       >
-        {tier ? <TierSummary tier={tier} /> : null}
-        <div style={totalRow}>
-          <span style={{ color: planSheetColors.muted }}>Total</span>
-          <strong>${plan.amountUsd} USD</strong>
-        </div>
         {success ? (
           <p style={{ color: "#7dcea0", fontSize: 13, margin: "0 0 12px" }}>
             {success}
@@ -410,26 +344,67 @@ function SubscribeInner() {
         {error ? (
           <p style={{ color: "#f87171", fontSize: 13, margin: "0 0 12px" }}>{error}</p>
         ) : null}
-        {success && !embed ? (
-          <p style={{ ...muted, margin: "0 0 12px" }}>
-            <Link href={afterPayReturnTo} style={linkStyle}>
-              Back to Interfaze
-            </Link>
-          </p>
-        ) : null}
-        {/* Full-page approve_url redirect — SDK popup often opens about:blank in this host. */}
+
         {!success ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <>
+            <p style={{ ...muted, marginBottom: 8 }}>Amount</p>
+            <div style={presetRow}>
+              {PRESET_AMOUNTS_USD.map((usd) => (
+                <button
+                  key={usd}
+                  type="button"
+                  onClick={() => {
+                    setSelectedUsd(usd);
+                    setCustomUsd("");
+                  }}
+                  style={{
+                    ...presetBtn,
+                    borderColor:
+                      selectedUsd === usd && !customUsd
+                        ? planSheetColors.accent
+                        : planSheetColors.border,
+                    color:
+                      selectedUsd === usd && !customUsd
+                        ? planSheetColors.accent
+                        : planSheetColors.muted,
+                  }}
+                >
+                  ${usd}
+                </button>
+              ))}
+            </div>
+            <label style={{ ...muted, display: "block", margin: "12px 0 6px", fontSize: 12 }}>
+              Custom (USD)
+            </label>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={customUsd}
+              onChange={(e) => {
+                setCustomUsd(e.target.value);
+                setSelectedUsd(null);
+              }}
+              placeholder="10"
+              style={inputStyle}
+            />
+            {faceUsd > 0 ? (
+              <div style={totalRow}>
+                <span style={{ color: planSheetColors.muted }}>You receive</span>
+                <strong>
+                  {(quote?.credits ?? faceUsd * CREDITS_PER_USD).toLocaleString()} Credits
+                </strong>
+              </div>
+            ) : null}
             {PAYPAL_CLIENT_ID ? (
-              <>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <button
                   type="button"
                   style={paypalBtnStyle}
-                  disabled={paying !== null}
+                  disabled={paying !== null || faceUsd <= 0}
                   aria-busy={paying === "LOGIN"}
                   onClick={(e) => {
                     e.preventDefault();
-                    e.stopPropagation();
                     void startPaypalCheckout("LOGIN");
                   }}
                 >
@@ -438,74 +413,37 @@ function SubscribeInner() {
                 <button
                   type="button"
                   style={cardBtnStyle}
-                  disabled={paying !== null}
+                  disabled={paying !== null || faceUsd <= 0}
                   aria-busy={paying === "BILLING"}
                   onClick={(e) => {
                     e.preventDefault();
-                    e.stopPropagation();
                     void startPaypalCheckout("BILLING");
                   }}
                 >
                   {paying === "BILLING" ? "Redirecting…" : "Debit or Credit Card"}
                 </button>
-              </>
+                {quote ? (
+                  <p style={{ ...muted, fontSize: 11 }}>
+                    PayPal fee ${quote.channel_fee.toFixed(2)} · you pay $
+                    {quote.charge_amount.toFixed(2)}
+                  </p>
+                ) : null}
+              </div>
             ) : (
               <p style={{ color: "#ef4444", fontSize: 13 }}>PayPal is not configured.</p>
             )}
-          </div>
+          </>
         ) : null}
+
         {!embed ? (
           <p style={{ ...muted, marginTop: 16 }}>
-            <button
-              type="button"
-              style={{ ...linkStyle, background: "none", border: 0, padding: 0, cursor: "pointer" }}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                selectPlan(undefined);
-              }}
-            >
-              All plans
-            </button>
-            {" · "}
-            Need Credits top-up?{" "}
-            <a href="/wallet?return_to=/?account=wallet" style={linkStyle}>
-              Open Wallet
-            </a>
+            <Link href={afterPayReturnTo} style={linkStyle}>
+              Back to Interfaze
+            </Link>
           </p>
         ) : null}
       </PlanSheet>
     </main>
-  );
-}
-
-function TierSummary({
-  tier,
-}: {
-  tier: NonNullable<ReturnType<typeof findCatalogTier>>;
-}) {
-  return (
-    <article style={tierCard}>
-      <p style={{ margin: 0, fontSize: 15, fontWeight: 650 }}>{tier.label}</p>
-      <p
-        style={{
-          margin: "8px 0 0",
-          fontSize: 28,
-          fontWeight: 700,
-          letterSpacing: "-0.03em",
-        }}
-      >
-        {tier.price}
-      </p>
-      <ul style={tierBullets}>
-        {tier.bullets.map((line) => (
-          <li key={line} style={tierBullet}>
-            <span aria-hidden>✓</span>
-            <span>{line}</span>
-          </li>
-        ))}
-      </ul>
-    </article>
   );
 }
 
@@ -548,8 +486,6 @@ const btnStyle: CSSProperties = {
 const paypalBtnStyle: CSSProperties = {
   ...btnStyle,
   marginTop: 0,
-  position: "relative",
-  isolation: "isolate",
   background: "#ffc439",
   border: "1px solid #ffc439",
   color: "#003087",
@@ -558,11 +494,37 @@ const paypalBtnStyle: CSSProperties = {
 const cardBtnStyle: CSSProperties = {
   ...btnStyle,
   marginTop: 0,
-  position: "relative",
-  isolation: "isolate",
   background: "transparent",
   border: `1px solid ${planSheetColors.border}`,
   color: planSheetColors.text,
+};
+
+const presetRow: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, 1fr)",
+  gap: 8,
+};
+
+const presetBtn: CSSProperties = {
+  padding: "10px 0",
+  borderRadius: 8,
+  border: `1px solid ${planSheetColors.border}`,
+  background: planSheetColors.card,
+  fontWeight: 700,
+  fontSize: 12,
+  cursor: "pointer",
+};
+
+const inputStyle: CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  marginBottom: 12,
+  padding: "8px 10px",
+  borderRadius: 8,
+  border: `1px solid ${planSheetColors.border}`,
+  background: planSheetColors.card,
+  color: planSheetColors.text,
+  fontSize: 13,
 };
 
 const totalRow: CSSProperties = {
@@ -576,35 +538,17 @@ const totalRow: CSSProperties = {
   marginBottom: 16,
 };
 
-const tierCard: CSSProperties = {
-  background: planSheetColors.card,
-  borderRadius: 12,
-  padding: "16px 16px 14px",
-  border: `1px solid ${planSheetColors.border}`,
-  marginBottom: 12,
-};
-
-const tierBullets: CSSProperties = {
-  listStyle: "none",
-  margin: "14px 0 0",
-  padding: 0,
-  display: "flex",
-  flexDirection: "column",
-  gap: 8,
-};
-
-const tierBullet: CSSProperties = {
-  display: "flex",
-  gap: 8,
-  fontSize: 12,
-  color: planSheetColors.muted,
-  lineHeight: 1.4,
-};
-
-function SubscribeAuthGate() {
+function WalletAuthGate() {
   if (!isAuth0Configured()) {
     return (
-      <main style={{ minHeight: "100vh", background: planSheetColors.bg, color: planSheetColors.text, padding: 48 }}>
+      <main
+        style={{
+          minHeight: "100vh",
+          background: planSheetColors.bg,
+          color: planSheetColors.text,
+          padding: 48,
+        }}
+      >
         <p style={{ color: "#6b7280", fontSize: 13 }}>
           Auth0 is not configured. Set NEXT_PUBLIC_AUTH0_DOMAIN and NEXT_PUBLIC_AUTH0_CLIENT_ID.
         </p>
@@ -614,20 +558,46 @@ function SubscribeAuthGate() {
       </main>
     );
   }
-  return <SubscribeInner />;
+  return <WalletInner />;
 }
 
-export default function SubscribePage() {
-  if (isCnRegion()) return <CnSubscribeCheckout />;
+export default function WalletPage() {
+  if (isCnRegion()) {
+    return (
+      <Suspense
+        fallback={
+          <main
+            style={{
+              minHeight: "100vh",
+              background: planSheetColors.bg,
+              color: planSheetColors.muted,
+              padding: 48,
+            }}
+          >
+            加载中…
+          </main>
+        }
+      >
+        <CnWalletCheckout />
+      </Suspense>
+    );
+  }
   return (
     <Suspense
       fallback={
-        <main style={{ minHeight: "100vh", background: planSheetColors.bg, color: planSheetColors.muted, padding: 48 }}>
+        <main
+          style={{
+            minHeight: "100vh",
+            background: planSheetColors.bg,
+            color: planSheetColors.muted,
+            padding: 48,
+          }}
+        >
           Loading…
         </main>
       }
     >
-      <SubscribeAuthGate />
+      <WalletAuthGate />
     </Suspense>
   );
 }

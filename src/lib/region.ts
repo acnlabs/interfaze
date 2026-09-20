@@ -19,3 +19,11 @@ export function getAgentPlanetBaseUrl(): string {
     (isCnRegion() ? "https://agentplanet.acnlabs.cn" : "https://agentplanet.org")
   ).replace(/\/+$/, "");
 }
+
+/** ComicLaw Studio origin for the Interfaze face-chat window. CN omitted (Auth0). */
+export function getComicLawStudioUrl(): string {
+  if (isCnRegion()) return "";
+  const raw = (process.env.NEXT_PUBLIC_COMICLAW_STUDIO_URL || "").trim();
+  if (raw) return raw.replace(/\/+$/, "");
+  return "http://127.0.0.1:3000";
+}

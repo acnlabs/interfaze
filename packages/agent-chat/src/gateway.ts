@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatParticipant, ChatSummary, ThreadSummary } from "./types";
+import type { ChatMessage, ChatParticipant, ChatSummary, PieceHold, ThreadSummary } from "./types";
 
 export class ChatGatewayError extends Error {
   constructor(
@@ -280,6 +280,11 @@ export type MyAgentSummary = {
    * Who calls the model. I1 is always ``byo``. Official hops are I2.
    */
   inference_path?: "byo" | "official" | string | null;
+  /**
+   * Community per-image hang牌 in Credits. 0 / omitted = not selling stills.
+   * Dialog tokens still settle on L2 separately.
+   */
+  image_credits?: number | null;
   /** Present after a successful delivery PATCH when ACN returns follow-up copy. */
   next_step_hint?: string | null;
 };
@@ -305,6 +310,8 @@ export type GatewayClient = {
   /** Alias used by Shell. */
   createGroupChat: (title: string, agentIds: string[]) => Promise<ChatSummary>;
   listMessages: (chatId: string) => Promise<ChatMessage[]>;
+  fetchChatFile: (chatId: string, attachmentId: string) => Promise<Blob>;
+  rejectPieceHold: (chatId: string, holdId: string) => Promise<PieceHold>;
   listParticipants: (chatId: string) => Promise<ChatParticipant[]>;
   sendMessage: (
     chatId: string,
@@ -371,6 +378,14 @@ export type GatewayClient = {
       markup_percent?: number;
     },
   ) => Promise<MyAgentSummary>;
+  /** Owner per-image hang牌. 0 = not selling pieces. */
+  getMyAgentPieceSku: (
+    agentId: string,
+  ) => Promise<{ agent_id: string; image_credits: number }>;
+  updateMyAgentPieceSku: (
+    agentId: string,
+    imageCredits: number,
+  ) => Promise<{ agent_id: string; image_credits: number }>;
   /** Public Host Model Catalog (L1) row for a model id. */
   getModelCatalogItem: (modelId: string) => Promise<ModelCatalogItem>;
   /** Switch receive mode: push-to-URL (direct) or agent-pull (relay). */
@@ -404,6 +419,33 @@ export type GatewayClient = {
     fiat_amount: number | null;
     fiat_currency: string | null;
     period_days: number;
+  }>;
+  /** PayPal order for a Global plan. Capture happens after approve redirect. */
+  createPaypalOrder: (input: {
+    amount: number;
+    currency: string;
+    return_url: string;
+    cancel_url: string;
+    plan_code?: string;
+    landing_page?: "LOGIN" | "BILLING" | "NO_PREFERENCE";
+  }) => Promise<{ order_id: string; approve_url: string | null }>;
+  /** CNY quote for a Global USD plan (no wallet channel fee). */
+  getAlipayPlanQuote: (planCode: string) => Promise<{
+    plan_code: string;
+    amount_usd: number;
+    amount_cny: number;
+    rate: number;
+  }>;
+  /** Alipay page-pay for a Global plan. Capture happens after return_url. */
+  createAlipayOrder: (input: {
+    amount: number;
+    return_url: string;
+    plan_code?: string;
+  }) => Promise<{
+    out_trade_no: string;
+    pay_url: string;
+    amount_cny?: number;
+    plan_code?: string;
   }>;
   /** Account default collaboration tank size (preference; no lock). */
   getCollabCap: () => Promise<{ cap_credits: number }>;
@@ -611,6 +653,18 @@ export function createGatewayClient(
           body: JSON.stringify(pricing),
         },
       ),
+    getMyAgentPieceSku: (agentId) =>
+      request<{ agent_id: string; image_credits: number }>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/piece-sku`,
+      ),
+    updateMyAgentPieceSku: (agentId, imageCredits) =>
+      request<{ agent_id: string; image_credits: number }>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/piece-sku`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ image_credits: imageCredits }),
+        },
+      ),
     getModelCatalogItem: (modelId) => {
       // Keep `/` as path segments for FastAPI `{model_id:path}`.
       const path = modelId
@@ -664,6 +718,34 @@ export function createGatewayClient(
         period_days: number;
       }>(`/api/chat/plan-usage/checkout?${params}`);
     },
+    createPaypalOrder: (input) =>
+      request<{ order_id: string; approve_url: string | null }>(
+        "/api/users/me/wallet/paypal/create-order",
+        {
+          method: "POST",
+          body: JSON.stringify(input),
+        },
+      ),
+    getAlipayPlanQuote: (planCode) => {
+      const params = new URLSearchParams();
+      params.set("plan_code", planCode);
+      return request<{
+        plan_code: string;
+        amount_usd: number;
+        amount_cny: number;
+        rate: number;
+      }>(`/api/users/me/wallet/alipay/plan-quote?${params}`);
+    },
+    createAlipayOrder: (input) =>
+      request<{
+        out_trade_no: string;
+        pay_url: string;
+        amount_cny?: number;
+        plan_code?: string;
+      }>("/api/users/me/wallet/alipay/create-order", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
     listHumanWalletTransactions: (page = 1, pageSize = 20) => {
       const params = new URLSearchParams();
       params.set("page", String(page));
@@ -817,6 +899,26 @@ export function createGatewayClient(
       ),
     listMessages: (chatId) =>
       request<ChatMessage[]>(`/api/chats/${encodeURIComponent(chatId)}/messages?limit=50`),
+    fetchChatFile: async (chatId, attachmentId) => {
+      const token = await getAccessToken();
+      if (!token) {
+        throw new ChatGatewayError(401, "not_authenticated", "Not authenticated");
+      }
+      const res = await fetch(
+        joinUrl(
+          gatewayBaseUrl,
+          `/api/chats/${encodeURIComponent(chatId)}/files/${encodeURIComponent(attachmentId)}`,
+        ),
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) throw await parseError(res);
+      return await res.blob();
+    },
+    rejectPieceHold: (chatId, holdId) =>
+      request<PieceHold>(
+        `/api/chats/${encodeURIComponent(chatId)}/piece-holds/${encodeURIComponent(holdId)}/reject`,
+        { method: "POST" },
+      ),
     listParticipants: (chatId) =>
       request<ChatParticipant[]>(`/api/chats/${encodeURIComponent(chatId)}/participants`),
     sendMessage: (chatId, content, mentions, threadId, opts) =>

@@ -1,6 +1,9 @@
 /** postMessage type for embed checkout → Host Plan & Usage panel. */
 export const PLAN_ACTIVATED_MSG = "interfaze:plan-activated";
 
+/** postMessage type for embed wallet recharge → Host Wallet panel. */
+export const WALLET_CREDITED_MSG = "interfaze:wallet-credited";
+
 const PARENT_ORIGIN_KEY = "interfaze_embed_parent_origin";
 
 function envParentOrigins(): string[] {
@@ -130,6 +133,26 @@ export function notifyPlanActivated(
         type: PLAN_ACTIVATED_MSG,
         plan_code: planCode,
         paid_until: paidUntil ?? null,
+      },
+      target,
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+export function notifyWalletCredited(
+  balance?: number | null,
+  parentOriginParam?: string | null,
+): void {
+  if (typeof window === "undefined" || window.parent === window) return;
+  const target = resolvePostMessageTarget(parentOriginParam);
+  if (!target) return;
+  try {
+    window.parent.postMessage(
+      {
+        type: WALLET_CREDITED_MSG,
+        balance: balance ?? null,
       },
       target,
     );

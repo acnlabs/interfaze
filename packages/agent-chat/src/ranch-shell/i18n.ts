@@ -47,6 +47,17 @@ export type RanchMessages = {
   pricingMismatch: (listed: string, observed: string) => string;
   /** Agent bubble footer: this hop's token burn, in/out separately. */
   agentHopUsage: (input: number, output: number) => string;
+  /** Agent bubble: who this hop invoked (completed). */
+  orchCalled: (name: string) => string;
+  /** Agent bubble: invoke accepted, waiting on callee. */
+  orchAsked: (name: string) => string;
+  /** Agent bubble: invoke failed. */
+  orchFailed: (name: string) => string;
+  pieceReject: string;
+  pieceHeld: (amount: number) => string;
+  pieceCaptured: string;
+  pieceRejected: string;
+  pieceRejectFailed: string;
   /** Composer chip: current runtime / listing model (M1). */
   composerModelLabel: string;
   composerModelUnknown: string;
@@ -58,6 +69,18 @@ export type RanchMessages = {
   expand: string;
   collapse: string;
   close: string;
+  /** Open the session-bound window as face chat (kind=talk). */
+  faceChat: string;
+  faceChatOpen: string;
+  faceChatOpening: string;
+  faceChatFailed: string;
+  faceChatClosed: string;
+  faceChatOffline: string;
+  faceChatUnauthorized: string;
+  windowClose: string;
+  showWindow: string;
+  hideWindow: string;
+  windowEmpty: string;
   collapseSidebar: string;
   expandSidebar: string;
   searchChats: string;
@@ -220,6 +243,10 @@ export type RanchMessages = {
   accountPlanBuyConfirmBody: string;
   accountPlanBuyConfirmRenewBody: string;
   accountPlanBuyConfirm: string;
+  accountPlanPayPaypal: string;
+  accountPlanPayCard: string;
+  accountPlanPayAlipay: string;
+  accountPlanPayAlipayWithCny: string;
   accountPlanBuyCancel: string;
   accountPlanBuySuccess: string;
   accountPlanBuySuccessRenew: string;
@@ -304,6 +331,13 @@ export type RanchMessages = {
   myAgentsSavePricing: string;
   myAgentsPricingSaved: string;
   myAgentsPricingFailed: string;
+  myAgentsSectionPieceSku: string;
+  myAgentsPieceSkuHint: string;
+  myAgentsPieceSkuLabel: string;
+  myAgentsPieceSkuOff: string;
+  myAgentsSavePieceSku: string;
+  myAgentsPieceSkuSaved: string;
+  myAgentsPieceSkuFailed: string;
   myAgentsNameHint: string;
   myAgentsDescHint: string;
   myAgentsDescClearHint: string;
@@ -498,6 +532,14 @@ const en: RanchMessages = {
     `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
   agentHopUsage: (input, output) =>
     `in ${input.toLocaleString("en-US")} · out ${output.toLocaleString("en-US")}`,
+  orchCalled: (name) => `Called ${name}`,
+  orchAsked: (name) => `Asked ${name}`,
+  orchFailed: (name) => `Couldn't reach ${name}`,
+  pieceReject: "Reject stills",
+  pieceHeld: (amount) => `${amount} Credits settling`,
+  pieceCaptured: "Stills settled",
+  pieceRejected: "Stills rejected",
+  pieceRejectFailed: "Couldn’t reject stills.",
   composerModelLabel: "Model",
   composerModelUnknown: "—",
   composerModelListing: "listing",
@@ -508,6 +550,17 @@ const en: RanchMessages = {
   expand: "Expand",
   collapse: "Collapse",
   close: "Close",
+  faceChat: "Face chat",
+  faceChatOpen: "Face chat on",
+  faceChatOpening: "Opening face chat…",
+  faceChatFailed: "Couldn’t open face chat.",
+  faceChatClosed: "This agent isn’t open for face chat.",
+  faceChatOffline: "The other side isn’t connected.",
+  faceChatUnauthorized: "Sign in first.",
+  windowClose: "Close window",
+  showWindow: "Show window",
+  hideWindow: "Hide window",
+  windowEmpty: "Open face chat from the composer. Other window kinds can land here later.",
   collapseSidebar: "Hide sidebar",
   expandSidebar: "Show sidebar",
   searchChats: "Search chats…",
@@ -670,13 +723,17 @@ const en: RanchMessages = {
   accountPlanUpgrade: "Subscribe",
   accountPlanRenew: "Renew",
   accountPlanExpiresOn: "Access until {date}",
-  accountPlanBuyBusy: "Opening checkout…",
+  accountPlanBuyBusy: "Redirecting…",
   accountPlanBuyConfirmTitle: "Continue to checkout",
   accountPlanBuyConfirmBody:
-    "You’ll pay {price} for 30 days of {plan} (cash checkout on AgentPlanet). Included dialog pack: {pack}. Wallet Credits are not charged for the subscription.",
+    "You’ll pay {price} for 30 days of {plan}. Included dialog pack: {pack}. Wallet Credits are not charged.",
   accountPlanBuyConfirmRenewBody:
     "You’ll pay {price} to renew {plan} for another 30 days and refresh the included dialog pack ({pack}). Wallet Credits are not charged.",
   accountPlanBuyConfirm: "Continue to pay",
+  accountPlanPayPaypal: "Pay with PayPal",
+  accountPlanPayCard: "Debit or Credit Card",
+  accountPlanPayAlipay: "Pay with Alipay",
+  accountPlanPayAlipayWithCny: "Pay with Alipay · ¥{n}",
   accountPlanBuyCancel: "Cancel",
   accountPlanBuySuccess: "You’re on {plan} until {date}.",
   accountPlanBuySuccessRenew: "Renewed {plan} until {date}.",
@@ -772,6 +829,15 @@ const en: RanchMessages = {
   myAgentsSavePricing: "Save default model & markup",
   myAgentsPricingSaved: "Pricing saved",
   myAgentsPricingFailed: "Couldn’t save pricing.",
+  myAgentsSectionPieceSku: "Per image",
+  myAgentsPieceSkuHint:
+    "Credits charged per still in this chat when the file lands. 0 = not selling stills. Dislike is not a refund; dialog tokens still settle separately.",
+  myAgentsPieceSkuLabel: "Credits per image",
+  myAgentsPieceSkuOff:
+    "0 = not selling stills. Images can still land in this chat; they just won’t occupy the wallet.",
+  myAgentsSavePieceSku: "Save per-image price",
+  myAgentsPieceSkuSaved: "Per-image price saved",
+  myAgentsPieceSkuFailed: "Couldn’t save per-image price.",
   myAgentsNameHint: "2–100 characters, at least one letter",
   myAgentsDescHint: "10–500 characters",
   myAgentsDescClearHint: "Description can’t be cleared here — leave as-is or write 10+ characters.",
@@ -902,8 +968,8 @@ const en: RanchMessages = {
   walletWithdrawOk: "Withdrawn",
   walletFailed: "Wallet action failed.",
   walletInsufficient: "Not enough Credits for this transfer.",
-  walletRechargeExternal: "Add Credits on AgentPlanet",
-  walletRechargeExternalHint: "Leaves Interfaze — recharge your human wallet, then come back to top up the agent.",
+  walletRechargeExternal: "Add Credits",
+  walletRechargeExternalHint: "Pay here — Credits land in this wallet. Channel fee is listed at checkout.",
   walletTxTitle: "Recent activity",
   walletTxEmpty: "No transactions yet.",
   walletLoadFailed: "Couldn’t load this agent’s wallet.",
@@ -987,6 +1053,14 @@ const zh: RanchMessages = {
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
   agentHopUsage: (input, output) =>
     `入 ${input.toLocaleString("zh-CN")} · 出 ${output.toLocaleString("zh-CN")}`,
+  orchCalled: (name) => `调用了 ${name}`,
+  orchAsked: (name) => `已请 ${name}`,
+  orchFailed: (name) => `没叫到 ${name}`,
+  pieceReject: "拒按张",
+  pieceHeld: (amount) => `按张结算中 ${amount} Credits`,
+  pieceCaptured: "按张已入账",
+  pieceRejected: "已拒按张",
+  pieceRejectFailed: "无法拒按张。",
   composerModelLabel: "模型",
   composerModelUnknown: "—",
   composerModelListing: "挂牌",
@@ -997,6 +1071,17 @@ const zh: RanchMessages = {
   expand: "全屏",
   collapse: "收起",
   close: "关闭",
+  faceChat: "面聊",
+  faceChatOpen: "面聊中",
+  faceChatOpening: "正在打开面聊…",
+  faceChatFailed: "打不开面聊。",
+  faceChatClosed: "对方还没开放面聊。",
+  faceChatOffline: "对面还没接上。",
+  faceChatUnauthorized: "请先登录。",
+  windowClose: "关闭窗口",
+  showWindow: "展示窗口",
+  hideWindow: "收起窗口",
+  windowEmpty: "从输入栏打开面聊。以后别的窗口也开在这里。",
   collapseSidebar: "收起侧栏",
   expandSidebar: "打开侧栏",
   searchChats: "搜索会话…",
@@ -1148,13 +1233,17 @@ const zh: RanchMessages = {
   accountPlanUpgrade: "订阅",
   accountPlanRenew: "续费",
   accountPlanExpiresOn: "有效期至 {date}",
-  accountPlanBuyBusy: "打开收银台…",
+  accountPlanBuyBusy: "正在跳转…",
   accountPlanBuyConfirmTitle: "前往支付",
   accountPlanBuyConfirmBody:
-    "将支付 {price} 获得 {plan} 30 天（在 AgentPlanet 用法币结账）。含包对话用量：{pack}。订阅不扣钱包星币。",
+    "将支付 {price} 获得 {plan} 30 天。含包对话用量：{pack}。订阅不扣钱包星币。",
   accountPlanBuyConfirmRenewBody:
     "将支付 {price} 为 {plan} 续费 30 天，并刷新含包（{pack}）。订阅不扣钱包星币。",
   accountPlanBuyConfirm: "去支付",
+  accountPlanPayPaypal: "PayPal 支付",
+  accountPlanPayCard: "借记卡 / 信用卡",
+  accountPlanPayAlipay: "支付宝支付",
+  accountPlanPayAlipayWithCny: "支付宝支付 · ¥{n}",
   accountPlanBuyCancel: "取消",
   accountPlanBuySuccess: "已开通 {plan}，有效至 {date}。",
   accountPlanBuySuccessRenew: "已续费 {plan}，有效至 {date}。",
@@ -1247,6 +1336,14 @@ const zh: RanchMessages = {
   myAgentsSavePricing: "保存默认模型与上浮",
   myAgentsPricingSaved: "定价已保存",
   myAgentsPricingFailed: "保存定价失败。",
+  myAgentsSectionPieceSku: "按张",
+  myAgentsPieceSkuHint:
+    "图进这场对话即按张成交。0 = 不卖按张。不满意不退；没出货不占。对话 token 仍另结。",
+  myAgentsPieceSkuLabel: "每张 Credits",
+  myAgentsPieceSkuOff: "0 = 不卖按张。图仍可进这场对话，只是不占钱包。",
+  myAgentsSavePieceSku: "保存按张价",
+  myAgentsPieceSkuSaved: "按张价已保存",
+  myAgentsPieceSkuFailed: "保存按张价失败。",
   myAgentsNameHint: "2–100 字，至少含一个字母",
   myAgentsDescHint: "10–500 字",
   myAgentsDescClearHint: "此处无法清空描述——保持原样，或填写 10 字以上。",
@@ -1376,8 +1473,8 @@ const zh: RanchMessages = {
   walletWithdrawOk: "已提取",
   walletFailed: "钱包操作失败。",
   walletInsufficient: "Credits 不足，无法完成本次转账。",
-  walletRechargeExternal: "去 AgentPlanet 充值",
-  walletRechargeExternalHint: "将离开 Interfaze——先给自己的钱包充值，再回来给 agent 转账。",
+  walletRechargeExternal: "充值",
+  walletRechargeExternalHint: "在界面内完成支付，星币直接进入这个钱包。通道费在结账时另列。",
   walletTxTitle: "最近流水",
   walletTxEmpty: "暂无交易记录。",
   walletLoadFailed: "无法加载此 agent 的钱包。",

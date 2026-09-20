@@ -113,7 +113,7 @@ export type RanchChatShellProps = {
    */
   connectGuideUrl?: string;
   /**
-   * AgentPlanet origin for wallet recharge / external manage deep-links.
+   * AgentPlanet origin for remaining Host-only deep-links (not wallet recharge).
    * Default: https://agentplanet.org
    */
   agentPlanetBaseUrl?: string;
@@ -122,6 +122,11 @@ export type RanchChatShellProps = {
    * Default: https://interfaze.io (override for local / preview hosts).
    */
   interfazeBaseUrl?: string;
+  /**
+   * ComicLaw Studio origin for the session window (kind=talk).
+   * Empty / omitted hides the face-chat entry.
+   */
+  studioBaseUrl?: string;
   /**
    * UI locale (BCP-47). Supported: `en` (default), `zh`.
    * Other values fall back to English.
@@ -183,8 +188,33 @@ export type ChatMessage = {
       model_id?: string;
       meter_source?: string;
     };
+    /** Downstream agents this hop invoked (writeback contract). */
+    orchestration?: {
+      callees?: Array<{
+        agent_id: string;
+        hop_id?: string;
+        status?: string;
+        name?: string;
+      }>;
+    };
+    piece?: PieceHold | null;
     [key: string]: unknown;
   } | null;
+  /** This-chat mailbox refs (``mbx:…``), JSON string or list. */
+  attachments?: string | string[] | null;
+};
+
+export type PieceHold = {
+  hold_id: string;
+  hop_id?: string;
+  claimed?: number;
+  attachments?: number;
+  billable?: number;
+  unit_credits?: number;
+  amount?: number;
+  status: string;
+  occupied: boolean;
+  reject_deadline?: string | null;
 };
 
 /** Chat Topic (API name: Thread). Response field is ``id``, not ``thread_id``. */

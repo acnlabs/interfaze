@@ -18,7 +18,8 @@ import {
   startWeChatLogin,
 } from "@/lib/auth/cn";
 import { getGatewayBaseUrl } from "@/lib/gateway";
-import { getAgentPlanetBaseUrl, getAppOrigin, isCnRegion } from "@/lib/region";
+import { usePaypalPlanReturn } from "@/lib/paypalPlanReturn";
+import { getAgentPlanetBaseUrl, getAppOrigin, getComicLawStudioUrl, isCnRegion } from "@/lib/region";
 
 type ReauthOpts = {
   forceLogin?: boolean;
@@ -51,14 +52,6 @@ function useAccountDeepLink() {
       return;
     }
     setInitialAccountPanel(account);
-    sp.delete("account");
-    sp.delete("checkout");
-    const q = sp.toString();
-    window.history.replaceState(
-      null,
-      "",
-      q ? `${window.location.pathname}?${q}` : window.location.pathname,
-    );
   }, []);
 
   return initialAccountPanel;
@@ -168,6 +161,7 @@ function CnChatHost() {
       connectGuideUrl="https://github.com/acnlabs/interfaze/blob/main/CONNECT.md"
       agentPlanetBaseUrl={getAgentPlanetBaseUrl()}
       interfazeBaseUrl={getAppOrigin()}
+      studioBaseUrl={getComicLawStudioUrl()}
       account={
         sessionUser
           ? {
@@ -212,7 +206,7 @@ function GlobalChatHost() {
   const { getAccessTokenSilently, isAuthenticated, user, logout, loginWithRedirect } = useAuth0();
   const gatewayBaseUrl = getGatewayBaseUrl();
   const [directoryAgents, setDirectoryAgents] = useState<AgentDirectoryItem[]>([]);
-  const initialAccountPanel = useAccountDeepLink();
+  const deepLinkPanel = useAccountDeepLink();
   const initialOpenAgentId = useClaimedAgentDeepLink();
   const reauthStarted = useRef(false);
 
@@ -260,6 +254,13 @@ function GlobalChatHost() {
       return null;
     }
   }, [getAccessTokenSilently, isAuthenticated]);
+
+  const paypalPanel = usePaypalPlanReturn({
+    getAccessToken: tokenGetter,
+    gatewayBaseUrl,
+    enabled: isAuthenticated,
+  });
+  const initialAccountPanel = paypalPanel ?? deepLinkPanel;
 
   useEffect(() => {
     if (!isAuthenticated || !isAuth0Configured()) return;
@@ -356,6 +357,7 @@ function GlobalChatHost() {
       connectGuideUrl="https://github.com/acnlabs/interfaze/blob/main/CONNECT.md"
       agentPlanetBaseUrl={getAgentPlanetBaseUrl()}
       interfazeBaseUrl={getAppOrigin()}
+      studioBaseUrl={getComicLawStudioUrl()}
       account={
         isAuthenticated && user
           ? {

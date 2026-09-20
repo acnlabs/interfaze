@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 import {
   ChatGatewayError,
@@ -38,6 +39,12 @@ import {
   AccountWalletPanel,
   ChatCollabBudgetSection,
 } from "./AccountPanels";
+import {
+  accountPanelHref,
+  readAccountPanelFromUrl,
+  writeAccountPanelToUrl,
+  type AccountDeepLinkPanel,
+} from "./accountDeepLink";
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
 import { NewComposeMenu } from "./NewComposeMenu";
@@ -52,6 +59,22 @@ import {
   type RanchMessages,
 } from "./i18n";
 import { btnGhost, btnIcon, btnPrimary, colors, inputStyle, shellRoot } from "./styles";
+import { calleesFromMetadata, orchLine, type OrchestrationCallee } from "../orchestration";
+import { MailboxPiece } from "./MailboxPiece";
+import { ChatWindowPane } from "./chat-window/ChatWindowPane";
+import {
+  mergePersistedChatWindows,
+  readPersistedChatWindows,
+  readPersistedPaneOpen,
+  writePersistedChatWindows,
+} from "./chat-window/persist";
+import { openStudioTalk, talkOpenErrorMessage } from "./chat-window/studioTalk";
+import {
+  TALK_REFRESH_LEAD_MS,
+  talkTokenFresh,
+  talkWindowFromOpen,
+  type ChatWindow,
+} from "./chat-window/types";
 
 function formatRelativeTime(iso: string | null | undefined, t: RanchMessages): string {
   if (!iso) return "";
@@ -437,6 +460,49 @@ function AgentUsageFooter({
       }}
     >
       {text}
+    </div>
+  );
+}
+
+function AgentOrchestrationFooter({
+  callees,
+  names,
+  t,
+}: {
+  callees: OrchestrationCallee[];
+  names: Record<string, string>;
+  t: RanchMessages;
+}) {
+  if (!callees.length) return null;
+  return (
+    <div
+      style={{
+        paddingLeft: 4,
+        fontSize: 11,
+        lineHeight: 1.35,
+        color: colors.muted,
+        maxWidth: "100%",
+        display: "flex",
+        flexDirection: "column",
+        gap: 1,
+      }}
+    >
+      {callees.map((c) => {
+        const text = orchLine(c, t, names);
+        return (
+          <div
+            key={c.hop_id || c.agent_id}
+            title={c.hop_id || c.agent_id}
+            style={{
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {text}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1038,6 +1104,24 @@ function IconSidebar() {
   );
 }
 
+/** Right-rail window — mirror of IconSidebar. */
+function IconWindow() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect
+        x="3"
+        y="3"
+        width="18"
+        height="18"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path d="M15 3v18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** Ranch SystemHeader-style locale control: compact round chip + menu (scales). */
 function LanguageSwitcher({
   locale,
@@ -1234,6 +1318,22 @@ function AccountFooter({
     fn?.();
   };
 
+  const menuLinkStyle: CSSProperties = {
+    ...menuItemStyle,
+    textDecoration: "none",
+    boxSizing: "border-box",
+  };
+
+  const accountLinkClick =
+    (fn?: () => void) => (e: ReactMouseEvent<HTMLAnchorElement>) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+        setMenuOpen(false);
+        return;
+      }
+      e.preventDefault();
+      runAndClose(fn);
+    };
+
   const hasUpper =
     !!(onProfile || onManage || onWallet || onPlanUsage || onDiscoverAgents);
 
@@ -1274,48 +1374,48 @@ function AccountFooter({
           }}
         >
           {onProfile ? (
-            <button
-              type="button"
+            <a
+              href={accountPanelHref("profile")}
               role="menuitem"
-              style={menuItemStyle}
-              onClick={() => runAndClose(onProfile)}
+              style={menuLinkStyle}
+              onClick={accountLinkClick(onProfile)}
               {...hoverHandlers}
             >
               <span style={{ flex: 1 }}>{t.accountProfile}</span>
-            </button>
+            </a>
           ) : null}
           {onManage ? (
-            <button
-              type="button"
+            <a
+              href={accountPanelHref("manage")}
               role="menuitem"
-              style={menuItemStyle}
-              onClick={() => runAndClose(onManage)}
+              style={menuLinkStyle}
+              onClick={accountLinkClick(onManage)}
               {...hoverHandlers}
             >
               <span style={{ flex: 1 }}>{t.accountManage}</span>
-            </button>
+            </a>
           ) : null}
           {onWallet ? (
-            <button
-              type="button"
+            <a
+              href={accountPanelHref("wallet")}
               role="menuitem"
-              style={menuItemStyle}
-              onClick={() => runAndClose(onWallet)}
+              style={menuLinkStyle}
+              onClick={accountLinkClick(onWallet)}
               {...hoverHandlers}
             >
               <span style={{ flex: 1 }}>{t.accountWallet}</span>
-            </button>
+            </a>
           ) : null}
           {onPlanUsage ? (
-            <button
-              type="button"
+            <a
+              href={accountPanelHref("plan")}
               role="menuitem"
-              style={menuItemStyle}
-              onClick={() => runAndClose(onPlanUsage)}
+              style={menuLinkStyle}
+              onClick={accountLinkClick(onPlanUsage)}
               {...hoverHandlers}
             >
               <span style={{ flex: 1 }}>{t.accountPlanUsage}</span>
-            </button>
+            </a>
           ) : null}
           {(onProfile || onManage || onWallet || onPlanUsage) && onDiscoverAgents ? (
             <div style={{ height: 1, background: colors.border, margin: "2px 0" }} />
@@ -1471,6 +1571,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     connectGuideUrl,
     agentPlanetBaseUrl,
     interfazeBaseUrl,
+    studioBaseUrl,
     locale: localeProp,
     onLocaleChange,
     onOwnedAgentUpdated,
@@ -1573,6 +1674,36 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showAccountManage, setShowAccountManage] = useState(false);
   const [showAccountWallet, setShowAccountWallet] = useState(false);
   const [showAccountPlan, setShowAccountPlan] = useState(false);
+  const [chatWindows, setChatWindows] = useState<Record<string, ChatWindow>>({});
+  const [paneOpenByChat, setPaneOpenByChat] = useState<Record<string, boolean>>({});
+  const [windowBusy, setWindowBusy] = useState(false);
+  const [windowError, setWindowError] = useState<string | null>(null);
+  const chatWindowsRef = useRef(chatWindows);
+  chatWindowsRef.current = chatWindows;
+  const persistedWindowsRef = useRef<ReturnType<typeof readPersistedChatWindows>>({});
+  const talkInflightRef = useRef<string | null>(null);
+  const windowPersistReadyRef = useRef(false);
+
+  useEffect(() => {
+    setWindowError(null);
+  }, [active?.chat_id]);
+
+  useEffect(() => {
+    persistedWindowsRef.current = readPersistedChatWindows();
+    setPaneOpenByChat(readPersistedPaneOpen());
+    windowPersistReadyRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!windowPersistReadyRef.current) return;
+    const next = mergePersistedChatWindows(
+      persistedWindowsRef.current,
+      paneOpenByChat,
+      chatWindows,
+    );
+    persistedWindowsRef.current = next;
+    writePersistedChatWindows(next);
+  }, [chatWindows, paneOpenByChat]);
 
   const closeAccountSurfaces = () => {
     setShowAccountProfile(false);
@@ -1582,15 +1713,36 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setShowMyAgents(false);
   };
 
+  const applyAccountPanel = (panel: AccountDeepLinkPanel | null) => {
+    closeAccountSurfaces();
+    if (panel === "plan") setShowAccountPlan(true);
+    else if (panel === "wallet") setShowAccountWallet(true);
+    else if (panel === "manage") setShowAccountManage(true);
+    else if (panel === "profile") setShowAccountProfile(true);
+  };
+
+  const openAccountPanel = (panel: AccountDeepLinkPanel) => {
+    setPickerMode(null);
+    applyAccountPanel(panel);
+    writeAccountPanelToUrl(panel, "push");
+  };
+
+  const closeAccountPanel = () => {
+    closeAccountSurfaces();
+    writeAccountPanelToUrl(null, "replace");
+  };
+
   // Deep-link back from plan checkout (PayPal full-page return).
   useEffect(() => {
     if (!initialAccountPanel) return;
-    closeAccountSurfaces();
-    if (initialAccountPanel === "plan") setShowAccountPlan(true);
-    else if (initialAccountPanel === "wallet") setShowAccountWallet(true);
-    else if (initialAccountPanel === "manage") setShowAccountManage(true);
-    else if (initialAccountPanel === "profile") setShowAccountProfile(true);
+    applyAccountPanel(initialAccountPanel);
   }, [initialAccountPanel]);
+
+  useEffect(() => {
+    const onPop = () => applyAccountPanel(readAccountPanelFromUrl());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
   const [showAddMember, setShowAddMember] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -2047,6 +2199,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
     [client, clearReplySlot, directoryAgents, resolveAfterDeliveryIssue],
   );
 
+  const restoredOpenWindowRef = useRef(false);
+  useEffect(() => {
+    if (!open || restoredOpenWindowRef.current || !windowPersistReadyRef.current) return;
+    if (active || initialOpenAgentId) return;
+    const openId = Object.entries(persistedWindowsRef.current).find(([, row]) => row.open)?.[0];
+    if (!openId) return;
+    const chat = chats.find((c) => c.chat_id === openId);
+    if (!chat) return;
+    restoredOpenWindowRef.current = true;
+    void openConversation(chat);
+  }, [active, chats, initialOpenAgentId, open, openConversation]);
+
   const openedInitialAgentRef = useRef(false);
   useEffect(() => {
     const want = (initialOpenAgentId || "").replace(/^acn:/i, "").trim().toLowerCase();
@@ -2210,9 +2374,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
               created_at:
                 typeof d.created_at === "string" ? d.created_at : new Date().toISOString(),
               metadata: parseMessageMetadata(d.metadata),
+              attachments:
+                Array.isArray(d.attachments) || typeof d.attachments === "string"
+                  ? (d.attachments as string | string[])
+                  : null,
             };
             setMessages((prev) => {
-              const next = prev.some((x) => x.message_id === m.message_id) ? prev : [...prev, m];
+              const idx = prev.findIndex((x) => x.message_id === m.message_id);
+              const next =
+                idx >= 0
+                  ? prev.map((x, i) => (i === idx ? { ...x, ...m } : x))
+                  : [...prev, m];
               if (m.sender_type === "agent") {
                 queueMicrotask(() => noteAgentActivity(chatId, next));
               }
@@ -2884,6 +3056,109 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const activeOffline =
     active && !isGroupChat(active) && isAgentOffline(active.agent_status);
   const groupActive = !!(active && isGroupChat(active));
+  const studioOrigin = (studioBaseUrl || "").replace(/\/+$/, "");
+  const activeWindow = active ? chatWindows[active.chat_id] ?? null : null;
+  const paneOpen = Boolean(active && paneOpenByChat[active.chat_id]);
+  const canOpenTalk = Boolean(studioOrigin && active?.agent_id && !groupActive);
+
+  const setPaneOpen = useCallback((chatId: string, open: boolean) => {
+    setPaneOpenByChat((prev) => ({ ...prev, [chatId]: open }));
+  }, []);
+
+  const hidePane = useCallback((chatId: string) => {
+    setPaneOpen(chatId, false);
+    setWindowError(null);
+  }, [setPaneOpen]);
+
+  const ensureTalkWindow = useCallback(
+    async (opts?: { force?: boolean }) => {
+      if (!active?.chat_id || !active.agent_id || !studioOrigin) return;
+      const chatId = active.chat_id;
+      const agentId = active.agent_id;
+      setPaneOpen(chatId, true);
+      if (!opts?.force && talkTokenFresh(chatWindowsRef.current[chatId])) return;
+      if (talkInflightRef.current === chatId) return;
+      talkInflightRef.current = chatId;
+      setWindowBusy(true);
+      setWindowError(null);
+      const opened = await openStudioTalk({
+        studioBaseUrl: studioOrigin,
+        getAccessToken,
+        agentId,
+      });
+      if (talkInflightRef.current === chatId) talkInflightRef.current = null;
+      setWindowBusy(false);
+      if (!opened.ok || !opened.data.hostToken) {
+        setWindowError(talkOpenErrorMessage(!opened.ok ? opened.code : "failed", t));
+        return;
+      }
+      const next = talkWindowFromOpen({
+        chatId,
+        agentId,
+        data: opened.data,
+        title: t.faceChat,
+      });
+      if (!next) {
+        setWindowError(t.faceChatFailed);
+        return;
+      }
+      setChatWindows((prev) => ({ ...prev, [chatId]: next }));
+    },
+    [
+      active?.agent_id,
+      active?.chat_id,
+      getAccessToken,
+      setPaneOpen,
+      studioOrigin,
+      t,
+    ],
+  );
+
+  const openTalkWindow = useCallback(() => {
+    void ensureTalkWindow();
+  }, [ensureTalkWindow]);
+
+  useEffect(() => {
+    if (!windowPersistReadyRef.current) return;
+    if (!active?.chat_id || !canOpenTalk || !paneOpen) return;
+    const live = chatWindowsRef.current[active.chat_id];
+    if (talkTokenFresh(live)) return;
+    const persisted = persistedWindowsRef.current[active.chat_id];
+    if (live?.kind === "talk" || persisted?.kind === "talk") {
+      void ensureTalkWindow();
+    }
+  }, [active?.chat_id, canOpenTalk, ensureTalkWindow, paneOpen]);
+
+  useEffect(() => {
+    if (!active?.chat_id || !paneOpen || !canOpenTalk) return;
+    const live = chatWindowsRef.current[active.chat_id];
+    if (live?.kind !== "talk" || !live.payload.hostExpiresAt) return;
+    const delay = Math.max(5_000, live.payload.hostExpiresAt - Date.now() - TALK_REFRESH_LEAD_MS);
+    const timer = window.setTimeout(() => {
+      void ensureTalkWindow({ force: true });
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [
+    active?.chat_id,
+    activeWindow?.payload.hostExpiresAt,
+    activeWindow?.payload.hostToken,
+    canOpenTalk,
+    ensureTalkWindow,
+    paneOpen,
+  ]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!active?.chat_id || !paneOpen || !canOpenTalk) return;
+      if (!talkTokenFresh(chatWindowsRef.current[active.chat_id])) {
+        void ensureTalkWindow();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [active?.chat_id, canOpenTalk, ensureTalkWindow, paneOpen]);
+
   const slashParsed = parseSlashDraft(draft);
   const slashMenuOpen = isSlashMenuDraft(draft);
   const slashCommands: SlashCmdDef[] = (
@@ -3367,28 +3642,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
           <AccountFooter
             account={account}
             onLogout={onLogout}
-            onProfile={() => {
-              setPickerMode(null);
-              closeAccountSurfaces();
-              setShowAccountProfile(true);
-            }}
-            onManage={() => {
-              setPickerMode(null);
-              closeAccountSurfaces();
-              setShowAccountManage(true);
-            }}
-            onWallet={() => {
-              setPickerMode(null);
-              closeAccountSurfaces();
-              setShowAccountWallet(true);
-            }}
-            onPlanUsage={() => {
-              setPickerMode(null);
-              closeAccountSurfaces();
-              setShowAccountPlan(true);
-            }}
+            onProfile={() => openAccountPanel("profile")}
+            onManage={() => openAccountPanel("manage")}
+            onWallet={() => openAccountPanel("wallet")}
+            onPlanUsage={() => openAccountPanel("plan")}
             onDiscoverAgents={() => {
-              closeAccountSurfaces();
+              closeAccountPanel();
               setPickerMode("direct");
             }}
             t={t}
@@ -3399,14 +3658,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
           <AccountProfilePanel
             account={account}
             messages={t}
-            onClose={() => setShowAccountProfile(false)}
+            onClose={() => closeAccountPanel()}
           />
         ) : null}
 
         {showAccountManage ? (
           <AccountManagePanel
             messages={t}
-            onClose={() => setShowAccountManage(false)}
+            onClose={() => closeAccountPanel()}
             onOpenAgents={() => {
               setShowAccountManage(false);
               setShowMyAgents(true);
@@ -3418,8 +3677,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
           <AccountWalletPanel
             client={client}
             messages={t}
-            agentPlanetBaseUrl={agentPlanetBaseUrl}
-            onClose={() => setShowAccountWallet(false)}
+            interfazeBaseUrl={interfazeBaseUrl}
+            onClose={() => closeAccountPanel()}
           />
         ) : null}
 
@@ -3430,7 +3689,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             locale={uiLocale}
             agentPlanetBaseUrl={agentPlanetBaseUrl}
             interfazeBaseUrl={interfazeBaseUrl}
-            onClose={() => setShowAccountPlan(false)}
+            onClose={() => closeAccountPanel()}
           />
         ) : null}
 
@@ -3690,24 +3949,42 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     </div>
                   </button>
                 </div>
-                {mode === "side" ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                   <button
                     type="button"
-                    style={btnGhost}
-                    onClick={() => {
-                      if (activeTopic) {
-                        exitTopicFilter();
-                        return;
-                      }
-                      setView("list");
-                      setActive(null);
+                    style={{
+                      ...btnIcon,
+                      background: paneOpen ? colors.accentSoft : "transparent",
                     }}
-                    aria-label={activeTopic ? t.backToMainChat : t.close}
-                    title={activeTopic ? t.backToMainChat : t.close}
+                    onClick={() => {
+                      if (!active) return;
+                      setPaneOpen(active.chat_id, !paneOpen);
+                    }}
+                    aria-pressed={paneOpen}
+                    aria-label={paneOpen ? t.hideWindow : t.showWindow}
+                    title={paneOpen ? t.hideWindow : t.showWindow}
                   >
-                    ✕
+                    <IconWindow />
                   </button>
-                ) : null}
+                  {mode === "side" ? (
+                    <button
+                      type="button"
+                      style={btnGhost}
+                      onClick={() => {
+                        if (activeTopic) {
+                          exitTopicFilter();
+                          return;
+                        }
+                        setView("list");
+                        setActive(null);
+                      }}
+                      aria-label={activeTopic ? t.backToMainChat : t.close}
+                      title={activeTopic ? t.backToMainChat : t.close}
+                    >
+                      ✕
+                    </button>
+                  ) : null}
+                </div>
               </div>
 
               {activeOffline ? (
@@ -3857,6 +4134,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         }}
                       >
                         {m.content}
+                        {!isUser && active ? (
+                          <div style={{ whiteSpace: "normal" }}>
+                          <MailboxPiece
+                            chatId={active.chat_id}
+                            message={m}
+                            client={client}
+                            t={t}
+                          />
+                          </div>
+                        ) : null}
                       </div>
                       {isUser && (delivery || deliveryByAgent) ? (
                         <DeliveryStatusFooter
@@ -3869,7 +4156,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       {!isUser
                         ? (() => {
                             const usage = hopUsageFromMessage(m);
-                            return usage ? <AgentUsageFooter usage={usage} t={t} /> : null;
+                            const callees = calleesFromMetadata(m.metadata);
+                            if (!usage && !callees.length) return null;
+                            return (
+                              <>
+                                {callees.length ? (
+                                  <AgentOrchestrationFooter
+                                    callees={callees}
+                                    names={agentNames}
+                                    t={t}
+                                  />
+                                ) : null}
+                                {usage ? <AgentUsageFooter usage={usage} t={t} /> : null}
+                              </>
+                            );
                           })()
                         : null}
                     </div>
@@ -3919,6 +4219,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
               {error && (
                 <div style={{ padding: "8px 14px", color: colors.danger, fontSize: 12 }}>{error}</div>
               )}
+              {windowError ? (
+                <div style={{ padding: "8px 14px", color: colors.danger, fontSize: 12 }}>
+                  {windowError}
+                </div>
+              ) : null}
 
               <form
                 onSubmit={(e) => {
@@ -4528,6 +4833,25 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     }
                   }}
                 />
+                {canOpenTalk ? (
+                  <button
+                    type="button"
+                    style={{
+                      ...btnGhost,
+                      alignSelf: "flex-end",
+                      background:
+                        activeWindow?.kind === "talk" ? colors.accentSoft : "transparent",
+                      borderColor:
+                        activeWindow?.kind === "talk" ? colors.accent : colors.border,
+                    }}
+                    disabled={windowBusy}
+                    onClick={() => void openTalkWindow()}
+                    aria-pressed={activeWindow?.kind === "talk"}
+                    title={windowBusy ? t.faceChatOpening : t.faceChat}
+                  >
+                    {windowBusy ? t.faceChatOpening : t.faceChat}
+                  </button>
+                ) : null}
                 <button
                   type="submit"
                   disabled={busy || !draft.trim() || healthOk === false}
@@ -4829,7 +5153,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         client={client}
                         agentId={active.agent_id.replace(/^acn:/i, "")}
                         messages={t}
-                        agentPlanetBaseUrl={agentPlanetBaseUrl}
+                        interfazeBaseUrl={interfazeBaseUrl}
                         busy={busy}
                       />
                     </div>
@@ -5386,6 +5710,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
           )}
         </div>
       )}
+
+      {active && paneOpen ? (
+        <ChatWindowPane
+          window={activeWindow}
+          studioBaseUrl={studioOrigin}
+          busy={windowBusy}
+          onClose={() => hidePane(active.chat_id)}
+          onTalkExpired={() => void ensureTalkWindow({ force: true })}
+          t={t}
+        />
+      ) : null}
 
       {pickerMode ? (
         <NewChatPicker
