@@ -57,6 +57,16 @@ export type RanchMessages = {
   pricingMismatch: (listed: string, observed: string) => string;
   /** Agent bubble footer: this hop's token burn, in/out separately. */
   agentHopUsage: (input: number, output: number) => string;
+  /** Agent bubble: who this hop invoked (completed). */
+  orchCalled: (name: string) => string;
+  /** Agent bubble: invoke accepted, waiting on callee. */
+  orchAsked: (name: string) => string;
+  /** Agent bubble: invoke failed. */
+  orchFailed: (name: string) => string;
+  /** Expanded callee chip: agent id / hop labels. */
+  orchIdLabel: string;
+  orchHopLabel: string;
+  orchCopy: string;
   pieceHeld: (amount: number) => string;
   pieceCaptured: string;
   /** Composer chip: current runtime / listing model (M1). */
@@ -682,6 +692,12 @@ const en: RanchMessages = {
     `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
   agentHopUsage: (input, output) =>
     `in ${input.toLocaleString("en-US")} · out ${output.toLocaleString("en-US")}`,
+  orchCalled: (name) => `Called ${name}`,
+  orchAsked: (name) => `Asked ${name}`,
+  orchFailed: (name) => `Couldn't reach ${name}`,
+  orchIdLabel: "id",
+  orchHopLabel: "hop",
+  orchCopy: "Copy",
   pieceHeld: (amount) => `${amount} Credits settling`,
   pieceCaptured: "Settled",
   composerProviderLabel: "Provider",
@@ -1362,6 +1378,12 @@ const zh: RanchMessages = {
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
   agentHopUsage: (input, output) =>
     `入 ${input.toLocaleString("zh-CN")} · 出 ${output.toLocaleString("zh-CN")}`,
+  orchCalled: (name) => `调用了 ${name}`,
+  orchAsked: (name) => `已请 ${name}`,
+  orchFailed: (name) => `没叫到 ${name}`,
+  orchIdLabel: "id",
+  orchHopLabel: "hop",
+  orchCopy: "复制",
   pieceHeld: (amount) => `按件结算中 ${amount} Credits`,
   pieceCaptured: "已入账",
   composerProviderLabel: "供应商",

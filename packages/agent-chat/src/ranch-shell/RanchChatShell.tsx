@@ -29,6 +29,7 @@ import type {
 import { connectChatSocket, type ChatSocket } from "../ws";
 import { MailboxThumbs } from "../MailboxThumbs";
 import { parseMessageAttachments } from "../mailbox";
+import { calleesFromMetadata, orchLine, type OrchestrationCallee } from "../orchestration";
 import {
   AgentOwnerSettings,
   deliveryLabel,
@@ -726,6 +727,191 @@ function AgentUsageFooter({
       }}
     >
       {text}
+    </div>
+  );
+}
+
+
+function orchStatusDot(status?: string): string {
+  const st = (status || "").toLowerCase();
+  if (st === "failed") return colors.danger;
+  if (st === "accepted" || st === "sent") return "#eab308";
+  return "#22c55e";
+}
+
+function AgentOrchestrationFooter({
+  callees,
+  names,
+  t,
+}: {
+  callees: OrchestrationCallee[];
+  names: Record<string, string>;
+  t: RanchMessages;
+}) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  if (!callees.length) return null;
+
+  const copyText = async (key: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(key);
+      window.setTimeout(() => setCopied((cur) => (cur === key ? null : cur)), 1500);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        maxWidth: "100%",
+      }}
+    >
+      {callees.map((c) => {
+        const rowKey = c.hop_id || c.agent_id;
+        const open = openId === rowKey;
+        const text = orchLine(c, t, names);
+        return (
+          <div
+            key={rowKey}
+            style={{
+              border: `1px solid ${colors.border}`,
+              background: colors.panel,
+              borderRadius: 8,
+              overflow: "hidden",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setOpenId(open ? null : rowKey)}
+              title={c.hop_id || c.agent_id}
+              aria-expanded={open}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                width: "100%",
+                border: "none",
+                background: "transparent",
+                color: colors.text,
+                padding: "6px 8px",
+                fontSize: 12,
+                lineHeight: 1.35,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: 99,
+                  flexShrink: 0,
+                  background: orchStatusDot(c.status),
+                }}
+              />
+              <span
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  flex: 1,
+                }}
+              >
+                {text}
+              </span>
+            </button>
+            {open ? (
+              <div
+                style={{
+                  padding: "0 8px 8px 23px",
+                  fontSize: 11,
+                  lineHeight: 1.45,
+                  color: colors.muted,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                }}
+              >
+                <OrchCopyRow
+                  label={t.orchIdLabel}
+                  value={c.agent_id}
+                  copied={copied === `${rowKey}:id`}
+                  copyLabel={t.orchCopy}
+                  copiedLabel={t.promptCopied}
+                  onCopy={() => copyText(`${rowKey}:id`, c.agent_id)}
+                />
+                {c.hop_id ? (
+                  <OrchCopyRow
+                    label={t.orchHopLabel}
+                    value={c.hop_id}
+                    copied={copied === `${rowKey}:hop`}
+                    copyLabel={t.orchCopy}
+                    copiedLabel={t.promptCopied}
+                    onCopy={() => copyText(`${rowKey}:hop`, c.hop_id || "")}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function OrchCopyRow({
+  label,
+  value,
+  copied,
+  copyLabel,
+  copiedLabel,
+  onCopy,
+}: {
+  label: string;
+  value: string;
+  copied: boolean;
+  copyLabel: string;
+  copiedLabel: string;
+  onCopy: () => void;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+      <span style={{ flexShrink: 0 }}>{label}</span>
+      <span
+        title={value}
+        style={{
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          color: colors.text,
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          flex: 1,
+          minWidth: 0,
+        }}
+      >
+        {value}
+      </span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onCopy();
+        }}
+        style={{
+          ...btnGhost,
+          padding: "2px 6px",
+          fontSize: 10,
+          flexShrink: 0,
+        }}
+      >
+        {copied ? copiedLabel : copyLabel}
+      </button>
     </div>
   );
 }
@@ -5061,7 +5247,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       {!isUser
                         ? (() => {
                             const usage = hopUsageFromMessage(m);
-                            return usage ? <AgentUsageFooter usage={usage} t={t} /> : null;
+                            const callees = calleesFromMetadata(m.metadata);
+                            if (!usage && !callees.length) return null;
+                            return (
+                              <>
+                                {callees.length ? (
+                                  <AgentOrchestrationFooter
+                                    callees={callees}
+                                    names={agentNames}
+                                    t={t}
+                                  />
+                                ) : null}
+                                {usage ? <AgentUsageFooter usage={usage} t={t} /> : null}
+                              </>
+                            );
                           })()
                         : null}
                     </div>
