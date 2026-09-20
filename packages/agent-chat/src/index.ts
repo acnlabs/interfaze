@@ -38,3 +38,8 @@ export {
   type ThreadSummary,
   type MessageDelivery,
 } from "./types";
+export {
+  calleesFromMetadata,
+  type OrchestrationCallee,
+} from "./orchestration";
+
