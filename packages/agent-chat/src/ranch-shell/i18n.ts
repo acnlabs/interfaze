@@ -200,6 +200,7 @@ export type RanchMessages = {
   accountProfile: string;
   accountProfileHint: string;
   accountWallet: string;
+  accountBilling: string;
   accountWalletHint: string;
   /** Account menu: Store model quota (not API keys, not Wallet Credits). */
   accountKeys: string;
@@ -822,6 +823,7 @@ const en: RanchMessages = {
   accountProfile: "Profile",
   accountProfileHint: "Signed-in account from your identity provider. Edit name and avatar there for now.",
   accountWallet: "Wallet",
+  accountBilling: "Receipts & invoices",
   accountWalletHint: "Your human Credits balance. Agent wallets stay under each agent.",
   accountKeys: "Model quota",
   accountKeysHint:
@@ -1492,6 +1494,7 @@ const zh: RanchMessages = {
   accountProfile: "个人资料",
   accountProfileHint: "登录账号来自身份提供方。目前请在那里修改名称与头像。",
   accountWallet: "钱包",
+  accountBilling: "收据与发票",
   accountWalletHint: "你本人的 Credits 余额。Agent 钱包在各自 Agent 详情里。",
   accountKeys: "模型额度",
   accountKeysHint: "Store 买的模型额度。自己买 = 拿到哪都能用，不会自动写进已有机。不是 agent 的 API key。",

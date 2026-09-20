@@ -1522,10 +1522,12 @@ function WalletBillingDocsSection({
   client,
   messages: t,
   interfazeBaseUrl,
+  hideHeading = false,
 }: {
   client: GatewayClient;
   messages: RanchMessages;
   interfazeBaseUrl?: string;
+  hideHeading?: boolean;
 }) {
   const isCn = isCnInterfazeOrigin(resolveInterfazeOrigin(interfazeBaseUrl));
   const [loading, setLoading] = useState(true);
@@ -1613,8 +1615,12 @@ function WalletBillingDocsSection({
 
   return (
     <section>
-      <h3 style={sectionTitle}>{t.walletBillingDocs}</h3>
-      <p style={sectionHint}>{t.walletBillingDocsHint}</p>
+      {hideHeading ? null : (
+        <>
+          <h3 style={sectionTitle}>{t.walletBillingDocs}</h3>
+          <p style={sectionHint}>{t.walletBillingDocsHint}</p>
+        </>
+      )}
       {loading ? (
         <EmptyText>{t.loading}</EmptyText>
       ) : loadFailed ? (
@@ -1778,16 +1784,41 @@ function WalletBillingDocsSection({
   );
 }
 
-export function AccountWalletPanel({
+export function AccountBillingPanel({
   client,
   messages: t,
-  interfazeBaseUrl = "https://interfaze.io",
+  interfazeBaseUrl,
   onClose,
 }: {
   client: GatewayClient;
   messages: RanchMessages;
   interfazeBaseUrl?: string;
   onClose: () => void;
+}) {
+  return (
+    <PanelChrome title={t.accountBilling} onClose={onClose} closeLabel={t.close}>
+      <WalletBillingDocsSection
+        client={client}
+        messages={t}
+        interfazeBaseUrl={interfazeBaseUrl}
+        hideHeading
+      />
+    </PanelChrome>
+  );
+}
+
+export function AccountWalletPanel({
+  client,
+  messages: t,
+  interfazeBaseUrl = "https://interfaze.io",
+  onClose,
+  onOpenBilling,
+}: {
+  client: GatewayClient;
+  messages: RanchMessages;
+  interfazeBaseUrl?: string;
+  onClose: () => void;
+  onOpenBilling?: () => void;
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2117,11 +2148,29 @@ export function AccountWalletPanel({
             )}
           </section>
 
-          <WalletBillingDocsSection
-            client={client}
-            messages={t}
-            interfazeBaseUrl={interfazeBaseUrl}
-          />
+          {onOpenBilling ? (
+            <button
+              type="button"
+              onClick={onOpenBilling}
+              style={{
+                ...card,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                width: "100%",
+                padding: "12px 16px",
+                cursor: "pointer",
+                color: colors.text,
+                fontSize: 13,
+                textAlign: "left",
+              }}
+            >
+              <span style={{ flex: 1, fontWeight: 600 }}>{t.accountBilling}</span>
+              <span aria-hidden style={{ color: colors.muted }}>
+                →
+              </span>
+            </button>
+          ) : null}
         </div>
       )}
       {checkoutEmbedUrl ? (
