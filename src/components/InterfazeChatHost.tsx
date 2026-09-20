@@ -26,6 +26,37 @@ type ReauthOpts = {
   forceLogin?: boolean;
 };
 
+function upsertMineDirectoryAgent(
+  prev: AgentDirectoryItem[],
+  agent: { agent_id: string; name?: string | null; description?: string | null },
+): AgentDirectoryItem[] {
+  const key = agent.agent_id.replace(/^acn:/i, "");
+  const idx = prev.findIndex((a) => {
+    const id = a.agent_id.replace(/^acn:/i, "");
+    return id === key || a.agent_id === agent.agent_id;
+  });
+  if (idx >= 0) {
+    return prev.map((a, i) =>
+      i === idx
+        ? {
+            ...a,
+            name: agent.name ?? a.name,
+            description: agent.description ?? a.description,
+          }
+        : a,
+    );
+  }
+  return [
+    {
+      agent_id: agent.agent_id,
+      name: agent.name,
+      description: agent.description,
+      group: "mine",
+    },
+    ...prev,
+  ];
+}
+
 /**
  * Interfaze host — ranch-ported shell chrome + Chat Gateway.
  * Locale is owned by RanchChatShell (switcher + localStorage + browser fallback).
@@ -211,18 +242,7 @@ function CnChatHost() {
       onLogout={handleLogout}
       onReauth={() => handleReauth({ forceLogin: true })}
       onOwnedAgentUpdated={(agent) => {
-        setDirectoryAgents((prev) =>
-          prev.map((a) =>
-            a.agent_id === agent.agent_id ||
-            a.agent_id.replace(/^acn:/i, "") === agent.agent_id.replace(/^acn:/i, "")
-              ? {
-                  ...a,
-                  name: agent.name ?? a.name,
-                  description: agent.description ?? a.description,
-                }
-              : a,
-          ),
-        );
+        setDirectoryAgents((prev) => upsertMineDirectoryAgent(prev, agent));
       }}
       onOwnedAgentRemoved={(agentId) => {
         const bare = agentId.replace(/^acn:/i, "");
@@ -416,18 +436,7 @@ function GlobalChatHost() {
           : undefined
       }
       onOwnedAgentUpdated={(agent) => {
-        setDirectoryAgents((prev) =>
-          prev.map((a) =>
-            a.agent_id === agent.agent_id ||
-            a.agent_id.replace(/^acn:/i, "") === agent.agent_id.replace(/^acn:/i, "")
-              ? {
-                  ...a,
-                  name: agent.name ?? a.name,
-                  description: agent.description ?? a.description,
-                }
-              : a,
-          ),
-        );
+        setDirectoryAgents((prev) => upsertMineDirectoryAgent(prev, agent));
       }}
       onOwnedAgentRemoved={(agentId) => {
         const bare = agentId.replace(/^acn:/i, "");
