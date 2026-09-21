@@ -67,6 +67,14 @@ export type RanchMessages = {
   orchIdLabel: string;
   orchHopLabel: string;
   orchCopy: string;
+  /** P2: agent suggested a group; human must confirm. */
+  orchProposeTitle: string;
+  orchProposeNeedTwo: string;
+  orchProposeCreate: string;
+  orchProposeOpenExisting: string;
+  orchProposeDismiss: string;
+  orchProposeMembers: (names: string) => string;
+  orchProposePartial: (names: string) => string;
   pieceHeld: (amount: number) => string;
   pieceCaptured: string;
   /** Composer chip: current runtime / listing model (M1). */
@@ -698,6 +706,13 @@ const en: RanchMessages = {
   orchIdLabel: "id",
   orchHopLabel: "hop",
   orchCopy: "Copy",
+  orchProposeTitle: "Suggests a group",
+  orchProposeNeedTwo: "Need at least two agents to open a group.",
+  orchProposeCreate: "Create group",
+  orchProposeOpenExisting: "Open existing group",
+  orchProposeDismiss: "Not now",
+  orchProposeMembers: (names) => `With ${names}`,
+  orchProposePartial: (names) => `Couldn't add ${names} (no permission)`,
   pieceHeld: (amount) => `${amount} Credits settling`,
   pieceCaptured: "Settled",
   composerProviderLabel: "Provider",
@@ -1384,6 +1399,13 @@ const zh: RanchMessages = {
   orchIdLabel: "id",
   orchHopLabel: "hop",
   orchCopy: "复制",
+  orchProposeTitle: "提议开群",
+  orchProposeNeedTwo: "开群至少要两个 agent。",
+  orchProposeCreate: "创建群聊",
+  orchProposeOpenExisting: "打开已有群",
+  orchProposeDismiss: "先不",
+  orchProposeMembers: (names) => `拉上 ${names}`,
+  orchProposePartial: (names) => `${names} 进不去（没权限）`,
   pieceHeld: (amount) => `按件结算中 ${amount} Credits`,
   pieceCaptured: "已入账",
   composerProviderLabel: "供应商",

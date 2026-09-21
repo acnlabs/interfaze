@@ -29,7 +29,7 @@ import type {
 import { connectChatSocket, type ChatSocket } from "../ws";
 import { MailboxThumbs } from "../MailboxThumbs";
 import { parseMessageAttachments } from "../mailbox";
-import { calleesFromMetadata, orchLine, type OrchestrationCallee } from "../orchestration";
+import { calleesFromMetadata, orchLine, proposeGroupFromMetadata, type OrchestrationCallee, type OrchestrationProposeGroup } from "../orchestration";
 import {
   AgentOwnerSettings,
   deliveryLabel,
@@ -912,6 +912,105 @@ function OrchCopyRow({
       >
         {copied ? copiedLabel : copyLabel}
       </button>
+    </div>
+  );
+}
+
+}
+
+function AgentProposeGroupFooter({
+  propose,
+  names,
+  existingTitle,
+  busy,
+  t,
+  onCreate,
+  onOpenExisting,
+  onDismiss,
+}: {
+  propose: OrchestrationProposeGroup;
+  names: Record<string, string>;
+  existingTitle?: string;
+  busy: boolean;
+  t: RanchMessages;
+  onCreate: () => void;
+  onOpenExisting?: () => void;
+  onDismiss: () => void;
+}) {
+  const labels = propose.agent_ids
+    .map((id) => {
+      const hit = Object.entries(names).find(
+        ([k]) => k.toLowerCase() === id.toLowerCase(),
+      );
+      return hit?.[1]?.trim() || (id.length > 8 ? id.slice(0, 8) : id);
+    })
+    .filter(Boolean);
+  return (
+    <div
+      style={{
+        border: `1px solid ${colors.border}`,
+        background: colors.panel,
+        borderRadius: 8,
+        padding: "8px 10px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 600, color: colors.text }}>
+        {propose.title?.trim() || t.orchProposeTitle}
+      </div>
+      {labels.length ? (
+        <div style={{ fontSize: 12, color: colors.muted }}>
+          {t.orchProposeMembers(labels.join(" · "))}
+        </div>
+      ) : null}
+      {propose.summary ? (
+        <div
+          style={{
+            fontSize: 11,
+            color: colors.muted,
+            lineHeight: 1.4,
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {propose.summary}
+        </div>
+      ) : null}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {onOpenExisting ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onOpenExisting}
+            style={{ ...btnPrimary, padding: "4px 10px", fontSize: 12 }}
+          >
+            {existingTitle
+              ? `${t.orchProposeOpenExisting} · ${existingTitle}`
+              : t.orchProposeOpenExisting}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onCreate}
+          style={{
+            ...(onOpenExisting ? btnGhost : btnPrimary),
+            padding: "4px 10px",
+            fontSize: 12,
+          }}
+        >
+          {t.orchProposeCreate}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onDismiss}
+          style={{ ...btnGhost, padding: "4px 10px", fontSize: 12 }}
+        >
+          {t.orchProposeDismiss}
+        </button>
+      </div>
     </div>
   );
 }
@@ -2223,6 +2322,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     };
   }, [client]);
   const [showAddMember, setShowAddMember] = useState(false);
+  const [dismissedPropose, setDismissedPropose] = useState<Set<string>>(() => new Set());
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [addMemberId, setAddMemberId] = useState("");
@@ -3066,6 +3166,88 @@ export function RanchChatShell(props: RanchChatShellProps) {
           : e instanceof Error
             ? e.message
             : "Failed to create group",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmProposeGroup = async (
+    propose: OrchestrationProposeGroup,
+    messageId: string,
+    opts?: { preferExisting?: boolean },
+  ) => {
+    if (!active || isGroupChat(active)) return;
+    const peer = (active.agent_id || "").trim();
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    const pushId = (raw: string) => {
+      const id = raw.trim();
+      const key = id.toLowerCase();
+      if (!id || seen.has(key)) return;
+      seen.add(key);
+      ids.push(id);
+    };
+    if (peer) pushId(peer);
+    for (const id of propose.agent_ids) pushId(id);
+    if (ids.length < 2) {
+      setError(t.orchProposeNeedTwo);
+      return;
+    }
+    const title =
+      propose.title?.trim() ||
+      t.orchProposeMembers(
+        ids
+          .map((id) => agentNames[id]?.trim() || (id.length > 8 ? id.slice(0, 8) : id))
+          .join(" · "),
+      );
+    const existing =
+      opts?.preferExisting && propose.existing_chat_id
+        ? chats.find(
+            (c) => isGroupChat(c) && c.chat_id === propose.existing_chat_id,
+          )
+        : undefined;
+    setBusy(true);
+    setError(null);
+    try {
+      let target = existing || null;
+      const failed: string[] = [];
+      if (existing) {
+        for (const id of ids) {
+          try {
+            await client.addParticipant(existing.chat_id, id);
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : "";
+            if (!/already in chat/i.test(msg)) {
+              failed.push(
+                agentNames[id]?.trim() || (id.length > 8 ? id.slice(0, 8) : id),
+              );
+            }
+          }
+        }
+      } else {
+        target = await client.createGroupChat(title, ids);
+      }
+      if (!target) throw new Error(t.sendFailed);
+      const summary = propose.summary?.trim();
+      if (summary) {
+        try {
+          await client.sendMessage(target.chat_id, summary, ids);
+        } catch {
+          /* group is open even if the digest fails */
+        }
+      }
+      setDismissedPropose((cur) => new Set(cur).add(messageId));
+      if (failed.length) setError(t.orchProposePartial(failed.join(" · ")));
+      await refreshChats();
+      await openConversation(target);
+    } catch (e) {
+      setError(
+        e instanceof ChatGatewayError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : t.sendFailed,
       );
     } finally {
       setBusy(false);
@@ -5248,7 +5430,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         ? (() => {
                             const usage = hopUsageFromMessage(m);
                             const callees = calleesFromMetadata(m.metadata);
-                            if (!usage && !callees.length) return null;
+                            const propose =
+                              active &&
+                              !isGroupChat(active) &&
+                              !dismissedPropose.has(m.message_id)
+                                ? proposeGroupFromMetadata(m.metadata)
+                                : null;
+                            if (!usage && !callees.length && !propose) return null;
+                            const existing =
+                              propose?.existing_chat_id
+                                ? chats.find(
+                                    (c) =>
+                                      isGroupChat(c) &&
+                                      c.chat_id === propose.existing_chat_id,
+                                  )
+                                : undefined;
                             return (
                               <>
                                 {callees.length ? (
@@ -5256,6 +5452,39 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     callees={callees}
                                     names={agentNames}
                                     t={t}
+                                  />
+                                ) : null}
+                                {propose ? (
+                                  <AgentProposeGroupFooter
+                                    propose={propose}
+                                    names={agentNames}
+                                    existingTitle={
+                                      existing
+                                        ? conversationLabel(existing, t)
+                                        : undefined
+                                    }
+                                    busy={busy}
+                                    t={t}
+                                    onCreate={() =>
+                                      void confirmProposeGroup(propose, m.message_id, {
+                                        preferExisting: false,
+                                      })
+                                    }
+                                    onOpenExisting={
+                                      existing
+                                        ? () =>
+                                            void confirmProposeGroup(
+                                              propose,
+                                              m.message_id,
+                                              { preferExisting: true },
+                                            )
+                                        : undefined
+                                    }
+                                    onDismiss={() =>
+                                      setDismissedPropose((cur) =>
+                                        new Set(cur).add(m.message_id),
+                                      )
+                                    }
                                   />
                                 ) : null}
                                 {usage ? <AgentUsageFooter usage={usage} t={t} /> : null}
