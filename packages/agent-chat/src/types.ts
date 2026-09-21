@@ -205,6 +205,12 @@ export type ChatMessage = {
         status?: string;
         name?: string;
       }>;
+      propose_group?: {
+        agent_ids?: string[];
+        title?: string;
+        summary?: string;
+        existing_chat_id?: string;
+      };
     };
     piece?: PieceHold | null;
     [key: string]: unknown;
