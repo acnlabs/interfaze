@@ -221,7 +221,37 @@ function hostCaption(origin?: string | null): string {
 function conversationLabel(c: ChatSummary, t: RanchMessages): string {
   const headline = (c.embed?.headline || "").trim();
   if (headline) return headline;
+  const title = (c.title || "").trim();
+  if (title) return title;
   return c.last_message_at || c.created_at ? t.untitledChat : t.startNewChat;
+}
+
+/** D10: host-named group, then a group that already has the proposed agents, then same title. */
+function preferredExistingGroup(
+  chats: ChatSummary[],
+  propose: OrchestrationProposeGroup,
+  groupAgents: Record<string, string[]>,
+): ChatSummary | undefined {
+  const groups = chats.filter(isGroupChat);
+  if (propose.existing_chat_id) {
+    const named = groups.find((c) => c.chat_id === propose.existing_chat_id);
+    if (named) return named;
+  }
+  const wanted = [
+    ...new Set(propose.agent_ids.map((id) => agentIdKey(id)).filter(Boolean)),
+  ];
+  if (wanted.length) {
+    const ranked = groups
+      .slice()
+      .sort((a, b) => chatActivityTs(b) - chatActivityTs(a));
+    for (const g of ranked) {
+      const have = new Set((groupAgents[g.chat_id] || []).map(agentIdKey));
+      if (wanted.every((id) => have.has(id))) return g;
+    }
+  }
+  const title = propose.title?.trim();
+  if (!title) return undefined;
+  return groups.find((g) => (g.title || "").trim() === title);
 }
 
 /** ChatGPT-style: a row exists only after someone has spoken. */
@@ -1346,6 +1376,37 @@ function writeStickyMention(chatId: string, sticky: StickyMention | null): void 
   }
 }
 
+const ORCH_PROPOSE_DISMISS_KEY = "interfaze:orchProposeDismissed:v1";
+const ORCH_PROPOSE_DISMISS_MAX = 200;
+
+function readDismissedPropose(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(ORCH_PROPOSE_DISMISS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(arr)) return new Set();
+    return new Set(
+      arr
+        .filter((x: unknown): x is string => typeof x === "string")
+        .slice(-ORCH_PROPOSE_DISMISS_MAX),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function writeDismissedPropose(ids: Set<string>): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      ORCH_PROPOSE_DISMISS_KEY,
+      JSON.stringify([...ids].slice(-ORCH_PROPOSE_DISMISS_MAX)),
+    );
+  } catch {
+    /* quota */
+  }
+}
+
 /** Explicit @ / @all only — no silent @all fallback. */
 function resolveGroupMentions(
   text: string,
@@ -2320,7 +2381,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
     };
   }, [client]);
   const [showAddMember, setShowAddMember] = useState(false);
-  const [dismissedPropose, setDismissedPropose] = useState<Set<string>>(() => new Set());
+  const [dismissedPropose, setDismissedPropose] = useState<Set<string>>(
+    () => readDismissedPropose(),
+  );
+  const [groupAgentsByChat, setGroupAgentsByChat] = useState<Record<string, string[]>>(
+    {},
+  );
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [addMemberId, setAddMemberId] = useState("");
@@ -2755,6 +2821,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
           (p) => p.participant_type === "agent" && p.is_active !== false,
         );
         agentIdsRef.current = agents.map((p) => p.participant_id);
+        if (isGroupChat(chat)) {
+          const ids = agents.map((p) => p.participant_id);
+          setGroupAgentsByChat((prev) =>
+            prev[chat.chat_id] === ids ? prev : { ...prev, [chat.chat_id]: ids },
+          );
+        }
         const labels = resolveParticipantLabels(agents, directoryAgents);
         setAgentNames(labels);
         const statuses: Record<string, string> = {};
@@ -2918,6 +2990,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
         (p) => p.participant_type === "agent" && p.is_active !== false,
       );
       agentIdsRef.current = agents.map((p) => p.participant_id);
+      const ids = agents.map((p) => p.participant_id);
+      setGroupAgentsByChat((prev) => ({ ...prev, [chatId]: ids }));
       const labels = resolveParticipantLabels(agents, directoryAgents);
       setAgentNames(labels);
       const statuses: Record<string, string> = {};
@@ -3199,12 +3273,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
           .map((id) => agentNames[id]?.trim() || (id.length > 8 ? id.slice(0, 8) : id))
           .join(" · "),
       );
-    const existing =
-      opts?.preferExisting && propose.existing_chat_id
-        ? chats.find(
-            (c) => isGroupChat(c) && c.chat_id === propose.existing_chat_id,
-          )
-        : undefined;
+    const existing = opts?.preferExisting
+      ? preferredExistingGroup(chats, propose, groupAgentsByChat)
+      : undefined;
+    if (opts?.preferExisting && !existing) {
+      setError(t.sendFailed);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -3235,7 +3310,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
           /* group is open even if the digest fails */
         }
       }
-      setDismissedPropose((cur) => new Set(cur).add(messageId));
+      setDismissedPropose((cur) => {
+        const next = new Set(cur).add(messageId);
+        writeDismissedPropose(next);
+        return next;
+      });
       if (failed.length) setError(t.orchProposePartial(failed.join(" · ")));
       await refreshChats();
       await openConversation(target);
@@ -3251,6 +3330,59 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (!active || isGroupChat(active)) return;
+    const hasPropose = messages.some(
+      (m) =>
+        !dismissedPropose.has(m.message_id) &&
+        proposeGroupFromMetadata(m.metadata),
+    );
+    if (!hasPropose) return;
+    const missing = chats
+      .filter(isGroupChat)
+      .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))
+      .slice(0, 8)
+      .filter((g) => groupAgentsByChat[g.chat_id] == null);
+    if (!missing.length) return;
+    let cancelled = false;
+    void Promise.all(
+      missing.map(async (g) => {
+        try {
+          const ps = await client.listParticipants(g.chat_id);
+          return [
+            g.chat_id,
+            ps
+              .filter(
+                (p) => p.participant_type === "agent" && p.is_active !== false,
+              )
+              .map((p) => p.participant_id),
+          ] as const;
+        } catch {
+          return [g.chat_id, [] as string[]] as const;
+        }
+      }),
+    ).then((rows) => {
+      if (cancelled) return;
+      setGroupAgentsByChat((prev) => {
+        const next = { ...prev };
+        for (const [id, ids] of rows) {
+          if (next[id] == null) next[id] = ids;
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    active,
+    messages,
+    chats,
+    dismissedPropose,
+    groupAgentsByChat,
+    client,
+  ]);
 
   type SendOpts = {
     forceMentions?: string[];
@@ -5435,14 +5567,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 ? proposeGroupFromMetadata(m.metadata)
                                 : null;
                             if (!usage && !callees.length && !propose) return null;
-                            const existing =
-                              propose?.existing_chat_id
-                                ? chats.find(
-                                    (c) =>
-                                      isGroupChat(c) &&
-                                      c.chat_id === propose.existing_chat_id,
-                                  )
-                                : undefined;
+                            const existing = propose
+                              ? preferredExistingGroup(
+                                  chats,
+                                  propose,
+                                  groupAgentsByChat,
+                                )
+                              : undefined;
                             return (
                               <>
                                 {callees.length ? (
@@ -5457,9 +5588,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     propose={propose}
                                     names={agentNames}
                                     existingTitle={
-                                      existing
-                                        ? conversationLabel(existing, t)
-                                        : undefined
+                                      existing ? chatTitle(existing) : undefined
                                     }
                                     busy={busy}
                                     t={t}
@@ -5479,9 +5608,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                         : undefined
                                     }
                                     onDismiss={() =>
-                                      setDismissedPropose((cur) =>
-                                        new Set(cur).add(m.message_id),
-                                      )
+                                      setDismissedPropose((cur) => {
+                                        const next = new Set(cur).add(
+                                          m.message_id,
+                                        );
+                                        writeDismissedPropose(next);
+                                        return next;
+                                      })
                                     }
                                   />
                                 ) : null}
