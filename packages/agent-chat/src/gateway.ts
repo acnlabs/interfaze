@@ -405,26 +405,18 @@ export type MyAgentSummary = {
   /** Owner-authorized official model ids (Host table). */
   official_models?: string[] | null;
   /**
-   * Community hang牌 in Credits. 0 / omitted = not selling that kind.
-   * Dialog tokens still settle on L2 separately.
+   * Owner ceiling on per-file hunter listed Credits.
+   * 0 disables occupy. Missing = platform max (100000).
    */
-  image_credits?: number | null;
-  video_credits?: number | null;
-  audio_credits?: number | null;
-  file_credits?: number | null;
-  video_seconds?: number | null;
+  cap_credits?: number | null;
   /** Present after a successful delivery PATCH when ACN returns follow-up copy. */
   next_step_hint?: string | null;
 };
 
 export type PieceSku = {
   agent_id: string;
-  image_credits: number;
-  video_credits: number;
-  audio_credits: number;
-  file_credits: number;
+  cap_credits: number;
   network_usage_fee_rate?: number | null;
-  video_seconds?: number | null;
 };
 
 export type ModelCatalogItem = {
@@ -598,20 +590,11 @@ export type GatewayClient = {
       markup_percent?: number;
     },
   ) => Promise<MyAgentSummary>;
-  /** Owner hang牌. 0 = not selling that kind. */
+  /** Owner ceiling on per-file hunter tags. 0 disables occupy. */
   getMyAgentPieceSku: (agentId: string) => Promise<PieceSku>;
   updateMyAgentPieceSku: (
     agentId: string,
-    sku: Partial<
-      Pick<
-        PieceSku,
-        | "image_credits"
-        | "video_credits"
-        | "audio_credits"
-        | "file_credits"
-        | "video_seconds"
-      >
-    >,
+    sku: Partial<Pick<PieceSku, "cap_credits">>,
   ) => Promise<PieceSku>;
   /** Public Host Model Catalog (L1) row for a model id. */
   getModelCatalogItem: (modelId: string) => Promise<ModelCatalogItem>;

@@ -68,35 +68,20 @@ function parsePieceCredits(raw: string): number | null {
   return n;
 }
 
-function skuNumber(v: unknown): number {
-  return typeof v === "number" && Number.isFinite(v) && v >= 0
-    ? Math.min(MAX_PIECE_CREDITS, Math.floor(v))
-    : 0;
+function capFrom(v: unknown): number {
+  if (typeof v === "number" && Number.isFinite(v) && v >= 0) {
+    return Math.min(MAX_PIECE_CREDITS, Math.floor(v));
+  }
+  return MAX_PIECE_CREDITS;
 }
 
 function skuFromDetail(d: MyAgentSummary): Omit<PieceSku, "agent_id"> {
-  return {
-    image_credits: skuNumber(d.image_credits),
-    video_credits: skuNumber(d.video_credits),
-    audio_credits: skuNumber(d.audio_credits),
-    file_credits: skuNumber(d.file_credits),
-    video_seconds:
-      typeof d.video_seconds === "number" && Number.isInteger(d.video_seconds)
-        ? Math.min(120, Math.max(1, d.video_seconds))
-        : null,
-  };
+  return { cap_credits: capFrom(d.cap_credits) };
 }
 
 function skuFromRow(row: PieceSku): Omit<PieceSku, "agent_id"> {
   return {
-    image_credits: skuNumber(row.image_credits),
-    video_credits: skuNumber(row.video_credits),
-    audio_credits: skuNumber(row.audio_credits),
-    file_credits: skuNumber(row.file_credits),
-    video_seconds:
-      typeof row.video_seconds === "number" && Number.isInteger(row.video_seconds)
-        ? Math.min(120, Math.max(1, row.video_seconds))
-        : null,
+    cap_credits: capFrom(row.cap_credits),
     network_usage_fee_rate:
       typeof row.network_usage_fee_rate === "number" && Number.isFinite(row.network_usage_fee_rate)
         ? row.network_usage_fee_rate
@@ -106,7 +91,6 @@ function skuFromRow(row: PieceSku): Omit<PieceSku, "agent_id"> {
 
 const FALLBACK_MODEL_ID = "openai/gpt-4o-mini";
 const DEFAULT_MARKUP_PERCENT = 50;
-const DEFAULT_VIDEO_SECONDS = 5;
 
 function roundUsdPerMillion(n: number): number {
   // Keep enough precision for cheap models without noisy floats.
@@ -119,38 +103,6 @@ function applyMarkup(catalog: number, markupPercent: number): number {
 
 function sameModelId(left: string, right: string): boolean {
   return left.trim().toLowerCase() === right.trim().toLowerCase();
-}
-
-type PieceHangRow = {
-  id: string;
-  name: string;
-  unitUsd: number;
-  unit?: string | null;
-  source?: string | null;
-};
-
-function parseVideoSeconds(raw: string): number | null {
-  const v = raw.trim();
-  if (!/^\d+$/.test(v)) return null;
-  const n = Number(v);
-  if (!Number.isInteger(n) || n < 1 || n > 120) return null;
-  return n;
-}
-
-function hangableOnMachine(
-  catalog: PieceHangRow[],
-  configured: string[],
-  hungId: string,
-): PieceHangRow[] {
-  const out = catalog.filter((row) =>
-    configured.some((id) => sameModelId(id, row.id)),
-  );
-  const hung = hungId.trim();
-  if (hung && !out.some((row) => sameModelId(row.id, hung))) {
-    const fromCat = catalog.find((row) => sameModelId(row.id, hung));
-    out.unshift(fromCat || { id: hung, name: hung, unitUsd: 0 });
-  }
-  return out;
 }
 
 function officialSetsEqual(left: string[], right: string[]): boolean {
@@ -1011,19 +963,9 @@ export function AgentOwnerSettings({
   const [pricingMsg, setPricingMsg] = useState<string | null>(null);
   const [pricingError, setPricingError] = useState<string | null>(null);
   const [skuSaved, setSkuSaved] = useState(() => skuFromDetail(detail));
-  const [pieceImageModels, setPieceImageModels] = useState<PieceHangRow[]>([]);
-  const [pieceVideoModels, setPieceVideoModels] = useState<PieceHangRow[]>([]);
-  const [pieceCatalogReady, setPieceCatalogReady] = useState(false);
-  const [imageCreditsDraft, setImageCreditsDraft] = useState(() =>
-    String(skuFromDetail(detail).image_credits),
+  const [capCreditsDraft, setCapCreditsDraft] = useState(() =>
+    String(skuFromDetail(detail).cap_credits),
   );
-  const [videoCreditsDraft, setVideoCreditsDraft] = useState(() =>
-    String(skuFromDetail(detail).video_credits),
-  );
-  const [videoSecondsDraft, setVideoSecondsDraft] = useState(() => {
-    const s = skuFromDetail(detail).video_seconds;
-    return s == null ? String(DEFAULT_VIDEO_SECONDS) : String(s);
-  });
   const [savingPieceSku, setSavingPieceSku] = useState(false);
   const [pieceSkuMsg, setPieceSkuMsg] = useState<string | null>(null);
   const [pieceSkuError, setPieceSkuError] = useState<string | null>(null);
@@ -1116,13 +1058,7 @@ export function AgentOwnerSettings({
   useEffect(() => {
     const fromDetail = skuFromDetail(detail);
     setSkuSaved(fromDetail);
-    setImageCreditsDraft(String(fromDetail.image_credits));
-    setVideoCreditsDraft(String(fromDetail.video_credits));
-    setVideoSecondsDraft(
-      fromDetail.video_seconds == null
-        ? String(DEFAULT_VIDEO_SECONDS)
-        : String(fromDetail.video_seconds),
-    );
+    setCapCreditsDraft(String(fromDetail.cap_credits));
     setPieceSkuMsg(null);
     setPieceSkuError(null);
     let cancelled = false;
@@ -1132,13 +1068,7 @@ export function AgentOwnerSettings({
         if (cancelled) return;
         const next = skuFromRow(row);
         setSkuSaved(next);
-        setImageCreditsDraft(String(next.image_credits));
-        setVideoCreditsDraft(String(next.video_credits));
-        setVideoSecondsDraft(
-          next.video_seconds == null
-            ? String(DEFAULT_VIDEO_SECONDS)
-            : String(next.video_seconds),
-        );
+        setCapCreditsDraft(String(next.cap_credits));
       })
       .catch(() => {
         /* Host without SKU route: keep draft from detail. */
@@ -1146,64 +1076,7 @@ export function AgentOwnerSettings({
     return () => {
       cancelled = true;
     };
-  }, [client, detail.agent_id, detail.image_credits, detail.video_credits, detail.video_seconds]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const toRows = (items: Array<{
-      model_id?: string;
-      display_name?: string | null;
-      piece_unit_usd?: number | null;
-      piece_unit?: string | null;
-      source?: string | null;
-    }>) => {
-      const rows: PieceHangRow[] = [];
-      for (const row of items) {
-        const id = (row.model_id || "").trim();
-        const usd = Number(row.piece_unit_usd);
-        if (!id || !Number.isFinite(usd) || usd <= 0) continue;
-        rows.push({
-          id,
-          name: (row.display_name || id).trim() || id,
-          unitUsd: usd,
-          unit: typeof row.piece_unit === "string" ? row.piece_unit : null,
-          source: typeof row.source === "string" ? row.source : null,
-        });
-      }
-      return rows;
-    };
-    void Promise.all([
-      client.listModelCatalog({
-        source: "openrouter",
-        active_only: true,
-        piece_kind: "image",
-        limit: 500,
-      }),
-      client.listModelCatalog({
-        source: "openrouter",
-        active_only: true,
-        piece_kind: "video",
-        limit: 500,
-      }),
-    ])
-      .then(([images, videos]) => {
-        if (cancelled) return;
-        setPieceImageModels(toRows(images.items));
-        setPieceVideoModels(toRows(videos.items));
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPieceImageModels([]);
-          setPieceVideoModels([]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setPieceCatalogReady(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [client]);
+  }, [client, detail.agent_id, detail.cap_credits]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1596,35 +1469,9 @@ export function AgentOwnerSettings({
     !modelsBusy &&
     !savingPricing &&
     !busy;
-  const videoSecondsParsed = parseVideoSeconds(videoSecondsDraft);
-  const imageCreditsParsed = parsePieceCredits(imageCreditsDraft);
-  const videoCreditsParsed = parsePieceCredits(videoCreditsDraft);
-  const pieceConfigured = uniqModelIds(
-    supportedModels,
-    officialSaved,
-    [detail.runtime_model_id],
-    [detail.preferred_model_id],
-    [detail.token_pricing?.model_id],
-  );
-  const hangableImages = hangableOnMachine(pieceImageModels, pieceConfigured, "");
-  const hangableVideos = hangableOnMachine(pieceVideoModels, pieceConfigured, "");
-  const showImageNumeric = pieceCatalogReady && hangableImages.length === 0;
-  const showVideoNumeric = pieceCatalogReady && hangableVideos.length === 0;
-  const showVideoSeconds =
-    showVideoNumeric || (pieceCatalogReady && hangableVideos.length > 0);
-  const imageNumericDirty =
-    showImageNumeric &&
-    imageCreditsParsed !== null &&
-    imageCreditsParsed !== skuSaved.image_credits;
-  const videoNumericDirty =
-    showVideoNumeric &&
-    videoCreditsParsed !== null &&
-    videoCreditsParsed !== skuSaved.video_credits;
-  const videoSecondsDirty =
-    showVideoSeconds &&
-    videoSecondsParsed !== null &&
-    videoSecondsParsed !== (skuSaved.video_seconds ?? DEFAULT_VIDEO_SECONDS);
-  const pieceSkuDirty = imageNumericDirty || videoNumericDirty || videoSecondsDirty;
+  const capCreditsParsed = parsePieceCredits(capCreditsDraft);
+  const pieceSkuDirty =
+    capCreditsParsed !== null && capCreditsParsed !== skuSaved.cap_credits;
   const canSavePieceSku = pieceSkuDirty && !savingPieceSku && !busy;
   const vendorModelsKey = vendorModels.join("\u0001");
   useEffect(() => {
@@ -1874,42 +1721,21 @@ export function AgentOwnerSettings({
   };
 
   const runSavePieceSku = (): Promise<PieceSku | null> => {
-    if (!canSavePieceSku) return Promise.resolve(null);
-    if (showImageNumeric && imageCreditsParsed === null) return Promise.resolve(null);
-    if (showVideoNumeric && videoCreditsParsed === null) return Promise.resolve(null);
-    if (showVideoSeconds && videoSecondsParsed === null) return Promise.resolve(null);
-    const body: Parameters<GatewayClient["updateMyAgentPieceSku"]>[1] = {};
-    if (showImageNumeric && imageCreditsParsed !== null) {
-      body.image_credits = imageCreditsParsed;
-    }
-    if (showVideoNumeric && videoCreditsParsed !== null) {
-      body.video_credits = videoCreditsParsed;
-    }
-    if (showVideoSeconds && videoSecondsParsed !== null) {
-      body.video_seconds = videoSecondsParsed;
-    }
+    if (!canSavePieceSku || capCreditsParsed === null) return Promise.resolve(null);
     setSavingPieceSku(true);
     setPieceSkuError(null);
     setPieceSkuMsg(null);
     return client
-      .updateMyAgentPieceSku(detail.agent_id, body)
+      .updateMyAgentPieceSku(detail.agent_id, { cap_credits: capCreditsParsed })
       .then((row) => {
         const next = skuFromRow(row);
         setSkuSaved(next);
-        setImageCreditsDraft(String(next.image_credits));
-        setVideoCreditsDraft(String(next.video_credits));
-        setVideoSecondsDraft(
-          next.video_seconds == null
-            ? String(DEFAULT_VIDEO_SECONDS)
-            : String(next.video_seconds),
-        );
+        setCapCreditsDraft(String(next.cap_credits));
         setPieceSkuMsg(t.myAgentsPieceSkuSaved);
         window.setTimeout(() => setPieceSkuMsg(null), 2000);
         onUpdated?.({
           ...detail,
-          image_credits: next.image_credits,
-          video_credits: next.video_credits,
-          video_seconds: next.video_seconds,
+          cap_credits: next.cap_credits,
         });
         return row;
       })
@@ -2742,88 +2568,39 @@ export function AgentOwnerSettings({
         <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
           {t.myAgentsPieceSkuOff}
         </p>
-        {showImageNumeric ? (
-          <label style={{ display: "block", marginBottom: 10 }}>
-            <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
-              {t.myAgentsPieceSkuLabelImage}
-            </div>
-            <input
-              aria-label={t.myAgentsPieceSkuLabelImage}
-              value={imageCreditsDraft}
-              onChange={(e) => setImageCreditsDraft(e.target.value)}
-              style={inputStyle}
-              inputMode="numeric"
-              disabled={busy || savingPieceSku}
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </label>
+        <label style={{ display: "block", marginBottom: 10 }}>
+          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+            {t.myAgentsPieceSkuLabel}
+          </div>
+          <input
+            aria-label={t.myAgentsPieceSkuLabel}
+            value={capCreditsDraft}
+            onChange={(e) => setCapCreditsDraft(e.target.value)}
+            style={inputStyle}
+            inputMode="numeric"
+            disabled={busy || savingPieceSku}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
+        {pieceSkuError ? (
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>{pieceSkuError}</p>
         ) : null}
-        {showVideoNumeric ? (
-          <label style={{ display: "block", marginBottom: 10 }}>
-            <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
-              {t.myAgentsPieceSkuLabelVideo}
-            </div>
-            <input
-              aria-label={t.myAgentsPieceSkuLabelVideo}
-              value={videoCreditsDraft}
-              onChange={(e) => setVideoCreditsDraft(e.target.value)}
-              style={inputStyle}
-              inputMode="numeric"
-              disabled={busy || savingPieceSku}
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </label>
+        {pieceSkuMsg ? (
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>{pieceSkuMsg}</p>
         ) : null}
-        {showVideoSeconds ? (
-          <label style={{ display: "block", marginBottom: 10 }}>
-            <div
-              style={{
-                fontSize: 12,
-                color: colors.muted,
-                marginBottom: 4,
-                display: "flex",
-                alignItems: "center",
-              }}
-            >
-              {t.myAgentsPieceSkuSeconds}
-              <FieldHint text={t.myAgentsPieceSkuSecondsHint} />
-            </div>
-            <input
-              aria-label={t.myAgentsPieceSkuSeconds}
-              value={videoSecondsDraft}
-              onChange={(e) => setVideoSecondsDraft(e.target.value)}
-              style={inputStyle}
-              inputMode="numeric"
-              disabled={busy || savingPieceSku}
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </label>
-        ) : null}
-        {showImageNumeric || showVideoNumeric || showVideoSeconds ? (
-          <>
-            {pieceSkuError ? (
-              <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>{pieceSkuError}</p>
-            ) : null}
-            {pieceSkuMsg ? (
-              <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>{pieceSkuMsg}</p>
-            ) : null}
-            <button
-              type="button"
-              style={{
-                ...btnGhost,
-                opacity: canSavePieceSku ? 1 : 0.45,
-                cursor: canSavePieceSku ? "pointer" : "default",
-              }}
-              disabled={!canSavePieceSku}
-              onClick={() => void runSavePieceSku()}
-            >
-              {savingPieceSku ? "…" : t.myAgentsSavePieceSku}
-            </button>
-          </>
-        ) : null}
+        <button
+          type="button"
+          style={{
+            ...btnGhost,
+            opacity: canSavePieceSku ? 1 : 0.45,
+            cursor: canSavePieceSku ? "pointer" : "default",
+          }}
+          disabled={!canSavePieceSku}
+          onClick={() => void runSavePieceSku()}
+        >
+          {savingPieceSku ? "…" : t.myAgentsSavePieceSku}
+        </button>
       </section>
 
       {showConnectSection ? (
