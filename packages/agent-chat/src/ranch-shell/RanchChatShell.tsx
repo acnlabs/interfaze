@@ -110,6 +110,13 @@ function agentIdKey(agentId?: string | null): string {
   return (agentId || "").replace(/^acn:/i, "").trim().toLowerCase();
 }
 
+function isAcnCatalogAgentId(agentId?: string | null): boolean {
+  const id = (agentId || "").trim();
+  if (!id) return false;
+  const lower = id.toLowerCase();
+  return !lower.startsWith("sys:") && !lower.startsWith("local:");
+}
+
 function isAgentInGroup(agentId: string, names: Record<string, string>): boolean {
   const key = agentIdKey(agentId);
   if (!key) return false;
@@ -1266,6 +1273,8 @@ function NoAgentsEmpty({
   connectGuideUrl,
   interfazeBaseUrl,
   locale,
+  officialAgent,
+  onStartOfficial,
   onConnectExisting,
   onNewChat,
   t,
@@ -1274,25 +1283,39 @@ function NoAgentsEmpty({
   connectGuideUrl?: string;
   interfazeBaseUrl?: string;
   locale: RanchLocale;
+  officialAgent?: AgentDirectoryItem | null;
+  onStartOfficial?: () => void;
   onConnectExisting: () => void;
   onNewChat: () => void;
   t: RanchMessages;
 }) {
   const [copied, setCopied] = useState(false);
+  const officialLabel = officialAgent
+    ? t.startOfficialChat(officialAgent.name || officialAgent.agent_id)
+    : null;
   return (
     <div style={{ textAlign: "center", padding: "28px 20px", color: colors.muted }}>
       <p style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 600, color: colors.text }}>
-        {t.noAgentsTitle}
+        {officialAgent ? t.officialEmptyTitle : t.noAgentsTitle}
       </p>
-      <p style={{ margin: "0 0 16px", fontSize: 12, lineHeight: 1.55 }}>{t.noAgentsBody}</p>
+      <p style={{ margin: "0 0 16px", fontSize: 12, lineHeight: 1.55 }}>
+        {officialAgent ? t.officialEmptyBody : t.noAgentsBody}
+      </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
-        <button
-          type="button"
-          style={btnPrimary}
-          onClick={onConnectExisting}
-        >
-          {t.connectExisting}
-        </button>
+        {officialAgent && onStartOfficial ? (
+          <button type="button" style={btnPrimary} onClick={onStartOfficial}>
+            {officialLabel}
+          </button>
+        ) : (
+          <button type="button" style={btnPrimary} onClick={onConnectExisting}>
+            {t.connectExisting}
+          </button>
+        )}
+        {officialAgent ? (
+          <button type="button" style={btnGhost} onClick={onConnectExisting}>
+            {t.connectExisting}
+          </button>
+        ) : null}
         <button
           type="button"
           style={btnGhost}
@@ -2645,15 +2668,29 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   const searchDiscover = useCallback(
     async (q: string): Promise<AgentDirectoryItem[]> => {
+      const pinned = directoryAgents.filter(
+        (a) => a.group === "recommended" && isAcnCatalogAgentId(a.agent_id),
+      );
       const hits = await client.searchAgents(q, 20);
-      return hits.map((h) => ({
+      const mapped = hits.map((h) => ({
         agent_id: h.agent_id,
         name: h.name,
         description: h.description,
         group: "recommended" as const,
       }));
+      const qn = q.trim().toLowerCase();
+      const pinnedShown = qn
+        ? pinned.filter((a) => {
+            const id = agentIdKey(a.agent_id);
+            const name = (a.name || "").toLowerCase();
+            return id.includes(qn) || name.includes(qn);
+          })
+        : pinned;
+      const seen = new Set(mapped.map((a) => agentIdKey(a.agent_id)));
+      const extra = pinnedShown.filter((a) => !seen.has(agentIdKey(a.agent_id)));
+      return [...extra, ...mapped];
     },
-    [client],
+    [client, directoryAgents],
   );
 
   useEffect(() => {
@@ -2736,33 +2773,34 @@ export function RanchChatShell(props: RanchChatShellProps) {
     })();
   }, [open, client, refreshChats]);
 
-  /** Ensure host "mine" ACN agents always have a direct chat row in the list. */
-  const ensuredMineKeyRef = useRef("");
+  /** Ensure host "mine" + official conversation agents have a direct chat row. */
+  const ensuredDirectoryKeyRef = useRef("");
   useEffect(() => {
     if (!open) return;
-    const mine = directoryAgents.filter((a) => a.group === "mine" && a.agent_id.trim());
-    if (mine.length === 0) return;
-    const key = mine
-      .map((a) => a.agent_id)
+    const ensure = directoryAgents.filter(
+      (a) =>
+        (a.group === "mine" || a.group === "recommended") && isAcnCatalogAgentId(a.agent_id),
+    );
+    if (ensure.length === 0) return;
+    const key = ensure
+      .map((a) => `${a.group}:${agentIdKey(a.agent_id)}`)
       .sort()
       .join("|");
-    if (ensuredMineKeyRef.current === key) return;
+    if (ensuredDirectoryKeyRef.current === key) return;
 
     let cancelled = false;
     (async () => {
       try {
         const list = await client.listChats();
         if (cancelled) return;
-        const have = new Set(
-          list.map((c) => (c.agent_id || "").trim()).filter(Boolean),
-        );
-        const missing = mine.filter((a) => !have.has(a.agent_id));
+        const have = new Set(list.map((c) => agentIdKey(c.agent_id)).filter(Boolean));
+        const missing = ensure.filter((a) => !have.has(agentIdKey(a.agent_id)));
         for (const a of missing) {
           if (cancelled) return;
           await client.createOrGetDirectChat(a.agent_id);
         }
         if (cancelled) return;
-        ensuredMineKeyRef.current = key;
+        ensuredDirectoryKeyRef.current = key;
         if (missing.length > 0) await refreshChats();
       } catch {
         /* best-effort — picker still works */
@@ -2903,6 +2941,51 @@ export function RanchChatShell(props: RanchChatShellProps) {
       cancelled = true;
     };
   }, [open, initialOpenAgentId, client, openConversation, loadingChats]);
+
+  const openedOfficialRef = useRef(false);
+  useEffect(() => {
+    const official = directoryAgents.find(
+      (a) => a.group === "recommended" && isAcnCatalogAgentId(a.agent_id),
+    );
+    if (!official) return;
+    const want = agentIdKey(official.agent_id);
+    if (!open || !want || openedOfficialRef.current || openedInitialAgentRef.current) return;
+    if (initialOpenAgentId || loadingChats || active) return;
+    const others = chats.filter((c) => !isGroupChat(c) && agentIdKey(c.agent_id) !== want);
+    if (others.length > 0) return;
+    openedOfficialRef.current = true;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const siblings = chats
+          .filter((c) => !isGroupChat(c) && agentIdKey(c.agent_id) === want)
+          .sort((a, b) => chatActivityTs(b) - chatActivityTs(a));
+        let found = siblings.find(isGlobalDirect) ?? siblings[0];
+        if (!found) {
+          found = await client.createOrGetDirectChat(official.agent_id);
+        }
+        if (cancelled || !found) {
+          openedOfficialRef.current = false;
+          return;
+        }
+        await openConversation(found);
+      } catch {
+        openedOfficialRef.current = false;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    directoryAgents,
+    initialOpenAgentId,
+    loadingChats,
+    active,
+    chats,
+    client,
+    openConversation,
+  ]);
 
   const loadTopics = useCallback(
     async (chatId: string) => {
@@ -3755,6 +3838,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
   });
   const mineAgents = directoryAgents.filter((a) => a.group === "mine" && a.agent_id.trim());
   const hasMineAgents = mineAgents.length > 0;
+  const officialAgent =
+    directoryAgents.find(
+      (a) => a.group === "recommended" && isAcnCatalogAgentId(a.agent_id),
+    ) ?? null;
 
   const isOwnedDirectAgent = (agentId?: string | null): boolean => {
     if (!agentId?.trim()) return false;
@@ -4858,6 +4945,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 connectGuideUrl={connectGuideUrl}
                 interfazeBaseUrl={interfazeBaseUrl}
                 locale={uiLocale}
+                officialAgent={officialAgent}
+                onStartOfficial={
+                  officialAgent
+                    ? () => {
+                        void startDirect(officialAgent.agent_id);
+                      }
+                    : undefined
+                }
                 onConnectExisting={() => setShowConnect(true)}
                 onNewChat={() => setPickerMode("direct")}
                 t={t}
@@ -5121,6 +5216,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     connectGuideUrl={connectGuideUrl}
                     interfazeBaseUrl={interfazeBaseUrl}
                     locale={uiLocale}
+                    officialAgent={officialAgent}
+                    onStartOfficial={
+                      officialAgent
+                        ? () => {
+                            void startDirect(officialAgent.agent_id);
+                          }
+                        : undefined
+                    }
                     onConnectExisting={() => setShowConnect(true)}
                     onNewChat={() => setPickerMode("direct")}
                     t={t}
