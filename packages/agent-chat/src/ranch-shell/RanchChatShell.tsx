@@ -3315,9 +3315,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
         writeDismissedPropose(next);
         return next;
       });
-      if (failed.length) setError(t.orchProposePartial(failed.join(" · ")));
       await refreshChats();
       await openConversation(target);
+      // After navigate: openConversation clears error, so restore ACL misses here.
+      if (failed.length) setError(t.orchProposePartial(failed.join(" · ")));
     } catch (e) {
       setError(
         e instanceof ChatGatewayError
