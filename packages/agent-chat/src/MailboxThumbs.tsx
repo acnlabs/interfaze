@@ -23,7 +23,37 @@ function filenameFromDisposition(header: string | null, fallback: string): strin
   return ascii?.[1]?.trim() || fallback;
 }
 
-type FileBlob = { url: string; contentType: string; name: string };
+function listedFromHeader(header: string | null): number {
+  if (!header) return 0;
+  const n = Number(header.trim());
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(100_000, Math.floor(n));
+}
+
+type FileBlob = { url: string; contentType: string; name: string; listedCredits: number };
+
+function ListedTag({ n }: { n: number }) {
+  if (n <= 0) return null;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 8,
+        left: 8,
+        zIndex: 1,
+        padding: "2px 8px",
+        borderRadius: 999,
+        background: "rgba(0,0,0,0.72)",
+        color: "#fff",
+        fontSize: 11,
+        lineHeight: 1.4,
+        pointerEvents: "none",
+      }}
+    >
+      {n} Credits
+    </div>
+  );
+}
 
 export function MailboxThumbs({
   chatId,
@@ -71,6 +101,10 @@ export function MailboxThumbs({
               res.headers.get("content-disposition"),
               id,
             ),
+            listedCredits: listedFromHeader(
+              res.headers.get("X-Piece-Listed-Credits") ||
+                res.headers.get("x-piece-listed-credits"),
+            ),
           });
         } catch {
           /* skip broken blob */
@@ -95,10 +129,9 @@ export function MailboxThumbs({
         maxWidth: "100%",
       }}
     >
-      {files.map((f) =>
-        f.contentType.startsWith("video/") ? (
+      {files.map((f) => {
+        const media = f.contentType.startsWith("video/") ? (
           <video
-            key={f.url}
             src={f.url}
             controls
             playsInline
@@ -106,21 +139,18 @@ export function MailboxThumbs({
           />
         ) : f.contentType.startsWith("audio/") ? (
           <audio
-            key={f.url}
             src={f.url}
             controls
             style={{ width: "100%", display: "block" }}
           />
         ) : f.contentType.startsWith("image/") ? (
           <img
-            key={f.url}
             src={f.url}
             alt=""
             style={{ maxWidth: "100%", borderRadius: 8, display: "block" }}
           />
         ) : (
           <a
-            key={f.url}
             href={f.url}
             download={f.name}
             style={{
@@ -131,9 +161,19 @@ export function MailboxThumbs({
             }}
           >
             {f.name}
+            {f.listedCredits > 0 ? ` · ${f.listedCredits} Credits` : ""}
           </a>
-        ),
-      )}
+        );
+        if (f.contentType.startsWith("image/") || f.contentType.startsWith("video/") || f.contentType.startsWith("audio/")) {
+          return (
+            <div key={f.url} style={{ position: "relative", maxWidth: "100%" }}>
+              <ListedTag n={f.listedCredits} />
+              {media}
+            </div>
+          );
+        }
+        return <div key={f.url}>{media}</div>;
+      })}
     </div>
   );
 }
