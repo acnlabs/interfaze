@@ -466,7 +466,7 @@ export function AgentChatShell(props: AgentChatShellProps) {
                     padding: "8px 12px",
                   }}
                 >
-                  官方助手暂未配置（NEXT_PUBLIC_LABS_CONCIERGE_AGENT_ID）
+                  官方助手暂未配置（NEXT_PUBLIC_OFFICIAL_CONVERSATION_AGENT_ID）
                 </div>
               )}
 

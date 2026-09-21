@@ -31,11 +31,11 @@ export type AgentChatShellProps = {
   getAccessToken: () => Promise<string | null>;
   /** Chat Gateway base, e.g. https://api.example.com or CN BFF origin. */
   gatewayBaseUrl: string;
-  /** Host default / recommended ACN agent ids (Concierge etc.). */
+  /** Host default / recommended ACN agent ids (official conversation agent). */
   defaultAgentIds?: string[];
   /**
    * Claimed + recommended agents for shell picker.
-   * Host loads these (e.g. Labs analytics owner= + system agents).
+   * Host `recommended` is the official conversation agent (not Labs Concierge).
    */
   directoryAgents?: AgentDirectoryItem[];
   /** Allow typing another agent id. Default true for shell; ignored in assistant. */
@@ -92,6 +92,7 @@ export type RanchChatAccount = {
 export type RanchChatShellProps = {
   getAccessToken: () => Promise<string | null>;
   gatewayBaseUrl: string;
+  /** Host mine + official conversation agent (`group: "recommended"`). */
   directoryAgents?: AgentDirectoryItem[];
   title?: string;
   /** Optional brand mark URL (e.g. /logo.png). Shown in the chat-list header. */

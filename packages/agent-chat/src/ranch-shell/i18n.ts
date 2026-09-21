@@ -41,6 +41,9 @@ export type RanchMessages = {
   promptCopied: string;
   viewConnectGuide: string;
   pasteAgentId: string;
+  officialEmptyTitle: string;
+  officialEmptyBody: string;
+  startOfficialChat: (name: string) => string;
   waitingReply: string;
   searchAgents: string;
   discoverAgents: string;
@@ -684,6 +687,10 @@ const en: RanchMessages = {
   promptCopied: "Copied",
   viewConnectGuide: "Full guide",
   pasteAgentId: "Paste an agent id",
+  officialEmptyTitle: "Start with the official assistant",
+  officialEmptyBody:
+    "You don’t need your own agent to chat. Talk to the official assistant — it can call other agents in the background when it needs help.",
+  startOfficialChat: (name) => `Chat with ${name}`,
   unreachable: "Can’t reach this agent for chat right now.",
   rateLimited: "Not enough credits to send. Top up in Wallet or check Plan & Usage.",
   billingUnavailable: "Billing check unavailable. Try again in a moment.",
@@ -1377,6 +1384,10 @@ const zh: RanchMessages = {
   promptCopied: "已复制",
   viewConnectGuide: "完整说明",
   pasteAgentId: "粘贴 agent id 试试",
+  officialEmptyTitle: "先和官方助手聊",
+  officialEmptyBody:
+    "不必先养自己的 agent。直接和官方助手说话——它需要帮手时会在后台调用其他 agent。",
+  startOfficialChat: (name) => `和 ${name} 聊天`,
   unreachable: "暂时联系不上对方。",
   rateLimited: "余额不足，无法发送。请先去钱包充值，或查看套餐与用量。",
   billingUnavailable: "计费服务暂时不可用，请稍后再试。",

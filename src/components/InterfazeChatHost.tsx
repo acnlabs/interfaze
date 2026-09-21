@@ -26,12 +26,38 @@ type ReauthOpts = {
   forceLogin?: boolean;
 };
 
+function readOfficialConversationAgent(): AgentDirectoryItem | null {
+  const id = (process.env.NEXT_PUBLIC_OFFICIAL_CONVERSATION_AGENT_ID || "").trim();
+  if (!id) return null;
+  const lower = id.toLowerCase();
+  if (lower.startsWith("sys:") || lower.startsWith("local:")) return null;
+  const name = (process.env.NEXT_PUBLIC_OFFICIAL_CONVERSATION_AGENT_NAME || "").trim() || null;
+  const bare = id.replace(/^acn:/i, "");
+  return {
+    agent_id: bare,
+    name,
+    description: null,
+    group: "recommended",
+  };
+}
+
+function mergeOfficialConversationAgent(mine: AgentDirectoryItem[]): AgentDirectoryItem[] {
+  const official = readOfficialConversationAgent();
+  if (!official) return mine;
+  const key = official.agent_id.replace(/^acn:/i, "").toLowerCase();
+  if (mine.some((a) => a.agent_id.replace(/^acn:/i, "").toLowerCase() === key)) {
+    return mine;
+  }
+  return [official, ...mine];
+}
+
 function upsertMineDirectoryAgent(
   prev: AgentDirectoryItem[],
   agent: { agent_id: string; name?: string | null; description?: string | null },
 ): AgentDirectoryItem[] {
   const key = agent.agent_id.replace(/^acn:/i, "");
   const idx = prev.findIndex((a) => {
+    if (a.group !== "mine") return false;
     const id = a.agent_id.replace(/^acn:/i, "");
     return id === key || a.agent_id === agent.agent_id;
   });
@@ -203,7 +229,7 @@ function CnChatHost() {
       } catch {
         /* best-effort */
       }
-      if (!cancelled) setDirectoryAgents(mine);
+      if (!cancelled) setDirectoryAgents(mergeOfficialConversationAgent(mine));
     })();
     return () => {
       cancelled = true;
@@ -248,6 +274,7 @@ function CnChatHost() {
         const bare = agentId.replace(/^acn:/i, "");
         setDirectoryAgents((prev) =>
           prev.filter((a) => {
+            if (a.group !== "mine") return true;
             const id = a.agent_id.replace(/^acn:/i, "");
             return id !== bare && a.agent_id !== agentId;
           }),
@@ -392,7 +419,7 @@ function GlobalChatHost() {
         /* best-effort */
       }
 
-      if (!cancelled) setDirectoryAgents(mine);
+      if (!cancelled) setDirectoryAgents(mergeOfficialConversationAgent(mine));
     })();
 
     return () => {
@@ -442,6 +469,7 @@ function GlobalChatHost() {
         const bare = agentId.replace(/^acn:/i, "");
         setDirectoryAgents((prev) =>
           prev.filter((a) => {
+            if (a.group !== "mine") return true;
             const id = a.agent_id.replace(/^acn:/i, "");
             return id !== bare && a.agent_id !== agentId;
           }),
