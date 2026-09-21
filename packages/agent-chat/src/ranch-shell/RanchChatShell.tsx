@@ -916,8 +916,6 @@ function OrchCopyRow({
   );
 }
 
-}
-
 function AgentProposeGroupFooter({
   propose,
   names,
