@@ -21,7 +21,13 @@ function machinesFrom(avail: AgentCreateAvailability | null): AgentCreateMachine
     tier_id: row.tier_id,
     product_id: row.product_id,
     machine_credits: row.machine_credits,
+    available: row.available,
+    reason: row.reason,
   }));
+}
+
+function tierBuyable(row: AgentCreateMachine): boolean {
+  return row.available !== false;
 }
 
 function keysFrom(avail: AgentCreateAvailability | null): AgentCreateKey[] {
@@ -100,7 +106,8 @@ export function CreateAgentDialog({
         setAvail(row);
         const machines = machinesFrom(row);
         const keys = keysFrom(row);
-        if (machines[0]?.tier_id) setTierId(machines[0].tier_id);
+        const pick = machines.find(tierBuyable);
+        if (pick?.tier_id) setTierId(pick.tier_id);
         const preferredRuntime = row.default_runtime === "openclaw" ? "openclaw" : "hermes";
         setRuntime(preferredRuntime);
         const preferred =
@@ -261,7 +268,7 @@ export function CreateAgentDialog({
           <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
         ) : !avail?.available ? (
           <p style={{ color: colors.muted, fontSize: 13, lineHeight: 1.55 }}>
-            {t.createAgentUnavailable}
+            {avail.reason === "sold_out" ? t.createAgentSoldOutPage : t.createAgentUnavailable}
           </p>
         ) : (
           <>
@@ -282,32 +289,40 @@ export function CreateAgentDialog({
               <div style={{ fontSize: 11, color: colors.muted, marginBottom: 6 }}>
                 {t.createAgentServerSection}
               </div>
-              {machines.map((row) => (
-                <label
-                  key={row.tier_id}
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    alignItems: "flex-start",
-                    marginBottom: 8,
-                    fontSize: 13,
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="tier"
-                    checked={tierId === row.tier_id}
-                    disabled={locked}
-                    onChange={() => setTierId(row.tier_id)}
-                  />
-                  <span>
-                    <strong>
-                      {row.tier_id === "standard" ? t.createAgentStandard : t.createAgentStarter}
-                    </strong>
-                    <span style={{ color: colors.muted }}> · {row.machine_credits} credits</span>
-                  </span>
-                </label>
-              ))}
+              {machines.map((row) => {
+                const soldOut = !tierBuyable(row);
+                return (
+                  <label
+                    key={row.tier_id}
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      alignItems: "flex-start",
+                      marginBottom: 8,
+                      fontSize: 13,
+                      color: soldOut ? colors.muted : undefined,
+                      cursor: soldOut ? "not-allowed" : undefined,
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="tier"
+                      checked={tierId === row.tier_id}
+                      disabled={locked || soldOut}
+                      onChange={() => {
+                        if (!soldOut) setTierId(row.tier_id);
+                      }}
+                    />
+                    <span>
+                      <strong>
+                        {row.tier_id === "standard" ? t.createAgentStandard : t.createAgentStarter}
+                      </strong>
+                      <span style={{ color: colors.muted }}> · {row.machine_credits} credits</span>
+                      {soldOut ? <span> · {t.createAgentSoldOut}</span> : null}
+                    </span>
+                  </label>
+                );
+              })}
             </div>
             <div style={{ margin: "8px 0 12px" }}>
               <div style={{ fontSize: 11, color: colors.muted, marginBottom: 6 }}>
@@ -440,7 +455,7 @@ export function CreateAgentDialog({
               <button
                 type="button"
                 style={{ ...btnPrimary, width: "100%" }}
-                disabled={acting || busy || name.trim().length < 2 || !machine || !key}
+                disabled={acting || busy || name.trim().length < 2 || !machine || !key || !tierBuyable(machine)}
                 onClick={() => void submit()}
               >
                 {acting ? t.createAgentWorking : t.createAgentSubmit}
