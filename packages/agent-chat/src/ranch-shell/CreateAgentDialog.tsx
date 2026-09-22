@@ -317,7 +317,10 @@ export function CreateAgentDialog({
                       <strong>
                         {row.tier_id === "standard" ? t.createAgentStandard : t.createAgentStarter}
                       </strong>
-                      <span style={{ color: colors.muted }}> · {row.machine_credits} credits</span>
+                      <span style={{ color: colors.muted }}>
+                      {" "}
+                      · {t.createAgentTierCredits.replace("{n}", String(row.machine_credits))}
+                    </span>
                       {soldOut ? <span> · {t.createAgentSoldOut}</span> : null}
                     </span>
                   </label>
@@ -388,7 +391,7 @@ export function CreateAgentDialog({
                     <span style={{ color: colors.muted }}>
                       {" "}
                       · {row.key_quota_credits} + {row.key_fee_credits} ({feePercent(row)}%) ·{" "}
-                      {row.key_credits}
+                      {t.createAgentTierCredits.replace("{n}", String(row.key_credits))}
                     </span>
                   </span>
                 </label>
