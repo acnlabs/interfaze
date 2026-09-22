@@ -67,12 +67,16 @@ export type AgentCreateTier = {
   key_fee_credits?: number;
   key_credits: number;
   total_credits: number;
+  available?: boolean;
+  reason?: string | null;
 };
 
 export type AgentCreateMachine = {
   tier_id: "starter" | "standard" | string;
   product_id: string;
   machine_credits: number;
+  available?: boolean;
+  reason?: string | null;
 };
 
 export type AgentCreateKey = {

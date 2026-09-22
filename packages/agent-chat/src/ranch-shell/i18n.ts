@@ -355,6 +355,8 @@ export type RanchMessages = {
   createAgentOrderExpired: string;
   createAgentRetryBind: string;
   createAgentUnavailable: string;
+  createAgentSoldOut: string;
+  createAgentSoldOutPage: string;
   createAgentFailed: string;
   createAgentSlow: string;
   myAgentsOfflineHint: string;
@@ -1002,6 +1004,8 @@ const en: RanchMessages = {
   createAgentOrderExpired: "That checkout expired. Start a new create.",
   createAgentRetryBind: "Retry bind",
   createAgentUnavailable: "Create is not available in this region yet.",
+  createAgentSoldOut: "Sold out",
+  createAgentSoldOutPage: "Sold out for now.",
   createAgentFailed: "Could not create this agent.",
   createAgentSlow: "Still deploying. You can close this window — the chat will open when it's ready.",
   myAgentsOfflineHint:
@@ -1685,6 +1689,8 @@ const zh: RanchMessages = {
   createAgentOrderExpired: "这张结账单过期了。请重新创建。",
   createAgentRetryBind: "重试绑定",
   createAgentUnavailable: "这个区域还不能创建。",
+  createAgentSoldOut: "售罄",
+  createAgentSoldOutPage: "暂时售罄。",
   createAgentFailed: "创建失败。",
   createAgentSlow: "还在部署。可以关掉这个窗口，就绪后会自动打开对话。",
   myAgentsOfflineHint:
