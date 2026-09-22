@@ -337,6 +337,7 @@ export type RanchMessages = {
   createAgentKeySection: string;
   createAgentStarter: string;
   createAgentStandard: string;
+  createAgentTierCredits: string;
   createAgentKeyUsd: string;
   createAgentMachineLine: string;
   createAgentKeyQuotaLine: string;
@@ -986,6 +987,7 @@ const en: RanchMessages = {
   createAgentKeySection: "Model allowance",
   createAgentStarter: "Starter · 2C2G / 30 days",
   createAgentStandard: "Standard · 2C4G / 30 days",
+  createAgentTierCredits: "{n} credits",
   createAgentKeyUsd: "${usd} OpenRouter",
   createAgentMachineLine: "Machine {n} credits",
   createAgentKeyQuotaLine: "Model allowance {n} credits",
@@ -1671,12 +1673,13 @@ const zh: RanchMessages = {
   createAgentKeySection: "模型额度",
   createAgentStarter: "入门 · 2C2G / 30 天",
   createAgentStandard: "标准 · 2C4G / 30 天",
+  createAgentTierCredits: "{n} 星币",
   createAgentKeyUsd: "${usd} OpenRouter",
-  createAgentMachineLine: "机费 {n} credits",
-  createAgentKeyQuotaLine: "模型额度 {n} credits",
-  createAgentKeyFeeLine: "服务费 {n} credits（{pct}%）",
-  createAgentKeyLine: "起步模型额度 {n} credits（含 10% 服务费）",
-  createAgentTotalLine: "合计 {n} credits",
+  createAgentMachineLine: "机费 {n} 星币",
+  createAgentKeyQuotaLine: "模型额度 {n} 星币",
+  createAgentKeyFeeLine: "服务费 {n} 星币（{pct}%）",
+  createAgentKeyLine: "起步模型额度 {n} 星币（含 10% 服务费）",
+  createAgentTotalLine: "合计 {n} 星币",
   createAgentSubmit: "付款并创建",
   createAgentWorking: "处理中…",
   createAgentProgress: "正在部署并写入起步 key…",
