@@ -30,6 +30,7 @@ import { connectChatSocket, type ChatSocket } from "../ws";
 import { MailboxThumbs } from "../MailboxThumbs";
 import { parseMessageAttachments } from "../mailbox";
 import { calleesFromMetadata, orchLine, proposeGroupFromMetadata, type OrchestrationCallee, type OrchestrationProposeGroup } from "../orchestration";
+import { settleQueuedDelivery } from "./settleQueuedDelivery";
 import {
   AgentOwnerSettings,
   deliveryLabel,
@@ -5516,14 +5517,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 {displayMessages.map((m, idx) => {
                   const isUser = m.sender_type === "user";
                   const topicStart = isLocalTopicStartMessage(m);
-                  const delivery =
+                  const rawDelivery =
                     isUser && typeof m.metadata?.delivery === "string" ? m.metadata.delivery : null;
-                  const deliveryByAgent =
+                  const rawDeliveryByAgent =
                     isUser &&
                     m.metadata?.delivery_by_agent &&
                     typeof m.metadata.delivery_by_agent === "object"
                       ? (m.metadata.delivery_by_agent as Record<string, string>)
                       : null;
+                  const settled = isUser
+                    ? settleQueuedDelivery(displayMessages, m, rawDelivery, rawDeliveryByAgent)
+                    : { delivery: rawDelivery, byAgent: rawDeliveryByAgent };
+                  const delivery = settled.delivery;
+                  const deliveryByAgent = settled.byAgent;
                   const group = active ? isGroupChat(active) : false;
                   const senderLabel =
                     !isUser && !topicStart && group
