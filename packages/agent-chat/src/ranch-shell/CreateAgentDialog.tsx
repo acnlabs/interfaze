@@ -268,7 +268,7 @@ export function CreateAgentDialog({
           <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
         ) : !avail?.available ? (
           <p style={{ color: colors.muted, fontSize: 13, lineHeight: 1.55 }}>
-            {avail.reason === "sold_out" ? t.createAgentSoldOutPage : t.createAgentUnavailable}
+            {avail?.reason === "sold_out" ? t.createAgentSoldOutPage : t.createAgentUnavailable}
           </p>
         ) : (
           <>
