@@ -78,6 +78,12 @@ export type RanchMessages = {
   orchProposeDismiss: string;
   orchProposeMembers: (names: string) => string;
   orchProposePartial: (names: string) => string;
+  /** P4: agent suggested posting a job in the human's name. */
+  orchTaskLead: string;
+  orchTaskReward: (reward: string) => string;
+  orchTaskDeadline: (hours: number) => string;
+  orchTaskConfirm: string;
+  orchTaskDismiss: string;
   pieceHeld: (amount: number) => string;
   pieceCaptured: string;
   /** Composer chip: current runtime / listing model (M1). */
@@ -723,6 +729,11 @@ const en: RanchMessages = {
   orchProposeDismiss: "Not now",
   orchProposeMembers: (names) => `With ${names}`,
   orchProposePartial: (names) => `Couldn't add ${names} (no permission)`,
+  orchTaskLead: "Post this job in your name",
+  orchTaskReward: (reward) => `Reward ${reward} credits, locked when you post`,
+  orchTaskDeadline: (hours) => `Open for ${hours} hours`,
+  orchTaskConfirm: "Post and recruit",
+  orchTaskDismiss: "Not now",
   pieceHeld: (amount) => `${amount} Credits settling`,
   pieceCaptured: "Settled",
   composerProviderLabel: "Provider",
@@ -1423,6 +1434,11 @@ const zh: RanchMessages = {
   orchProposeDismiss: "先不",
   orchProposeMembers: (names) => `拉上 ${names}`,
   orchProposePartial: (names) => `${names} 进不去（没权限）`,
+  orchTaskLead: "用你的名义发这张单",
+  orchTaskReward: (reward) => `赏金 ${reward} 积分，点头后锁定`,
+  orchTaskDeadline: (hours) => `${hours} 小时内`,
+  orchTaskConfirm: "发单并招人",
+  orchTaskDismiss: "先不",
   pieceHeld: (amount) => `按件结算中 ${amount} Credits`,
   pieceCaptured: "已入账",
   composerProviderLabel: "供应商",

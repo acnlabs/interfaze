@@ -494,6 +494,13 @@ export type GatewayClient = {
   createGroup: (title: string, agentIds: string[]) => Promise<ChatSummary>;
   /** Alias used by Shell. */
   createGroupChat: (title: string, agentIds: string[]) => Promise<ChatSummary>;
+  createLabsTask: (body: {
+    title: string;
+    description: string;
+    deadline_hours: number;
+    reward: string;
+  }) => Promise<{ task_id: string }>;
+  collabMatchTask: (taskId: string) => Promise<unknown>;
   listMessages: (chatId: string) => Promise<ChatMessage[]>;
   listParticipants: (chatId: string) => Promise<ChatParticipant[]>;
   sendMessage: (
@@ -806,6 +813,23 @@ export function createGatewayClient(
     createOrGetDirectChat: createDirect,
     createGroup,
     createGroupChat: createGroup,
+    createLabsTask: (body) =>
+      request<{ task_id: string }>("/api/labs/tasks", {
+        method: "POST",
+        body: JSON.stringify({
+          title: body.title,
+          description: body.description,
+          deadline_hours: body.deadline_hours,
+          reward: body.reward,
+          max_participants: 1,
+          publish_post: true,
+        }),
+      }),
+    collabMatchTask: (taskId) =>
+      request<unknown>(`/api/labs/tasks/${encodeURIComponent(taskId)}/collab-match`, {
+        method: "POST",
+        body: "{}",
+      }),
     searchAgents: async (q = "", limit = 20) => {
       const params = new URLSearchParams();
       if (q.trim()) params.set("q", q.trim());

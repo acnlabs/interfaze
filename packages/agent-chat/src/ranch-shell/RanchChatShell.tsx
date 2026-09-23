@@ -29,7 +29,7 @@ import type {
 import { connectChatSocket, type ChatSocket } from "../ws";
 import { MailboxThumbs } from "../MailboxThumbs";
 import { parseMessageAttachments } from "../mailbox";
-import { calleesFromMetadata, orchLine, proposeGroupFromMetadata, type OrchestrationCallee, type OrchestrationProposeGroup } from "../orchestration";
+import { calleesFromMetadata, orchLine, proposeGroupFromMetadata, proposeTaskFromMetadata, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
 import { settleQueuedDelivery } from "./settleQueuedDelivery";
 import {
   AgentOwnerSettings,
@@ -1045,6 +1045,55 @@ function AgentProposeGroupFooter({
           style={{ ...btnGhost, padding: "4px 10px", fontSize: 12 }}
         >
           {t.orchProposeDismiss}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AgentProposeTaskFooter({
+  propose,
+  busy,
+  t,
+  onConfirm,
+  onDismiss,
+}: {
+  propose: OrchestrationProposeTask;
+  busy: boolean;
+  t: RanchMessages;
+  onConfirm: () => void;
+  onDismiss: () => void;
+}) {
+  const reward = propose.reward ?? "0";
+  const hours = propose.deadline_hours ?? 72;
+  return (
+    <div
+      style={{
+        border: `1px solid ${colors.border}`,
+        background: colors.panel,
+        borderRadius: 8,
+        padding: "8px 10px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 600, color: colors.text }}>{t.orchTaskLead}</div>
+      <div style={{ fontSize: 13, color: colors.text }}>{propose.title}</div>
+      {propose.description ? (
+        <div style={{ fontSize: 11, color: colors.muted, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
+          {propose.description}
+        </div>
+      ) : null}
+      <div style={{ fontSize: 12, color: colors.muted }}>
+        {t.orchTaskReward(reward)} · {t.orchTaskDeadline(hours)}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <button type="button" disabled={busy} onClick={onConfirm} style={{ ...btnPrimary, padding: "4px 10px", fontSize: 12 }}>
+          {t.orchTaskConfirm}
+        </button>
+        <button type="button" disabled={busy} onClick={onDismiss} style={{ ...btnGhost, padding: "4px 10px", fontSize: 12 }}>
+          {t.orchTaskDismiss}
         </button>
       </div>
     </div>
@@ -2408,6 +2457,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [dismissedPropose, setDismissedPropose] = useState<Set<string>>(
     () => readDismissedPropose(),
   );
+  const postedTasksRef = useRef<Map<string, string>>(new Map());
   const [groupAgentsByChat, setGroupAgentsByChat] = useState<Record<string, string[]>>(
     {},
   );
@@ -3403,6 +3453,43 @@ export function RanchChatShell(props: RanchChatShellProps) {
       await openConversation(target);
       // After navigate: openConversation clears error, so restore ACL misses here.
       if (failed.length) setError(t.orchProposePartial(failed.join(" · ")));
+    } catch (e) {
+      setError(
+        e instanceof ChatGatewayError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : t.sendFailed,
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmProposeTask = async (
+    propose: OrchestrationProposeTask,
+    messageId: string,
+  ) => {
+    setBusy(true);
+    setError(null);
+    try {
+      let taskId = postedTasksRef.current.get(messageId);
+      if (!taskId) {
+        const created = await client.createLabsTask({
+          title: propose.title,
+          description: propose.description?.trim() || propose.title,
+          deadline_hours: propose.deadline_hours ?? 72,
+          reward: propose.reward ?? "0",
+        });
+        taskId = created.task_id;
+        postedTasksRef.current.set(messageId, taskId);
+      }
+      await client.collabMatchTask(taskId);
+      setDismissedPropose((cur) => {
+        const next = new Set(cur).add(messageId);
+        writeDismissedPropose(next);
+        return next;
+      });
     } catch (e) {
       setError(
         e instanceof ChatGatewayError
@@ -5676,7 +5763,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               !dismissedPropose.has(m.message_id)
                                 ? proposeGroupFromMetadata(m.metadata)
                                 : null;
-                            if (!usage && !callees.length && !propose) return null;
+                            const taskPropose =
+                              !dismissedPropose.has(m.message_id)
+                                ? proposeTaskFromMetadata(m.metadata)
+                                : null;
+                            if (!usage && !callees.length && !propose && !taskPropose) return null;
                             const existing = propose
                               ? preferredExistingGroup(
                                   chats,
@@ -5722,6 +5813,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                         const next = new Set(cur).add(
                                           m.message_id,
                                         );
+                                        writeDismissedPropose(next);
+                                        return next;
+                                      })
+                                    }
+                                  />
+                                ) : null}
+                                {taskPropose ? (
+                                  <AgentProposeTaskFooter
+                                    propose={taskPropose}
+                                    busy={busy}
+                                    t={t}
+                                    onConfirm={() =>
+                                      void confirmProposeTask(taskPropose, m.message_id)
+                                    }
+                                    onDismiss={() =>
+                                      setDismissedPropose((cur) => {
+                                        const next = new Set(cur).add(m.message_id);
                                         writeDismissedPropose(next);
                                         return next;
                                       })
