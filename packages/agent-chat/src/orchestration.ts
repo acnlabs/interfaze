@@ -7,6 +7,13 @@ export type OrchestrationCallee = {
   name?: string;
 };
 
+export type OrchestrationProposeTask = {
+  title: string;
+  description?: string;
+  reward?: string;
+  deadline_hours?: number;
+};
+
 export type OrchestrationProposeGroup = {
   agent_ids: string[];
   title?: string;
@@ -113,6 +120,32 @@ export function proposeGroupFromMetadata(meta: unknown): OrchestrationProposeGro
   if (title) out.title = title;
   if (summary) out.summary = summary;
   if (existing) out.existing_chat_id = existing;
+  return out;
+}
+
+export function proposeTaskFromMetadata(meta: unknown): OrchestrationProposeTask | null {
+  const rec = asRecord(meta);
+  const orch = rec ? asRecord(rec.orchestration) : null;
+  const raw = orch ? asRecord(orch.propose_task) : null;
+  if (!raw || typeof raw.title !== "string") return null;
+  const title = raw.title.trim().slice(0, 200);
+  if (!title) return null;
+  const out: OrchestrationProposeTask = { title };
+  if (typeof raw.description === "string") {
+    const description = raw.description.trim().slice(0, 2000);
+    if (description) out.description = description;
+  }
+  if (typeof raw.reward === "string") {
+    const reward = raw.reward.trim().slice(0, 32);
+    const amount = Number(reward);
+    if (reward && Number.isFinite(amount) && amount >= 0 && amount <= 1_000_000) {
+      out.reward = reward;
+    }
+  }
+  if (typeof raw.deadline_hours === "number" && Number.isFinite(raw.deadline_hours)) {
+    const hours = Math.trunc(raw.deadline_hours);
+    if (hours >= 1 && hours <= 2160) out.deadline_hours = hours;
+  }
   return out;
 }
 
