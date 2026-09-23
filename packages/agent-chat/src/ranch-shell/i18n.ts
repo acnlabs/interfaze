@@ -84,6 +84,11 @@ export type RanchMessages = {
   orchTaskDeadline: (hours: number) => string;
   orchTaskConfirm: string;
   orchTaskDismiss: string;
+  orchTaskPosted: string;
+  orchTaskRecruitAgain: string;
+  orchTaskAck: string;
+  orchTaskRecruitFailed: string;
+  orchTaskNeedReward: string;
   pieceHeld: (amount: number) => string;
   pieceCaptured: string;
   /** Composer chip: current runtime / listing model (M1). */
@@ -734,6 +739,11 @@ const en: RanchMessages = {
   orchTaskDeadline: (hours) => `Open for ${hours} hours`,
   orchTaskConfirm: "Post and recruit",
   orchTaskDismiss: "Not now",
+  orchTaskPosted: "This job is already posted",
+  orchTaskRecruitAgain: "Recruit again",
+  orchTaskAck: "OK",
+  orchTaskRecruitFailed: "The job is posted and the reward is locked. Recruiting failed — you can try again.",
+  orchTaskNeedReward: "This suggestion has no reward, so it can't be posted.",
   pieceHeld: (amount) => `${amount} Credits settling`,
   pieceCaptured: "Settled",
   composerProviderLabel: "Provider",
@@ -1439,6 +1449,11 @@ const zh: RanchMessages = {
   orchTaskDeadline: (hours) => `${hours} 小时内`,
   orchTaskConfirm: "发单并招人",
   orchTaskDismiss: "先不",
+  orchTaskPosted: "这张单已经发出",
+  orchTaskRecruitAgain: "再招一次人",
+  orchTaskAck: "知道了",
+  orchTaskRecruitFailed: "单已经发出，积分已锁定。招人没成功，可以再试一次。",
+  orchTaskNeedReward: "这条提议没有赏金，不能发单。",
   pieceHeld: (amount) => `按件结算中 ${amount} Credits`,
   pieceCaptured: "已入账",
   composerProviderLabel: "供应商",

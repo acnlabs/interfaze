@@ -1054,17 +1054,19 @@ function AgentProposeGroupFooter({
 function AgentProposeTaskFooter({
   propose,
   busy,
+  posted,
   t,
   onConfirm,
   onDismiss,
 }: {
   propose: OrchestrationProposeTask;
   busy: boolean;
+  posted: boolean;
   t: RanchMessages;
   onConfirm: () => void;
   onDismiss: () => void;
 }) {
-  const reward = propose.reward ?? "0";
+  const reward = propose.reward;
   const hours = propose.deadline_hours ?? 72;
   return (
     <div
@@ -1085,15 +1087,24 @@ function AgentProposeTaskFooter({
           {propose.description}
         </div>
       ) : null}
-      <div style={{ fontSize: 12, color: colors.muted }}>
-        {t.orchTaskReward(reward)} · {t.orchTaskDeadline(hours)}
-      </div>
+      {reward ? (
+        <div style={{ fontSize: 12, color: colors.muted }}>
+          {t.orchTaskReward(reward)} · {t.orchTaskDeadline(hours)}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: colors.muted }}>{t.orchTaskNeedReward}</div>
+      )}
+      {posted ? (
+        <div style={{ fontSize: 12, color: colors.text }}>{t.orchTaskPosted}</div>
+      ) : null}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        <button type="button" disabled={busy} onClick={onConfirm} style={{ ...btnPrimary, padding: "4px 10px", fontSize: 12 }}>
-          {t.orchTaskConfirm}
-        </button>
+        {reward ? (
+          <button type="button" disabled={busy} onClick={onConfirm} style={{ ...btnPrimary, padding: "4px 10px", fontSize: 12 }}>
+            {posted ? t.orchTaskRecruitAgain : t.orchTaskConfirm}
+          </button>
+        ) : null}
         <button type="button" disabled={busy} onClick={onDismiss} style={{ ...btnGhost, padding: "4px 10px", fontSize: 12 }}>
-          {t.orchTaskDismiss}
+          {posted ? t.orchTaskAck : t.orchTaskDismiss}
         </button>
       </div>
     </div>
@@ -1450,6 +1461,7 @@ function writeStickyMention(chatId: string, sticky: StickyMention | null): void 
 }
 
 const ORCH_PROPOSE_DISMISS_KEY = "interfaze:orchProposeDismissed:v1";
+const ORCH_POSTED_TASK_KEY = "interfaze:orchPostedTask:v1";
 const ORCH_PROPOSE_DISMISS_MAX = 200;
 
 function readDismissedPropose(): Set<string> {
@@ -1465,6 +1477,33 @@ function readDismissedPropose(): Set<string> {
     );
   } catch {
     return new Set();
+  }
+}
+
+function readPostedTasks(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(ORCH_POSTED_TASK_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return {};
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (typeof key === "string" && typeof value === "string" && key && value) {
+        out[key] = value;
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function writePostedTasks(tasks: Record<string, string>): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ORCH_POSTED_TASK_KEY, JSON.stringify(tasks));
+  } catch {
+    /* quota */
   }
 }
 
@@ -2457,7 +2496,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [dismissedPropose, setDismissedPropose] = useState<Set<string>>(
     () => readDismissedPropose(),
   );
-  const postedTasksRef = useRef<Map<string, string>>(new Map());
+  const [postedTasks, setPostedTasks] = useState<Record<string, string>>(() => readPostedTasks());
+  const postedTasksRef = useRef(postedTasks);
+  const postingTasksRef = useRef<Set<string>>(new Set());
   const [groupAgentsByChat, setGroupAgentsByChat] = useState<Record<string, string[]>>(
     {},
   );
@@ -3470,19 +3511,26 @@ export function RanchChatShell(props: RanchChatShellProps) {
     propose: OrchestrationProposeTask,
     messageId: string,
   ) => {
+    if (!propose.reward) return;
+    if (postingTasksRef.current.has(messageId)) return;
+    postingTasksRef.current.add(messageId);
     setBusy(true);
     setError(null);
     try {
-      let taskId = postedTasksRef.current.get(messageId);
+      let taskId = postedTasksRef.current[messageId];
       if (!taskId) {
         const created = await client.createLabsTask({
           title: propose.title,
           description: propose.description?.trim() || propose.title,
           deadline_hours: propose.deadline_hours ?? 72,
-          reward: propose.reward ?? "0",
+          reward: propose.reward,
         });
         taskId = created.task_id;
-        postedTasksRef.current.set(messageId, taskId);
+        if (!taskId) throw new Error(t.sendFailed);
+        const next = { ...postedTasksRef.current, [messageId]: taskId };
+        postedTasksRef.current = next;
+        writePostedTasks(next);
+        setPostedTasks(next);
       }
       await client.collabMatchTask(taskId);
       setDismissedPropose((cur) => {
@@ -3492,13 +3540,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
       });
     } catch (e) {
       setError(
-        e instanceof ChatGatewayError
-          ? e.message
-          : e instanceof Error
+        postedTasksRef.current[messageId]
+          ? t.orchTaskRecruitFailed
+          : e instanceof ChatGatewayError
             ? e.message
-            : t.sendFailed,
+            : e instanceof Error
+              ? e.message
+              : t.sendFailed,
       );
     } finally {
+      postingTasksRef.current.delete(messageId);
       setBusy(false);
     }
   };
@@ -5822,7 +5873,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 {taskPropose ? (
                                   <AgentProposeTaskFooter
                                     propose={taskPropose}
-                                    busy={busy}
+                                    busy={busy || postingTasksRef.current.has(m.message_id)}
+                                    posted={Boolean(postedTasks[m.message_id])}
                                     t={t}
                                     onConfirm={() =>
                                       void confirmProposeTask(taskPropose, m.message_id)

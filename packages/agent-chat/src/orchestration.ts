@@ -131,17 +131,24 @@ export function proposeTaskFromMetadata(meta: unknown): OrchestrationProposeTask
   const title = raw.title.trim().slice(0, 200);
   if (!title) return null;
   const out: OrchestrationProposeTask = { title };
+  let rewardOk = false;
   if (typeof raw.description === "string") {
     const description = raw.description.trim().slice(0, 2000);
     if (description) out.description = description;
   }
-  if (typeof raw.reward === "string") {
-    const reward = raw.reward.trim().slice(0, 32);
+  const rewardRaw =
+    typeof raw.reward === "number" && Number.isFinite(raw.reward)
+      ? String(raw.reward)
+      : raw.reward;
+  if (typeof rewardRaw === "string") {
+    const reward = rewardRaw.trim().slice(0, 32);
     const amount = Number(reward);
     if (reward && Number.isFinite(amount) && amount >= 0 && amount <= 1_000_000) {
       out.reward = reward;
+      rewardOk = true;
     }
   }
+  if (!rewardOk) return null;
   if (typeof raw.deadline_hours === "number" && Number.isFinite(raw.deadline_hours)) {
     const hours = Math.trunc(raw.deadline_hours);
     if (hours >= 1 && hours <= 2160) out.deadline_hours = hours;
