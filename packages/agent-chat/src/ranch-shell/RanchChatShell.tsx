@@ -5866,6 +5866,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 ? proposeGroupFromMetadata(m.metadata)
                                 : null;
                             const taskPropose =
+                              active &&
+                              !isGroupChat(active) &&
                               !dismissedPropose.has(m.message_id)
                                 ? proposeTaskFromMetadata(m.metadata)
                                 : null;
