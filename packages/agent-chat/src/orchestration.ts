@@ -156,6 +156,39 @@ export function proposeTaskFromMetadata(meta: unknown): OrchestrationProposeTask
   return out;
 }
 
+/** Labs / ACN reject a job description shorter than 10 characters. */
+const LABS_DESCRIPTION_MIN = 10;
+const LABS_DESCRIPTION_MAX = 2000;
+const LABS_DESCRIPTION_PAD = "（这条说明来自聊天）";
+
+export function labsTaskDescription(title: string, description?: string): string {
+  const desc = (description ?? "").trim();
+  const name = title.trim();
+  let text = desc || name;
+  if (desc && name && text.length < LABS_DESCRIPTION_MIN && !desc.includes(name)) {
+    text = `${desc} ${name}`.trim();
+  }
+  if (text.length < LABS_DESCRIPTION_MIN) text = `${text}${LABS_DESCRIPTION_PAD}`;
+  return text.slice(0, LABS_DESCRIPTION_MAX);
+}
+
+const TAKEN_TASK_STATUS = new Set([
+  "assigned",
+  "in_progress",
+  "submitted",
+  "in_review",
+  "completed",
+]);
+
+export function labsTaskTaken(
+  task: { assignee_id?: string | null; status?: string | null } | null | undefined,
+): boolean {
+  if (!task) return false;
+  if (typeof task.assignee_id === "string" && task.assignee_id.trim()) return true;
+  const status = typeof task.status === "string" ? task.status.trim().toLowerCase() : "";
+  return TAKEN_TASK_STATUS.has(status);
+}
+
 export function calleeLabel(
   c: OrchestrationCallee,
   names?: Record<string, string>,
