@@ -2499,6 +2499,36 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [postedTasks, setPostedTasks] = useState<Record<string, string>>(() => readPostedTasks());
   const postedTasksRef = useRef(postedTasks);
   const postingTasksRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const pending = Object.entries(postedTasks).filter(
+      ([messageId]) => !dismissedPropose.has(messageId),
+    );
+    if (!pending.length) return;
+    let cancelled = false;
+    void Promise.all(
+      pending.map(async ([messageId, taskId]) => {
+        try {
+          return labsTaskTaken(await client.getLabsTask(taskId)) ? messageId : null;
+        } catch {
+          return null;
+        }
+      }),
+    ).then((rows) => {
+      if (cancelled) return;
+      const taken = rows.filter((id): id is string => Boolean(id));
+      if (!taken.length) return;
+      setDismissedPropose((cur) => {
+        const next = new Set(cur);
+        for (const id of taken) next.add(id);
+        if (next.size === cur.size) return cur;
+        writeDismissedPropose(next);
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, dismissedPropose, postedTasks]);
   const [groupAgentsByChat, setGroupAgentsByChat] = useState<Record<string, string[]>>(
     {},
   );
