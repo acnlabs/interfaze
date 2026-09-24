@@ -29,7 +29,7 @@ import type {
 import { connectChatSocket, type ChatSocket } from "../ws";
 import { MailboxThumbs } from "../MailboxThumbs";
 import { parseMessageAttachments } from "../mailbox";
-import { calleesFromMetadata, orchLine, proposeGroupFromMetadata, proposeTaskFromMetadata, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
+import { calleesFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, proposeGroupFromMetadata, proposeTaskFromMetadata, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
 import { settleQueuedDelivery } from "./settleQueuedDelivery";
 import {
   AgentOwnerSettings,
@@ -3516,12 +3516,26 @@ export function RanchChatShell(props: RanchChatShellProps) {
     postingTasksRef.current.add(messageId);
     setBusy(true);
     setError(null);
+    const dismissTaskCard = () => {
+      setDismissedPropose((cur) => {
+        const next = new Set(cur).add(messageId);
+        writeDismissedPropose(next);
+        return next;
+      });
+    };
+    const taskIsTaken = async (taskId: string) => {
+      try {
+        return labsTaskTaken(await client.getLabsTask(taskId));
+      } catch {
+        return false;
+      }
+    };
     try {
       let taskId = postedTasksRef.current[messageId];
       if (!taskId) {
         const created = await client.createLabsTask({
           title: propose.title,
-          description: propose.description?.trim() || propose.title,
+          description: labsTaskDescription(propose.title, propose.description),
           deadline_hours: propose.deadline_hours ?? 72,
           reward: propose.reward,
         });
@@ -3531,13 +3545,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
         postedTasksRef.current = next;
         writePostedTasks(next);
         setPostedTasks(next);
+      } else if (await taskIsTaken(taskId)) {
+        dismissTaskCard();
+        return;
       }
-      await client.collabMatchTask(taskId);
-      setDismissedPropose((cur) => {
-        const next = new Set(cur).add(messageId);
-        writeDismissedPropose(next);
-        return next;
-      });
+      try {
+        await client.collabMatchTask(taskId);
+      } catch (matchErr) {
+        if (await taskIsTaken(taskId)) {
+          dismissTaskCard();
+          return;
+        }
+        throw matchErr;
+      }
+      dismissTaskCard();
     } catch (e) {
       setError(
         postedTasksRef.current[messageId]

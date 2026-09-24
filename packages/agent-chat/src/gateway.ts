@@ -501,6 +501,10 @@ export type GatewayClient = {
     reward: string;
   }) => Promise<{ task_id: string }>;
   collabMatchTask: (taskId: string) => Promise<unknown>;
+  getLabsTask: (taskId: string) => Promise<{
+    assignee_id?: string | null;
+    status?: string | null;
+  }>;
   listMessages: (chatId: string) => Promise<ChatMessage[]>;
   listParticipants: (chatId: string) => Promise<ChatParticipant[]>;
   sendMessage: (
@@ -830,6 +834,10 @@ export function createGatewayClient(
         method: "POST",
         body: "{}",
       }),
+    getLabsTask: (taskId) =>
+      request<{ assignee_id?: string | null; status?: string | null }>(
+        `/api/labs/tasks/${encodeURIComponent(taskId)}`,
+      ),
     searchAgents: async (q = "", limit = 20) => {
       const params = new URLSearchParams();
       if (q.trim()) params.set("q", q.trim());
