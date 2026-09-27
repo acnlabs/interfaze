@@ -29,7 +29,7 @@ import type {
 import { connectChatSocket, type ChatSocket } from "../ws";
 import { MailboxThumbs } from "../MailboxThumbs";
 import { parseMessageAttachments } from "../mailbox";
-import { calleesFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, proposeGroupFromMetadata, proposeTaskFromMetadata, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
+import { calleesFromMetadata, decideFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, proposeGroupFromMetadata, proposeTaskFromMetadata, type MessageDecide, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
 import { settleQueuedDelivery } from "./settleQueuedDelivery";
 import {
   AgentOwnerSettings,
@@ -950,6 +950,138 @@ function OrchCopyRow({
       >
         {copied ? copiedLabel : copyLabel}
       </button>
+    </div>
+  );
+}
+
+function AgentDecideFooter({
+  decide,
+  auto,
+  hops,
+  hopCap,
+  busy,
+  t,
+  onPick,
+}: {
+  decide: MessageDecide;
+  auto: boolean;
+  hops: number;
+  hopCap: number;
+  busy: boolean;
+  t: RanchMessages;
+  onPick: (id: string, label: string) => void;
+}) {
+  const appliedId = decide.applied?.option_id || null;
+  const shadow = decide.shadow;
+  const suggested =
+    !appliedId && shadow?.status === "scored" && shadow.choice ? shadow.choice : null;
+  const waitingHuman =
+    shadow?.status === "ask_human" ||
+    shadow?.gate?.ask_human === true ||
+    shadow?.status === "low_confidence";
+  const scoring = shadow?.status === "pending";
+  const capped = auto && hopCap > 0 && hops >= hopCap && !appliedId;
+  const locked = Boolean(appliedId) || busy || (auto && scoring);
+  let status = "";
+  if (appliedId) status = t.decisionPicked;
+  else if (scoring) status = t.decisionScoring;
+  else if (waitingHuman) status = t.decisionAskHuman;
+  else if (capped) status = t.decisionCap;
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        paddingLeft: 2,
+        maxWidth: "100%",
+      }}
+    >
+      {status ? (
+        <div style={{ fontSize: 11, color: colors.muted, lineHeight: 1.35 }}>{status}</div>
+      ) : null}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {decide.options.map((opt) => {
+          const picked = appliedId === opt.id;
+          const hint = suggested === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              disabled={locked}
+              onClick={() => onPick(opt.id, opt.label)}
+              style={{
+                ...btnGhost,
+                padding: "4px 10px",
+                fontSize: 12,
+                opacity: locked && !picked ? 0.55 : 1,
+                borderColor: picked || hint ? "rgba(59,130,246,0.45)" : colors.border,
+                background: picked || hint ? colors.accentSoft : "transparent",
+                color: colors.text,
+                cursor: locked ? "default" : "pointer",
+              }}
+            >
+              {opt.label}
+              {hint && !picked ? ` · ${t.decisionSuggested}` : ""}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ChatDecisionSettings({
+  auto,
+  goal,
+  hops,
+  hopCap,
+  busy,
+  t,
+  onToggle,
+}: {
+  auto: boolean;
+  goal: string;
+  hops: number;
+  hopCap: number;
+  busy: boolean;
+  t: RanchMessages;
+  onToggle: (next: boolean) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontSize: 13, fontWeight: 650, color: colors.text }}>{t.decisionAuto}</div>
+      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
+        {t.decisionAutoHint}
+      </p>
+      <label
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          fontSize: 13,
+          color: colors.text,
+          userSelect: "none",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={auto}
+          disabled={busy}
+          onChange={(e) => onToggle(e.target.checked)}
+        />
+        {t.decisionAuto}
+      </label>
+      {!goal ? (
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
+          {t.decisionAutoNeedGoal}
+        </p>
+      ) : (
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
+          {goal}
+          {auto && hopCap > 0 ? ` · ${hops}/${hopCap}` : ""}
+        </p>
+      )}
     </div>
   );
 }
@@ -2579,6 +2711,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   } | null>(null);
   /** User pick for this hop (S1). Sticky per chat until changed. */
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [pinDecisionGoal, setPinDecisionGoal] = useState(false);
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
   const [composerMenuQuery, setComposerMenuQuery] = useState("");
   const [composerCatalog, setComposerCatalog] = useState<Array<{ id: string; in: number; out: number }>>(
@@ -3664,6 +3797,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     text?: string;
     /** Override topic tagging (e.g. newly created thread id). */
     threadId?: string | null;
+    /** Pick a listed decide option (same send path as typing the label). */
+    decisionChoice?: string;
   };
 
   const send = async (opts?: SendOpts) => {
@@ -3727,6 +3862,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
           Boolean(composerModel?.official_channel),
           composerModel?.official_key_geo,
         ),
+        decision_goal: opts?.decisionChoice ? null : pinDecisionGoal ? text : null,
+        decision_choice: opts?.decisionChoice ?? null,
       });
       if (group && mentions) {
         if (mentions.length === 1) {
@@ -3737,6 +3874,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         }
       }
       setDraft("");
+      setPinDecisionGoal(false);
       await reloadMessages(chatId, seq);
       await refreshChats();
       // Mode B writeback is async (~5–30s). WS message.new can be missed; poll DB.
@@ -3835,6 +3973,29 @@ export function RanchChatShell(props: RanchChatShellProps) {
   };
   sendRef.current = send;
 
+  const toggleChatDecision = async (next: boolean) => {
+    if (!active || isGroupChat(active)) return;
+    const chatId = active.chat_id;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await client.patchChatDecision(chatId, next);
+      const decision = updated.decision ?? {
+        ...(active.decision || {}),
+        auto: next,
+        auto_hops: next ? 0 : active.decision?.auto_hops,
+      };
+      setActive((cur) => (cur && cur.chat_id === chatId ? { ...cur, decision } : cur));
+      setChats((prev) =>
+        prev.map((c) => (c.chat_id === chatId ? { ...c, decision } : c)),
+      );
+    } catch (e) {
+      setError(e instanceof ChatGatewayError ? e.message : t.sendFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const retryLastUserMessage = () => {
     if (!active) return;
     const lastUser = [...messages].reverse().find((m) => m.sender_type === "user");
@@ -3875,12 +4036,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
           text,
           mentions,
           activeTopic?.id ?? composerTopic?.id ?? null,
-          { requested_model: requestedModelForSend(
-            selectedModelId,
-            composerModel?.listed_model_id ?? null,
-            Boolean(composerModel?.official_channel),
-            composerModel?.official_key_geo,
-          ) },
+          {
+            requested_model: requestedModelForSend(
+              selectedModelId,
+              composerModel?.listed_model_id ?? null,
+              Boolean(composerModel?.official_channel),
+              composerModel?.official_key_geo,
+            ),
+            decision_goal: pinDecisionGoal ? text : null,
+          },
         );
         if (group && mentions) {
           if (mentions.length === 1) {
@@ -3891,6 +4055,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           }
         }
         setDraft("");
+        setPinDecisionGoal(false);
         await reloadMessages(chatId, seq);
         await refreshChats();
         void (async () => {
@@ -4410,6 +4575,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const activeOffline =
     active && !isGroupChat(active) && isAgentOffline(active.agent_status);
   const groupActive = !!(active && isGroupChat(active));
+  const latestDecideId = groupActive
+    ? undefined
+    : [...displayMessages].reverse().find((m) => decideFromMetadata(m.metadata))?.message_id;
   const studioOrigin = (studioBaseUrl || "").replace(/\/+$/, "");
   const embodyOrigin = (embodyBaseUrl || "").replace(/\/+$/, "");
   const activeWindow = active ? chatWindows[active.chat_id] ?? null : null;
@@ -5859,6 +6027,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         ? (() => {
                             const usage = hopUsageFromMessage(m);
                             const callees = calleesFromMetadata(m.metadata);
+                            const decide = group ? null : decideFromMetadata(m.metadata);
                             const propose =
                               active &&
                               !isGroupChat(active) &&
@@ -5871,7 +6040,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               !dismissedPropose.has(m.message_id)
                                 ? proposeTaskFromMetadata(m.metadata)
                                 : null;
-                            if (!usage && !callees.length && !propose && !taskPropose) return null;
+                            if (!usage && !callees.length && !decide && !propose && !taskPropose) return null;
                             const existing = propose
                               ? preferredExistingGroup(
                                   chats,
@@ -5886,6 +6055,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     callees={callees}
                                     names={agentNames}
                                     t={t}
+                                  />
+                                ) : null}
+                                {decide ? (
+                                  <AgentDecideFooter
+                                    decide={decide}
+                                    auto={Boolean(active?.decision?.auto)}
+                                    hops={active?.decision?.auto_hops ?? 0}
+                                    hopCap={active?.decision?.auto_hop_cap ?? 5}
+                                    busy={busy || m.message_id !== latestDecideId}
+                                    t={t}
+                                    onPick={(id, label) => {
+                                      void send({ text: label, decisionChoice: id });
+                                    }}
                                   />
                                 ) : null}
                                 {propose ? (
@@ -6635,6 +6817,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     })()}
                   </div>
                 ) : null}
+                <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 12,
+                    color: colors.muted,
+                    userSelect: "none",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={pinDecisionGoal}
+                    onChange={(e) => setPinDecisionGoal(e.target.checked)}
+                  />
+                  {t.decisionGoal}
+                </label>
                 <textarea
                   value={draft}
                   onChange={(e) => {
@@ -6933,6 +7132,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         : ([
                             ["info", t.infoTab],
                             ["chats", t.chatsTab],
+                            ["settings", t.settingsTab],
                           ] as const)
                     ).map(([key, label]) => (
                       <button
@@ -7039,32 +7239,46 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </div>
                       ) : null}
                     </>
-                  ) : infoTab === "settings" && !groupActive && activeIsOwned ? (
+                  ) : infoTab === "settings" && !groupActive ? (
                     <div
                       style={{
                         flex: 1,
                         overflow: "auto",
                         padding: 16,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 20,
                       }}
                     >
-                      {ownedAgentLoading && !ownedAgentDetail ? (
-                        <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
-                      ) : ownedAgentDetail ? (
-                        <AgentOwnerSettings
-                          client={client}
-                          detail={ownedAgentDetail}
-                          messages={t}
-                          agentPlanetBaseUrl={agentPlanetBaseUrl}
-                          interfazeBaseUrl={interfazeBaseUrl}
-                          connectGuideUrl={connectGuideUrl}
-                          busy={busy}
-                          onUpdated={applyOwnedAgentProfileUpdate}
-                          onRemoved={applyOwnedAgentRemoved}
-                          onOpenKeys={() => openAccountPanel("keys")}
-                        />
-                      ) : (
-                        <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>
-                      )}
+                      <ChatDecisionSettings
+                        auto={Boolean(active.decision?.auto)}
+                        goal={(active.decision?.goal || "").trim()}
+                        hops={active.decision?.auto_hops ?? 0}
+                        hopCap={active.decision?.auto_hop_cap ?? 5}
+                        busy={busy}
+                        t={t}
+                        onToggle={(next) => void toggleChatDecision(next)}
+                      />
+                      {activeIsOwned ? (
+                        ownedAgentLoading && !ownedAgentDetail ? (
+                          <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
+                        ) : ownedAgentDetail ? (
+                          <AgentOwnerSettings
+                            client={client}
+                            detail={ownedAgentDetail}
+                            messages={t}
+                            agentPlanetBaseUrl={agentPlanetBaseUrl}
+                            interfazeBaseUrl={interfazeBaseUrl}
+                            connectGuideUrl={connectGuideUrl}
+                            busy={busy}
+                            onUpdated={applyOwnedAgentProfileUpdate}
+                            onRemoved={applyOwnedAgentRemoved}
+                            onOpenKeys={() => openAccountPanel("keys")}
+                          />
+                        ) : (
+                          <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>
+                        )
+                      ) : null}
                     </div>
                   ) : infoTab === "wallet" && !groupActive && activeIsOwned && active?.agent_id ? (
                     <div

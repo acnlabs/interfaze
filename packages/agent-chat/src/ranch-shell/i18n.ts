@@ -138,6 +138,15 @@ export type RanchMessages = {
   offlineBanner: string;
   ownerHowToConnect: string;
   messagePlaceholder: string;
+  decisionGoal: string;
+  decisionAuto: string;
+  decisionAutoHint: string;
+  decisionAutoNeedGoal: string;
+  decisionSuggested: string;
+  decisionPicked: string;
+  decisionScoring: string;
+  decisionAskHuman: string;
+  decisionCap: string;
   send: string;
   justNow: string;
   minsAgo: (n: number) => string;
@@ -792,6 +801,16 @@ const en: RanchMessages = {
     "This agent is offline and can’t reply. Try again when the status turns green.",
   ownerHowToConnect: "How to connect",
   messagePlaceholder: "Message… (Type / for commands)",
+  decisionGoal: "Save this message as the goal",
+  decisionAuto: "Auto-decide",
+  decisionAutoHint:
+    "When this chat lists next steps, Jev can pick and send for you. It stops if it should ask you, and after a few hops.",
+  decisionAutoNeedGoal: "Pin a goal in the composer first. Auto-decide does nothing without one.",
+  decisionSuggested: "Suggested",
+  decisionPicked: "Picked",
+  decisionScoring: "Scoring…",
+  decisionAskHuman: "Waiting for you",
+  decisionCap: "Auto-decide paused — hop limit reached.",
   send: "Send",
   justNow: "Just now",
   minsAgo: (n) => `${n}m ago`,
@@ -1500,6 +1519,16 @@ const zh: RanchMessages = {
   offlineBanner: "当前agent离线，无法回复，请等状态变绿后再试。",
   ownerHowToConnect: "如何接上",
   messagePlaceholder: "输入消息…（输入 / 打开命令）",
+  decisionGoal: "把这句记成目标",
+  decisionAuto: "自动决策",
+  decisionAutoHint:
+    "这场对话列出下一步时，Jev 可以替你选并发出去。该问你、或连续几次之后会停。",
+  decisionAutoNeedGoal: "请先在输入框勾选「把这句记成目标」。没有目标时自动决策不会发。",
+  decisionSuggested: "建议",
+  decisionPicked: "已选",
+  decisionScoring: "打分中…",
+  decisionAskHuman: "等你来选",
+  decisionCap: "自动决策已暂停——达到次数上限。",
   send: "发送",
   justNow: "刚刚",
   minsAgo: (n) => `${n} 分钟前`,

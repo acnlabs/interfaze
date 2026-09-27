@@ -76,6 +76,13 @@ export type ChatSummary = {
   unread_count?: number;
   agent_status?: string | null;
   embed?: ChatEmbed | null;
+  /** Per-chat decision goal + auto-decide switch (direct chats). */
+  decision?: {
+    goal?: string | null;
+    auto?: boolean;
+    auto_hops?: number;
+    auto_hop_cap?: number;
+  } | null;
   /** Group chats: member counts from Gateway list/detail. */
   total_members?: number;
   active_members?: number;
@@ -211,6 +218,11 @@ export type ChatMessage = {
         title?: string;
         summary?: string;
         existing_chat_id?: string;
+      };
+      decide?: {
+        options?: Array<{ id: string; label: string }>;
+        shadow?: Record<string, unknown>;
+        applied?: { option_id?: string; by?: string };
       };
     };
     piece?: PieceHold | null;
