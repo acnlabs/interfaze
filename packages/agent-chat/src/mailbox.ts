@@ -31,6 +31,19 @@ export function mailboxIdsFromAttachments(refs: string[]): string[] {
   return ids;
 }
 
+const UUID_FILE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\.[a-z0-9]{1,8})?$/i;
+const HEX32_FILE = /^[0-9a-f]{32}(\.[a-z0-9]{1,8})?$/i;
+
+/** Download links need a hunter-readable name. Mailbox ids stay off the bubble. */
+export function isReadableAttachmentName(name: string, mailboxId: string): boolean {
+  const n = name.trim();
+  if (!n) return false;
+  if (n === mailboxId || n === `${MAILBOX_PREFIX}${mailboxId}`) return false;
+  const base = n.split(/[/\\]/).pop() || n;
+  if (UUID_FILE.test(base) || HEX32_FILE.test(base)) return false;
+  return true;
+}
+
 export function normalizeChatMessage<T extends { attachments?: unknown }>(
   row: T,
 ): T & { attachments: string[] } {
