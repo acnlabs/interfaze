@@ -29,7 +29,7 @@ import type {
 import { connectChatSocket, type ChatSocket } from "../ws";
 import { MailboxThumbs } from "../MailboxThumbs";
 import { parseMessageAttachments } from "../mailbox";
-import { calleesFromMetadata, decideFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, proposeGroupFromMetadata, proposeTaskFromMetadata, type MessageDecide, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
+import { calleesFromMetadata, decideFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, planFromMetadata, proposeGroupFromMetadata, proposeTaskFromMetadata, type MessageDecide, type MessagePlan, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
 import { settleQueuedDelivery } from "./settleQueuedDelivery";
 import {
   AgentOwnerSettings,
@@ -954,6 +954,36 @@ function OrchCopyRow({
   );
 }
 
+function AgentPlanFooter({
+  plan,
+  t,
+}: {
+  plan: MessagePlan;
+  t: RanchMessages;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        paddingLeft: 2,
+        maxWidth: "100%",
+      }}
+    >
+      <div style={{ fontSize: 11, color: colors.muted, lineHeight: 1.35 }}>
+        {t.historyPlans}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 650, color: colors.text, lineHeight: 1.35 }}>
+        {plan.title}
+      </div>
+      {plan.summary ? (
+        <div style={{ fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>{plan.summary}</div>
+      ) : null}
+    </div>
+  );
+}
+
 function AgentDecideFooter({
   decide,
   auto,
@@ -1033,7 +1063,6 @@ function AgentDecideFooter({
 
 function ChatDecisionSettings({
   auto,
-  goal,
   hops,
   hopCap,
   busy,
@@ -1041,7 +1070,6 @@ function ChatDecisionSettings({
   onToggle,
 }: {
   auto: boolean;
-  goal: string;
   hops: number;
   hopCap: number;
   busy: boolean;
@@ -1072,14 +1100,13 @@ function ChatDecisionSettings({
         />
         {t.decisionAuto}
       </label>
-      {!goal ? (
+      {auto && hopCap > 0 ? (
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
-          {t.decisionAutoNeedGoal}
+          {hops}/{hopCap}
         </p>
       ) : (
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
-          {goal}
-          {auto && hopCap > 0 ? ` · ${hops}/${hopCap}` : ""}
+          {t.decisionAutoNeedGoal}
         </p>
       )}
     </div>
@@ -2630,6 +2657,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   );
   const [postedTasks, setPostedTasks] = useState<Record<string, string>>(() => readPostedTasks());
   const postedTasksRef = useRef(postedTasks);
+  postedTasksRef.current = postedTasks;
   const postingTasksRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const pending = Object.entries(postedTasks).filter(
@@ -2687,6 +2715,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   } | null>(null);
   /** Detail panel tab. Group: members. Direct: info | settings? | wallet? | chats. */
   const [infoTab, setInfoTab] = useState<"info" | "settings" | "wallet" | "members" | "chats">("info");
+  const [historyKind, setHistoryKind] = useState<"chats" | "plans" | "tasks">("chats");
   /** Owned-agent ACN detail for Info (read-only) + Settings (manage). */
   const [ownedAgentDetail, setOwnedAgentDetail] = useState<MyAgentSummary | null>(null);
   const [composerModel, setComposerModel] = useState<{
@@ -2711,7 +2740,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
   } | null>(null);
   /** User pick for this hop (S1). Sticky per chat until changed. */
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-  const [pinDecisionGoal, setPinDecisionGoal] = useState(false);
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
   const [composerMenuQuery, setComposerMenuQuery] = useState("");
   const [composerCatalog, setComposerCatalog] = useState<Array<{ id: string; in: number; out: number }>>(
@@ -2998,6 +3026,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const el = listRef.current?.querySelector(`[data-topic-id="${safe}"]`);
     if (el && "scrollIntoView" in el) {
       (el as HTMLElement).scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, []);
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    const safe = messageId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const el = listRef.current?.querySelector(`[data-message-id="${safe}"]`);
+    if (el && "scrollIntoView" in el) {
+      (el as HTMLElement).scrollIntoView({ block: "center", behavior: "smooth" });
     }
   }, []);
 
@@ -3862,7 +3898,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
           Boolean(composerModel?.official_channel),
           composerModel?.official_key_geo,
         ),
-        decision_goal: opts?.decisionChoice ? null : pinDecisionGoal ? text : null,
         decision_choice: opts?.decisionChoice ?? null,
       });
       if (group && mentions) {
@@ -3874,7 +3909,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
         }
       }
       setDraft("");
-      setPinDecisionGoal(false);
       await reloadMessages(chatId, seq);
       await refreshChats();
       // Mode B writeback is async (~5–30s). WS message.new can be missed; poll DB.
@@ -4043,7 +4077,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
               Boolean(composerModel?.official_channel),
               composerModel?.official_key_geo,
             ),
-            decision_goal: pinDecisionGoal ? text : null,
           },
         );
         if (group && mentions) {
@@ -4055,7 +4088,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
           }
         }
         setDraft("");
-        setPinDecisionGoal(false);
         await reloadMessages(chatId, seq);
         await refreshChats();
         void (async () => {
@@ -4180,6 +4212,78 @@ export function RanchChatShell(props: RanchChatShellProps) {
           )
           .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))
       : [];
+
+  const historyPlans: Array<{
+    key: string;
+    title: string;
+    summary?: string;
+    chatId: string;
+    messageId?: string;
+  }> = (() => {
+    const rows: Array<{
+      key: string;
+      title: string;
+      summary?: string;
+      chatId: string;
+      messageId?: string;
+    }> = [];
+    const seen = new Set<string>();
+    const push = (
+      chatId: string,
+      title: string,
+      summary?: string,
+      messageId?: string,
+    ) => {
+      const key = `${chatId}:${messageId || title}`;
+      if (seen.has(key) || !title.trim()) return;
+      seen.add(key);
+      rows.push({ key, title, summary, chatId, messageId });
+    };
+    for (const c of siblingChats) {
+      const listed = c.decision?.plans?.length
+        ? c.decision.plans
+        : c.decision?.plan
+          ? [c.decision.plan]
+          : [];
+      for (const p of listed) {
+        if (!p?.title) continue;
+        push(c.chat_id, p.title, p.summary, p.message_id || p.id);
+      }
+    }
+    if (active && !isGroupChat(active)) {
+      for (const m of messages) {
+        const plan = planFromMetadata(m.metadata);
+        if (plan) push(active.chat_id, plan.title, plan.summary, m.message_id);
+      }
+    }
+    return rows;
+  })();
+
+  const historyTasks: Array<{
+    key: string;
+    title: string;
+    pending: boolean;
+    taskId?: string;
+  }> = (() => {
+    const rows: Array<{
+      key: string;
+      title: string;
+      pending: boolean;
+      taskId?: string;
+    }> = [];
+    for (const m of messages) {
+      const task = proposeTaskFromMetadata(m.metadata);
+      if (!task) continue;
+      const taskId = postedTasks[m.message_id];
+      rows.push({
+        key: m.message_id,
+        title: task.title,
+        pending: !taskId,
+        taskId,
+      });
+    }
+    return rows;
+  })();
 
   const showAgentReplyPending =
     replySlot?.phase === "pending" && replySlot.chatId === active?.chat_id;
@@ -5943,6 +6047,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </div>
                       ) : null}
                     <div
+                      data-message-id={m.message_id}
                       style={{
                         alignSelf: isUser ? "flex-end" : "flex-start",
                         maxWidth: "85%",
@@ -6028,6 +6133,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             const usage = hopUsageFromMessage(m);
                             const callees = calleesFromMetadata(m.metadata);
                             const decide = group ? null : decideFromMetadata(m.metadata);
+                            const plan = group ? null : planFromMetadata(m.metadata);
                             const propose =
                               active &&
                               !isGroupChat(active) &&
@@ -6040,7 +6146,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               !dismissedPropose.has(m.message_id)
                                 ? proposeTaskFromMetadata(m.metadata)
                                 : null;
-                            if (!usage && !callees.length && !decide && !propose && !taskPropose) return null;
+                            if (!usage && !callees.length && !decide && !plan && !propose && !taskPropose) return null;
                             const existing = propose
                               ? preferredExistingGroup(
                                   chats,
@@ -6057,6 +6163,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     t={t}
                                   />
                                 ) : null}
+                                {plan ? <AgentPlanFooter plan={plan} t={t} /> : null}
                                 {decide ? (
                                   <AgentDecideFooter
                                     decide={decide}
@@ -6817,23 +6924,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     })()}
                   </div>
                 ) : null}
-                <label
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 12,
-                    color: colors.muted,
-                    userSelect: "none",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={pinDecisionGoal}
-                    onChange={(e) => setPinDecisionGoal(e.target.checked)}
-                  />
-                  {t.decisionGoal}
-                </label>
                 <textarea
                   value={draft}
                   onChange={(e) => {
@@ -7159,8 +7249,140 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
                   {infoTab === "chats" && !groupActive ? (
                     <>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 4,
+                          padding: "8px 12px 0",
+                        }}
+                      >
+                        {(
+                          [
+                            ["chats", t.historyChats],
+                            ["plans", t.historyPlans],
+                            ["tasks", t.historyTasks],
+                          ] as const
+                        ).map(([key, label]) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setHistoryKind(key)}
+                            style={{
+                              ...btnGhost,
+                              flex: 1,
+                              fontSize: 12,
+                              fontWeight: historyKind === key ? 650 : 500,
+                              background: historyKind === key ? colors.accentSoft : "transparent",
+                              color: historyKind === key ? colors.text : colors.muted,
+                              borderColor:
+                                historyKind === key ? "rgba(59,130,246,0.35)" : colors.border,
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                       <div style={{ flex: 1, overflow: "auto", padding: 12 }}>
-                        {siblingChats.length === 0 ? (
+                        {historyKind === "plans" ? (
+                          historyPlans.length === 0 ? (
+                            <div
+                              style={{
+                                textAlign: "center",
+                                padding: "28px 12px",
+                                color: colors.muted,
+                              }}
+                            >
+                              <p style={{ margin: 0, fontSize: 12 }}>{t.historyPlansEmpty}</p>
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              {historyPlans.map((row) => (
+                                <button
+                                  key={row.key}
+                                  type="button"
+                                  onClick={() => {
+                                    if (row.chatId === active.chat_id) {
+                                      setShowMembersPanel(false);
+                                      if (row.messageId) scrollToMessage(row.messageId);
+                                      return;
+                                    }
+                                    const target = siblingChats.find((c) => c.chat_id === row.chatId);
+                                    if (target) void openConversation(target);
+                                  }}
+                                  style={{ ...listItem, textAlign: "left" }}
+                                >
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div
+                                      style={{
+                                        fontWeight: 600,
+                                        fontSize: 13,
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      {row.title}
+                                    </div>
+                                    {row.summary ? (
+                                      <div
+                                        style={{
+                                          fontSize: 11,
+                                          color: colors.muted,
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
+                                        }}
+                                      >
+                                        {row.summary}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )
+                        ) : historyKind === "tasks" ? (
+                          historyTasks.length === 0 ? (
+                            <div
+                              style={{
+                                textAlign: "center",
+                                padding: "28px 12px",
+                                color: colors.muted,
+                              }}
+                            >
+                              <p style={{ margin: 0, fontSize: 12 }}>{t.historyTasksEmpty}</p>
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              {historyTasks.map((row) => (
+                                <div
+                                  key={row.key}
+                                  style={{
+                                    ...listItem,
+                                    cursor: "default",
+                                  }}
+                                >
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div
+                                      style={{
+                                        fontWeight: 600,
+                                        fontSize: 13,
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      {row.title}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: colors.muted }}>
+                                      {row.pending ? t.historyTaskPending : t.historyTaskPosted}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        ) : siblingChats.length === 0 ? (
                           <div
                             style={{
                               textAlign: "center",
@@ -7226,7 +7448,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           </div>
                         )}
                       </div>
-                      {active.agent_id ? (
+                      {historyKind === "chats" && active.agent_id ? (
                         <div style={{ padding: 12, borderTop: `1px solid ${colors.border}` }}>
                           <button
                             type="button"
@@ -7252,7 +7474,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     >
                       <ChatDecisionSettings
                         auto={Boolean(active.decision?.auto)}
-                        goal={(active.decision?.goal || "").trim()}
                         hops={active.decision?.auto_hops ?? 0}
                         hopCap={active.decision?.auto_hop_cap ?? 5}
                         busy={busy}

@@ -249,6 +249,35 @@ export function decideFromMetadata(meta: unknown): MessageDecide | null {
   return out;
 }
 
+export type MessagePlan = {
+  title: string;
+  summary?: string;
+  message_id?: string;
+  id?: string;
+};
+
+export function planFromMetadata(meta: unknown): MessagePlan | null {
+  const rec = asRecord(meta);
+  const orch = rec ? asRecord(rec.orchestration) : null;
+  const plan = orch ? asRecord(orch.plan) : null;
+  if (!plan) return null;
+  const titleRaw = typeof plan.title === "string" ? plan.title : typeof plan.goal === "string" ? plan.goal : "";
+  const title = titleRaw.trim().replace(/\s+/g, " ").slice(0, 200);
+  if (!title) return null;
+  const out: MessagePlan = { title };
+  if (typeof plan.summary === "string") {
+    const summary = plan.summary.trim().replace(/\s+/g, " ").slice(0, 4000);
+    if (summary) out.summary = summary;
+  }
+  if (typeof plan.message_id === "string" && plan.message_id.trim()) {
+    out.message_id = plan.message_id.trim().slice(0, 64);
+  }
+  if (typeof plan.id === "string" && plan.id.trim()) {
+    out.id = plan.id.trim().slice(0, 64);
+  }
+  return out;
+}
+
 export function calleeLabel(
   c: OrchestrationCallee,
   names?: Record<string, string>,

@@ -76,12 +76,25 @@ export type ChatSummary = {
   unread_count?: number;
   agent_status?: string | null;
   embed?: ChatEmbed | null;
-  /** Per-chat decision goal + auto-decide switch (direct chats). */
+  /** Per-chat auto-decide switch and agent-written plans (direct chats). */
   decision?: {
     goal?: string | null;
     auto?: boolean;
     auto_hops?: number;
     auto_hop_cap?: number;
+    plan?: {
+      title: string;
+      summary?: string;
+      message_id?: string;
+      id?: string;
+    } | null;
+    plans?: Array<{
+      title: string;
+      summary?: string;
+      message_id?: string;
+      id?: string;
+      chat_id?: string;
+    }>;
   } | null;
   /** Group chats: member counts from Gateway list/detail. */
   total_members?: number;
@@ -223,6 +236,17 @@ export type ChatMessage = {
         options?: Array<{ id: string; label: string }>;
         shadow?: Record<string, unknown>;
         applied?: { option_id?: string; by?: string };
+      };
+      plan?: {
+        title?: string;
+        summary?: string;
+        goal?: string;
+      };
+      propose_task?: {
+        title?: string;
+        description?: string;
+        reward?: string;
+        deadline_hours?: number;
       };
     };
     piece?: PieceHold | null;
