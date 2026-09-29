@@ -40,8 +40,12 @@ export {
 } from "./types";
 export {
   calleesFromMetadata,
+  decideFromMetadata,
+  planFromMetadata,
   proposeGroupFromMetadata,
   type OrchestrationCallee,
   type OrchestrationProposeGroup,
+  type MessageDecide,
+  type MessagePlan,
 } from "./orchestration";
 

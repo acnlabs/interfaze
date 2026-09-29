@@ -138,6 +138,22 @@ export type RanchMessages = {
   offlineBanner: string;
   ownerHowToConnect: string;
   messagePlaceholder: string;
+  decisionGoal: string;
+  decisionAuto: string;
+  decisionAutoHint: string;
+  decisionAutoNeedGoal: string;
+  decisionSuggested: string;
+  decisionPicked: string;
+  decisionScoring: string;
+  decisionAskHuman: string;
+  decisionCap: string;
+  historyChats: string;
+  historyPlans: string;
+  historyTasks: string;
+  historyPlansEmpty: string;
+  historyTasksEmpty: string;
+  historyTaskPending: string;
+  historyTaskPosted: string;
   send: string;
   justNow: string;
   minsAgo: (n: number) => string;
@@ -792,6 +808,23 @@ const en: RanchMessages = {
     "This agent is offline and can’t reply. Try again when the status turns green.",
   ownerHowToConnect: "How to connect",
   messagePlaceholder: "Message… (Type / for commands)",
+  decisionGoal: "Save this message as the goal",
+  decisionAuto: "Auto-decide",
+  decisionAutoHint:
+    "When this chat has a plan with next steps, Jev can pick and send for you. It stops if it should ask you, and after a few hops.",
+  decisionAutoNeedGoal: "The agent writes a plan from what you already said. Auto-decide does nothing without one.",
+  decisionSuggested: "Suggested",
+  decisionPicked: "Picked",
+  decisionScoring: "Scoring…",
+  decisionAskHuman: "Waiting for you",
+  decisionCap: "Auto-decide paused — hop limit reached.",
+  historyChats: "Chats",
+  historyPlans: "Plans",
+  historyTasks: "Tasks",
+  historyPlansEmpty: "No plan yet. When the agent writes one from this conversation, it shows up here.",
+  historyTasksEmpty: "No task yet. Confirm a job card in chat and it will appear here.",
+  historyTaskPending: "Waiting for you",
+  historyTaskPosted: "Posted",
   send: "Send",
   justNow: "Just now",
   minsAgo: (n) => `${n}m ago`,
@@ -1500,6 +1533,23 @@ const zh: RanchMessages = {
   offlineBanner: "当前agent离线，无法回复，请等状态变绿后再试。",
   ownerHowToConnect: "如何接上",
   messagePlaceholder: "输入消息…（输入 / 打开命令）",
+  decisionGoal: "把这句记成目标",
+  decisionAuto: "自动决策",
+  decisionAutoHint:
+    "这场对话已有计划、并列出下一步时，Jev 可以替你选并发出去。该问你、或连续几次之后会停。",
+  decisionAutoNeedGoal: "智能体会根据你已经说的需求写出计划。没有计划时自动决策不会发。",
+  decisionSuggested: "建议",
+  decisionPicked: "已选",
+  decisionScoring: "打分中…",
+  decisionAskHuman: "等你来选",
+  decisionCap: "自动决策已暂停——达到次数上限。",
+  historyChats: "对话",
+  historyPlans: "目标",
+  historyTasks: "任务",
+  historyPlansEmpty: "还没有计划。智能体根据这场对话写出计划后，会出现在这里。",
+  historyTasksEmpty: "还没有任务。在对话里点头确认发单后，会出现在这里。",
+  historyTaskPending: "等你确认",
+  historyTaskPosted: "已发单",
   send: "发送",
   justNow: "刚刚",
   minsAgo: (n) => `${n} 分钟前`,
@@ -1514,7 +1564,7 @@ const zh: RanchMessages = {
   groupInfo: "群资料",
   agentInfo: "Agent 资料",
   topics: "话题",
-  chatsTab: "对话",
+  chatsTab: "历史",
   startNewChat: "新对话",
   untitledChat: "未命名对话",
   noAgentChatsHint: "和这个 agent 的对话都在这里，包括 Studio 等其它渠道。",

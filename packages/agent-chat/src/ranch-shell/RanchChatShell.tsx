@@ -29,7 +29,7 @@ import type {
 import { connectChatSocket, type ChatSocket } from "../ws";
 import { MailboxThumbs } from "../MailboxThumbs";
 import { parseMessageAttachments } from "../mailbox";
-import { calleesFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, proposeGroupFromMetadata, proposeTaskFromMetadata, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
+import { calleesFromMetadata, decideFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, planFromMetadata, proposeGroupFromMetadata, proposeTaskFromMetadata, type MessageDecide, type MessagePlan, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
 import { settleQueuedDelivery } from "./settleQueuedDelivery";
 import {
   AgentOwnerSettings,
@@ -950,6 +950,165 @@ function OrchCopyRow({
       >
         {copied ? copiedLabel : copyLabel}
       </button>
+    </div>
+  );
+}
+
+function AgentPlanFooter({
+  plan,
+  t,
+}: {
+  plan: MessagePlan;
+  t: RanchMessages;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        paddingLeft: 2,
+        maxWidth: "100%",
+      }}
+    >
+      <div style={{ fontSize: 11, color: colors.muted, lineHeight: 1.35 }}>
+        {t.historyPlans}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 650, color: colors.text, lineHeight: 1.35 }}>
+        {plan.title}
+      </div>
+      {plan.summary ? (
+        <div style={{ fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>{plan.summary}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function AgentDecideFooter({
+  decide,
+  auto,
+  hops,
+  hopCap,
+  busy,
+  t,
+  onPick,
+}: {
+  decide: MessageDecide;
+  auto: boolean;
+  hops: number;
+  hopCap: number;
+  busy: boolean;
+  t: RanchMessages;
+  onPick: (id: string, label: string) => void;
+}) {
+  const appliedId = decide.applied?.option_id || null;
+  const shadow = decide.shadow;
+  const suggested =
+    !appliedId && shadow?.status === "scored" && shadow.choice ? shadow.choice : null;
+  const waitingHuman =
+    shadow?.status === "ask_human" ||
+    shadow?.gate?.ask_human === true ||
+    shadow?.status === "low_confidence";
+  const scoring = shadow?.status === "pending";
+  const capped = auto && hopCap > 0 && hops >= hopCap && !appliedId;
+  const locked = Boolean(appliedId) || busy || (auto && scoring);
+  let status = "";
+  if (appliedId) status = t.decisionPicked;
+  else if (scoring) status = t.decisionScoring;
+  else if (waitingHuman) status = t.decisionAskHuman;
+  else if (capped) status = t.decisionCap;
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        paddingLeft: 2,
+        maxWidth: "100%",
+      }}
+    >
+      {status ? (
+        <div style={{ fontSize: 11, color: colors.muted, lineHeight: 1.35 }}>{status}</div>
+      ) : null}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {decide.options.map((opt) => {
+          const picked = appliedId === opt.id;
+          const hint = suggested === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              disabled={locked}
+              onClick={() => onPick(opt.id, opt.label)}
+              style={{
+                ...btnGhost,
+                padding: "4px 10px",
+                fontSize: 12,
+                opacity: locked && !picked ? 0.55 : 1,
+                borderColor: picked || hint ? "rgba(59,130,246,0.45)" : colors.border,
+                background: picked || hint ? colors.accentSoft : "transparent",
+                color: colors.text,
+                cursor: locked ? "default" : "pointer",
+              }}
+            >
+              {opt.label}
+              {hint && !picked ? ` · ${t.decisionSuggested}` : ""}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ChatDecisionSettings({
+  auto,
+  hops,
+  hopCap,
+  busy,
+  t,
+  onToggle,
+}: {
+  auto: boolean;
+  hops: number;
+  hopCap: number;
+  busy: boolean;
+  t: RanchMessages;
+  onToggle: (next: boolean) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontSize: 13, fontWeight: 650, color: colors.text }}>{t.decisionAuto}</div>
+      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
+        {t.decisionAutoHint}
+      </p>
+      <label
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          fontSize: 13,
+          color: colors.text,
+          userSelect: "none",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={auto}
+          disabled={busy}
+          onChange={(e) => onToggle(e.target.checked)}
+        />
+        {t.decisionAuto}
+      </label>
+      {auto && hopCap > 0 ? (
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
+          {hops}/{hopCap}
+        </p>
+      ) : (
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
+          {t.decisionAutoNeedGoal}
+        </p>
+      )}
     </div>
   );
 }
@@ -2498,6 +2657,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   );
   const [postedTasks, setPostedTasks] = useState<Record<string, string>>(() => readPostedTasks());
   const postedTasksRef = useRef(postedTasks);
+  postedTasksRef.current = postedTasks;
   const postingTasksRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const pending = Object.entries(postedTasks).filter(
@@ -2555,6 +2715,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   } | null>(null);
   /** Detail panel tab. Group: members. Direct: info | settings? | wallet? | chats. */
   const [infoTab, setInfoTab] = useState<"info" | "settings" | "wallet" | "members" | "chats">("info");
+  const [historyKind, setHistoryKind] = useState<"chats" | "plans" | "tasks">("chats");
   /** Owned-agent ACN detail for Info (read-only) + Settings (manage). */
   const [ownedAgentDetail, setOwnedAgentDetail] = useState<MyAgentSummary | null>(null);
   const [composerModel, setComposerModel] = useState<{
@@ -2865,6 +3026,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const el = listRef.current?.querySelector(`[data-topic-id="${safe}"]`);
     if (el && "scrollIntoView" in el) {
       (el as HTMLElement).scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, []);
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    const safe = messageId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const el = listRef.current?.querySelector(`[data-message-id="${safe}"]`);
+    if (el && "scrollIntoView" in el) {
+      (el as HTMLElement).scrollIntoView({ block: "center", behavior: "smooth" });
     }
   }, []);
 
@@ -3664,6 +3833,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     text?: string;
     /** Override topic tagging (e.g. newly created thread id). */
     threadId?: string | null;
+    /** Pick a listed decide option (same send path as typing the label). */
+    decisionChoice?: string;
   };
 
   const send = async (opts?: SendOpts) => {
@@ -3727,6 +3898,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           Boolean(composerModel?.official_channel),
           composerModel?.official_key_geo,
         ),
+        decision_choice: opts?.decisionChoice ?? null,
       });
       if (group && mentions) {
         if (mentions.length === 1) {
@@ -3835,6 +4007,29 @@ export function RanchChatShell(props: RanchChatShellProps) {
   };
   sendRef.current = send;
 
+  const toggleChatDecision = async (next: boolean) => {
+    if (!active || isGroupChat(active)) return;
+    const chatId = active.chat_id;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await client.patchChatDecision(chatId, next);
+      const decision = updated.decision ?? {
+        ...(active.decision || {}),
+        auto: next,
+        auto_hops: next ? 0 : active.decision?.auto_hops,
+      };
+      setActive((cur) => (cur && cur.chat_id === chatId ? { ...cur, decision } : cur));
+      setChats((prev) =>
+        prev.map((c) => (c.chat_id === chatId ? { ...c, decision } : c)),
+      );
+    } catch (e) {
+      setError(e instanceof ChatGatewayError ? e.message : t.sendFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const retryLastUserMessage = () => {
     if (!active) return;
     const lastUser = [...messages].reverse().find((m) => m.sender_type === "user");
@@ -3875,12 +4070,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
           text,
           mentions,
           activeTopic?.id ?? composerTopic?.id ?? null,
-          { requested_model: requestedModelForSend(
-            selectedModelId,
-            composerModel?.listed_model_id ?? null,
-            Boolean(composerModel?.official_channel),
-            composerModel?.official_key_geo,
-          ) },
+          {
+            requested_model: requestedModelForSend(
+              selectedModelId,
+              composerModel?.listed_model_id ?? null,
+              Boolean(composerModel?.official_channel),
+              composerModel?.official_key_geo,
+            ),
+          },
         );
         if (group && mentions) {
           if (mentions.length === 1) {
@@ -4015,6 +4212,78 @@ export function RanchChatShell(props: RanchChatShellProps) {
           )
           .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))
       : [];
+
+  const historyPlans: Array<{
+    key: string;
+    title: string;
+    summary?: string;
+    chatId: string;
+    messageId?: string;
+  }> = (() => {
+    const rows: Array<{
+      key: string;
+      title: string;
+      summary?: string;
+      chatId: string;
+      messageId?: string;
+    }> = [];
+    const seen = new Set<string>();
+    const push = (
+      chatId: string,
+      title: string,
+      summary?: string,
+      messageId?: string,
+    ) => {
+      const key = `${chatId}:${messageId || title}`;
+      if (seen.has(key) || !title.trim()) return;
+      seen.add(key);
+      rows.push({ key, title, summary, chatId, messageId });
+    };
+    for (const c of siblingChats) {
+      const listed = c.decision?.plans?.length
+        ? c.decision.plans
+        : c.decision?.plan
+          ? [c.decision.plan]
+          : [];
+      for (const p of listed) {
+        if (!p?.title) continue;
+        push(c.chat_id, p.title, p.summary, p.message_id || p.id);
+      }
+    }
+    if (active && !isGroupChat(active)) {
+      for (const m of messages) {
+        const plan = planFromMetadata(m.metadata);
+        if (plan) push(active.chat_id, plan.title, plan.summary, m.message_id);
+      }
+    }
+    return rows;
+  })();
+
+  const historyTasks: Array<{
+    key: string;
+    title: string;
+    pending: boolean;
+    taskId?: string;
+  }> = (() => {
+    const rows: Array<{
+      key: string;
+      title: string;
+      pending: boolean;
+      taskId?: string;
+    }> = [];
+    for (const m of messages) {
+      const task = proposeTaskFromMetadata(m.metadata);
+      if (!task) continue;
+      const taskId = postedTasks[m.message_id];
+      rows.push({
+        key: m.message_id,
+        title: task.title,
+        pending: !taskId,
+        taskId,
+      });
+    }
+    return rows;
+  })();
 
   const showAgentReplyPending =
     replySlot?.phase === "pending" && replySlot.chatId === active?.chat_id;
@@ -4410,6 +4679,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const activeOffline =
     active && !isGroupChat(active) && isAgentOffline(active.agent_status);
   const groupActive = !!(active && isGroupChat(active));
+  const latestDecideId = groupActive
+    ? undefined
+    : [...displayMessages].reverse().find((m) => decideFromMetadata(m.metadata))?.message_id;
   const studioOrigin = (studioBaseUrl || "").replace(/\/+$/, "");
   const embodyOrigin = (embodyBaseUrl || "").replace(/\/+$/, "");
   const activeWindow = active ? chatWindows[active.chat_id] ?? null : null;
@@ -5775,6 +6047,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </div>
                       ) : null}
                     <div
+                      data-message-id={m.message_id}
                       style={{
                         alignSelf: isUser ? "flex-end" : "flex-start",
                         maxWidth: "85%",
@@ -5859,6 +6132,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         ? (() => {
                             const usage = hopUsageFromMessage(m);
                             const callees = calleesFromMetadata(m.metadata);
+                            const decide = group ? null : decideFromMetadata(m.metadata);
+                            const plan = group ? null : planFromMetadata(m.metadata);
                             const propose =
                               active &&
                               !isGroupChat(active) &&
@@ -5871,7 +6146,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               !dismissedPropose.has(m.message_id)
                                 ? proposeTaskFromMetadata(m.metadata)
                                 : null;
-                            if (!usage && !callees.length && !propose && !taskPropose) return null;
+                            if (!usage && !callees.length && !decide && !plan && !propose && !taskPropose) return null;
                             const existing = propose
                               ? preferredExistingGroup(
                                   chats,
@@ -5886,6 +6161,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     callees={callees}
                                     names={agentNames}
                                     t={t}
+                                  />
+                                ) : null}
+                                {plan ? <AgentPlanFooter plan={plan} t={t} /> : null}
+                                {decide ? (
+                                  <AgentDecideFooter
+                                    decide={decide}
+                                    auto={Boolean(active?.decision?.auto)}
+                                    hops={active?.decision?.auto_hops ?? 0}
+                                    hopCap={active?.decision?.auto_hop_cap ?? 5}
+                                    busy={busy || m.message_id !== latestDecideId}
+                                    t={t}
+                                    onPick={(id, label) => {
+                                      void send({ text: label, decisionChoice: id });
+                                    }}
                                   />
                                 ) : null}
                                 {propose ? (
@@ -6933,6 +7222,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         : ([
                             ["info", t.infoTab],
                             ["chats", t.chatsTab],
+                            ["settings", t.settingsTab],
                           ] as const)
                     ).map(([key, label]) => (
                       <button
@@ -6959,8 +7249,140 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
                   {infoTab === "chats" && !groupActive ? (
                     <>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 4,
+                          padding: "8px 12px 0",
+                        }}
+                      >
+                        {(
+                          [
+                            ["chats", t.historyChats],
+                            ["plans", t.historyPlans],
+                            ["tasks", t.historyTasks],
+                          ] as const
+                        ).map(([key, label]) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setHistoryKind(key)}
+                            style={{
+                              ...btnGhost,
+                              flex: 1,
+                              fontSize: 12,
+                              fontWeight: historyKind === key ? 650 : 500,
+                              background: historyKind === key ? colors.accentSoft : "transparent",
+                              color: historyKind === key ? colors.text : colors.muted,
+                              borderColor:
+                                historyKind === key ? "rgba(59,130,246,0.35)" : colors.border,
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                       <div style={{ flex: 1, overflow: "auto", padding: 12 }}>
-                        {siblingChats.length === 0 ? (
+                        {historyKind === "plans" ? (
+                          historyPlans.length === 0 ? (
+                            <div
+                              style={{
+                                textAlign: "center",
+                                padding: "28px 12px",
+                                color: colors.muted,
+                              }}
+                            >
+                              <p style={{ margin: 0, fontSize: 12 }}>{t.historyPlansEmpty}</p>
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              {historyPlans.map((row) => (
+                                <button
+                                  key={row.key}
+                                  type="button"
+                                  onClick={() => {
+                                    if (row.chatId === active.chat_id) {
+                                      setShowMembersPanel(false);
+                                      if (row.messageId) scrollToMessage(row.messageId);
+                                      return;
+                                    }
+                                    const target = siblingChats.find((c) => c.chat_id === row.chatId);
+                                    if (target) void openConversation(target);
+                                  }}
+                                  style={{ ...listItem, textAlign: "left" }}
+                                >
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div
+                                      style={{
+                                        fontWeight: 600,
+                                        fontSize: 13,
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      {row.title}
+                                    </div>
+                                    {row.summary ? (
+                                      <div
+                                        style={{
+                                          fontSize: 11,
+                                          color: colors.muted,
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
+                                        }}
+                                      >
+                                        {row.summary}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )
+                        ) : historyKind === "tasks" ? (
+                          historyTasks.length === 0 ? (
+                            <div
+                              style={{
+                                textAlign: "center",
+                                padding: "28px 12px",
+                                color: colors.muted,
+                              }}
+                            >
+                              <p style={{ margin: 0, fontSize: 12 }}>{t.historyTasksEmpty}</p>
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              {historyTasks.map((row) => (
+                                <div
+                                  key={row.key}
+                                  style={{
+                                    ...listItem,
+                                    cursor: "default",
+                                  }}
+                                >
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div
+                                      style={{
+                                        fontWeight: 600,
+                                        fontSize: 13,
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      {row.title}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: colors.muted }}>
+                                      {row.pending ? t.historyTaskPending : t.historyTaskPosted}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        ) : siblingChats.length === 0 ? (
                           <div
                             style={{
                               textAlign: "center",
@@ -7026,7 +7448,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           </div>
                         )}
                       </div>
-                      {active.agent_id ? (
+                      {historyKind === "chats" && active.agent_id ? (
                         <div style={{ padding: 12, borderTop: `1px solid ${colors.border}` }}>
                           <button
                             type="button"
@@ -7039,32 +7461,45 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </div>
                       ) : null}
                     </>
-                  ) : infoTab === "settings" && !groupActive && activeIsOwned ? (
+                  ) : infoTab === "settings" && !groupActive ? (
                     <div
                       style={{
                         flex: 1,
                         overflow: "auto",
                         padding: 16,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 20,
                       }}
                     >
-                      {ownedAgentLoading && !ownedAgentDetail ? (
-                        <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
-                      ) : ownedAgentDetail ? (
-                        <AgentOwnerSettings
-                          client={client}
-                          detail={ownedAgentDetail}
-                          messages={t}
-                          agentPlanetBaseUrl={agentPlanetBaseUrl}
-                          interfazeBaseUrl={interfazeBaseUrl}
-                          connectGuideUrl={connectGuideUrl}
-                          busy={busy}
-                          onUpdated={applyOwnedAgentProfileUpdate}
-                          onRemoved={applyOwnedAgentRemoved}
-                          onOpenKeys={() => openAccountPanel("keys")}
-                        />
-                      ) : (
-                        <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>
-                      )}
+                      <ChatDecisionSettings
+                        auto={Boolean(active.decision?.auto)}
+                        hops={active.decision?.auto_hops ?? 0}
+                        hopCap={active.decision?.auto_hop_cap ?? 5}
+                        busy={busy}
+                        t={t}
+                        onToggle={(next) => void toggleChatDecision(next)}
+                      />
+                      {activeIsOwned ? (
+                        ownedAgentLoading && !ownedAgentDetail ? (
+                          <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
+                        ) : ownedAgentDetail ? (
+                          <AgentOwnerSettings
+                            client={client}
+                            detail={ownedAgentDetail}
+                            messages={t}
+                            agentPlanetBaseUrl={agentPlanetBaseUrl}
+                            interfazeBaseUrl={interfazeBaseUrl}
+                            connectGuideUrl={connectGuideUrl}
+                            busy={busy}
+                            onUpdated={applyOwnedAgentProfileUpdate}
+                            onRemoved={applyOwnedAgentRemoved}
+                            onOpenKeys={() => openAccountPanel("keys")}
+                          />
+                        ) : (
+                          <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>
+                        )
+                      ) : null}
                     </div>
                   ) : infoTab === "wallet" && !groupActive && activeIsOwned && active?.agent_id ? (
                     <div

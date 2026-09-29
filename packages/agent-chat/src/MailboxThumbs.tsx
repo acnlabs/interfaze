@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { mailboxIdsFromAttachments, parseMessageAttachments } from "./mailbox";
+import { mailboxIdsFromAttachments, parseMessageAttachments, isReadableAttachmentName } from "./mailbox";
 
 function joinUrl(base: string, path: string): string {
   const b = base.replace(/\/+$/, "");
@@ -30,7 +30,13 @@ function listedFromHeader(header: string | null): number {
   return Math.min(100_000, Math.floor(n));
 }
 
-type FileBlob = { url: string; contentType: string; name: string; listedCredits: number };
+type FileBlob = {
+  url: string;
+  contentType: string;
+  name: string;
+  mailboxId: string;
+  listedCredits: number;
+};
 
 function ListedTag({ n }: { n: number }) {
   if (n <= 0) return null;
@@ -97,6 +103,7 @@ export function MailboxThumbs({
           next.push({
             url,
             contentType,
+            mailboxId: id,
             name: filenameFromDisposition(
               res.headers.get("content-disposition"),
               id,
@@ -118,7 +125,14 @@ export function MailboxThumbs({
     };
   }, [chatId, gatewayBaseUrl, getAccessToken, ids.join("|")]);
 
-  if (files.length === 0) return null;
+  const visible = files.filter((f) => {
+    const playable =
+      f.contentType.startsWith("video/") ||
+      f.contentType.startsWith("audio/") ||
+      f.contentType.startsWith("image/");
+    return playable || isReadableAttachmentName(f.name, f.mailboxId);
+  });
+  if (visible.length === 0) return null;
   return (
     <div
       style={{
@@ -129,42 +143,32 @@ export function MailboxThumbs({
         maxWidth: "100%",
       }}
     >
-      {files.map((f) => {
-        const media = f.contentType.startsWith("video/") ? (
-          <video
-            src={f.url}
-            controls
-            playsInline
-            style={{ maxWidth: "100%", borderRadius: 8, display: "block" }}
-          />
-        ) : f.contentType.startsWith("audio/") ? (
-          <audio
-            src={f.url}
-            controls
-            style={{ width: "100%", display: "block" }}
-          />
-        ) : f.contentType.startsWith("image/") ? (
-          <img
-            src={f.url}
-            alt=""
-            style={{ maxWidth: "100%", borderRadius: 8, display: "block" }}
-          />
-        ) : (
-          <a
-            href={f.url}
-            download={f.name}
-            style={{
-              fontSize: 13,
-              color: "inherit",
-              textDecoration: "underline",
-              wordBreak: "break-all",
-            }}
-          >
-            {f.name}
-            {f.listedCredits > 0 ? ` · ${f.listedCredits} Credits` : ""}
-          </a>
-        );
-        if (f.contentType.startsWith("image/") || f.contentType.startsWith("video/") || f.contentType.startsWith("audio/")) {
+      {visible.map((f) => {
+        const playable =
+          f.contentType.startsWith("video/") ||
+          f.contentType.startsWith("audio/") ||
+          f.contentType.startsWith("image/");
+        if (playable) {
+          const media = f.contentType.startsWith("video/") ? (
+            <video
+              src={f.url}
+              controls
+              playsInline
+              style={{ maxWidth: "100%", borderRadius: 8, display: "block" }}
+            />
+          ) : f.contentType.startsWith("audio/") ? (
+            <audio
+              src={f.url}
+              controls
+              style={{ width: "100%", display: "block" }}
+            />
+          ) : (
+            <img
+              src={f.url}
+              alt=""
+              style={{ maxWidth: "100%", borderRadius: 8, display: "block" }}
+            />
+          );
           return (
             <div key={f.url} style={{ position: "relative", maxWidth: "100%" }}>
               <ListedTag n={f.listedCredits} />
@@ -172,7 +176,23 @@ export function MailboxThumbs({
             </div>
           );
         }
-        return <div key={f.url}>{media}</div>;
+        if (!isReadableAttachmentName(f.name, f.mailboxId)) return null;
+        return (
+          <div key={f.url}>
+            <a
+              href={f.url}
+              download={f.name}
+              style={{
+                fontSize: 13,
+                color: "inherit",
+                textDecoration: "underline",
+                wordBreak: "break-all",
+              }}
+            >
+              {f.name}
+            </a>
+          </div>
+        );
       })}
     </div>
   );

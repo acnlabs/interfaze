@@ -512,8 +512,14 @@ export type GatewayClient = {
     content: string,
     mentions?: string[],
     threadId?: string | null,
-    opts?: { requested_model?: string | null; requested_provider?: string | null },
+    opts?: {
+      requested_model?: string | null;
+      requested_provider?: string | null;
+      decision_goal?: string | null;
+      decision_choice?: string | null;
+    },
   ) => Promise<ChatMessage>;
+  patchChatDecision: (chatId: string, auto: boolean) => Promise<ChatSummary>;
   listThreads: (chatId: string) => Promise<ThreadSummary[]>;
   createThread: (
     chatId: string,
@@ -1295,7 +1301,18 @@ export function createGatewayClient(
           ...(opts?.requested_provider
             ? { requested_provider: opts.requested_provider }
             : {}),
+          ...(opts?.decision_goal
+            ? { decision_goal: opts.decision_goal }
+            : {}),
+          ...(opts?.decision_choice
+            ? { decision_choice: opts.decision_choice }
+            : {}),
         }),
+      }),
+    patchChatDecision: (chatId, auto) =>
+      request<ChatSummary>(`/api/chats/${encodeURIComponent(chatId)}/decision`, {
+        method: "PATCH",
+        body: JSON.stringify({ auto }),
       }),
     listThreads: async (chatId) => {
       const data = await request<{ data?: ThreadSummary[]; total?: number }>(

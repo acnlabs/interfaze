@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { labsTaskDescription, labsTaskTaken } from "./orchestration";
+import { labsTaskDescription, labsTaskTaken, planFromMetadata } from "./orchestration";
 
 const short = "画一只会走路的鸭子";
 assert.equal(short.length, 9);
@@ -20,5 +20,12 @@ assert.equal(labsTaskTaken({ status: "open", assignee_id: null }), false);
 assert.equal(labsTaskTaken({ status: "in_progress", assignee_id: "cd7ec18a" }), true);
 assert.equal(labsTaskTaken({ status: "open", assignee_id: "cd7ec18a" }), true);
 assert.equal(labsTaskTaken(null), false);
+
+const plan = planFromMetadata({
+  orchestration: { plan: { title: " 15秒介绍视频 ", summary: " 不要再问确认 " } },
+});
+assert.equal(plan?.title, "15秒介绍视频");
+assert.equal(plan?.summary, "不要再问确认");
+assert.equal(planFromMetadata({ orchestration: { plan: { title: "  " } } }), null);
 
 console.log("ok");
