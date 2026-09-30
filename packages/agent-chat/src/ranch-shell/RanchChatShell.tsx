@@ -1378,9 +1378,9 @@ function AgentReplyPendingBubble({ t }: { t: RanchMessages }) {
   );
 }
 
-/** 40s window. Official CLI complete defaults to 28s so the error bubble lands first. */
+/** ~112s window — matches Comiclaw COMICLAW_CHAT_COMPLETE_TIMEOUT default (110s). */
 const REPLY_POLL_MS = 2000;
-const REPLY_POLL_ATTEMPTS = 20;
+const REPLY_POLL_ATTEMPTS = 56;
 
 type ReplyTimeoutReason = "offline" | "undeliverable" | "timeout" | "no_reply";
 
@@ -7296,49 +7296,80 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             </div>
                           ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                              {historyPlans.map((row) => (
-                                <button
-                                  key={row.key}
-                                  type="button"
-                                  onClick={() => {
-                                    if (row.chatId === active.chat_id) {
-                                      setShowMembersPanel(false);
-                                      if (row.messageId) scrollToMessage(row.messageId);
-                                      return;
-                                    }
-                                    const target = siblingChats.find((c) => c.chat_id === row.chatId);
-                                    if (target) void openConversation(target);
-                                  }}
-                                  style={{ ...listItem, textAlign: "left" }}
-                                >
-                                  <div style={{ minWidth: 0, flex: 1 }}>
-                                    <div
-                                      style={{
-                                        fontWeight: 600,
-                                        fontSize: 13,
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                        whiteSpace: "nowrap",
-                                      }}
-                                    >
-                                      {row.title}
-                                    </div>
-                                    {row.summary ? (
+                              {historyPlans.map((row) => {
+                                const planChat =
+                                  row.chatId === active.chat_id
+                                    ? null
+                                    : siblingChats.find((c) => c.chat_id === row.chatId);
+                                return (
+                                  <button
+                                    key={row.key}
+                                    type="button"
+                                    onClick={() => {
+                                      if (row.chatId === active.chat_id) {
+                                        setShowMembersPanel(false);
+                                        if (row.messageId) scrollToMessage(row.messageId);
+                                        return;
+                                      }
+                                      const target = siblingChats.find((c) => c.chat_id === row.chatId);
+                                      if (target) void openConversation(target);
+                                    }}
+                                    style={{
+                                      ...listItem,
+                                      textAlign: "left",
+                                      background: colors.panel,
+                                      border: `1px solid ${colors.border}`,
+                                      padding: "10px 12px",
+                                    }}
+                                  >
+                                    <div style={{ minWidth: 0, flex: 1 }}>
                                       <div
                                         style={{
-                                          fontSize: 11,
-                                          color: colors.muted,
+                                          fontWeight: 650,
+                                          fontSize: 13,
+                                          color: colors.text,
+                                          lineHeight: 1.35,
                                           overflow: "hidden",
                                           textOverflow: "ellipsis",
                                           whiteSpace: "nowrap",
                                         }}
                                       >
-                                        {row.summary}
+                                        {row.title}
                                       </div>
-                                    ) : null}
-                                  </div>
-                                </button>
-                              ))}
+                                      {row.summary ? (
+                                        <div
+                                          style={{
+                                            fontSize: 12,
+                                            color: colors.text,
+                                            opacity: 0.78,
+                                            lineHeight: 1.45,
+                                            marginTop: 2,
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                          }}
+                                        >
+                                          {row.summary}
+                                        </div>
+                                      ) : null}
+                                      {planChat ? (
+                                        <div
+                                          style={{
+                                            fontSize: 11,
+                                            color: colors.muted,
+                                            marginTop: 4,
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                          }}
+                                        >
+                                          {conversationLabel(planChat, t)}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </button>
+                                );
+                              })}
                             </div>
                           )
                         ) : historyKind === "tasks" ? (
