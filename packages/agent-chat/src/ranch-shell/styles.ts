@@ -15,6 +15,17 @@ export const colors = {
   userBubble: "#1d4ed8",
   agentBubble: "#1e293b",
   danger: "#f87171",
+  online: "#22c55e",
+  busy: "#eab308",
+  offline: "#64748b",
+  mention: "#93c5fd",
+  warn: "#fbbf24",
+  warnSoft: "#fcd34d",
+  avatarFrom: "#334155",
+  avatarTo: "#1e293b",
+  avatarSelfFrom: "#0f766e",
+  panelAlt: "#1c2330",
+  onAccent: "#ffffff",
 };
 
 export const shellRoot = (mode: "side" | "full"): CSSProperties =>
@@ -59,8 +70,8 @@ export const btnGhost: CSSProperties = {
 /** Square icon control for shell header (fullscreen / collapse / close). */
 export const btnIcon: CSSProperties = {
   ...btnGhost,
-  width: 28,
-  height: 28,
+  width: 36,
+  height: 36,
   padding: 0,
   display: "inline-flex",
   alignItems: "center",
@@ -84,5 +95,4 @@ export const inputStyle: CSSProperties = {
   color: colors.text,
   padding: "8px 10px",
   fontSize: 13,
-  outline: "none",
 };

@@ -11,6 +11,7 @@ export function ChatWindowPane({
   busy,
   onClose,
   onTalkExpired,
+  fill,
   t,
 }: {
   window: ChatWindow | null;
@@ -18,6 +19,8 @@ export function ChatWindowPane({
   busy?: boolean;
   onClose: () => void;
   onTalkExpired?: () => void;
+  /** Overlay mode: stretch to the container instead of capping at 640px. */
+  fill?: boolean;
   t: RanchMessages;
 }) {
   const empty = !window;
@@ -32,11 +35,11 @@ export function ChatWindowPane({
       style={{
         display: "flex",
         flexDirection: "column",
-        flex: empty ? "0 0 240px" : "1 1 420px",
-        minWidth: empty ? 200 : 280,
-        maxWidth: empty ? 280 : 640,
+        flex: empty && !fill ? "0 0 240px" : "1 1 420px",
+        minWidth: empty && !fill ? 200 : 280,
+        maxWidth: fill ? "none" : empty ? 280 : 640,
         height: "100%",
-        borderLeft: `1px solid ${colors.border}`,
+        borderLeft: fill ? undefined : `1px solid ${colors.border}`,
         background: colors.bg,
       }}
     >

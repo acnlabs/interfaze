@@ -66,6 +66,7 @@ export type RanchMessages = {
   composerModelNoPrice: string;
   composerModelMismatch: (listed: string, runtime: string) => string;
   sendFailed: string;
+  offlineSendBlocked: string;
   expand: string;
   collapse: string;
   close: string;
@@ -98,6 +99,15 @@ export type RanchMessages = {
   offlineBanner: string;
   ownerHowToConnect: string;
   messagePlaceholder: string;
+  decisionGoal: string;
+  decisionAuto: string;
+  decisionAutoHint: string;
+  decisionAutoNeedGoal: string;
+  decisionSuggested: string;
+  decisionPicked: string;
+  decisionScoring: string;
+  decisionAskHuman: string;
+  decisionCap: string;
   send: string;
   justNow: string;
   minsAgo: (n: number) => string;
@@ -548,6 +558,7 @@ const en: RanchMessages = {
   composerModelMismatch: (listed, runtime) =>
     `Listing ${listed} ≠ runtime ${runtime} (still billed at listing price)`,
   sendFailed: "Send failed",
+  offlineSendBlocked: "You're offline — message not sent. It will still be here when you reconnect.",
   expand: "Expand",
   collapse: "Collapse",
   close: "Close",
@@ -581,6 +592,16 @@ const en: RanchMessages = {
     "This agent is offline and can’t reply. Try again when the status turns green.",
   ownerHowToConnect: "How to connect",
   messagePlaceholder: "Message… (Type / for commands)",
+  decisionGoal: "Save this message as the goal",
+  decisionAuto: "Auto-decide",
+  decisionAutoHint:
+    "When this chat lists next steps, Jev can pick and send for you. It stops if it should ask you, and after a few hops.",
+  decisionAutoNeedGoal: "Pin a goal in the composer first. Auto-decide does nothing without one.",
+  decisionSuggested: "Suggested",
+  decisionPicked: "Picked",
+  decisionScoring: "Scoring…",
+  decisionAskHuman: "Waiting for you",
+  decisionCap: "Auto-decide paused — hop limit reached.",
   send: "Send",
   justNow: "Just now",
   minsAgo: (n) => `${n}m ago`,
@@ -1047,7 +1068,7 @@ const zh: RanchMessages = {
   viewConnectGuide: "完整说明",
   pasteAgentId: "粘贴 agent id 试试",
   unreachable: "暂时联系不上对方。",
-  rateLimited: "余额不足，无法发送。请先去钱包充值，或查看套餐与用量。",
+  rateLimited: "余额不足，无法发送。请先去钱包购买星币，或查看套餐与用量。",
   billingUnavailable: "计费服务暂时不可用，请稍后再试。",
   unsupportedModel: "该智能体不支持所选模型。",
   modelPricingUnavailable: "平台暂无该模型报价，请换一个；或等 Host 价包录入后再试。",
@@ -1059,7 +1080,7 @@ const zh: RanchMessages = {
   orchAsked: (name) => `已请 ${name}`,
   orchFailed: (name) => `没叫到 ${name}`,
   pieceReject: "拒按张",
-  pieceHeld: (amount) => `按张结算中 ${amount} Credits`,
+  pieceHeld: (amount) => `按张结算中 ${amount} 星币`,
   pieceCaptured: "按张已入账",
   pieceRejected: "已拒按张",
   pieceRejectFailed: "无法拒按张。",
@@ -1070,6 +1091,7 @@ const zh: RanchMessages = {
   composerModelMismatch: (listed, runtime) =>
     `挂牌 ${listed} ≠ 运行 ${runtime}（仍按挂牌价结算）`,
   sendFailed: "发送失败",
+  offlineSendBlocked: "当前网络离线，消息未发送。草稿已保留，联网后请重试。",
   expand: "全屏",
   collapse: "收起",
   close: "关闭",
@@ -1097,10 +1119,20 @@ const zh: RanchMessages = {
   startChat: "开始聊天",
   selectOrStart: "选择一个会话，或新建聊天",
   sayHello: "打个招呼开始对话。",
-  sayHelloOffline: "当前agent离线，无法回复，请等状态变绿后再试。",
-  offlineBanner: "当前agent离线，无法回复，请等状态变绿后再试。",
+  sayHelloOffline: "当前 agent 离线，无法回复，请等状态变绿后再试。",
+  offlineBanner: "当前 agent 离线，无法回复，请等状态变绿后再试。",
   ownerHowToConnect: "如何接上",
   messagePlaceholder: "输入消息…（输入 / 打开命令）",
+  decisionGoal: "把这句记成目标",
+  decisionAuto: "自动决策",
+  decisionAutoHint:
+    "这场对话列出下一步时，Jev 可以替你选并发出去。该问你、或连续几次之后会停。",
+  decisionAutoNeedGoal: "请先在输入框勾选「把这句记成目标」。没有目标时自动决策不会发。",
+  decisionSuggested: "建议",
+  decisionPicked: "已选",
+  decisionScoring: "打分中…",
+  decisionAskHuman: "等你来选",
+  decisionCap: "自动决策已暂停——达到次数上限。",
   send: "发送",
   justNow: "刚刚",
   minsAgo: (n) => `${n} 分钟前`,
@@ -1186,7 +1218,7 @@ const zh: RanchMessages = {
   accountProfile: "个人资料",
   accountProfileHint: "登录账号来自身份提供方。目前请在那里修改名称与头像。",
   accountWallet: "钱包",
-  accountWalletHint: "你本人的 Credits 余额。Agent 钱包在各自 Agent 详情里。",
+  accountWalletHint: "你本人的星币余额。Agent 钱包在各自 Agent 详情里。",
   collabBudget: "协作预算",
   collabBudgetHint: "多智能体协作用的额度油箱。有剩余时自动放行，不用每次点同意。",
   collabAccountCap: "默认额度",
@@ -1251,7 +1283,7 @@ const zh: RanchMessages = {
   accountPlanBuySuccess: "已开通 {plan}，有效至 {date}。",
   accountPlanBuySuccessRenew: "已续费 {plan}，有效至 {date}。",
   accountPlanBuyFailed: "无法打开该方案的收银台。",
-  accountPlanNeedCredits: "星币不足。请先给钱包充值，再重试。",
+  accountPlanNeedCredits: "星币不足。请先给钱包购买星币，再重试。",
   accountPlanOpenWallet: "打开钱包",
   accountPlanOpenCheckout: "去 AgentPlanet 支付",
   accountPlanCheckoutPending: "已打开收银台。支付完成后回到此页，我们会刷新套餐状态。",
@@ -1318,8 +1350,8 @@ const zh: RanchMessages = {
   myAgentsPricingModelHint:
     "从这只 agent 已自报的模型里选默认。这里不能增删模型。",
   myAgentsPricingModelsEmpty: "这只 agent 还没有自报任何模型。",
-  myAgentsPricingCreditsLine: "钱包预览（Credits / 百万，向上取整）：入 ${in} / 出 ${out}",
-  myAgentsPricingCreditsNote: "按现网汇率 1 Credit = $0.10。每跳按整数 Credits 结算。",
+  myAgentsPricingCreditsLine: "钱包预览（星币 / 百万，向上取整）：入 ${in} / 出 ${out}",
+  myAgentsPricingCreditsNote: "按现网汇率 1 星币 = $0.10。每跳按整数星币结算。",
   myAgentsPricingRuntimeHint: "Runtime 上报：${model}（自报，未验真）。",
   myAgentsPricingSelfReportNote:
     "Owner 只设默认模型 + 上浮；底价由 Host 维护，智能体不能改写全网结算价。",
@@ -1342,7 +1374,7 @@ const zh: RanchMessages = {
   myAgentsSectionPieceSku: "按张",
   myAgentsPieceSkuHint:
     "图进这场对话即按张成交。0 = 不卖按张。不满意不退；没出货不占。对话 token 仍另结。",
-  myAgentsPieceSkuLabel: "每张 Credits",
+  myAgentsPieceSkuLabel: "每张星币",
   myAgentsPieceSkuOff: "0 = 不卖按张。图仍可进这场对话，只是不占钱包。",
   myAgentsSavePieceSku: "保存按张价",
   myAgentsPieceSkuSaved: "按张价已保存",
@@ -1396,7 +1428,7 @@ const zh: RanchMessages = {
   myAgentsPolicyOpenHelp: "网络上能发现你的人都可以开聊。",
   myAgentsPolicyAllowlist: "仅白名单",
   myAgentsPolicyAllowlistHelp:
-    "信任的 agent 直达收件箱，其他人进队列。仅限 agent，不含人类用户；也不等于免费对话或免扣 Credits。",
+    "信任的 agent 直达收件箱，其他人进队列。仅限 agent，不含人类用户；也不等于免费对话或免扣星币。",
   myAgentsPolicyClosed: "已关闭",
   myAgentsPolicyClosedHelp: "拒绝入站网络消息。你作为主人仍可在 Interfaze 开聊，但别人不能随意找这个 agent。",
   myAgentsPolicyManifest: "收件箱 / 排队",
@@ -1409,7 +1441,7 @@ const zh: RanchMessages = {
   myAgentsPolicyClosedConfirmLabel: "关闭入站",
   myAgentsAllowlistTitle: "白名单",
   myAgentsAllowlistHint:
-    "ACN 上其他 agent 的信任名单：在名单内→直达收件箱；不在→进队列。不管人类用户，也不代表免费对话或免扣 Credits。",
+    "ACN 上其他 agent 的信任名单：在名单内→直达收件箱；不在→进队列。不管人类用户，也不代表免费对话或免扣星币。",
   myAgentsAllowlistEmpty: "白名单还是空的。",
   myAgentsAllowlistAdd: "添加",
   myAgentsAllowlistRemove: "移除",
@@ -1460,36 +1492,36 @@ const zh: RanchMessages = {
     "此 agent 仍拥有子网。请先在 AgentPlanet 转移或删除这些子网。",
   walletTab: "钱包",
   walletBalance: "星币",
-  walletCreditsHint: "可转账。充值 / 提取只针对星币。",
+  walletCreditsHint: "可转账。转入 / 提取只针对星币。",
   walletApPoints: "AP 积分",
   walletApPointsHint: "平台行为奖励，不可转出。",
   walletOwnerBalance: "你的星币",
-  walletTopup: "充值",
+  walletTopup: "转入",
   walletWithdraw: "提取",
   walletAmount: "金额（星币）",
   walletAmountHint: "整数星币。100 星币 = 1 本区法币单位。",
-  walletTopupDialogTitle: "充值星币",
+  walletTopupDialogTitle: "从钱包转入星币",
   walletWithdrawDialogTitle: "提取星币",
-  walletTopupConfirmLabel: "确认充值",
+  walletTopupConfirmLabel: "确认转入",
   walletWithdrawConfirmLabel: "确认提取",
-  walletTopupOk: "已充值",
+  walletTopupOk: "已转入",
   walletWithdrawOk: "已提取",
   walletFailed: "钱包操作失败。",
-  walletInsufficient: "Credits 不足，无法完成本次转账。",
-  walletRechargeExternal: "充值",
+  walletInsufficient: "星币不足，无法完成本次转账。",
+  walletRechargeExternal: "购买星币",
   walletRechargeExternalHint: "在界面内完成支付，星币直接进入这个钱包。通道费在结账时另列。",
   walletTxTitle: "最近流水",
   walletTxEmpty: "暂无交易记录。",
   walletLoadFailed: "无法加载此 agent 的钱包。",
   spendPolicyTitle: "消费授权",
   spendPolicyHint:
-    "此 agent 可在不询问你的情况下，自主花掉多少 Credits。适用于所有自主 Credits 流出。",
+    "此 agent 可在不询问你的情况下，自主花掉多少星币。适用于所有自主星币流出。",
   spendPolicyEdit: "编辑",
   spendPolicySave: "保存授权",
   spendPolicySaved: "消费授权已更新",
   spendPolicyFailed: "无法更新消费授权。",
   spendPolicyLoadFailed: "无法加载消费授权。",
-  spendPolicyInvalidLimits: "请填写非负整数 Credits，某项留空表示不限。",
+  spendPolicyInvalidLimits: "请填写非负整数星币，某项留空表示不限。",
   spendAutonomyDisabled: "仅主人",
   spendAutonomyDisabledHelp: "agent 不能自主消费。",
   spendAutonomyLimited: "有限额",
@@ -1497,12 +1529,12 @@ const zh: RanchMessages = {
   spendAutonomyUnlimited: "不限额",
   spendAutonomyUnlimitedHelp: "自主消费无上限。",
   spendAutonomyUnlimitedWarn:
-    "不限额意味着 agent 可不经询问花光其 Credits。除非你信任运行环境，建议用「有限额」。",
+    "不限额意味着 agent 可不经询问花光其星币。除非你信任运行环境，建议用「有限额」。",
   spendPerTxLimit: "单笔上限",
   spendWindowLimit: "窗口累计上限",
   spendWindowHours: "窗口（小时）",
   spendReserveFloor: "保留余额",
-  spendReserveFloorHint: "自主消费不得使 Credits 低于此值。",
+  spendReserveFloorHint: "自主消费不得使星币低于此值。",
   spendNoCap: "不限",
   spendWindowSpent: (hours) => `近 ${hours} 小时已花`,
   spendWindowRemaining: "剩余",
@@ -1512,7 +1544,7 @@ const zh: RanchMessages = {
   spendApprovals: "审批",
   spendApprovalsTitle: "消费审批",
   spendApprovalsHint:
-    "超过消费授权额度的支出申请。批准后会立即从 Credits 扣款。",
+    "超过消费授权额度的支出申请。批准后会立即从星币扣款。",
   spendApprovalsEmpty: "暂无待审批的支出申请。",
   spendApprovalsLoadFailed: "无法加载消费审批。",
   spendApprovalsApprove: "批准",

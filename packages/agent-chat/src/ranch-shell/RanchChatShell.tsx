@@ -48,6 +48,7 @@ import {
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
 import { NewComposeMenu } from "./NewComposeMenu";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { copyConnectPromptWithInvite, openJoinLanding } from "./connectPrompt";
 import {
   RANCH_LOCALE_OPTIONS,
@@ -59,7 +60,7 @@ import {
   type RanchMessages,
 } from "./i18n";
 import { btnGhost, btnIcon, btnPrimary, colors, inputStyle, shellRoot } from "./styles";
-import { calleesFromMetadata, orchLine, type OrchestrationCallee } from "../orchestration";
+import { calleesFromMetadata, decideFromMetadata, orchLine, type OrchestrationCallee, type MessageDecide } from "../orchestration";
 import { MailboxPiece } from "./MailboxPiece";
 import { ChatWindowPane } from "./chat-window/ChatWindowPane";
 import {
@@ -119,12 +120,12 @@ function agentStatusDotColor(status?: string | null): string | null {
   if (!status) return null;
   switch (status.toLowerCase()) {
     case "active":
-      return "#22c55e"; // green-500 — ACN online + recent delivery ok
+      return colors.online; // ACN online + recent delivery ok
     case "busy":
-      return "#eab308"; // yellow-500 — ACN busy, or online but undeliverable
+      return colors.busy; // ACN busy, or online but undeliverable
     case "idle":
     case "offline":
-      return "#64748b"; // slate-500 — ACN not listening
+      return colors.offline; // ACN not listening
     default:
       return null;
   }
@@ -277,7 +278,7 @@ function DeliveryStatusIcon({
     height: 14,
   };
   const stroke =
-    delivery === "pending" || delivery === "sent" ? colors.muted : "#93c5fd";
+    delivery === "pending" || delivery === "sent" ? colors.muted : colors.mention;
   const title =
     delivery === "pending"
       ? t.sending
@@ -503,6 +504,138 @@ function AgentOrchestrationFooter({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function AgentDecideFooter({
+  decide,
+  auto,
+  hops,
+  hopCap,
+  busy,
+  t,
+  onPick,
+}: {
+  decide: MessageDecide;
+  auto: boolean;
+  hops: number;
+  hopCap: number;
+  busy: boolean;
+  t: RanchMessages;
+  onPick: (id: string, label: string) => void;
+}) {
+  const appliedId = decide.applied?.option_id || null;
+  const shadow = decide.shadow;
+  const suggested =
+    !appliedId && shadow?.status === "scored" && shadow.choice ? shadow.choice : null;
+  const waitingHuman =
+    shadow?.status === "ask_human" ||
+    shadow?.gate?.ask_human === true ||
+    shadow?.status === "low_confidence";
+  const scoring = shadow?.status === "pending";
+  const capped = auto && hopCap > 0 && hops >= hopCap && !appliedId;
+  const locked = Boolean(appliedId) || busy || (auto && scoring);
+  let status = "";
+  if (appliedId) status = t.decisionPicked;
+  else if (scoring) status = t.decisionScoring;
+  else if (waitingHuman) status = t.decisionAskHuman;
+  else if (capped) status = t.decisionCap;
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        paddingLeft: 2,
+        maxWidth: "100%",
+      }}
+    >
+      {status ? (
+        <div style={{ fontSize: 11, color: colors.muted, lineHeight: 1.35 }}>{status}</div>
+      ) : null}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {decide.options.map((opt) => {
+          const picked = appliedId === opt.id;
+          const hint = suggested === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              disabled={locked}
+              onClick={() => onPick(opt.id, opt.label)}
+              style={{
+                ...btnGhost,
+                padding: "4px 10px",
+                fontSize: 12,
+                opacity: locked && !picked ? 0.55 : 1,
+                borderColor: picked || hint ? "rgba(59,130,246,0.45)" : colors.border,
+                background: picked || hint ? colors.accentSoft : "transparent",
+                color: colors.text,
+                cursor: locked ? "default" : "pointer",
+              }}
+            >
+              {opt.label}
+              {hint && !picked ? ` · ${t.decisionSuggested}` : ""}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ChatDecisionSettings({
+  auto,
+  goal,
+  hops,
+  hopCap,
+  busy,
+  t,
+  onToggle,
+}: {
+  auto: boolean;
+  goal: string;
+  hops: number;
+  hopCap: number;
+  busy: boolean;
+  t: RanchMessages;
+  onToggle: (next: boolean) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontSize: 13, fontWeight: 650, color: colors.text }}>{t.decisionAuto}</div>
+      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
+        {t.decisionAutoHint}
+      </p>
+      <label
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          fontSize: 13,
+          color: colors.text,
+          userSelect: "none",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={auto}
+          disabled={busy}
+          onChange={(e) => onToggle(e.target.checked)}
+        />
+        {t.decisionAuto}
+      </label>
+      {!goal ? (
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
+          {t.decisionAutoNeedGoal}
+        </p>
+      ) : (
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
+          {goal}
+          {auto && hopCap > 0 ? ` · ${hops}/${hopCap}` : ""}
+        </p>
+      )}
     </div>
   );
 }
@@ -955,7 +1088,7 @@ function TopicDivider({
       <span
         style={{
           fontSize: 11,
-          color: "#93c5fd",
+          color: colors.mention,
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -1250,29 +1383,6 @@ function AccountFooter({
   const initial = label.slice(0, 1).toUpperCase() || "?";
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const closeTimerRef = useRef<number | null>(null);
-
-  const clearCloseTimer = () => {
-    if (closeTimerRef.current != null) {
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-  };
-
-  const openMenu = () => {
-    clearCloseTimer();
-    setMenuOpen(true);
-  };
-
-  const scheduleCloseMenu = () => {
-    clearCloseTimer();
-    closeTimerRef.current = window.setTimeout(() => {
-      setMenuOpen(false);
-      closeTimerRef.current = null;
-    }, 160);
-  };
-
-  useEffect(() => () => clearCloseTimer(), []);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -1340,8 +1450,6 @@ function AccountFooter({
   return (
     <div
       ref={rootRef}
-      onMouseEnter={openMenu}
-      onMouseLeave={scheduleCloseMenu}
       style={{
         position: "relative",
         borderTop: `1px solid ${colors.border}`,
@@ -1366,7 +1474,7 @@ function AccountFooter({
         <div
           className="ranch-account-menu-panel"
           style={{
-            background: "#1c2330",
+            background: colors.panelAlt,
             border: `1px solid ${colors.border}`,
             borderRadius: 10,
             boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
@@ -1492,8 +1600,8 @@ function AccountFooter({
               width: 32,
               height: 32,
               borderRadius: 999,
-              background: "linear-gradient(135deg,#475569,#1e293b)",
-              color: "#fff",
+              background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
+              color: colors.onAccent,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -1551,6 +1659,18 @@ function AccountFooter({
       </button>
     </div>
   );
+}
+
+function useViewportWidth(): number {
+  // Fixed SSR-safe initial value; synced to the real width on mount.
+  const [width, setWidth] = useState(1024);
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return width;
 }
 
 export function RanchChatShell(props: RanchChatShellProps) {
@@ -1638,6 +1758,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, [modeProp]);
 
   const showSidebar = mode !== "full" || !sidebarCollapsed;
+  const viewportWidth = useViewportWidth();
+  /** <768px in full mode: single-column, list ↔ conversation like side mode. */
+  const isNarrowFull = mode === "full" && viewportWidth < 768;
+  /** Face-chat pane overlays instead of squeezing a third column. */
+  const paneOverlay = mode === "side" || viewportWidth < 900;
 
   const client = useMemo(
     () => createGatewayClient(gatewayBaseUrl, getAccessToken),
@@ -1755,6 +1880,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [agentRefIndex, setAgentRefIndex] = useState(0);
   const [slashIndex, setSlashIndex] = useState(0);
   const [draft, setDraft] = useState("");
+  /** Escape dismisses the slash menu without wiping the draft; typing re-opens it. */
+  const [slashMenuDismissed, setSlashMenuDismissed] = useState(false);
   /** Group: continue with last @'d agent for 15m (chip above composer). */
   const [stickyMention, setStickyMention] = useState<StickyMention | null>(null);
   /** Group: forced recipient picker when send has no @ / sticky (ranch-style). */
@@ -1787,6 +1914,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   } | null>(null);
   /** User pick for this hop (S1). Sticky per chat until changed. */
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [pinDecisionGoal, setPinDecisionGoal] = useState(false);
   const [ownedAgentLoading, setOwnedAgentLoading] = useState(false);
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [activeTopic, setActiveTopic] = useState<ThreadSummary | null>(null);
@@ -2141,6 +2269,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setMentionIndex(0);
       setDraft("");
       setRecipientPickerOpen(false);
+      setPinDecisionGoal(false);
       setStickyMention(isGroupChat(chat) ? readStickyMention(chat.chat_id) : null);
       clearReplySlot();
       agentIdsRef.current = [];
@@ -2516,11 +2645,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
     text?: string;
     /** Override topic tagging (e.g. newly created thread id). */
     threadId?: string | null;
+    /** Pick a listed decide option (same send path as typing the label). */
+    decisionChoice?: string;
   };
 
   const send = async (opts?: SendOpts) => {
     const text = (opts?.text ?? draft).trim();
     if (!text || !active) return;
+    // Soft offline guard: keep the draft, surface a dismissible hint.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      setError(t.offlineSendBlocked);
+      return;
+    }
+    // Soft agent-offline guard (1:1 only): the message would queue with no one to answer.
+    if (!isGroupChat(active) && isAgentOffline(active.agent_status)) {
+      setError(t.sayHelloOffline);
+      return;
+    }
     const chatId = active.chat_id;
     const group = isGroupChat(active);
     const seq = loadSeqRef.current;
@@ -2574,6 +2715,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
           : (activeTopic?.id ?? composerTopic?.id ?? null);
       await client.sendMessage(chatId, text, mentions, sendThreadId, {
         requested_model: selectedModelId,
+        decision_goal: !group && !opts?.decisionChoice && pinDecisionGoal ? text : null,
+        decision_choice: opts?.decisionChoice ?? null,
       });
       if (group && mentions) {
         if (mentions.length === 1) {
@@ -2583,7 +2726,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
           clearStickyMention(chatId);
         }
       }
-      setDraft("");
+      // An option click submits its label independently of the composer draft.
+      if (seq === loadSeqRef.current && !opts?.decisionChoice) {
+        setDraft("");
+        setPinDecisionGoal(false);
+      }
       await reloadMessages(chatId, seq);
       await refreshChats();
       // Mode B writeback is async (~5–30s). WS message.new can be missed; poll DB.
@@ -2693,6 +2840,29 @@ export function RanchChatShell(props: RanchChatShellProps) {
     }
   };
   sendRef.current = send;
+
+  const toggleChatDecision = async (next: boolean) => {
+    if (!active || isGroupChat(active)) return;
+    const chatId = active.chat_id;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await client.patchChatDecision(chatId, next);
+      const decision = updated.decision ?? {
+        ...(active.decision || {}),
+        auto: next,
+        auto_hops: next ? 0 : active.decision?.auto_hops,
+      };
+      setActive((cur) => (cur && cur.chat_id === chatId ? { ...cur, decision } : cur));
+      setChats((prev) =>
+        prev.map((c) => (c.chat_id === chatId ? { ...c, decision } : c)),
+      );
+    } catch (e) {
+      setError(e instanceof ChatGatewayError ? e.message : t.sendFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const retryLastUserMessage = () => {
     if (!active) return;
@@ -3060,6 +3230,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const activeOffline =
     active && !isGroupChat(active) && isAgentOffline(active.agent_status);
   const groupActive = !!(active && isGroupChat(active));
+  const latestDecideId = groupActive
+    ? undefined
+    : [...messages].reverse().find(
+        (m) => m.sender_type === "agent" && decideFromMetadata(m.metadata),
+      )?.message_id;
   const studioOrigin = (studioBaseUrl || "").replace(/\/+$/, "");
   const activeWindow = active ? chatWindows[active.chat_id] ?? null : null;
   const paneOpen = Boolean(active && paneOpenByChat[active.chat_id]);
@@ -3164,7 +3339,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, [active?.chat_id, canOpenTalk, ensureTalkWindow, paneOpen]);
 
   const slashParsed = parseSlashDraft(draft);
-  const slashMenuOpen = isSlashMenuDraft(draft);
+  const slashMenuOpen = isSlashMenuDraft(draft) && !slashMenuDismissed;
   const slashCommands: SlashCmdDef[] = (
     [
       { id: "agent" as const, label: "/agent", description: t.slashAgentDesc },
@@ -3246,6 +3421,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     .map(([id, name]) => ({ id, name }));
 
   const tryRunSlashFromDraft = () => {
+    // Menu dismissed with Escape — Enter sends the raw text instead.
+    if (slashMenuDismissed) return false;
     const parsed = parseSlashDraft(draft);
     if (!parsed) return false;
     // Bare "/" — keep menu open, don't send as chat text.
@@ -3347,14 +3524,31 @@ export function RanchChatShell(props: RanchChatShellProps) {
         }
         @media (prefers-reduced-motion: reduce) {
           .ranch-account-menu-panel { animation: none; }
+          .ranch-reply-dot { animation: none; opacity: 1; }
         }
+        [data-ranch-chat-shell] :focus-visible {
+          outline: 2px solid ${colors.accent};
+          outline-offset: 2px;
+        }
+        .ranch-list-item { background: transparent; }
+        .ranch-list-item:hover { background: ${colors.hover}; }
+        .ranch-list-item:focus-visible {
+          outline: 2px solid ${colors.accent};
+          outline-offset: -2px;
+        }
+        .ranch-list-item[data-selected="true"] { background: ${colors.accentSoft}; }
+        .ranch-list-item[data-selected="true"]:hover { background: rgba(59,130,246,0.22); }
       `}</style>
       <div
         style={{
-          width: mode === "full" ? 360 : "100%",
-          maxWidth: mode === "full" ? 360 : undefined,
-          borderRight: mode === "full" ? `1px solid ${colors.border}` : undefined,
-          display: showSidebar && (view === "list" || mode === "full") ? "flex" : "none",
+          width: mode === "full" && !isNarrowFull ? 360 : "100%",
+          maxWidth: mode === "full" && !isNarrowFull ? 360 : undefined,
+          borderRight:
+            mode === "full" && !isNarrowFull ? `1px solid ${colors.border}` : undefined,
+          display:
+            showSidebar && (view === "list" || (mode === "full" && !isNarrowFull))
+              ? "flex"
+              : "none",
           flexDirection: "column",
           minWidth: 0,
           height: "100%",
@@ -3512,10 +3706,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       ? [c.agent_id, listTitle].filter(Boolean).join(" · ") || undefined
                       : undefined
                   }
-                  style={{
-                    ...listItem,
-                    background: selected ? colors.accentSoft : "transparent",
-                  }}
+                  className="ranch-list-item"
+                  data-selected={selected}
+                  aria-current={selected ? "true" : undefined}
+                  style={listItem}
                 >
                   <span style={{ position: "relative", width: 40, height: 40, flexShrink: 0 }}>
                     <span
@@ -3523,7 +3717,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         width: 40,
                         height: 40,
                         borderRadius: c.type === "group" ? 10 : 999,
-                        background: "linear-gradient(135deg,#334155,#1e293b)",
+                        background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -3581,7 +3775,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               padding: "0 5px",
                               borderRadius: 999,
                               background: colors.accent,
-                              color: "#fff",
+                              color: colors.onAccent,
                               fontSize: 10,
                               fontWeight: 700,
                               display: "inline-flex",
@@ -3687,6 +3881,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             client={client}
             messages={t}
             interfazeBaseUrl={interfazeBaseUrl}
+            locale={uiLocale}
             onClose={() => closeAccountPanel()}
           />
         ) : null}
@@ -3732,8 +3927,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
         <div
           style={{
             flex: 1,
-            // full: always show right pane (empty state when no selection)
-            display: mode === "full" || view === "conversation" ? "flex" : "none",
+            // full: always show right pane (empty state when no selection);
+            // narrow full (<768px): single-column, list view hides it.
+            display:
+              (mode === "full" && !isNarrowFull) || view === "conversation"
+                ? "flex"
+                : "none",
             flexDirection: "column",
             minWidth: 0,
             height: "100%",
@@ -3806,7 +4005,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             <>
               <div style={listHeader}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  {(mode === "side" || activeTopic) && (
+                  {(mode === "side" || isNarrowFull || activeTopic) && (
                     <button
                       type="button"
                       style={btnGhost}
@@ -3870,7 +4069,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           width: 32,
                           height: 32,
                           borderRadius: isGroupChat(active) ? 8 : 999,
-                          background: "linear-gradient(135deg,#334155,#1e293b)",
+                          background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -4007,7 +4206,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     padding: "8px 14px",
                     fontSize: 12,
                     lineHeight: 1.45,
-                    color: "#fbbf24",
+                    color: colors.warn,
                     background: "rgba(234,179,8,0.1)",
                     borderBottom: `1px solid ${colors.border}`,
                   }}
@@ -4020,7 +4219,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         href={connectGuideUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        style={{ color: "#fcd34d" }}
+                        style={{ color: colors.warnSoft }}
                       >
                         {t.ownerHowToConnect}
                       </a>
@@ -4042,7 +4241,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
               >
                 {displayMessages.length === 0 && (
                   <p style={{ color: colors.muted, fontSize: 13, margin: 0 }}>
-                    {activeTopic ? t.noMessagesYet : t.sayHello}
+                    {activeTopic
+                      ? t.noMessagesYet
+                      : activeOffline
+                        ? t.sayHelloOffline
+                        : t.sayHello}
                   </p>
                 )}
                 {displayMessages.map((m, idx) => {
@@ -4171,7 +4374,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         ? (() => {
                             const usage = hopUsageFromMessage(m);
                             const callees = calleesFromMetadata(m.metadata);
-                            if (!usage && !callees.length) return null;
+                            const decide = group ? null : decideFromMetadata(m.metadata);
+                            if (!usage && !callees.length && !decide) return null;
                             return (
                               <>
                                 {callees.length ? (
@@ -4179,6 +4383,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     callees={callees}
                                     names={agentNames}
                                     t={t}
+                                  />
+                                ) : null}
+                                {decide ? (
+                                  <AgentDecideFooter
+                                    decide={decide}
+                                    auto={Boolean(active?.decision?.auto)}
+                                    hops={active?.decision?.auto_hops ?? 0}
+                                    hopCap={active?.decision?.auto_hop_cap ?? 5}
+                                    busy={busy || m.message_id !== latestDecideId}
+                                    t={t}
+                                    onPick={(id, label) => {
+                                      void send({ text: label, decisionChoice: id });
+                                    }}
                                   />
                                 ) : null}
                                 {usage ? <AgentUsageFooter usage={usage} t={t} /> : null}
@@ -4230,12 +4447,36 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   {t.collabNeedTopup}
                 </div>
               ) : null}
-              {error && (
-                <div style={{ padding: "8px 14px", color: colors.danger, fontSize: 12 }}>{error}</div>
-              )}
-              {windowError ? (
-                <div style={{ padding: "8px 14px", color: colors.danger, fontSize: 12 }}>
-                  {windowError}
+              {error || windowError ? (
+                <div
+                  role="alert"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "8px 14px",
+                    color: colors.danger,
+                    fontSize: 12,
+                  }}
+                >
+                  <span style={{ flex: 1, minWidth: 0 }}>{error || windowError}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError(null);
+                      setWindowError(null);
+                    }}
+                    style={{
+                      ...btnGhost,
+                      padding: "2px 8px",
+                      fontSize: 11,
+                      flexShrink: 0,
+                      lineHeight: 1.4,
+                    }}
+                    aria-label={t.close}
+                  >
+                    ×
+                  </button>
                 </div>
               ) : null}
 
@@ -4291,8 +4532,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       onClick={() => setComposerTopic(null)}
                       style={{
                         ...btnIcon,
-                        width: 20,
-                        height: 20,
+                        width: 28,
+                        height: 28,
                         fontSize: 14,
                         lineHeight: 1,
                         color: colors.muted,
@@ -4333,8 +4574,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       onClick={() => clearStickyMention(active?.chat_id)}
                       style={{
                         ...btnIcon,
-                        width: 20,
-                        height: 20,
+                        width: 28,
+                        height: 28,
                         fontSize: 14,
                         lineHeight: 1,
                         color: colors.muted,
@@ -4344,13 +4585,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     </button>
                   </div>
                 ) : null}
-                <div style={{ display: "flex", gap: 8, position: "relative" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, position: "relative" }}>
                 {slashMenuOpen && slashCandidates.length > 0 ? (
                   <div
                     style={{
                       position: "absolute",
                       left: 0,
-                      right: 72,
+                      right: 0,
                       bottom: "100%",
                       marginBottom: 8,
                       background: colors.panel,
@@ -4405,7 +4646,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     style={{
                       position: "absolute",
                       left: 0,
-                      right: 72,
+                      right: 0,
                       bottom: "100%",
                       marginBottom: 8,
                       background: colors.panel,
@@ -4465,7 +4706,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     style={{
                       position: "absolute",
                       left: 0,
-                      right: 72,
+                      right: 0,
                       bottom: "100%",
                       marginBottom: 8,
                       background: colors.panel,
@@ -4535,7 +4776,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 width: 28,
                                 height: 28,
                                 borderRadius: 999,
-                                background: "linear-gradient(135deg,#0f766e,#1e293b)",
+                                background: `linear-gradient(135deg,${colors.avatarSelfFrom},${colors.avatarTo})`,
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
@@ -4652,7 +4893,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   maxWidth: 160,
                                   padding: "2px 0",
                                   cursor: "pointer",
-                                  outline: "none",
                                 }}
                               >
                                 {options.map((id) => (
@@ -4709,7 +4949,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         style={{
                           fontSize: 11,
                           lineHeight: 1.35,
-                          color: "#fbbf24",
+                          color: colors.warn,
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
@@ -4725,12 +4965,31 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     ) : null}
                   </div>
                 ) : null}
+                {!groupActive && <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 12,
+                    color: colors.muted,
+                    userSelect: "none",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={pinDecisionGoal}
+                    onChange={(e) => setPinDecisionGoal(e.target.checked)}
+                  />
+                  {t.decisionGoal}
+                </label>}
+                <div style={{ display: "flex", gap: 8, alignItems: "flex-end", width: "100%" }}>
                 <textarea
                   value={draft}
                   onChange={(e) => {
                     setDraft(e.target.value);
                     setMentionIndex(0);
                     setSlashIndex(0);
+                    setSlashMenuDismissed(false);
                     if (recipientPickerOpen && trailingMentionQuery(e.target.value) !== null) {
                       setRecipientPickerOpen(false);
                     }
@@ -4762,7 +5021,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       }
                       if (e.key === "Escape") {
                         e.preventDefault();
-                        setDraft("");
+                        setSlashMenuDismissed(true);
                         return;
                       }
                       if (e.key === "Enter" && !e.shiftKey) {
@@ -4876,6 +5135,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   {t.send}
                 </button>
                 </div>
+                </div>
               </form>
 
               {showMembersPanel && active ? (
@@ -4928,7 +5188,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           width: 56,
                           height: 56,
                           borderRadius: groupActive ? 12 : 999,
-                          background: "linear-gradient(135deg,#334155,#1e293b)",
+                          background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -5044,6 +5304,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         : ([
                             ["info", t.infoTab],
                             ["chats", t.chatsTab],
+                            ["settings", t.settingsTab],
                           ] as const)
                     ).map(([key, label]) => (
                       <button
@@ -5131,31 +5392,45 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </div>
                       ) : null}
                     </>
-                  ) : infoTab === "settings" && !groupActive && activeIsOwned ? (
+                  ) : infoTab === "settings" && !groupActive ? (
                     <div
                       style={{
                         flex: 1,
                         overflow: "auto",
                         padding: 16,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 20,
                       }}
                     >
-                      {ownedAgentLoading && !ownedAgentDetail ? (
-                        <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
-                      ) : ownedAgentDetail ? (
-                        <AgentOwnerSettings
-                          client={client}
-                          detail={ownedAgentDetail}
-                          messages={t}
-                          agentPlanetBaseUrl={agentPlanetBaseUrl}
-                          interfazeBaseUrl={interfazeBaseUrl}
-                          connectGuideUrl={connectGuideUrl}
-                          busy={busy}
-                          onUpdated={applyOwnedAgentProfileUpdate}
-                          onRemoved={applyOwnedAgentRemoved}
-                        />
-                      ) : (
-                        <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>
-                      )}
+                      <ChatDecisionSettings
+                        auto={Boolean(active.decision?.auto)}
+                        goal={(active.decision?.goal || "").trim()}
+                        hops={active.decision?.auto_hops ?? 0}
+                        hopCap={active.decision?.auto_hop_cap ?? 5}
+                        busy={busy}
+                        t={t}
+                        onToggle={(next) => void toggleChatDecision(next)}
+                      />
+                      {activeIsOwned ? (
+                        ownedAgentLoading && !ownedAgentDetail ? (
+                          <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
+                        ) : ownedAgentDetail ? (
+                          <AgentOwnerSettings
+                            client={client}
+                            detail={ownedAgentDetail}
+                            messages={t}
+                            agentPlanetBaseUrl={agentPlanetBaseUrl}
+                            interfazeBaseUrl={interfazeBaseUrl}
+                            connectGuideUrl={connectGuideUrl}
+                            busy={busy}
+                            onUpdated={applyOwnedAgentProfileUpdate}
+                            onRemoved={applyOwnedAgentRemoved}
+                          />
+                        ) : (
+                          <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>
+                        )
+                      ) : null}
                     </div>
                   ) : infoTab === "wallet" && !groupActive && activeIsOwned && active?.agent_id ? (
                     <div
@@ -5302,7 +5577,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               href={connectGuideUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              style={{ color: "#93c5fd", fontSize: 13 }}
+                              style={{ color: colors.mention, fontSize: 13 }}
                             >
                               {t.ownerHowToConnect}
                             </a>
@@ -5407,7 +5682,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   width: 36,
                                   height: 36,
                                   borderRadius: 999,
-                                  background: "linear-gradient(135deg,#0f766e,#1e293b)",
+                                  background: `linear-gradient(135deg,${colors.avatarSelfFrom},${colors.avatarTo})`,
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
@@ -5728,14 +6003,36 @@ export function RanchChatShell(props: RanchChatShellProps) {
       )}
 
       {active && paneOpen ? (
-        <ChatWindowPane
-          window={activeWindow}
-          studioBaseUrl={studioOrigin}
-          busy={windowBusy}
-          onClose={() => hidePane(active.chat_id)}
-          onTalkExpired={() => void ensureTalkWindow({ force: true })}
-          t={t}
-        />
+        paneOverlay ? (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 40,
+              display: "flex",
+              background: colors.bg,
+            }}
+          >
+            <ChatWindowPane
+              window={activeWindow}
+              studioBaseUrl={studioOrigin}
+              busy={windowBusy}
+              onClose={() => hidePane(active.chat_id)}
+              onTalkExpired={() => void ensureTalkWindow({ force: true })}
+              fill
+              t={t}
+            />
+          </div>
+        ) : (
+          <ChatWindowPane
+            window={activeWindow}
+            studioBaseUrl={studioOrigin}
+            busy={windowBusy}
+            onClose={() => hidePane(active.chat_id)}
+            onTalkExpired={() => void ensureTalkWindow({ force: true })}
+            t={t}
+          />
+        )
       ) : null}
 
       {pickerMode ? (
@@ -5759,70 +6056,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
       ) : null}
 
       {confirmDialog ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 120,
-            background: "rgba(0,0,0,0.55)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 24,
-          }}
-          onClick={() => {
-            if (!busy) setConfirmDialog(null);
-          }}
-        >
-          <div
-            style={{
-              width: "min(340px, 100%)",
-              background: colors.panel,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 12,
-              padding: 20,
-              boxShadow: "0 16px 48px rgba(0,0,0,0.45)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p
-              style={{
-                margin: "0 0 16px",
-                fontSize: 14,
-                lineHeight: 1.5,
-                color: colors.text,
-              }}
-            >
-              {confirmDialog.message}
-            </p>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                style={btnGhost}
-                disabled={busy}
-                onClick={() => setConfirmDialog(null)}
-              >
-                {t.cancel}
-              </button>
-              <button
-                type="button"
-                style={{
-                  ...btnGhost,
-                  background: "rgba(248,113,113,0.15)",
-                  borderColor: "rgba(248,113,113,0.45)",
-                  color: colors.danger,
-                  fontWeight: 600,
-                }}
-                disabled={busy}
-                onClick={() => confirmDialog.onConfirm()}
-              >
-                {confirmDialog.confirmLabel}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          message={confirmDialog.message}
+          confirmLabel={confirmDialog.confirmLabel}
+          cancelLabel={t.cancel}
+          busy={busy}
+          onConfirm={() => confirmDialog.onConfirm()}
+          onCancel={() => setConfirmDialog(null)}
+        />
       ) : null}
     </div>
   );

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { AgentDirectoryItem } from "../types";
 import { copyConnectPromptWithInvite } from "./connectPrompt";
 import type { RanchLocale, RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
+import { useModalA11y } from "./useModalA11y";
 
 type Props = {
   directoryAgents: AgentDirectoryItem[];
@@ -52,6 +53,9 @@ export function NewChatPicker({
   );
   const [discoverLoading, setDiscoverLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  useModalA11y({ open: true, onClose, containerRef: cardRef, initialFocusRef: searchInputRef });
 
   useEffect(() => {
     if (!onSearchDiscover) {
@@ -144,8 +148,22 @@ export function NewChatPicker({
   };
 
   return (
-    <div style={overlay}>
-      <div style={card}>
+    <div
+      style={overlay}
+      role="dialog"
+      aria-modal="true"
+      aria-label={
+        lockMode
+          ? mode === "group"
+            ? t.pickerTitleGroup
+            : t.pickerTitleDirect
+          : t.pickerTitle
+      }
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div ref={cardRef} style={{ ...card, outline: "none" }} tabIndex={-1}>
         <div style={header}>
           <strong style={{ fontSize: 16 }}>
             {lockMode
@@ -252,6 +270,7 @@ export function NewChatPicker({
             </div>
             {onSearchDiscover ? (
               <input
+                ref={searchInputRef}
                 value={discoverQ}
                 onChange={(e) => setDiscoverQ(e.target.value)}
                 placeholder={t.searchAgents}

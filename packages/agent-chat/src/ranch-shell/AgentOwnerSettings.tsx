@@ -20,6 +20,7 @@ import {
 import { copyText } from "./connectPrompt";
 import type { RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
+import { useModalA11y } from "./useModalA11y";
 
 /** Align with ACN / Gateway display-name rules (letter required). */
 function nameLooksValid(name: string): boolean {
@@ -1311,6 +1312,47 @@ export function AgentOwnerSettings({
     setDeleteTyped("");
   };
 
+  const confirmRelayRef = useRef<HTMLDivElement | null>(null);
+  const confirmClosedPolicyRef = useRef<HTMLDivElement | null>(null);
+  const giftDialogRef = useRef<HTMLDivElement | null>(null);
+  const confirmRotateRef = useRef<HTMLDivElement | null>(null);
+  const confirmDeleteRef = useRef<HTMLDivElement | null>(null);
+  const newApiKeyRef = useRef<HTMLDivElement | null>(null);
+  useModalA11y({
+    open: confirmRelay,
+    onClose: () => {
+      if (!savingDelivery) setConfirmRelay(false);
+    },
+    containerRef: confirmRelayRef,
+  });
+  useModalA11y({
+    open: confirmClosedPolicy,
+    onClose: () => {
+      if (!savingPolicy) setConfirmClosedPolicy(false);
+    },
+    containerRef: confirmClosedPolicyRef,
+  });
+  useModalA11y({ open: giftOpen, onClose: closeGift, containerRef: giftDialogRef });
+  useModalA11y({
+    open: confirmRotate,
+    onClose: () => {
+      if (!rotating) setConfirmRotate(false);
+    },
+    containerRef: confirmRotateRef,
+  });
+  useModalA11y({
+    open: confirmDelete,
+    onClose: closeDeleteConfirm,
+    containerRef: confirmDeleteRef,
+  });
+  useModalA11y({
+    open: !!newApiKey,
+    onClose: () => setNewApiKey(null),
+    containerRef: newApiKeyRef,
+    // One-shot key reveal: keep the original explicit-dismiss design.
+    closeOnEscape: false,
+  });
+
   const runDelete = () => {
     if (dangerBusy || !deleteConfirmOk) return;
     setDeleting(true);
@@ -2203,9 +2245,9 @@ export function AgentOwnerSettings({
           role="dialog"
           aria-modal="true"
           style={{
-            position: "absolute",
+            position: "fixed",
             inset: 0,
-            zIndex: 50,
+            zIndex: 80,
             background: "rgba(0,0,0,0.55)",
             display: "flex",
             alignItems: "center",
@@ -2225,6 +2267,8 @@ export function AgentOwnerSettings({
               padding: 20,
             }}
             onClick={(e) => e.stopPropagation()}
+            ref={confirmRelayRef}
+            tabIndex={-1}
           >
             <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.5 }}>
               {t.myAgentsDeliveryRelayConfirm}
@@ -2256,9 +2300,9 @@ export function AgentOwnerSettings({
           role="dialog"
           aria-modal="true"
           style={{
-            position: "absolute",
+            position: "fixed",
             inset: 0,
-            zIndex: 50,
+            zIndex: 80,
             background: "rgba(0,0,0,0.55)",
             display: "flex",
             alignItems: "center",
@@ -2278,6 +2322,8 @@ export function AgentOwnerSettings({
               padding: 20,
             }}
             onClick={(e) => e.stopPropagation()}
+            ref={confirmClosedPolicyRef}
+            tabIndex={-1}
           >
             <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.5 }}>
               {t.myAgentsPolicyClosedConfirm}
@@ -2316,9 +2362,9 @@ export function AgentOwnerSettings({
           aria-modal="true"
           aria-label={t.myAgentsGiftTitle}
           style={{
-            position: "absolute",
+            position: "fixed",
             inset: 0,
-            zIndex: 50,
+            zIndex: 80,
             background: "rgba(0,0,0,0.55)",
             display: "flex",
             alignItems: "center",
@@ -2336,6 +2382,8 @@ export function AgentOwnerSettings({
               padding: 20,
             }}
             onClick={(e) => e.stopPropagation()}
+            ref={giftDialogRef}
+            tabIndex={-1}
           >
             <div
               style={{
@@ -2424,9 +2472,9 @@ export function AgentOwnerSettings({
           role="dialog"
           aria-modal="true"
           style={{
-            position: "absolute",
+            position: "fixed",
             inset: 0,
-            zIndex: 50,
+            zIndex: 80,
             background: "rgba(0,0,0,0.55)",
             display: "flex",
             alignItems: "center",
@@ -2446,6 +2494,8 @@ export function AgentOwnerSettings({
               padding: 20,
             }}
             onClick={(e) => e.stopPropagation()}
+            ref={confirmRotateRef}
+            tabIndex={-1}
           >
             <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.5 }}>
               {t.myAgentsRotateConfirm}
@@ -2483,9 +2533,9 @@ export function AgentOwnerSettings({
           role="dialog"
           aria-modal="true"
           style={{
-            position: "absolute",
+            position: "fixed",
             inset: 0,
-            zIndex: 50,
+            zIndex: 80,
             background: "rgba(0,0,0,0.55)",
             display: "flex",
             alignItems: "center",
@@ -2503,6 +2553,8 @@ export function AgentOwnerSettings({
               padding: 20,
             }}
             onClick={(e) => e.stopPropagation()}
+            ref={confirmDeleteRef}
+            tabIndex={-1}
           >
             <p style={{ margin: "0 0 12px", fontSize: 14, lineHeight: 1.5 }}>
               {t.myAgentsDeleteConfirm}
@@ -2573,6 +2625,8 @@ export function AgentOwnerSettings({
               borderRadius: 12,
               padding: 20,
             }}
+            ref={newApiKeyRef}
+            tabIndex={-1}
           >
             <p style={{ margin: "0 0 10px", fontSize: 14, fontWeight: 600 }}>
               {t.myAgentsRotateDone}
