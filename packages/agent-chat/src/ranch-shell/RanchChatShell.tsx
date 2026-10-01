@@ -1760,6 +1760,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   /** Group: forced recipient picker when send has no @ / sticky (ranch-style). */
   const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [chatLoadError, setChatLoadError] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     message: string;
     confirmLabel: string;
@@ -1962,11 +1963,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   const refreshChats = useCallback(async () => {
     setLoadingChats(true);
+    void client.health().then((h) => setHealthOk(h.ok)).catch(() => setHealthOk(false));
     try {
       const list = await client.listChats();
       setChats(list);
+      setChatLoadError(null);
       setError(null);
     } catch (e) {
+      setChatLoadError(isAuthFailure(e) ? t.sessionExpired : t.chatLoadFailed);
       setError(
         isAuthFailure(e)
           ? t.sessionExpired
@@ -1977,7 +1981,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     } finally {
       setLoadingChats(false);
     }
-  }, [client, t.sessionExpired]);
+  }, [client, t.sessionExpired, t.chatLoadFailed]);
 
   const searchDiscover = useCallback(
     async (q: string): Promise<AgentDirectoryItem[]> => {
@@ -2019,14 +2023,22 @@ export function RanchChatShell(props: RanchChatShellProps) {
   // Keep presence dots fresh while a conversation is open.
   useEffect(() => {
     if (!open || !active) return;
+    let cancelled = false;
+    const chatId = active.chat_id;
     const tick = window.setInterval(() => {
       void client.listChats().then((list) => {
+        if (cancelled) return;
         setChats(list);
-        const next = list.find((c) => c.chat_id === active.chat_id);
-        if (next) setActive(next);
+        const next = list.find((c) => c.chat_id === chatId);
+        if (next) setActive((current) => current?.chat_id === chatId ? next : current);
+      }).catch(() => {
+        // A transient presence refresh failure should not interrupt the conversation.
       });
     }, 20000);
-    return () => window.clearInterval(tick);
+    return () => {
+      cancelled = true;
+      window.clearInterval(tick);
+    };
   }, [open, active?.chat_id, client]);
 
   const flashTopicHighlight = useCallback((topicId: string) => {
@@ -2062,14 +2074,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
   useEffect(() => {
     if (!open) return;
     void refreshChats();
-    (async () => {
-      try {
-        const h = await client.health();
-        setHealthOk(h.ok);
-      } catch {
-        setHealthOk(false);
-      }
-    })();
   }, [open, client, refreshChats]);
 
   /** Ensure host "mine" ACN agents always have a direct chat row in the list. */
@@ -3456,6 +3460,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
         <div style={{ flex: 1, overflow: "auto", padding: 8 }}>
           {loadingChats ? (
             <p style={{ color: colors.muted, textAlign: "center", padding: 24 }}>{t.loading}</p>
+          ) : chatLoadError ? (
+            <div role="status" style={{ padding: 24, color: colors.muted }}>
+              <p>{chatLoadError}</p>
+              <button type="button" style={btnGhost} onClick={() => void refreshChats()}>{t.retry}</button>
+            </div>
           ) : filtered.length === 0 ? (
             hasMineAgents ? (
               <div style={{ textAlign: "center", padding: 32, color: colors.muted }}>
@@ -3777,14 +3786,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     justifyContent: "center",
                   }}
                 >
-                  <NoAgentsEmpty
+                  {loadingChats || chatLoadError || healthOk === false ? (
+                    <div role="status" style={{ padding: 24, color: colors.muted }}>
+                      <p>{loadingChats ? t.loading : chatLoadError || t.gatewayUnavailable}</p>
+                      {!loadingChats && <button type="button" style={btnGhost} onClick={() => void refreshChats()}>{t.retry}</button>}
+                    </div>
+                  ) : <NoAgentsEmpty
                     client={client}
                     connectGuideUrl={connectGuideUrl}
                     interfazeBaseUrl={interfazeBaseUrl}
                     locale={uiLocale}
                     onNewChat={() => setPickerMode("direct")}
                     t={t}
-                  />
+                  />}
                 </div>
               )}
             </>
@@ -4732,6 +4746,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   disabled={busy || healthOk === false}
                   style={{ ...inputStyle, resize: "none", flex: 1 }}
                   onKeyDown={(e) => {
+                    // Enter confirms IME text first; keyCode 229 covers Safari's final event.
+                    if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
                     if (slashMenuOpen && slashCandidates.length > 0) {
                       const total = slashCandidates.length;
                       if (e.key === "ArrowDown") {

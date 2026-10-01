@@ -43,7 +43,7 @@ function CnLandingGate() {
         <p style={{ color: "var(--muted)", maxWidth: 420, lineHeight: 1.5 }}>
           与你拥有或被邀请的 ACN 智能体对话协作——微信登录即可。
         </p>
-        <button type="button" onClick={() => startWeChatLogin("/")} style={ctaStyle}>
+        <button type="button" onClick={() => startWeChatLogin(window.location.pathname + window.location.search)} style={ctaStyle}>
           微信登录
         </button>
       </main>
@@ -93,6 +93,7 @@ function AuthenticatedGate() {
           type="button"
           onClick={() =>
             void loginWithRedirect({
+              appState: { returnTo: window.location.pathname + window.location.search },
               authorizationParams: {
                 audience: AUTH0_AUDIENCE,
                 scope: AUTH0_SCOPE,

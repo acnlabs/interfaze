@@ -236,7 +236,7 @@ function GlobalChatHost() {
           ...(forceLogin ? { prompt: "login" as const } : {}),
         },
         appState: {
-          returnTo: typeof window !== "undefined" ? window.location.pathname : "/",
+          returnTo: typeof window !== "undefined" ? window.location.pathname + window.location.search : "/",
         },
       });
     },

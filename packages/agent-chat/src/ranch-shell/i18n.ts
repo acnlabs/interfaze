@@ -88,6 +88,7 @@ export type RanchMessages = {
   newDirectChat: string;
   newGroupChat: string;
   gatewayUnavailable: string;
+  chatLoadFailed: string;
   loading: string;
   noChatsYet: string;
   startChat: string;
@@ -568,6 +569,7 @@ const en: RanchMessages = {
   newDirectChat: "Direct chat",
   newGroupChat: "Group chat",
   gatewayUnavailable: "Gateway unavailable",
+  chatLoadFailed: "Could not load conversations. Please try again.",
   loading: "Loading…",
   noChatsYet: "No chats yet",
   startChat: "Start a chat",
@@ -1089,6 +1091,7 @@ const zh: RanchMessages = {
   newDirectChat: "私聊",
   newGroupChat: "群聊",
   gatewayUnavailable: "Gateway 不可用",
+  chatLoadFailed: "暂时无法加载会话，请重试。",
   loading: "加载中…",
   noChatsYet: "还没有会话",
   startChat: "开始聊天",
