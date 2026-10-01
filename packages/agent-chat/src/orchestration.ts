@@ -8,7 +8,9 @@ export type OrchestrationCallee = {
 };
 
 const MAX_CALLEES = 8;
+const MAX_DECIDE = 8;
 const STATUS = new Set(["accepted", "sent", "completed", "failed"]);
+const ID_RE = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v !== null && typeof v === "object" && !Array.isArray(v)
@@ -55,6 +57,64 @@ export function calleesFromMetadata(meta: unknown): OrchestrationCallee[] {
       if (name) callee.name = name;
     }
     out.push(callee);
+  }
+  return out;
+}
+
+export type DecideOption = { id: string; label: string };
+
+export type DecideShadow = {
+  status?: string;
+  choice?: string;
+  mode?: string;
+  gate?: { ask_human?: boolean };
+};
+
+export type DecideApplied = { option_id: string; by?: string };
+
+export type MessageDecide = {
+  options: DecideOption[];
+  shadow?: DecideShadow | null;
+  applied?: DecideApplied | null;
+};
+
+export function decideFromMetadata(meta: unknown): MessageDecide | null {
+  const rec = asRecord(meta);
+  const orch = rec ? asRecord(rec.orchestration) : null;
+  const decide = orch ? asRecord(orch.decide) : null;
+  if (!decide || !Array.isArray(decide.options)) return null;
+  const options: DecideOption[] = [];
+  const seen = new Set<string>();
+  for (const item of decide.options) {
+    if (options.length >= MAX_DECIDE) break;
+    const row = asRecord(item);
+    if (!row || typeof row.id !== "string" || typeof row.label !== "string") continue;
+    const id = row.id.trim().slice(0, 32);
+    const label = row.label.trim().replace(/\s+/g, " ").slice(0, 80);
+    if (!id || !label || !ID_RE.test(id) || seen.has(id)) continue;
+    seen.add(id);
+    options.push({ id, label });
+  }
+  if (options.length < 2) return null;
+  const out: MessageDecide = { options };
+  const shadow = asRecord(decide.shadow);
+  if (shadow) {
+    const parsed: DecideShadow = {};
+    if (typeof shadow.status === "string") parsed.status = shadow.status;
+    if (typeof shadow.choice === "string") parsed.choice = shadow.choice;
+    if (typeof shadow.mode === "string") parsed.mode = shadow.mode;
+    const gate = asRecord(shadow.gate);
+    if (gate && typeof gate.ask_human === "boolean") {
+      parsed.gate = { ask_human: gate.ask_human };
+    }
+    out.shadow = parsed;
+  }
+  const applied = asRecord(decide.applied);
+  if (applied && typeof applied.option_id === "string" && applied.option_id.trim()) {
+    out.applied = {
+      option_id: applied.option_id.trim(),
+      by: typeof applied.by === "string" ? applied.by : undefined,
+    };
   }
   return out;
 }
