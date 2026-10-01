@@ -1,6 +1,5 @@
 /** postMessage type for embed checkout → Host Plan & Usage panel. */
 export const PLAN_ACTIVATED_MSG = "interfaze:plan-activated";
-
 /** postMessage type for embed wallet recharge → Host Wallet panel. */
 export const WALLET_CREDITED_MSG = "interfaze:wallet-credited";
 

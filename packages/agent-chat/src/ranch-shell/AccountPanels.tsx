@@ -1,33 +1,195 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type {
+  AccountKey,
   ChatCollabBudget,
   GatewayClient,
   HumanWallet,
+  InvoiceRequestRecord,
+  MyAgentSummary,
   MyAgentWalletTx,
+  PaymentOrder,
   PlanCatalogEntry,
   PlanUsage,
 } from "../gateway";
 import type { RanchChatAccount } from "../types";
+import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import type { RanchLocale, RanchMessages } from "./i18n";
-import { btnGhost, btnPrimary, colors } from "./styles";
+import { btnGhost, btnIcon, btnPrimary, colors } from "./styles";
 import { useModalA11y } from "./useModalA11y";
 import {
   buildWalletCheckoutUrl,
+  isCnInterfazeOrigin,
   isInterfazeHostname,
   prefersInPanelCheckout,
   resolveInterfazeOrigin,
 } from "./interfazeHost";
+import { cleanTxDescription, fmtTxTimeShort, txTypeLabel } from "./txDisplay";
+
+/** Shared card container for all account panel sections. */
+const card: CSSProperties = {
+  background: colors.panel,
+  border: `1px solid ${colors.border}`,
+  borderRadius: 14,
+  padding: 16,
+};
 
 const sectionTitle: CSSProperties = {
-  margin: "0 0 8px",
-  fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  color: colors.muted,
+  marginTop: 0,
+  marginRight: 0,
+  marginBottom: 10,
+  marginLeft: 0,
+  fontSize: 13,
+  fontWeight: 650,
+  letterSpacing: "0.01em",
+  color: colors.text,
 };
+
+const sectionHint: CSSProperties = {
+  marginTop: 0,
+  marginRight: 0,
+  marginBottom: 14,
+  marginLeft: 0,
+  fontSize: 12,
+  color: colors.muted,
+  lineHeight: 1.55,
+};
+
+/** Panel actions are one size up from the compact shell chrome buttons. */
+const btnPrimaryLg: CSSProperties = {
+  ...btnPrimary,
+  padding: "9px 16px",
+  fontSize: 13,
+  borderRadius: 10,
+};
+
+const btnGhostLg: CSSProperties = {
+  ...btnGhost,
+  padding: "9px 16px",
+  fontSize: 13,
+  borderRadius: 10,
+};
+
+function useHover(): [boolean, { onMouseEnter: () => void; onMouseLeave: () => void }] {
+  const [hover, setHover] = useState(false);
+  return [hover, { onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) }];
+}
+
+function Badge({
+  tone = "neutral",
+  children,
+}: {
+  tone?: "neutral" | "accent" | "ok";
+  children: ReactNode;
+}) {
+  const palette: CSSProperties =
+    tone === "accent"
+      ? { background: colors.accentSoft, color: "#7aa2f7" }
+      : tone === "ok"
+        ? { background: "rgba(16,185,129,0.14)", color: "#34d399" }
+        : { background: "rgba(255,255,255,0.07)", color: colors.muted };
+  return (
+    <span
+      style={{
+        ...palette,
+        fontSize: 11,
+        fontWeight: 600,
+        padding: "3px 9px",
+        borderRadius: 999,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function AvatarDot({ label, size = 34 }: { label: string; size?: number }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 999,
+        flexShrink: 0,
+        background: colors.accentSoft,
+        color: "#7aa2f7",
+        display: "grid",
+        placeItems: "center",
+        fontSize: Math.round(size * 0.42),
+        fontWeight: 700,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+/** List row with hover feedback and optional chevron; used inside padded cards. */
+function RowButton({
+  onClick,
+  disabled = false,
+  children,
+}: {
+  onClick?: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  const [hover, hoverProps] = useHover();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      {...hoverProps}
+      style={{
+        width: "100%",
+        border: 0,
+        background: hover && !disabled ? colors.hover : "transparent",
+        color: disabled ? colors.muted : colors.text,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "10px 12px",
+        borderRadius: 10,
+        cursor: disabled ? "not-allowed" : "pointer",
+        textAlign: "left",
+        transition: "background 120ms ease",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function EmptyText({ children }: { children: ReactNode }) {
+  return <p style={{ margin: 0, fontSize: 13, color: colors.muted, lineHeight: 1.55 }}>{children}</p>;
+}
+
+function StatChip({ label, value }: { label: string; value: string }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        flexDirection: "column",
+        gap: 2,
+        padding: "8px 12px",
+        borderRadius: 10,
+        background: "rgba(255,255,255,0.04)",
+        border: `1px solid ${colors.border}`,
+        minWidth: 88,
+      }}
+    >
+      <span style={{ fontSize: 11, color: colors.muted }}>{label}</span>
+      <span style={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+        {value}
+      </span>
+    </span>
+  );
+}
 
 function PanelChrome({
   title,
@@ -55,20 +217,62 @@ function PanelChrome({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
-          padding: "10px 12px",
+          gap: 10,
+          padding: "12px 16px",
           borderBottom: `1px solid ${colors.border}`,
           flexShrink: 0,
+          background: "rgba(15,20,25,0.85)",
+          backdropFilter: "blur(8px)",
         }}
       >
-        <button type="button" style={btnGhost} onClick={onClose} aria-label={closeLabel}>
+        <button type="button" style={btnIcon} onClick={onClose} aria-label={closeLabel}>
           ←
         </button>
-        <strong style={{ fontSize: 14, flex: 1 }}>{title}</strong>
-        <span style={{ width: 40 }} />
+        <strong style={{ fontSize: 16, fontWeight: 650, flex: 1, letterSpacing: "-0.01em" }}>
+          {title}
+        </strong>
+        <span style={{ width: 28 }} />
       </div>
-      <div style={{ flex: 1, overflow: "auto", padding: 16 }}>{children}</div>
+      <div style={{ flex: 1, overflow: "auto", padding: "20px 20px 32px" }}>
+        <div style={{ maxWidth: 680, width: "100%", margin: "0 auto" }}>{children}</div>
+      </div>
     </div>
+  );
+}
+
+/** Covers the whole chat viewport — not the 360px account sidebar. */
+function ViewportOverlay({
+  label,
+  zIndex,
+  onBackdrop,
+  children,
+}: {
+  label: string;
+  zIndex: number;
+  onBackdrop?: () => void;
+  children: ReactNode;
+}) {
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex,
+        background: "rgba(0,0,0,0.62)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+      }}
+      onClick={onBackdrop}
+    >
+      {children}
+    </div>,
+    document.body,
   );
 }
 
@@ -87,70 +291,46 @@ export function AccountProfilePanel({
 
   return (
     <PanelChrome title={t.accountProfile} onClose={onClose} closeLabel={t.close}>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+      <div style={{ ...card, display: "flex", alignItems: "center", gap: 16, padding: 20 }}>
         {account.picture ? (
           <img
             src={account.picture}
             alt=""
-            width={72}
-            height={72}
+            width={64}
+            height={64}
             style={{
-              width: 72,
-              height: 72,
+              width: 64,
+              height: 64,
               borderRadius: 999,
               objectFit: "cover",
               background: colors.border,
+              flexShrink: 0,
             }}
           />
         ) : (
-          <span
-            aria-hidden
-            style={{
-              width: 72,
-              height: 72,
-              borderRadius: 999,
-              background: colors.accentSoft,
-              color: colors.accent,
-              display: "grid",
-              placeItems: "center",
-              fontSize: 28,
-              fontWeight: 700,
-            }}
-          >
-            {initial}
-          </span>
+          <AvatarDot label={initial} size={64} />
         )}
-        <div style={{ textAlign: "center", width: "100%" }}>
-          <p style={{ margin: 0, fontSize: 16, fontWeight: 650 }}>
+        <div style={{ minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: 17, fontWeight: 650, letterSpacing: "-0.01em" }}>
             {name || t.account}
           </p>
           {email ? (
-            <p style={{ margin: "6px 0 0", fontSize: 13, color: colors.muted }}>{email}</p>
+            <p style={{ margin: "5px 0 0", fontSize: 13, color: colors.muted }}>{email}</p>
           ) : null}
         </div>
       </div>
-      <div style={{ marginTop: 28 }}>
-        <h3 style={sectionTitle}>{t.accountProfile}</h3>
-        <p style={{ margin: 0, fontSize: 12, color: colors.muted, lineHeight: 1.55 }}>
-          {t.accountProfileHint}
-        </p>
-      </div>
+      <p style={{ ...sectionHint, marginTop: 16, marginBottom: 0 }}>{t.accountProfileHint}</p>
     </PanelChrome>
   );
 }
 
 const planCard: CSSProperties = {
-  background: "#1a222d",
-  borderRadius: 12,
-  padding: "16px 16px 14px",
-  border: `1px solid ${colors.border}`,
+  ...card,
+  padding: "18px 18px 16px",
 };
 
 const planSectionLabel: CSSProperties = {
-  margin: "0 0 10px",
-  fontSize: 13,
-  fontWeight: 500,
-  color: colors.muted,
+  ...sectionTitle,
 };
 
 function UsageBar({
@@ -164,11 +344,11 @@ function UsageBar({
   return (
     <div
       style={{
-        height: 5,
+        height: 8,
         borderRadius: 999,
         background: "rgba(255,255,255,0.08)",
         overflow: "hidden",
-        marginTop: 8,
+        marginTop: 10,
       }}
     >
       <div
@@ -176,7 +356,10 @@ function UsageBar({
           width: `${pct}%`,
           height: "100%",
           borderRadius: 999,
-          background: tone === "accent" ? "#7aa2f7" : "rgba(232,238,245,0.55)",
+          background:
+            tone === "accent"
+              ? "linear-gradient(90deg, #3b82f6, #7aa2f7)"
+              : "rgba(232,238,245,0.55)",
           transition: "width 240ms ease",
         }}
       />
@@ -249,17 +432,20 @@ export function AccountPlanUsagePanel({
   const [buyBusy, setBuyBusy] = useState<string | null>(null);
   const [buyMsg, setBuyMsg] = useState<string | null>(null);
   const [buyMsgTone, setBuyMsgTone] = useState<"muted" | "ok" | "danger">("muted");
-  const [confirmTier, setConfirmTier] = useState<PlanCatalogEntry | null>(null);
-  const [confirmIsRenew, setConfirmIsRenew] = useState(false);
   /** In-shell Interfaze /subscribe embed (QR / PayPal). */
   const [checkoutEmbedUrl, setCheckoutEmbedUrl] = useState<string | null>(null);
-  /** First close attempt on the checkout embed only arms the confirm bar. */
   const [checkoutCloseArmed, setCheckoutCloseArmed] = useState(false);
-  const requestCheckoutClose = () => setCheckoutCloseArmed(true);
-  const closeCheckoutEmbed = () => {
-    setCheckoutEmbedUrl(null);
-    setCheckoutCloseArmed(false);
-  };
+  const adjustPanelRef = useRef<HTMLDivElement | null>(null);
+  useModalA11y({
+    open: adjustOpen,
+    onClose: () => {
+      // Embedded checkout overlays this dialog — let its own dismiss run first.
+      if (checkoutEmbedUrl) return;
+      if (buyBusy) return;
+      setAdjustOpen(false);
+    },
+    containerRef: adjustPanelRef,
+  });
   type CheckoutWatch = {
     code: string;
     priorCode: string;
@@ -275,33 +461,6 @@ export function AccountPlanUsagePanel({
     returnTo: "/?account=wallet",
   });
 
-  function clearConfirm() {
-    setConfirmTier(null);
-    setConfirmIsRenew(false);
-  }
-
-  const adjustDialogRef = useRef<HTMLDivElement | null>(null);
-  const confirmTierDialogRef = useRef<HTMLDivElement | null>(null);
-  useModalA11y({
-    open: adjustOpen,
-    onClose: () => {
-      if (buyBusy) return;
-      // Top layers stay open; Escape dismisses them first.
-      if (checkoutEmbedUrl) return;
-      if (confirmTier) return;
-      clearConfirm();
-      setAdjustOpen(false);
-    },
-    containerRef: adjustDialogRef,
-  });
-  useModalA11y({
-    open: !!confirmTier,
-    onClose: () => {
-      if (buyBusy) return;
-      clearConfirm();
-    },
-    containerRef: confirmTierDialogRef,
-  });
 
   function buildSubscribeUrl(code: string, renew: boolean, embed: boolean): string {
     const u = new URL(`${subscribeBase}/subscribe`);
@@ -468,33 +627,38 @@ export function AccountPlanUsagePanel({
 
   function requestBuyPlan(tier: PlanCatalogEntry, opts?: { renew?: boolean }) {
     if (buyBusy) return;
+    const code = tier.code.toLowerCase() === "ultra" ? "max" : tier.code.toLowerCase();
+    const wasRenew = Boolean(opts?.renew);
     setBuyMsg(null);
     setBuyMsgTone("muted");
-    setConfirmIsRenew(Boolean(opts?.renew));
-    setConfirmTier(tier);
-  }
-
-  function tierFiatLabel(tier: PlanCatalogEntry): string {
-    if (tier.fiat_amount != null && tier.fiat_amount > 0) {
-      const n = String(tier.fiat_amount);
-      if ((tier.fiat_currency || "").toUpperCase() === "CNY") {
-        return fmtTpl(t.accountPlanPriceFiatCny, { n });
+    const useWeChat =
+      prefersInPanelCheckout(subscribeBase) ||
+      (tier.fiat_currency || "").toUpperCase() === "CNY";
+    if (!useWeChat) {
+      if (typeof window !== "undefined") {
+        window.location.assign(buildSubscribeUrl(code, wasRenew, false));
       }
-      return fmtTpl(t.accountPlanPriceFiatUsd, { n });
+      return;
     }
-    if (tier.price_credits != null && tier.price_credits > 0) {
-      return fmtTpl(t.accountPlanPriceCredits, { n: fmtCredits(tier.price_credits) });
-    }
-    return "—";
+    void openWeChatCheckout(code, wasRenew);
   }
 
-  async function confirmBuyPlan() {
-    if (!confirmTier) return;
-    const code = confirmTier.code.toLowerCase() === "ultra" ? "max" : confirmTier.code.toLowerCase();
-    const wasRenew = confirmIsRenew;
+  async function openWeChatCheckout(code: string, wasRenew: boolean) {
     setBuyBusy(code);
     setBuyMsg(null);
     setBuyMsgTone("muted");
+    const watch: CheckoutWatch = {
+      code,
+      priorCode: (data?.plan.code || "free").toLowerCase(),
+      paidUntil: data?.plan.paid_until ?? null,
+      wasRenew,
+      watchUntil: Date.now() + 15 * 60 * 1000,
+    };
+    const now = Date.now();
+    checkoutWatchesRef.current = [
+      ...checkoutWatchesRef.current.filter((w) => now <= w.watchUntil),
+      watch,
+    ].slice(-4);
     try {
       let checkoutUrl = buildSubscribeUrl(code, wasRenew, false);
       try {
@@ -514,19 +678,6 @@ export function AccountPlanUsagePanel({
       } catch {
         // Fall back to Interfaze /subscribe constructed above.
       }
-      const watch: CheckoutWatch = {
-        code,
-        priorCode: (data?.plan.code || "free").toLowerCase(),
-        paidUntil: data?.plan.paid_until ?? null,
-        wasRenew,
-        watchUntil: Date.now() + 15 * 60 * 1000,
-      };
-      const now = Date.now();
-      checkoutWatchesRef.current = [
-        ...checkoutWatchesRef.current.filter((w) => now <= w.watchUntil),
-        watch,
-      ].slice(-4);
-      clearConfirm();
       setBuyMsgTone("muted");
       setBuyMsg(t.accountPlanCheckoutPending);
 
@@ -537,9 +688,7 @@ export function AccountPlanUsagePanel({
           u.searchParams.set("parent_origin", window.location.origin);
         }
         setCheckoutEmbedUrl(u.toString());
-        setCheckoutCloseArmed(false);
       } else if (typeof window !== "undefined") {
-        // Global PayPal: navigate (same origin) or open tab — never iframe.
         try {
           const dest = new URL(checkoutUrl, window.location.origin);
           if (dest.origin === window.location.origin) {
@@ -560,6 +709,7 @@ export function AccountPlanUsagePanel({
     }
   }
 
+
   useEffect(() => {
     if (!checkoutEmbedUrl) return;
     const expectedOrigin = allowedCheckoutOrigin(checkoutEmbedUrl);
@@ -570,13 +720,27 @@ export function AccountPlanUsagePanel({
       const data = ev.data;
       if (!data || typeof data !== "object") return;
       if ((data as { type?: string }).type !== PLAN_ACTIVATED_MSG) return;
-      closeCheckoutEmbed();
+      setCheckoutCloseArmed(false);
+      setCheckoutEmbedUrl(null);
       setBuyMsgTone("ok");
       void refreshAfterCheckout();
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
   }, [checkoutEmbedUrl, refreshAfterCheckout]);
+
+  useEffect(() => {
+    const onPaid = () => {
+      void client
+        .getPlanUsage()
+        .then(applyPlanUsage)
+        .catch(() => {
+          /* ignore */
+        });
+    };
+    window.addEventListener(PLAN_ACTIVATED_MSG, onPaid);
+    return () => window.removeEventListener(PLAN_ACTIVATED_MSG, onPaid);
+  }, [client, applyPlanUsage]);
 
   const catalog: PlanCatalogEntry[] =
     data?.catalog && data.catalog.length > 0
@@ -602,13 +766,22 @@ export function AccountPlanUsagePanel({
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
           <section>
-            <h3 style={{ ...sectionTitle, marginBottom: 10 }}>{t.accountPlanCurrent}</h3>
-            <div style={planCard}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>
+            <h3 style={sectionTitle}>{t.accountPlanCurrent}</h3>
+            <div
+              style={{
+                ...planCard,
+                padding: 20,
+                background:
+                  "linear-gradient(135deg, rgba(59,130,246,0.14) 0%, rgba(16,185,129,0.05) 100%), #151b23",
+                border: "1px solid rgba(59,130,246,0.22)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" }}>
                   {planLabel}
                 </span>
-                <span style={{ fontSize: 14, color: colors.muted }}>
+                <Badge tone="accent">{t.accountPlanCurrent}</Badge>
+                <span style={{ fontSize: 13, color: colors.muted }}>
                   {currentCode === "free" ? t.accountPlanPayg : t.accountPlanIncludedUsage}
                 </span>
               </div>
@@ -623,10 +796,10 @@ export function AccountPlanUsagePanel({
                       daysLeft > 0 ? ` (${fmtTpl(t.accountPlanDaysLeft, { n: daysLeft })})` : ""
                     }`}
               </p>
-              <div style={{ marginTop: 14 }}>
+              <div style={{ marginTop: 16 }}>
                 <button
                   type="button"
-                  style={{ ...btnGhost, padding: "7px 12px", fontSize: 13 }}
+                  style={btnGhostLg}
                   onClick={() => {
                     const now = Date.now();
                     checkoutWatchesRef.current = checkoutWatchesRef.current.filter(
@@ -842,33 +1015,19 @@ export function AccountPlanUsagePanel({
       )}
 
       {adjustOpen ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={t.accountPlanAdjustTitle}
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 50,
-            background: "rgba(0,0,0,0.55)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
-          onClick={() => {
+        <ViewportOverlay
+          label={t.accountPlanAdjustTitle}
+          zIndex={10050}
+          onBackdrop={() => {
+            if (checkoutEmbedUrl) return;
             if (buyBusy) return;
-            // Match Escape layering: dismiss the top confirm sheet first.
-            if (confirmTier) return;
-            clearConfirm();
-            // Keep checkout watch + success/pending message across dismiss.
             setAdjustOpen(false);
           }}
         >
           <div
             style={{
-              width: "min(360px, 100%)",
-              maxHeight: "90%",
+              width: "min(920px, calc(100vw - 32px))",
+              maxHeight: "min(90vh, 900px)",
               overflow: "auto",
               background: "#141a22",
               borderRadius: 14,
@@ -878,7 +1037,7 @@ export function AccountPlanUsagePanel({
               position: "relative",
             }}
             onClick={(e) => e.stopPropagation()}
-            ref={adjustDialogRef}
+            ref={adjustPanelRef}
             tabIndex={-1}
           >
             <div
@@ -895,7 +1054,6 @@ export function AccountPlanUsagePanel({
                 style={{ ...btnGhost, width: 28, height: 28, padding: 0 }}
                 onClick={() => {
                   if (buyBusy) return;
-                  clearConfirm();
                   setAdjustOpen(false);
                 }}
                 aria-label={t.close}
@@ -903,7 +1061,14 @@ export function AccountPlanUsagePanel({
                 ×
               </button>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: 12,
+                alignItems: "stretch",
+              }}
+            >
               {catalog.map((tier) => {
                 const isCurrent = tier.code.toLowerCase() === currentCode;
                 const tierLabel =
@@ -942,23 +1107,15 @@ export function AccountPlanUsagePanel({
                     style={{
                       ...planCard,
                       position: "relative",
-                      background: isCurrent ? "#1e2733" : "#161c24",
+                      background: isCurrent ? "#1a2330" : colors.panel,
+                      border: isCurrent
+                        ? "1px solid rgba(59,130,246,0.45)"
+                        : `1px solid ${colors.border}`,
                     }}
                   >
                     {isCurrent ? (
-                      <span
-                        style={{
-                          position: "absolute",
-                          top: 12,
-                          right: 12,
-                          fontSize: 11,
-                          padding: "3px 8px",
-                          borderRadius: 999,
-                          background: "rgba(255,255,255,0.08)",
-                          color: colors.muted,
-                        }}
-                      >
-                        {t.accountPlanCurrent}
+                      <span style={{ position: "absolute", top: 12, right: 12 }}>
+                        <Badge tone="accent">{t.accountPlanCurrent}</Badge>
                       </span>
                     ) : null}
                     <p style={{ margin: 0, fontSize: 15, fontWeight: 650 }}>{tierLabel}</p>
@@ -1027,13 +1184,13 @@ export function AccountPlanUsagePanel({
                     {isCurrent && tier.purchasable ? (
                       <button
                         type="button"
-                        disabled={busy || buyBusy != null || confirmTier != null}
+                        disabled={busy || buyBusy != null}
                         style={{
                           ...btnPrimary,
                           width: "100%",
                           marginTop: 16,
                           padding: "9px 12px",
-                          opacity: busy || buyBusy != null || confirmTier != null ? 0.7 : 1,
+                          opacity: busy || buyBusy != null ? 0.7 : 1,
                         }}
                         onClick={() => requestBuyPlan(tier, { renew: true })}
                       >
@@ -1058,13 +1215,13 @@ export function AccountPlanUsagePanel({
                     ) : tier.purchasable ? (
                       <button
                         type="button"
-                        disabled={busy || buyBusy != null || confirmTier != null}
+                        disabled={busy || buyBusy != null}
                         style={{
                           ...btnPrimary,
                           width: "100%",
                           marginTop: 16,
                           padding: "9px 12px",
-                          opacity: busy || buyBusy != null || confirmTier != null ? 0.7 : 1,
+                          opacity: busy || buyBusy != null ? 0.7 : 1,
                         }}
                         onClick={() => requestBuyPlan(tier)}
                       >
@@ -1075,7 +1232,7 @@ export function AccountPlanUsagePanel({
                 );
               })}
             </div>
-            {buyMsg && !confirmTier ? (
+            {buyMsg ? (
               <div style={{ marginTop: 12, textAlign: "center" }}>
                 <p
                   style={{
@@ -1108,121 +1265,8 @@ export function AccountPlanUsagePanel({
               </div>
             ) : null}
 
-            {confirmTier ? (
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-label={t.accountPlanBuyConfirmTitle}
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  zIndex: 2,
-                  background: "rgba(0,0,0,0.62)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: 16,
-                  borderRadius: 14,
-                }}
-              >
-                <div
-                  style={{
-                    width: "100%",
-                    background: "#1a222d",
-                    borderRadius: 12,
-                    border: `1px solid ${colors.border}`,
-                    padding: "16px 14px 14px",
-                  }}
-                  ref={confirmTierDialogRef}
-                  tabIndex={-1}
-                >
-                  <strong style={{ fontSize: 15 }}>{t.accountPlanBuyConfirmTitle}</strong>
-                  <p
-                    style={{
-                      margin: "10px 0 0",
-                      fontSize: 13,
-                      color: colors.muted,
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {fmtTpl(
-                      confirmIsRenew
-                        ? t.accountPlanBuyConfirmRenewBody
-                        : t.accountPlanBuyConfirmBody,
-                      {
-                        plan:
-                          locale === "zh"
-                            ? confirmTier.label_zh || confirmTier.label
-                            : confirmTier.label,
-                        price: tierFiatLabel(confirmTier),
-                        pack: fmtCredits(confirmTier.dialog_allowance_credits ?? 0),
-                      },
-                    )}
-                  </p>
-                  {buyMsg && buyMsgTone === "danger" ? (
-                    <div style={{ marginTop: 12 }}>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: 12,
-                          color: colors.danger,
-                          lineHeight: 1.45,
-                        }}
-                      >
-                        {buyMsg}
-                      </p>
-                      {buyMsg === t.accountPlanNeedCredits ? (
-                        <a
-                          href={rechargeUrl}
-                          style={{
-                            display: "inline-block",
-                            marginTop: 8,
-                            fontSize: 12,
-                            color: colors.accent,
-                          }}
-                        >
-                          {t.accountPlanOpenWallet}
-                        </a>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 8,
-                      marginTop: 16,
-                      justifyContent: "flex-end",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      disabled={buyBusy != null}
-                      style={{ ...btnGhost, padding: "8px 12px" }}
-                      onClick={() => {
-                        clearConfirm();
-                        setBuyMsg(null);
-                      }}
-                    >
-                      {t.accountPlanBuyCancel}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={buyBusy != null}
-                      style={{
-                        ...btnPrimary,
-                        padding: "8px 12px",
-                        opacity: buyBusy != null ? 0.7 : 1,
-                      }}
-                      onClick={() => void confirmBuyPlan()}
-                    >
-                      {buyBusy ? t.accountPlanBuyBusy : t.accountPlanBuyConfirm}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
           </div>
-        </div>
+        </ViewportOverlay>
       ) : null}
 
       {checkoutEmbedUrl ? (
@@ -1231,24 +1275,26 @@ export function AccountPlanUsagePanel({
           title={locale === "zh" ? "Interfaze 订阅" : "Interfaze Subscribe"}
           locale={locale}
           closeLabel={t.close}
+          openPageLabel={locale === "zh" ? "新窗口打开" : "Open page"}
           armed={checkoutCloseArmed}
-          onRequestClose={requestCheckoutClose}
+          onRequestClose={() => setCheckoutCloseArmed(true)}
           onCancelClose={() => setCheckoutCloseArmed(false)}
-          onConfirmClose={closeCheckoutEmbed}
+          onConfirmClose={() => {
+            setCheckoutCloseArmed(false);
+            setCheckoutEmbedUrl(null);
+          }}
         />
       ) : null}
     </PanelChrome>
   );
 }
 
-/** In-panel checkout iframe. Backdrop / × / Escape only arm a confirm bar —
- *  a second explicit click actually closes, so an in-flight payment isn't
- *  killed by a stray tap. */
 function CheckoutEmbedDialog({
   url,
   title,
   locale,
   closeLabel,
+  openPageLabel,
   armed,
   onRequestClose,
   onCancelClose,
@@ -1258,6 +1304,7 @@ function CheckoutEmbedDialog({
   title: string;
   locale: RanchLocale;
   closeLabel: string;
+  openPageLabel: string;
   armed: boolean;
   onRequestClose: () => void;
   onCancelClose: () => void;
@@ -1267,22 +1314,7 @@ function CheckoutEmbedDialog({
   useModalA11y({ open: true, onClose: onRequestClose, containerRef: panelRef });
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      style={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 60,
-        background: "rgba(0,0,0,0.65)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 12,
-      }}
-      onClick={onRequestClose}
-    >
+    <ViewportOverlay label={title} zIndex={10060} onBackdrop={onRequestClose}>
       <div
         ref={panelRef}
         tabIndex={-1}
@@ -1317,7 +1349,7 @@ function CheckoutEmbedDialog({
               rel="noopener noreferrer"
               style={{ fontSize: 12, color: colors.muted }}
             >
-              {locale === "zh" ? "新窗口打开" : "Open page"}
+              {openPageLabel}
             </a>
             <button
               type="button"
@@ -1378,7 +1410,7 @@ function CheckoutEmbedDialog({
           style={{ flex: 1, width: "100%", border: 0, background: "#0a0a0a" }}
         />
       </div>
-    </div>
+    </ViewportOverlay>
   );
 }
 
@@ -1437,16 +1469,14 @@ export function ChatCollabBudgetSection({
   return (
     <div>
       <h3 style={sectionTitle}>{t.collabBudget}</h3>
-      <p style={{ margin: "0 0 12px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-        {t.collabBudgetHint}
-      </p>
+      <p style={sectionHint}>{t.collabBudgetHint}</p>
       {err ? (
-        <p style={{ color: colors.danger, fontSize: 12, margin: "0 0 8px" }}>{err}</p>
+        <p style={{ color: colors.danger, fontSize: 12, margin: "0 0 10px" }}>{err}</p>
       ) : null}
-      <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
+      <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
         {t.collabAccountCap}
       </label>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: chatId ? 16 : 0 }}>
         <input
           type="number"
           min={0}
@@ -1454,8 +1484,8 @@ export function ChatCollabBudgetSection({
           onChange={(e) => setCapDraft(e.target.value)}
           style={{
             flex: 1,
-            padding: "8px 10px",
-            borderRadius: 8,
+            padding: "9px 12px",
+            borderRadius: 10,
             border: `1px solid ${colors.border}`,
             background: colors.bg,
             color: colors.text,
@@ -1464,7 +1494,7 @@ export function ChatCollabBudgetSection({
         />
         <button
           type="button"
-          style={btnPrimary}
+          style={btnPrimaryLg}
           disabled={busy}
           onClick={() => {
             const n = Math.max(0, Math.trunc(Number(capDraft) || 0));
@@ -1483,27 +1513,29 @@ export function ChatCollabBudgetSection({
         </button>
       </div>
       {chatId ? (
-        <>
-          <p style={{ margin: "0 0 4px", fontSize: 12, color: colors.muted }}>
-            {t.collabRemaining}:{" "}
-            <strong style={{ color: colors.text }}>
-              {fmtCredits(budget?.remaining_credits ?? 0)}
-            </strong>
-          </p>
-          <p style={{ margin: "0 0 10px", fontSize: 11, color: colors.muted }}>
-            {budget?.can_auto ? t.collabAutoOn : t.collabAutoOff}
-            {cap > 0 ? ` · ${t.collabAccountCap} ${cap}` : ""}
-          </p>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+        <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: 14 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+            <StatChip
+              label={t.collabRemaining}
+              value={fmtCredits(budget?.remaining_credits ?? 0)}
+            />
+            <StatChip label={t.collabAccountCap} value={fmtCredits(cap)} />
+            <span style={{ alignSelf: "center" }}>
+              <Badge tone={budget?.can_auto ? "ok" : "neutral"}>
+                {budget?.can_auto ? t.collabAutoOn : t.collabAutoOff}
+              </Badge>
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <input
               type="number"
               min={1}
               value={addDraft}
               onChange={(e) => setAddDraft(e.target.value)}
               style={{
-                width: 88,
-                padding: "8px 10px",
-                borderRadius: 8,
+                width: 96,
+                padding: "9px 12px",
+                borderRadius: 10,
                 border: `1px solid ${colors.border}`,
                 background: colors.bg,
                 color: colors.text,
@@ -1512,7 +1544,7 @@ export function ChatCollabBudgetSection({
             />
             <button
               type="button"
-              style={btnPrimary}
+              style={btnPrimaryLg}
               disabled={busy}
               onClick={() => {
                 const n = Math.max(1, Math.trunc(Number(addDraft) || 0));
@@ -1528,7 +1560,7 @@ export function ChatCollabBudgetSection({
             </button>
             <button
               type="button"
-              style={btnGhost}
+              style={btnGhostLg}
               disabled={busy || cap <= 0}
               onClick={() => {
                 setBusy(true);
@@ -1543,7 +1575,7 @@ export function ChatCollabBudgetSection({
             </button>
             <button
               type="button"
-              style={btnGhost}
+              style={btnGhostLg}
               disabled={busy || !(budget && budget.remaining_credits > 0)}
               onClick={() => {
                 setBusy(true);
@@ -1557,9 +1589,318 @@ export function ChatCollabBudgetSection({
               {t.collabRelease}
             </button>
           </div>
-        </>
+        </div>
       ) : null}
     </div>
+  );
+}
+
+function fmtFiatCents(cents: number, currency: string): string {
+  const v = (cents / 100).toFixed(2);
+  return currency === "USD" ? `$${v}` : `¥${v}`;
+}
+
+function paymentChannelLabel(channel: string): string {
+  switch (channel) {
+    case "paypal":
+      return "PayPal";
+    case "alipay":
+      return "支付宝";
+    case "wechat_wxpay":
+    case "wechat_xpay":
+      return "微信支付";
+    default:
+      return channel;
+  }
+}
+
+/** 收据与发票区块：收款订单列表 + 收据下载 + CN 发票申请。 */
+function WalletBillingDocsSection({
+  client,
+  messages: t,
+  interfazeBaseUrl,
+  hideHeading = false,
+}: {
+  client: GatewayClient;
+  messages: RanchMessages;
+  interfazeBaseUrl?: string;
+  hideHeading?: boolean;
+}) {
+  const isCn = isCnInterfazeOrigin(resolveInterfazeOrigin(interfazeBaseUrl));
+  const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [orders, setOrders] = useState<PaymentOrder[]>([]);
+  const [requests, setRequests] = useState<InvoiceRequestRecord[]>([]);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [formOrderId, setFormOrderId] = useState<string | null>(null);
+  const [titleType, setTitleType] = useState<"personal" | "business">("personal");
+  const [title, setTitle] = useState("");
+  const [taxNo, setTaxNo] = useState("");
+  const [email, setEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([client.listPaymentOrders(), client.listInvoiceRequests()])
+      .then(([os, rs]) => {
+        if (cancelled) return;
+        setOrders(os);
+        setRequests(rs);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+
+  const paidOrders = orders.filter((o) => o.status === "paid");
+  const reqByOrder = new Map(requests.map((r) => [r.payment_order_id, r]));
+
+  const inputStyle: CSSProperties = {
+    width: "100%",
+    padding: "9px 12px",
+    borderRadius: 10,
+    border: `1px solid ${colors.border}`,
+    background: colors.bg,
+    color: colors.text,
+    fontSize: 13,
+    boxSizing: "border-box",
+  };
+
+  const downloadReceipt = (orderId: string) => {
+    setDownloading(orderId);
+    void client
+      .fetchReceiptPdf(orderId)
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `receipt-${orderId}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      })
+      .catch(() => setLoadFailed(true))
+      .finally(() => setDownloading(null));
+  };
+
+  const submitInvoice = (orderId: string) => {
+    setSubmitting(true);
+    setFormError(false);
+    void client
+      .createInvoiceRequest({
+        payment_order_id: orderId,
+        title_type: titleType,
+        title: title.trim(),
+        tax_no: titleType === "business" ? taxNo.trim() : null,
+        email: email.trim(),
+      })
+      .then(({ request }) => {
+        setRequests((prev) => [request, ...prev]);
+        setFormOrderId(null);
+        setTitle("");
+        setTaxNo("");
+      })
+      .catch(() => setFormError(true))
+      .finally(() => setSubmitting(false));
+  };
+
+  return (
+    <section>
+      {hideHeading ? null : (
+        <>
+          <h3 style={sectionTitle}>{t.walletBillingDocs}</h3>
+          <p style={sectionHint}>{t.walletBillingDocsHint}</p>
+        </>
+      )}
+      {loading ? (
+        <EmptyText>{t.loading}</EmptyText>
+      ) : loadFailed ? (
+        <p style={{ color: colors.danger, fontSize: 13, margin: 0 }}>
+          {t.walletBillingDocsLoadFailed}
+        </p>
+      ) : paidOrders.length === 0 ? (
+        <EmptyText>{t.walletBillingDocsEmpty}</EmptyText>
+      ) : (
+        <div style={{ ...card, padding: 6 }}>
+          {paidOrders.map((order) => {
+            const req = reqByOrder.get(order.order_id);
+            const formOpen = formOrderId === order.order_id;
+            const typeLabel =
+              order.order_type === "plan" && order.plan_code
+                ? `Interfaze ${order.plan_code.toUpperCase()}`
+                : txTypeLabel("recharge", t);
+            return (
+              <div key={order.order_id} style={{ padding: "10px 12px" }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>
+                      {typeLabel}
+                    </span>
+                    <span
+                      style={{
+                        display: "block",
+                        marginTop: 2,
+                        fontSize: 11,
+                        color: colors.muted,
+                      }}
+                    >
+                      {paymentChannelLabel(order.channel)} · {fmtTxTimeShort(order.paid_at || order.created_at)}
+                    </span>
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      fontVariantNumeric: "tabular-nums",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {fmtFiatCents(order.charge_cents, order.currency)}
+                  </span>
+                  <button
+                    type="button"
+                    style={{ ...btnGhost, flexShrink: 0, fontSize: 12, padding: "5px 10px" }}
+                    disabled={downloading === order.order_id}
+                    onClick={() => downloadReceipt(order.order_id)}
+                  >
+                    {t.walletDownloadReceipt}
+                  </button>
+                  {isCn ? (
+                    req ? (
+                      <Badge tone={req.status === "issued" ? "ok" : "accent"}>
+                        {req.status === "issued"
+                          ? t.walletInvoiceStatusIssued
+                          : t.walletInvoiceStatusPending}
+                      </Badge>
+                    ) : (
+                      <button
+                        type="button"
+                        style={{ ...btnGhost, flexShrink: 0, fontSize: 12, padding: "5px 10px" }}
+                        onClick={() => {
+                          setFormOrderId(formOpen ? null : order.order_id);
+                          setFormError(false);
+                        }}
+                      >
+                        {t.walletRequestInvoice}
+                      </button>
+                    )
+                  ) : null}
+                </div>
+                {formOpen ? (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      padding: 12,
+                      borderRadius: 10,
+                      border: `1px solid ${colors.border}`,
+                      background: colors.bg,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {(["personal", "business"] as const).map((kind) => (
+                        <button
+                          key={kind}
+                          type="button"
+                          onClick={() => setTitleType(kind)}
+                          style={{
+                            ...btnGhost,
+                            fontSize: 12,
+                            padding: "5px 12px",
+                            ...(titleType === kind
+                              ? { borderColor: colors.accent, color: colors.text }
+                              : {}),
+                          }}
+                        >
+                          {kind === "personal"
+                            ? t.walletInvoiceTitleTypePersonal
+                            : t.walletInvoiceTitleTypeBusiness}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder={t.walletInvoiceTitlePlaceholder}
+                      style={inputStyle}
+                    />
+                    {titleType === "business" ? (
+                      <input
+                        value={taxNo}
+                        onChange={(e) => setTaxNo(e.target.value)}
+                        placeholder={t.walletInvoiceTaxNoPlaceholder}
+                        style={inputStyle}
+                      />
+                    ) : null}
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder={t.walletInvoiceEmailPlaceholder}
+                      style={inputStyle}
+                    />
+                    {formError ? (
+                      <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>
+                        {t.walletInvoiceFailed}
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      style={{ ...btnPrimaryLg, border: 0, cursor: "pointer" }}
+                      disabled={
+                        submitting ||
+                        title.trim().length < 2 ||
+                        email.trim().length < 5 ||
+                        (titleType === "business" && !taxNo.trim())
+                      }
+                      onClick={() => submitInvoice(order.order_id)}
+                    >
+                      {submitting ? t.walletInvoiceSubmitting : t.walletInvoiceSubmit}
+                    </button>
+                  </div>
+                ) : null}
+                {req && req.status === "pending" ? (
+                  <p style={{ margin: "6px 0 0", fontSize: 11, color: colors.muted }}>
+                    {t.walletInvoiceSubmitted}
+                  </p>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+export function AccountBillingPanel({
+  client,
+  messages: t,
+  interfazeBaseUrl,
+  onClose,
+}: {
+  client: GatewayClient;
+  messages: RanchMessages;
+  interfazeBaseUrl?: string;
+  onClose: () => void;
+}) {
+  return (
+    <PanelChrome title={t.accountBilling} onClose={onClose} closeLabel={t.close}>
+      <WalletBillingDocsSection
+        client={client}
+        messages={t}
+        interfazeBaseUrl={interfazeBaseUrl}
+        hideHeading
+      />
+    </PanelChrome>
   );
 }
 
@@ -1569,25 +1910,25 @@ export function AccountWalletPanel({
   interfazeBaseUrl = "https://interfaze.io",
   locale = "en",
   onClose,
+  onOpenBilling,
 }: {
   client: GatewayClient;
   messages: RanchMessages;
   interfazeBaseUrl?: string;
   locale?: RanchLocale;
   onClose: () => void;
+  onOpenBilling?: () => void;
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [wallet, setWallet] = useState<HumanWallet | null>(null);
   const [txs, setTxs] = useState<MyAgentWalletTx[]>([]);
   const [checkoutEmbedUrl, setCheckoutEmbedUrl] = useState<string | null>(null);
-  /** First close attempt on the recharge embed only arms the confirm bar. */
   const [rechargeCloseArmed, setRechargeCloseArmed] = useState(false);
-  const closeRechargeEmbed = () => {
-    setCheckoutEmbedUrl(null);
-    setRechargeCloseArmed(false);
-  };
   const baselineBalanceRef = useRef<number | null>(null);
+  const [agentRows, setAgentRows] = useState<{ agent: MyAgentSummary; balance: number | null }[]>([]);
+  const [agentWalletsLoading, setAgentWalletsLoading] = useState(true);
+  const [agentWalletId, setAgentWalletId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     const [w, list] = await Promise.all([
@@ -1615,6 +1956,43 @@ export function AccountWalletPanel({
     };
   }, [reload, t.accountWalletLoadFailed]);
 
+  // Agent balances load separately so a slow agent wallet never blocks the human wallet.
+  const reloadAgentWallets = useCallback(async () => {
+    const agents = await client.listMyAgents(20);
+    const rows = await Promise.all(
+      agents.map(async (agent) => {
+        try {
+          const w = await client.getMyAgentWallet(agent.agent_id);
+          return { agent, balance: w.balance };
+        } catch {
+          return { agent, balance: null };
+        }
+      }),
+    );
+    setAgentRows(rows);
+  }, [client]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAgentWalletsLoading(true);
+    void reloadAgentWallets()
+      .catch(() => {
+        /* agent wallet list is optional */
+      })
+      .finally(() => {
+        if (!cancelled) setAgentWalletsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadAgentWallets]);
+
+  // Detail view may have changed a balance (top-up / withdraw) — refresh on return.
+  function closeAgentWalletDetail() {
+    setAgentWalletId(null);
+    void reloadAgentWallets().catch(() => undefined);
+  }
+
   const rechargeUrl = buildWalletCheckoutUrl({
     interfazeBaseUrl,
     returnTo: "/?account=wallet",
@@ -1622,7 +2000,6 @@ export function AccountWalletPanel({
 
   function openRecharge() {
     baselineBalanceRef.current = wallet?.balance ?? null;
-    setRechargeCloseArmed(false);
     if (prefersInPanelCheckout(rechargeUrl)) {
       setCheckoutEmbedUrl(
         buildWalletCheckoutUrl({
@@ -1650,7 +2027,8 @@ export function AccountWalletPanel({
       const data = ev.data;
       if (!data || typeof data !== "object") return;
       if ((data as { type?: string }).type !== WALLET_CREDITED_MSG) return;
-      closeRechargeEmbed();
+      setRechargeCloseArmed(false);
+      setCheckoutEmbedUrl(null);
       void reload().catch(() => undefined);
     };
     window.addEventListener("message", onMsg);
@@ -1665,7 +2043,8 @@ export function AccountWalletPanel({
         const w = await client.getHumanWallet();
         setWallet(w);
         if (baseline != null && w.balance > baseline) {
-          closeRechargeEmbed();
+          setRechargeCloseArmed(false);
+          setCheckoutEmbedUrl(null);
           void reload().catch(() => undefined);
         }
       } catch {
@@ -1676,85 +2055,225 @@ export function AccountWalletPanel({
     return () => window.clearInterval(id);
   }, [checkoutEmbedUrl, client, reload]);
 
+  if (agentWalletId) {
+    const row = agentRows.find((r) => r.agent.agent_id === agentWalletId);
+    const label = (row?.agent.name || "").trim() || t.accountWalletAgentWallets;
+    return (
+      <PanelChrome title={label} onClose={closeAgentWalletDetail} closeLabel={t.close}>
+        <AgentOwnerWallet
+          client={client}
+          agentId={agentWalletId}
+          messages={t}
+          interfazeBaseUrl={interfazeBaseUrl}
+        />
+      </PanelChrome>
+    );
+  }
+
   return (
     <PanelChrome title={t.accountWallet} onClose={onClose} closeLabel={t.close}>
-      <p style={{ margin: "0 0 16px", fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
-        {t.accountWalletHint}
-      </p>
+      <p style={sectionHint}>{t.accountWalletHint}</p>
       {loading ? (
-        <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
+        <EmptyText>{t.loading}</EmptyText>
       ) : error ? (
         <p style={{ color: colors.danger, fontSize: 13 }}>{error}</p>
       ) : (
-        <>
-          <h3 style={sectionTitle}>{t.walletTab}</h3>
-          <p style={{ margin: "0 0 4px", fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em" }}>
-            {fmtCredits(wallet?.balance ?? 0)}
-          </p>
-          <p style={{ margin: "0 0 16px", fontSize: 12, color: colors.muted }}>
-            {t.walletBalance}
-          </p>
-          <button
-            type="button"
-            onClick={openRecharge}
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div
             style={{
-              ...btnPrimary,
-              display: "inline-block",
-              textAlign: "center",
-              marginBottom: 8,
-              border: 0,
-              cursor: "pointer",
+              ...card,
+              padding: 20,
+              background:
+                "linear-gradient(135deg, rgba(59,130,246,0.16) 0%, rgba(16,185,129,0.06) 100%), #151b23",
+              border: "1px solid rgba(59,130,246,0.25)",
             }}
           >
-            {t.walletRechargeExternal}
-          </button>
-          <p style={{ margin: "0 0 16px", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
-            {t.walletRechargeExternalHint}
-          </p>
-          <div style={{ marginBottom: 24 }}>
+            <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>{t.walletBalance}</p>
+            <p
+              style={{
+                margin: "6px 0 0",
+                fontSize: 38,
+                fontWeight: 750,
+                letterSpacing: "-0.03em",
+                lineHeight: 1.1,
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {fmtCredits(wallet?.balance ?? 0)}
+            </p>
+            <button
+              type="button"
+              onClick={openRecharge}
+              style={{
+                ...btnPrimaryLg,
+                width: "100%",
+                marginTop: 18,
+                padding: "11px 16px",
+                border: 0,
+                cursor: "pointer",
+              }}
+            >
+              {t.walletRechargeExternal}
+            </button>
+            <p
+              style={{
+                margin: "10px 0 0",
+                fontSize: 11,
+                color: colors.muted,
+                lineHeight: 1.45,
+                textAlign: "center",
+              }}
+            >
+              {t.walletRechargeExternalHint}
+            </p>
+          </div>
+
+          <div style={card}>
             <ChatCollabBudgetSection client={client} messages={t} />
           </div>
-          <h3 style={sectionTitle}>{t.accountWalletRecent}</h3>
-          {txs.length === 0 ? (
-            <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>{t.accountWalletEmptyTx}</p>
-          ) : (
-            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-              {txs.map((tx) => (
-                <li
-                  key={tx.transaction_id}
-                  style={{
-                    padding: "10px 0",
-                    borderBottom: `1px solid ${colors.border}`,
-                    display: "flex",
-                    gap: 10,
-                    alignItems: "baseline",
-                  }}
-                >
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>
-                      {tx.type}
-                      {tx.description ? (
-                        <span style={{ fontWeight: 400, color: colors.muted }}> · {tx.description}</span>
-                      ) : null}
-                    </span>
-                    <span style={{ fontSize: 11, color: colors.muted }}>{fmtTxTime(tx.created_at)}</span>
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 650,
-                      color: tx.amount < 0 ? colors.danger : colors.text,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {tx.amount > 0 ? "+" : ""}
-                    {fmtCredits(tx.amount)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
+
+          <section>
+            <h3 style={sectionTitle}>{t.accountWalletAgentWallets}</h3>
+            {agentWalletsLoading ? (
+              <EmptyText>{t.loading}</EmptyText>
+            ) : agentRows.length === 0 ? (
+              <EmptyText>{t.accountWalletNoAgents}</EmptyText>
+            ) : (
+              <div style={{ ...card, padding: 6 }}>
+                {agentRows.map(({ agent, balance }) => {
+                  const name = (agent.name || "").trim() || agent.agent_id;
+                  return (
+                    <RowButton
+                      key={agent.agent_id}
+                      onClick={() => setAgentWalletId(agent.agent_id)}
+                    >
+                      <AvatarDot label={name.slice(0, 1).toUpperCase()} />
+                      <span
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          fontSize: 14,
+                          fontWeight: 600,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {name}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 700,
+                          fontVariantNumeric: "tabular-nums",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {balance == null ? "—" : fmtCredits(balance)}
+                      </span>
+                      <span aria-hidden style={{ color: colors.muted, fontSize: 15 }}>
+                        ›
+                      </span>
+                    </RowButton>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section>
+            <h3 style={sectionTitle}>{t.accountWalletRecent}</h3>
+            {txs.length === 0 ? (
+              <EmptyText>{t.accountWalletEmptyTx}</EmptyText>
+            ) : (
+              <div style={{ ...card, padding: 6 }}>
+                {txs.map((tx) => {
+                  const positive = tx.amount > 0;
+                  const negative = tx.amount < 0;
+                  const desc = cleanTxDescription(tx.description);
+                  return (
+                    <div
+                      key={tx.transaction_id}
+                      style={{
+                        display: "flex",
+                        gap: 12,
+                        alignItems: "center",
+                        padding: "10px 12px",
+                        borderRadius: 10,
+                      }}
+                    >
+                      <span
+                        aria-hidden
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 999,
+                          flexShrink: 0,
+                          background: positive ? "#34d399" : negative ? colors.danger : colors.muted,
+                        }}
+                      />
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>
+                          {txTypeLabel(tx.type, t)}
+                        </span>
+                        <span
+                          style={{
+                            display: "block",
+                            marginTop: 2,
+                            fontSize: 11,
+                            color: colors.muted,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {desc ? `${desc} · ` : ""}
+                          {fmtTxTimeShort(tx.created_at)}
+                        </span>
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 700,
+                          fontVariantNumeric: "tabular-nums",
+                          color: positive ? "#34d399" : negative ? colors.danger : colors.text,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {positive ? "+" : ""}
+                        {fmtCredits(tx.amount)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          {onOpenBilling ? (
+            <button
+              type="button"
+              onClick={onOpenBilling}
+              style={{
+                ...card,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                width: "100%",
+                padding: "12px 16px",
+                cursor: "pointer",
+                color: colors.text,
+                fontSize: 13,
+                textAlign: "left",
+              }}
+            >
+              <span style={{ flex: 1, fontWeight: 600 }}>{t.accountBilling}</span>
+              <span aria-hidden style={{ color: colors.muted }}>
+                →
+              </span>
+            </button>
+          ) : null}
+        </div>
       )}
       {checkoutEmbedUrl ? (
         <CheckoutEmbedDialog
@@ -1762,12 +2281,147 @@ export function AccountWalletPanel({
           title={t.walletRechargeExternal}
           locale={locale}
           closeLabel={t.close}
+          openPageLabel={t.accountPlanOpenWallet}
           armed={rechargeCloseArmed}
           onRequestClose={() => setRechargeCloseArmed(true)}
           onCancelClose={() => setRechargeCloseArmed(false)}
-          onConfirmClose={closeRechargeEmbed}
+          onConfirmClose={() => {
+            setRechargeCloseArmed(false);
+            setCheckoutEmbedUrl(null);
+          }}
         />
       ) : null}
+    </PanelChrome>
+  );
+}
+
+function storeOpenRouterUrl(base?: string): string {
+  return `${(base || "https://agentplanet.org").replace(/\/+$/, "")}/store/openrouter`;
+}
+
+export function AccountKeysPanel({
+  client,
+  messages: t,
+  agentPlanetBaseUrl = "https://agentplanet.org",
+  onClose,
+}: {
+  client: GatewayClient;
+  messages: RanchMessages;
+  agentPlanetBaseUrl?: string;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [keys, setKeys] = useState<AccountKey[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    void client
+      .getMyKeys()
+      .then((row) => {
+        if (cancelled) return;
+        setKeys(row.keys || []);
+      })
+      .catch(() => {
+        if (!cancelled) setError(t.accountKeysLoadFailed);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, t.accountKeysLoadFailed]);
+
+  const storeUrl = storeOpenRouterUrl(agentPlanetBaseUrl);
+
+  return (
+    <PanelChrome title={t.accountKeys} onClose={onClose} closeLabel={t.close}>
+      <p style={sectionHint}>{t.accountKeysHint}</p>
+      {loading ? (
+        <EmptyText>{t.loading}</EmptyText>
+      ) : error ? (
+        <p style={{ color: colors.danger, fontSize: 13 }}>{error}</p>
+      ) : keys.length === 0 ? (
+        <div style={{ marginBottom: 16 }}>
+          <EmptyText>{t.accountKeysEmpty}</EmptyText>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+          {keys.map((key) => {
+            const written = key.written_agent_name || key.written_agent_id;
+            return (
+              <div
+                key={key.order_id}
+                style={{ ...card, display: "flex", gap: 12, alignItems: "flex-start" }}
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 10,
+                    flexShrink: 0,
+                    background: colors.accentSoft,
+                    color: "#7aa2f7",
+                    display: "grid",
+                    placeItems: "center",
+                    fontSize: 12,
+                    fontWeight: 800,
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  OR
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 14, fontWeight: 650 }}>OpenRouter</span>
+                    {key.status ? <Badge>{key.status}</Badge> : null}
+                  </span>
+                  <span
+                    style={{ display: "block", marginTop: 5, fontSize: 12, color: colors.muted }}
+                  >
+                    {fmtTpl(t.accountPlanPriceCredits, { n: fmtCredits(key.credits_spent) })}
+                  </span>
+                  <span
+                    style={{ display: "block", marginTop: 3, fontSize: 12, color: colors.muted }}
+                  >
+                    {written
+                      ? fmtTpl(t.accountKeysWrittenTo, { name: written })
+                      : t.accountKeysNotWritten}
+                  </span>
+                  {key.created_at ? (
+                    <span
+                      style={{ display: "block", marginTop: 3, fontSize: 11, color: colors.muted }}
+                    >
+                      {fmtTxTime(key.created_at)}
+                    </span>
+                  ) : null}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <a
+        href={storeUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          ...btnPrimaryLg,
+          display: "inline-block",
+          textDecoration: "none",
+          textAlign: "center",
+          marginBottom: 12,
+        }}
+      >
+        {t.accountKeysBuy}
+      </a>
+      <p style={{ margin: 0, fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
+        {t.accountKeysBuyHint}
+      </p>
     </PanelChrome>
   );
 }
@@ -1810,103 +2464,51 @@ export function AccountManagePanel({
   ];
 
   return (
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 40,
-        background: colors.bg,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "10px 12px",
-          borderBottom: `1px solid ${colors.border}`,
-          flexShrink: 0,
-        }}
-      >
-        <button type="button" style={btnGhost} onClick={onClose} aria-label={t.close}>
-          ←
-        </button>
-        <strong style={{ fontSize: 14, flex: 1 }}>{t.accountManage}</strong>
-        <span style={{ width: 40 }} />
-      </div>
-      <div style={{ flex: 1, overflow: "auto", padding: "16px 0" }}>
-        <div style={{ padding: "0 14px 10px" }}>
-          <p style={sectionTitle}>{t.hubManageSection}</p>
-          <p style={{ margin: 0, fontSize: 12, color: colors.muted, lineHeight: 1.5 }}>
-            {t.hubManageIntro}
-          </p>
-        </div>
-        <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-          {items.map((item) => {
-            const disabled = !!item.comingSoon || !item.onSelect;
-            return (
-              <li key={item.key}>
-                <button
-                  type="button"
-                  disabled={disabled}
-                  aria-disabled={disabled || undefined}
-                  title={item.comingSoon ? t.comingSoon : undefined}
-                  onClick={() => item.onSelect?.()}
+    <PanelChrome title={t.accountManage} onClose={onClose} closeLabel={t.close}>
+      <p style={sectionHint}>{t.hubManageIntro}</p>
+      <div style={{ ...card, padding: 6 }}>
+        {items.map((item) => {
+          const disabled = !!item.comingSoon || !item.onSelect;
+          return (
+            <RowButton
+              key={item.key}
+              disabled={disabled}
+              onClick={() => item.onSelect?.()}
+            >
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span
                   style={{
-                    width: "100%",
-                    textAlign: "left",
-                    border: "none",
-                    borderBottom: `1px solid ${colors.border}`,
-                    background: "transparent",
-                    color: disabled ? colors.muted : colors.text,
-                    padding: "12px 14px",
-                    cursor: disabled ? "not-allowed" : "pointer",
                     display: "flex",
                     alignItems: "center",
-                    gap: 10,
-                    opacity: disabled ? 0.8 : 1,
+                    gap: 8,
+                    fontSize: 14,
+                    fontWeight: 600,
                   }}
                 >
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        fontSize: 14,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {item.label}
-                      {item.comingSoon ? (
-                        <span style={{ fontSize: 11, fontWeight: 500, color: colors.muted }}>
-                          {t.comingSoon}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span
-                      style={{
-                        display: "block",
-                        marginTop: 3,
-                        fontSize: 11,
-                        color: colors.muted,
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      {item.hint}
-                    </span>
-                  </span>
-                  {!disabled ? (
-                    <span style={{ color: colors.muted, fontSize: 14 }}>›</span>
-                  ) : null}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+                  {item.label}
+                  {item.comingSoon ? <Badge>{t.comingSoon}</Badge> : null}
+                </span>
+                <span
+                  style={{
+                    display: "block",
+                    marginTop: 3,
+                    fontSize: 12,
+                    color: colors.muted,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {item.hint}
+                </span>
+              </span>
+              {!disabled ? (
+                <span aria-hidden style={{ color: colors.muted, fontSize: 15 }}>
+                  ›
+                </span>
+              ) : null}
+            </RowButton>
+          );
+        })}
       </div>
-    </div>
+    </PanelChrome>
   );
 }

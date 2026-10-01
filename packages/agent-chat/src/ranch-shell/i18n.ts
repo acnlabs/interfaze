@@ -32,9 +32,18 @@ export type RanchMessages = {
   noAgentsBody: string;
   copyPromptForAgent: string;
   connectExisting: string;
+  connectHint: string;
+  connectYourInvite: string;
+  copyPageLink: string;
+  copyQr: string;
+  qrDownloaded: string;
+  connectInviteFailed: string;
   promptCopied: string;
   viewConnectGuide: string;
   pasteAgentId: string;
+  officialEmptyTitle: string;
+  officialEmptyBody: string;
+  startOfficialChat: (name: string) => string;
   waitingReply: string;
   searchAgents: string;
   discoverAgents: string;
@@ -42,7 +51,11 @@ export type RanchMessages = {
   rateLimited: string;
   billingUnavailable: string;
   unsupportedModel: string;
+  officialNotAuthorized: string;
+  officialModelUnsupported: string;
   modelPricingUnavailable: string;
+  needOpenRouterKey: string;
+  buyOpenRouterCredits: string;
   /** Soft warn: L2 listing model ≠ runtime/writeback model. */
   pricingMismatch: (listed: string, observed: string) => string;
   /** Agent bubble footer: this hop's token burn, in/out separately. */
@@ -53,20 +66,41 @@ export type RanchMessages = {
   orchAsked: (name: string) => string;
   /** Agent bubble: invoke failed. */
   orchFailed: (name: string) => string;
-  pieceReject: string;
+  /** Expanded callee chip: agent id / hop labels. */
+  orchIdLabel: string;
+  orchHopLabel: string;
+  orchCopy: string;
+  /** P2: agent suggested a group; human must confirm. */
+  orchProposeTitle: string;
+  orchProposeNeedTwo: string;
+  orchProposeCreate: string;
+  orchProposeOpenExisting: string;
+  orchProposeDismiss: string;
+  orchProposeMembers: (names: string) => string;
+  orchProposePartial: (names: string) => string;
+  /** P4: agent suggested posting a job in the human's name. */
+  orchTaskLead: string;
+  orchTaskReward: (reward: string) => string;
+  orchTaskDeadline: (hours: number) => string;
+  orchTaskConfirm: string;
+  orchTaskDismiss: string;
+  orchTaskPosted: string;
+  orchTaskRecruitAgain: string;
+  orchTaskAck: string;
+  orchTaskRecruitFailed: string;
+  orchTaskNeedReward: string;
   pieceHeld: (amount: number) => string;
   pieceCaptured: string;
-  pieceRejected: string;
-  pieceRejectFailed: string;
   /** Composer chip: current runtime / listing model (M1). */
+  composerProviderLabel: string;
   composerModelLabel: string;
   composerModelUnknown: string;
   composerModelListing: string;
   /** Catalog miss / unpriced — still shown in picker. */
   composerModelNoPrice: string;
+  composerModelPrice: (input: string, output: string) => string;
   composerModelMismatch: (listed: string, runtime: string) => string;
   sendFailed: string;
-  offlineSendBlocked: string;
   expand: string;
   collapse: string;
   close: string;
@@ -76,12 +110,18 @@ export type RanchMessages = {
   faceChatOpening: string;
   faceChatFailed: string;
   faceChatClosed: string;
-  faceChatOffline: string;
-  faceChatUnauthorized: string;
+  /** Open the agent's Embody room (kind=body). */
+  bodyChat: string;
+  bodyChatOpen: string;
+  bodyChatOpening: string;
+  bodyChatFailed: string;
+  bodyChatClosed: string;
+  bodyChatPick: string;
+  bodyChatLive: string;
+  bodyChatOff: string;
+  bodyChatSim: string;
+  bodyChatRobot: string;
   windowClose: string;
-  showWindow: string;
-  hideWindow: string;
-  windowEmpty: string;
   collapseSidebar: string;
   expandSidebar: string;
   searchChats: string;
@@ -89,7 +129,6 @@ export type RanchMessages = {
   newDirectChat: string;
   newGroupChat: string;
   gatewayUnavailable: string;
-  chatLoadFailed: string;
   loading: string;
   noChatsYet: string;
   startChat: string;
@@ -109,6 +148,18 @@ export type RanchMessages = {
   decisionScoring: string;
   decisionAskHuman: string;
   decisionCap: string;
+  historyChats: string;
+  historyPlans: string;
+  historyTasks: string;
+  historyPlansEmpty: string;
+  historyTasksEmpty: string;
+  historyTaskPending: string;
+  historyTaskPosted: string;
+  historyTaskOpen: string;
+  planViewerBack: string;
+  planViewerSource: string;
+  planViewerLoading: string;
+  planViewerEmpty: string;
   send: string;
   justNow: string;
   minsAgo: (n: number) => string;
@@ -126,6 +177,7 @@ export type RanchMessages = {
   topics: string;
   chatsTab: string;
   startNewChat: string;
+  untitledChat: string;
   noAgentChatsHint: string;
   newTopic: string;
   createTopic: string;
@@ -202,7 +254,18 @@ export type RanchMessages = {
   accountProfile: string;
   accountProfileHint: string;
   accountWallet: string;
+  accountBilling: string;
   accountWalletHint: string;
+  /** Account menu: Store model quota (not API keys, not Wallet Credits). */
+  accountKeys: string;
+  accountKeysHint: string;
+  accountKeysLoadFailed: string;
+  accountKeysEmpty: string;
+  accountKeysBuy: string;
+  accountKeysBuyHint: string;
+  accountKeysWrittenTo: string;
+  accountKeysNotWritten: string;
+  accountKeysOpenList: string;
   collabBudget: string;
   collabBudgetHint: string;
   collabAccountCap: string;
@@ -217,6 +280,8 @@ export type RanchMessages = {
   accountWalletLoadFailed: string;
   accountWalletEmptyTx: string;
   accountWalletRecent: string;
+  accountWalletAgentWallets: string;
+  accountWalletNoAgents: string;
   accountPlanUsage: string;
   accountPlanUsageLoadFailed: string;
   accountPlanCurrent: string;
@@ -291,6 +356,43 @@ export type RanchMessages = {
   myAgentsTitle: string;
   myAgentsEmptyTitle: string;
   myAgentsEmptyBody: string;
+  createAgent: string;
+  createAgentTitle: string;
+  createAgentBlurb: string;
+  createAgentName: string;
+  createAgentTier: string;
+  createAgentServerSection: string;
+  createAgentRuntimeSection: string;
+  createAgentRuntimeHermes: string;
+  createAgentRuntimeOpenclaw: string;
+  createAgentRegionSg: string;
+  createAgentRegionCn: string;
+  createAgentKeySection: string;
+  createAgentStarter: string;
+  createAgentStandard: string;
+  createAgentTierCredits: string;
+  createAgentKeyUsd: string;
+  createAgentMachineLine: string;
+  createAgentKeyQuotaLine: string;
+  createAgentKeyFeeLine: string;
+  createAgentKeyLine: string;
+  createAgentTotalLine: string;
+  createAgentSubmit: string;
+  createAgentWorking: string;
+  createAgentProgress: string;
+  createAgentReady: string;
+  createAgentPendingPay: string;
+  createAgentNeedCredits: string;
+  createAgentRecharge: string;
+  createAgentRetryPay: string;
+  createAgentStartOver: string;
+  createAgentOrderExpired: string;
+  createAgentRetryBind: string;
+  createAgentUnavailable: string;
+  createAgentSoldOut: string;
+  createAgentSoldOutPage: string;
+  createAgentFailed: string;
+  createAgentSlow: string;
   myAgentsOfflineHint: string;
   myAgentsSectionIdentity: string;
   myAgentsSectionOverview: string;
@@ -327,15 +429,43 @@ export type RanchMessages = {
   myAgentsPricingModelLabel: string;
   myAgentsPricingModelHint: string;
   myAgentsPricingModelsEmpty: string;
+  myAgentsPricingModelSearch: string;
+  myAgentsPricingOfficialEmpty: string;
+  myAgentsPricingOptionLine: string;
   myAgentsPricingCreditsLine: string;
   myAgentsPricingCreditsNote: string;
   myAgentsPricingRuntimeHint: string;
   myAgentsPricingSelfReportNote: string;
   myAgentsInferencePathByo: string;
   myAgentsInferencePathByoHint: string;
+  myAgentsInferencePathByoHintReady: string;
+  myAgentsProviderLabel: string;
+  myAgentsProviderHint: string;
+  myAgentsProviderByo: string;
+  myAgentsProviderOfficial: string;
+  myAgentsProviderMine: string;
+  myAgentsProviderAgent: string;
+  myAgentsProviderOther: string;
+  myAgentsProviderOfficialOpenRouter: string;
+  myAgentsProviderOpenRouter: string;
+  myAgentsOfficialHostHint: string;
+  myAgentsNeedStoreKey: string;
+  myAgentsOpenRouterRuntimeRequired: string;
+  myAgentsBuyStoreKey: string;
+  myAgentsRefreshRuntime: string;
+  myAgentsListingStaleHint: string;
+  myAgentsOfficialSectionHint: string;
+  myAgentsMineSectionHint: string;
+  myAgentsProviderUnlisted: string;
+  myAgentsSaveProviders: string;
+  myAgentsProvidersSaved: string;
+  myAgentsProvidersFailed: string;
   myAgentsPricingMarkupLabel: string;
   myAgentsPricingMarkupHint: string;
   myAgentsPricingCatalogLine: string;
+  myAgentsPricingSourceOpenRouter: string;
+  myAgentsPricingSourceTokenHub: string;
+  myAgentsPricingSourceHint: string;
   myAgentsPricingListingLine: string;
   myAgentsPricingExampleLine: string;
   myAgentsPricingCatalogMissing: string;
@@ -346,10 +476,38 @@ export type RanchMessages = {
   myAgentsSectionPieceSku: string;
   myAgentsPieceSkuHint: string;
   myAgentsPieceSkuLabel: string;
+  myAgentsPieceSkuLabelImage: string;
+  myAgentsPieceSkuLabelVideo: string;
+  myAgentsPieceSkuLabelAudio: string;
+  myAgentsPieceSkuLabelFile: string;
   myAgentsPieceSkuOff: string;
+  myAgentsPieceSkuNumeric: string;
+  myAgentsPieceSkuModel: string;
+  myAgentsPieceSkuModelVideo: string;
+  myAgentsPieceSkuNoneHang: string;
+  myAgentsPieceSkuPocketHint: string;
+  myAgentsPieceSkuMarkup: string;
+  myAgentsPieceSkuPreview: string;
+  myAgentsPieceSkuPreviewVideo: string;
+  myAgentsPieceSkuSeconds: string;
+  myAgentsPieceSkuSecondsHint: string;
+  myAgentsPieceSkuPerSecond: string;
+  myAgentsPieceSkuKindImage: string;
+  myAgentsPieceSkuKindVideo: string;
+  myAgentsPieceSkuKindAudio: string;
+  myAgentsPieceSkuKindFile: string;
+  myAgentsPieceSkuFillCredits: string;
+  myAgentsPieceSkuMeterLabel: string;
+  myAgentsPieceSkuMeterFile: string;
+  myAgentsPieceSkuMeterSecond: string;
+  myAgentsPieceSkuMeterNumeric: string;
+  myAgentsPieceSkuMarketFile: string;
+  myAgentsPieceSkuMarketSecond: string;
   myAgentsSavePieceSku: string;
   myAgentsPieceSkuSaved: string;
   myAgentsPieceSkuFailed: string;
+  myAgentsPricingSyncing: string;
+  myAgentsPricingNoAck: string;
   myAgentsNameHint: string;
   myAgentsDescHint: string;
   myAgentsDescClearHint: string;
@@ -465,6 +623,29 @@ export type RanchMessages = {
   walletRechargeExternalHint: string;
   walletTxTitle: string;
   walletTxEmpty: string;
+  walletTxTypeRewardGrant: string;
+  walletTxTypeWalletTransfer: string;
+  walletTxTypeRefund: string;
+  walletTxTypeStorePurchase: string;
+  walletTxTypePlanPurchase: string;
+  walletTxTypeRecharge: string;
+  walletBillingDocs: string;
+  walletBillingDocsHint: string;
+  walletBillingDocsEmpty: string;
+  walletBillingDocsLoadFailed: string;
+  walletDownloadReceipt: string;
+  walletRequestInvoice: string;
+  walletInvoiceStatusPending: string;
+  walletInvoiceStatusIssued: string;
+  walletInvoiceTitleTypePersonal: string;
+  walletInvoiceTitleTypeBusiness: string;
+  walletInvoiceTitlePlaceholder: string;
+  walletInvoiceTaxNoPlaceholder: string;
+  walletInvoiceEmailPlaceholder: string;
+  walletInvoiceSubmit: string;
+  walletInvoiceSubmitting: string;
+  walletInvoiceSubmitted: string;
+  walletInvoiceFailed: string;
   walletLoadFailed: string;
   spendPolicyTitle: string;
   spendPolicyHint: string;
@@ -531,14 +712,32 @@ const en: RanchMessages = {
   noAgentsBody:
     "Registering on ACN is not enough. Copy the prompt below, paste it to your agent, and let it finish setup (installs ACN skill if needed).",
   copyPromptForAgent: "Copy prompt for agent",
-  connectExisting: "Connect an existing agent",
+  connectExisting: "Connect agent",
+  connectHint:
+    "Share the prompt, link, or QR. Your agent joins ACN with the invite code. Claiming uses a separate private link — this never includes a claim token.",
+  connectYourInvite: "This is your invite.",
+  copyPageLink: "Copy link",
+  copyQr: "Copy QR",
+  qrDownloaded: "Saved image",
+  connectInviteFailed: "Couldn’t create an invite. Try again.",
   promptCopied: "Copied",
   viewConnectGuide: "Full guide",
   pasteAgentId: "Paste an agent id",
+  officialEmptyTitle: "Start with the official assistant",
+  officialEmptyBody:
+    "You don’t need your own agent to chat. Talk to the official assistant — it can call other agents in the background when it needs help.",
+  startOfficialChat: (name) => `Chat with ${name}`,
   unreachable: "Can’t reach this agent for chat right now.",
   rateLimited: "Not enough credits to send. Top up in Wallet or check Plan & Usage.",
   billingUnavailable: "Billing check unavailable. Try again in a moment.",
   unsupportedModel: "This agent does not support that model.",
+  officialNotAuthorized:
+    "This model is not on the official Host shelf. Pick one from the list.",
+  needOpenRouterKey:
+    "OpenRouter is BYO: the key lives on the agent, not on Interfaze. Host cannot see the key — we only read the heartbeat model. Put a key in its runtime, or buy Store credits for the owner to write one in.",
+  buyOpenRouterCredits: "Buy OpenRouter credits",
+  officialModelUnsupported:
+    "Official hosted inference cannot run thinking/reasoning models. Pick a chat model from the list.",
   modelPricingUnavailable: "No platform price for that model yet. Pick another or ask the owner to wait for Host pack coverage.",
   pricingMismatch: (listed, observed) =>
     `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
@@ -547,19 +746,37 @@ const en: RanchMessages = {
   orchCalled: (name) => `Called ${name}`,
   orchAsked: (name) => `Asked ${name}`,
   orchFailed: (name) => `Couldn't reach ${name}`,
-  pieceReject: "Reject stills",
+  orchIdLabel: "id",
+  orchHopLabel: "hop",
+  orchCopy: "Copy",
+  orchProposeTitle: "Suggests a group",
+  orchProposeNeedTwo: "Need at least two agents to open a group.",
+  orchProposeCreate: "Create group",
+  orchProposeOpenExisting: "Open existing group",
+  orchProposeDismiss: "Not now",
+  orchProposeMembers: (names) => `With ${names}`,
+  orchProposePartial: (names) => `Couldn't add ${names} (no permission)`,
+  orchTaskLead: "Post this job in your name",
+  orchTaskReward: (reward) => `Reward ${reward} credits, locked when you post`,
+  orchTaskDeadline: (hours) => `Open for ${hours} hours`,
+  orchTaskConfirm: "Post and recruit",
+  orchTaskDismiss: "Not now",
+  orchTaskPosted: "This job is already posted",
+  orchTaskRecruitAgain: "Recruit again",
+  orchTaskAck: "OK",
+  orchTaskRecruitFailed: "The job is posted and the reward is locked. Recruiting failed — you can try again.",
+  orchTaskNeedReward: "This suggestion has no reward, so it can't be posted.",
   pieceHeld: (amount) => `${amount} Credits settling`,
-  pieceCaptured: "Stills settled",
-  pieceRejected: "Stills rejected",
-  pieceRejectFailed: "Couldn’t reject stills.",
+  pieceCaptured: "Settled",
+  composerProviderLabel: "Provider",
   composerModelLabel: "Model",
   composerModelUnknown: "—",
   composerModelListing: "listing",
   composerModelNoPrice: "—",
+  composerModelPrice: (input, output) => `${input} in · ${output} out`,
   composerModelMismatch: (listed, runtime) =>
     `Listing ${listed} ≠ runtime ${runtime} (still billed at listing price)`,
   sendFailed: "Send failed",
-  offlineSendBlocked: "You're offline — message not sent. It will still be here when you reconnect.",
   expand: "Expand",
   collapse: "Collapse",
   close: "Close",
@@ -568,20 +785,24 @@ const en: RanchMessages = {
   faceChatOpening: "Opening face chat…",
   faceChatFailed: "Couldn’t open face chat.",
   faceChatClosed: "This agent isn’t open for face chat.",
-  faceChatOffline: "The other side isn’t connected.",
-  faceChatUnauthorized: "Sign in first.",
+  bodyChat: "Body",
+  bodyChatOpen: "Body on",
+  bodyChatOpening: "Opening body…",
+  bodyChatFailed: "Couldn’t open the body.",
+  bodyChatClosed: "This agent has no body yet.",
+  bodyChatPick: "Which body?",
+  bodyChatLive: "On",
+  bodyChatOff: "Off",
+  bodyChatSim: "Sim",
+  bodyChatRobot: "Robot",
   windowClose: "Close window",
-  showWindow: "Show window",
-  hideWindow: "Hide window",
-  windowEmpty: "Open face chat from the composer. Other window kinds can land here later.",
   collapseSidebar: "Hide sidebar",
   expandSidebar: "Show sidebar",
   searchChats: "Search chats…",
   newChat: "New",
-  newDirectChat: "Direct chat",
-  newGroupChat: "Group chat",
+  newDirectChat: "Direct message",
+  newGroupChat: "Group",
   gatewayUnavailable: "Gateway unavailable",
-  chatLoadFailed: "Could not load conversations. Please try again.",
   loading: "Loading…",
   noChatsYet: "No chats yet",
   startChat: "Start a chat",
@@ -596,14 +817,26 @@ const en: RanchMessages = {
   decisionGoal: "Save this message as the goal",
   decisionAuto: "Auto-decide",
   decisionAutoHint:
-    "When this chat lists next steps, Jev can pick and send for you. It stops if it should ask you, and after a few hops.",
-  decisionAutoNeedGoal: "Pin a goal in the composer first. Auto-decide does nothing without one.",
+    "When this chat has a plan with next steps, Jev can pick and send for you. It stops if it should ask you, and after a few hops.",
+  decisionAutoNeedGoal: "The agent writes a plan from what you already said. Auto-decide does nothing without one.",
   decisionAutoEnable: "Enable for this chat",
   decisionSuggested: "Suggested",
   decisionPicked: "Picked",
   decisionScoring: "Scoring…",
   decisionAskHuman: "Waiting for you",
   decisionCap: "Auto-decide paused — hop limit reached.",
+  historyChats: "Chats",
+  historyPlans: "Plans",
+  historyTasks: "Tasks",
+  historyPlansEmpty: "No plan yet. When the agent writes one from this conversation, it shows up here.",
+  historyTasksEmpty: "No task yet. Confirm a job card in chat and it will appear here.",
+  historyTaskPending: "Waiting for you",
+  historyTaskPosted: "Posted",
+  historyTaskOpen: "Open task",
+  planViewerBack: "Back",
+  planViewerSource: "View source message",
+  planViewerLoading: "Loading plan…",
+  planViewerEmpty: "No plan body yet.",
   send: "Send",
   justNow: "Just now",
   minsAgo: (n) => `${n}m ago`,
@@ -619,9 +852,10 @@ const en: RanchMessages = {
   groupInfo: "Group info",
   agentInfo: "Agent info",
   topics: "Topics",
-  chatsTab: "Chats",
+  chatsTab: "History",
   startNewChat: "New chat",
-  noAgentChatsHint: "Each chat is a separate conversation with this agent.",
+  untitledChat: "Untitled",
+  noAgentChatsHint: "Every conversation with this agent is here — including Studio and other hosts.",
   newTopic: "New Topic",
   createTopic: "Create",
   topicTitle: "Topic title",
@@ -667,8 +901,8 @@ const en: RanchMessages = {
   noAgentsToAdd: "No more agents to add. Search Discover or connect a new agent first.",
   noMessagesYet: "No messages yet",
   pickerTitle: "New chat",
-  pickerTitleDirect: "New direct chat",
-  pickerTitleGroup: "New group chat",
+  pickerTitleDirect: "New direct message",
+  pickerTitleGroup: "New group",
   mineAgents: "MY AGENTS",
   recommended: "DISCOVER",
   noMineAgents:
@@ -696,7 +930,19 @@ const en: RanchMessages = {
   accountProfile: "Profile",
   accountProfileHint: "Signed-in account from your identity provider. Edit name and avatar there for now.",
   accountWallet: "Wallet",
+  accountBilling: "Receipts & invoices",
   accountWalletHint: "Your human Credits balance. Agent wallets stay under each agent.",
+  accountKeys: "Model quota",
+  accountKeysHint:
+    "Model quota you bought in Store. A standalone buy is yours to use anywhere — it does not attach to an existing agent.",
+  accountKeysLoadFailed: "Couldn’t load model quota.",
+  accountKeysEmpty: "No model quota yet.",
+  accountKeysBuy: "Buy in Store",
+  accountKeysBuyHint:
+    "Creating a new agent can write Store model quota into that machine. Buying here yourself does not write into an existing agent.",
+  accountKeysWrittenTo: "Written to {name}",
+  accountKeysNotWritten: "Not written to any agent",
+  accountKeysOpenList: "View model quota",
   collabBudget: "Collaboration budget",
   collabBudgetHint:
     "Oil tank for multi-agent help. With remaining Credits, collaboration runs without asking each time.",
@@ -712,6 +958,8 @@ const en: RanchMessages = {
   accountWalletLoadFailed: "Couldn’t load wallet.",
   accountWalletEmptyTx: "No transactions yet.",
   accountWalletRecent: "Recent activity",
+  accountWalletAgentWallets: "Agent wallets",
+  accountWalletNoAgents: "No agents yet.",
   accountPlanUsage: "Plan & Usage",
   accountPlanUsageLoadFailed: "Couldn’t load plan & usage.",
   accountPlanCurrent: "Current plan",
@@ -744,14 +992,14 @@ const en: RanchMessages = {
   accountPlanFreeBlurb:
     "No subscription fee and no included pack — pay as you go from your Wallet.",
   accountPlanProBlurb:
-    "Pay with cash to subscribe for 30 days. Includes a matching dialog usage pack for billable chats (official + marketplace); your own agents stay free. Usage beyond the pack uses Wallet Credits. Access ends when the period expires — renew anytime.",
+    "Pay with PayPal for 30 days. Includes a matching dialog usage pack for billable chats (official + marketplace); your own agents stay free. Usage beyond the pack uses Wallet Credits. Access ends when the period expires — renew anytime.",
   accountPlanUpgrade: "Subscribe",
   accountPlanRenew: "Renew",
   accountPlanExpiresOn: "Access until {date}",
-  accountPlanBuyBusy: "Redirecting…",
+  accountPlanBuyBusy: "Opening checkout…",
   accountPlanBuyConfirmTitle: "Continue to checkout",
   accountPlanBuyConfirmBody:
-    "You’ll pay {price} for 30 days of {plan}. Included dialog pack: {pack}. Wallet Credits are not charged.",
+    "You’ll pay {price} for 30 days of {plan} (cash checkout on AgentPlanet). Included dialog pack: {pack}. Wallet Credits are not charged for the subscription.",
   accountPlanBuyConfirmRenewBody:
     "You’ll pay {price} to renew {plan} for another 30 days and refresh the included dialog pack ({pack}). Wallet Credits are not charged.",
   accountPlanBuyConfirm: "Continue to pay",
@@ -787,9 +1035,47 @@ const en: RanchMessages = {
   networkOrgs: "Orgs",
   comingSoon: "Coming soon",
   myAgentsTitle: "My agents",
-  myAgentsEmptyTitle: "No agents claimed yet",
+  myAgentsEmptyTitle: "No agents yet",
   myAgentsEmptyBody:
-    "Connect an existing agent with a prompt, link, or QR code. Claiming happens on Interfaze — do not share a claim token.",
+    "Create a hosted agent, or connect an existing one with a prompt, link, or QR code. Claiming happens on Interfaze — do not share a claim token.",
+  createAgent: "Create",
+  createAgentTitle: "Create a hosted agent",
+  createAgentBlurb:
+    "Pay for a hosted machine and a model pack. The key is written onto your machine — you use your own model allowance.",
+  createAgentName: "Name",
+  createAgentTier: "Plan",
+  createAgentServerSection: "Server",
+  createAgentRuntimeSection: "Runtime",
+  createAgentRuntimeHermes: "Hermes",
+  createAgentRuntimeOpenclaw: "OpenClaw",
+  createAgentRegionSg: "Deploys on an overseas machine.",
+  createAgentRegionCn: "Deploys on a China-region machine.",
+  createAgentKeySection: "Model allowance",
+  createAgentStarter: "Starter · 2C2G / 30 days",
+  createAgentStandard: "Standard · 2C4G / 30 days",
+  createAgentTierCredits: "{n} credits",
+  createAgentKeyUsd: "${usd} OpenRouter",
+  createAgentMachineLine: "Machine {n} credits",
+  createAgentKeyQuotaLine: "Model allowance {n} credits",
+  createAgentKeyFeeLine: "Service fee {n} credits ({pct}%)",
+  createAgentKeyLine: "Starter model pack {n} credits (includes 10% service fee)",
+  createAgentTotalLine: "Total {n} credits",
+  createAgentSubmit: "Pay and create",
+  createAgentWorking: "Working…",
+  createAgentProgress: "Deploying and writing the starter key…",
+  createAgentReady: "Ready",
+  createAgentPendingPay: "Waiting for payment.",
+  createAgentNeedCredits: "Not enough credits. Recharge, then retry pay.",
+  createAgentRecharge: "Recharge wallet",
+  createAgentRetryPay: "Retry pay",
+  createAgentStartOver: "Start a new create",
+  createAgentOrderExpired: "That checkout expired. Start a new create.",
+  createAgentRetryBind: "Retry bind",
+  createAgentUnavailable: "Create is not available in this region yet.",
+  createAgentSoldOut: "Sold out",
+  createAgentSoldOutPage: "Sold out for now.",
+  createAgentFailed: "Could not create this agent.",
+  createAgentSlow: "Still deploying. You can close this window — the chat will open when it's ready.",
   myAgentsOfflineHint:
     "This agent is registered but offline — start the process that keeps it alive, or check message receiving.",
   myAgentsSectionIdentity: "Profile",
@@ -823,28 +1109,66 @@ const en: RanchMessages = {
   myAgentsSaveProfile: "Save profile",
   myAgentsProfileSaved: "Saved",
   myAgentsProfileFailed: "Couldn’t save profile.",
-  myAgentsSectionPricing: "Pricing",
+  myAgentsSectionPricing: "Agent pricing",
   myAgentsPricingHint:
-    "Set the default model and your markup %. Settle = Host Catalog/pack baseline × (1+markup).",
+    "This agent’s call fee for others: hop baseline × (1+markup%). Official baseline is Catalog × 1.15; BYO stays Catalog/pack.",
   myAgentsPricingInputLabel: "Settle preview · input USD / 1M",
   myAgentsPricingOutputLabel: "Settle preview · output USD / 1M",
-  myAgentsPricingModelLabel: "Default model",
+  myAgentsPricingModelLabel: "Default model · USD / 1M tokens",
   myAgentsPricingModelHint:
     "Pick the default from models this agent already reports. You cannot add or remove models here.",
   myAgentsPricingModelsEmpty: "This agent has not reported any models yet.",
-  myAgentsPricingCreditsLine: "Wallet preview (Credits / 1M, rounded up): in ${in} / out ${out}",
-  myAgentsPricingCreditsNote: "1 Credit = $0.10 at the current Host rate. Each hop settles in whole Credits.",
-  myAgentsPricingRuntimeHint: "Runtime reported: ${model} (self-reported — not verified).",
+  myAgentsPricingModelSearch: "Search",
+  myAgentsPricingOfficialEmpty: "No matching OpenRouter models in Host Catalog.",
+  myAgentsPricingOptionLine: "${name} · in ${in} · out ${out}",
+  myAgentsPricingCreditsLine: "in ${in} · out ${out} Credits / 1M",
+  myAgentsPricingCreditsNote: "100 Credits = $1, same as wallet recharge. Each hop settles in whole Credits.",
+  myAgentsPricingRuntimeHint:
+    "Runtime reported: ${model} (heartbeat model only — Host cannot verify the key).",
   myAgentsPricingSelfReportNote:
     "You only set default model + markup. Host owns baseline prices; agents cannot rewrite the global settle book.",
   myAgentsInferencePathByo: "BYO",
   myAgentsInferencePathByoHint:
     "This agent calls models with its own key. Usage is self-reported — Host cannot verify. Official hosted inference is not available yet.",
-  myAgentsPricingMarkupLabel: "Markup over Host baseline",
+  myAgentsInferencePathByoHintReady:
+    "Chat picks a model. Official · OpenRouter is Interfaze’s key. OpenRouter here is a Store key on the agent.",
+  myAgentsProviderLabel: "Provider",
+  myAgentsProviderHint:
+    "Official · OpenRouter is Interfaze’s Host-held key (this Host’s shelf). OpenRouter is a Store/BYO key on the agent. Chat still picks a model only — path is inferred. BYO vendors follow the heartbeat.",
+  myAgentsProviderByo: "Mine",
+  myAgentsProviderOfficial: "Official · OpenRouter",
+  myAgentsProviderMine: "Mine",
+  myAgentsProviderAgent: "This agent",
+  myAgentsProviderOther: "Other",
+  myAgentsProviderOfficialOpenRouter: "Official · OpenRouter",
+  myAgentsProviderOpenRouter: "OpenRouter",
+  myAgentsOfficialHostHint:
+    "Official hops use Interfaze’s Host OpenRouter key. Quotes are published Catalog, not Store sync. This Host’s CN-billed key cannot complete GPT, Claude, or Gemini. The machine default stays on the agent’s own key.",
+  myAgentsNeedStoreKey:
+    "OpenRouter needs a key on this agent. Host cannot see the key — we only read the heartbeat model. If it doesn’t have one yet, buy Store credits, write the key into the runtime, then Refresh status.",
+  myAgentsOpenRouterRuntimeRequired:
+    "Runtime is still this agent’s own vendor. Host cannot see whether an OpenRouter key is installed. Write a Store key into the runtime, then Refresh status. OpenRouter can be saved only after the agent reports an OpenRouter model.",
+  myAgentsBuyStoreKey: "Buy in Store",
+  myAgentsRefreshRuntime: "Refresh status",
+  myAgentsListingStaleHint:
+    "The published listing still says OpenRouter, but this agent is running its own key. That’s leftover — not a real OpenRouter setup. OpenRouter can be saved only after the agent reports an OpenRouter model.",
+  myAgentsOfficialSectionHint:
+    "Official · OpenRouter uses Interfaze’s Host-held key and this Host’s shelf. OpenRouter is Store/BYO on the agent.",
+  myAgentsMineSectionHint:
+    "These models stay on this agent’s own key. Provider follows the live runtime.",
+  myAgentsProviderUnlisted: "Authorized, not in this agent’s self-report yet — won’t appear in chat until it reports the model.",
+  myAgentsSaveProviders: "Save providers",
+  myAgentsProvidersSaved: "Providers saved",
+  myAgentsProvidersFailed: "Couldn’t save providers.",
+  myAgentsPricingMarkupLabel: "Markup",
   myAgentsPricingMarkupHint:
-    "Settle = Catalog/pack(model) × (1 + markup%). Changing model keeps this % and recalculates the preview.",
-  myAgentsPricingCatalogLine: "Host baseline (Catalog/pack): in ${in} / out ${out}",
-  myAgentsPricingListingLine: "Settle preview (what others pay): in ${in} / out ${out}",
+    "Settle = hop baseline × (1 + markup%). Official uses Catalog × 1.15; BYO uses Catalog/pack. Changing model keeps this %.",
+  myAgentsPricingCatalogLine: "Host ${in} / ${out}",
+  myAgentsPricingSourceOpenRouter: "Reference · OpenRouter",
+  myAgentsPricingSourceTokenHub: "Reference · TokenHub",
+  myAgentsPricingSourceHint:
+    "Public list the Host Catalog row was taken from. Official settle uses published Catalog (sync × 1.15), not the list price. TokenHub still includes FX.",
+  myAgentsPricingListingLine: "In ${in} · out ${out} / 1M",
   myAgentsPricingExampleLine:
     "Example: 1M input tokens → they pay you ~$${pay}; Host baseline ~$${cost}",
   myAgentsPricingCatalogMissing:
@@ -854,15 +1178,47 @@ const en: RanchMessages = {
   myAgentsSavePricing: "Save default model & markup",
   myAgentsPricingSaved: "Pricing saved",
   myAgentsPricingFailed: "Couldn’t save pricing.",
-  myAgentsSectionPieceSku: "Per image",
+  myAgentsSectionPieceSku: "Per file",
   myAgentsPieceSkuHint:
-    "Credits charged per still in this chat when the file lands. 0 = not selling stills. Dislike is not a refund; dialog tokens still settle separately.",
-  myAgentsPieceSkuLabel: "Credits per image",
+    "Each file stamps its hunter listed Credits at upload. This ceiling caps each tag (min(tag, cap)). 0 disables occupy. Dialog tokens still settle separately.",
+  myAgentsPieceSkuLabel: "Per-file ceiling (Credits)",
+  myAgentsPieceSkuLabelImage: "Credits per image (listed)",
+  myAgentsPieceSkuLabelVideo: "Credits per second (listed)",
+  myAgentsPieceSkuLabelAudio: "Credits per audio",
+  myAgentsPieceSkuLabelFile: "Credits per other file",
   myAgentsPieceSkuOff:
-    "0 = not selling stills. Images can still land in this chat; they just won’t occupy the wallet.",
-  myAgentsSavePieceSku: "Save per-image price",
-  myAgentsPieceSkuSaved: "Per-image price saved",
-  myAgentsPieceSkuFailed: "Couldn’t save per-image price.",
+    "Default 100000. 0 = attachments never occupy. Files still land either way.",
+  myAgentsPieceSkuNumeric: "Fill a number (Dreamina / no catalog price)",
+  myAgentsPieceSkuModel: "Image model",
+  myAgentsPieceSkuModelVideo: "Video model",
+  myAgentsPieceSkuNoneHang:
+    "This machine has no catalog-priced model for this kind — fill a number.",
+  myAgentsPieceSkuPocketHint:
+    "Catch-all for files that aren’t image, video, or audio. Host owns the kinds — you don’t invent new ones.",
+  myAgentsPieceSkuMarkup: "Markup %",
+  myAgentsPieceSkuPreview: "Hunter pays ${listed} · you net ${net}",
+  myAgentsPieceSkuPreviewVideo:
+    "Hunter pays ${listed} for a ${seconds}s clip if we cannot read the file · you net ${net}",
+  myAgentsPieceSkuSeconds: "Fallback seconds",
+  myAgentsPieceSkuSecondsHint:
+    "Used when the landed file has no readable duration (1–120). If we can read the clip, that length bills instead.",
+  myAgentsPieceSkuPerSecond: "Catalog ${usd} / second",
+  myAgentsPieceSkuKindImage: "Image",
+  myAgentsPieceSkuKindVideo: "Video",
+  myAgentsPieceSkuKindAudio: "Audio",
+  myAgentsPieceSkuKindFile: "Other file",
+  myAgentsPieceSkuFillCredits: "Fill Credits",
+  myAgentsPieceSkuMeterLabel: "How it’s billed",
+  myAgentsPieceSkuMeterFile: "Per file",
+  myAgentsPieceSkuMeterSecond: "Per second",
+  myAgentsPieceSkuMeterNumeric: "You set Credits per file",
+  myAgentsPieceSkuMarketFile: "Catalog ${usd} / file",
+  myAgentsPieceSkuMarketSecond: "Catalog ${usd} / second",
+  myAgentsSavePieceSku: "Save ceiling",
+  myAgentsPieceSkuSaved: "Ceiling saved",
+  myAgentsPieceSkuFailed: "Couldn’t save ceiling.",
+  myAgentsPricingSyncing: "Syncing to the agent…",
+  myAgentsPricingNoAck: "The agent did not confirm the new default. Nothing was saved.",
   myAgentsNameHint: "2–100 characters, at least one letter",
   myAgentsDescHint: "10–500 characters",
   myAgentsDescClearHint: "Description can’t be cleared here — leave as-is or write 10+ characters.",
@@ -997,6 +1353,30 @@ const en: RanchMessages = {
   walletRechargeExternalHint: "Pay here — Credits land in this wallet. Channel fee is listed at checkout.",
   walletTxTitle: "Recent activity",
   walletTxEmpty: "No transactions yet.",
+  walletTxTypeRewardGrant: "Reward",
+  walletTxTypeWalletTransfer: "Transfer",
+  walletTxTypeRefund: "Refund",
+  walletTxTypeStorePurchase: "Store purchase",
+  walletTxTypePlanPurchase: "Plan purchase",
+  walletTxTypeRecharge: "Top-up",
+  walletBillingDocs: "Receipts & invoices",
+  walletBillingDocsHint:
+    "Download a receipt for any payment. On the CN site you can also request a fapiao — issued manually to your email within 1-3 business days.",
+  walletBillingDocsEmpty: "No payments yet.",
+  walletBillingDocsLoadFailed: "Couldn't load receipts.",
+  walletDownloadReceipt: "Receipt",
+  walletRequestInvoice: "Request fapiao",
+  walletInvoiceStatusPending: "Processing",
+  walletInvoiceStatusIssued: "Issued",
+  walletInvoiceTitleTypePersonal: "Personal",
+  walletInvoiceTitleTypeBusiness: "Business",
+  walletInvoiceTitlePlaceholder: "Invoice title (name or company)",
+  walletInvoiceTaxNoPlaceholder: "Tax ID (统一社会信用代码)",
+  walletInvoiceEmailPlaceholder: "Email to receive the fapiao",
+  walletInvoiceSubmit: "Submit request",
+  walletInvoiceSubmitting: "Submitting…",
+  walletInvoiceSubmitted: "Submitted — the fapiao will be emailed to you after issuance.",
+  walletInvoiceFailed: "Submit failed. Please try again.",
   walletLoadFailed: "Couldn’t load this agent’s wallet.",
   spendPolicyTitle: "Spend policy",
   spendPolicyHint:
@@ -1065,14 +1445,32 @@ const zh: RanchMessages = {
   noAgentsBody:
     "注册还不够。复制下面的提示词发给你的 agent，让它自己接完（没有 ACN skill 时会先安装）。",
   copyPromptForAgent: "复制给 agent 的提示词",
-  connectExisting: "接入已有 agent",
+  connectExisting: "接入 agent",
+  connectHint:
+    "把提示词、链接或二维码发给你的 agent。它用邀请码加入 ACN。认领是另一条私密链接，这里不会带认领 token。",
+  connectYourInvite: "这是你的邀请。",
+  copyPageLink: "复制链接",
+  copyQr: "复制二维码",
+  qrDownloaded: "已保存图片",
+  connectInviteFailed: "邀请创建失败，请重试。",
   promptCopied: "已复制",
   viewConnectGuide: "完整说明",
   pasteAgentId: "粘贴 agent id 试试",
+  officialEmptyTitle: "先和官方助手聊",
+  officialEmptyBody:
+    "不必先养自己的 agent。直接和官方助手说话——它需要帮手时会在后台调用其他 agent。",
+  startOfficialChat: (name) => `和 ${name} 聊天`,
   unreachable: "暂时联系不上对方。",
-  rateLimited: "余额不足，无法发送。请先去钱包购买星币，或查看套餐与用量。",
+  rateLimited: "余额不足，无法发送。请先去钱包充值，或查看套餐与用量。",
   billingUnavailable: "计费服务暂时不可用，请稍后再试。",
   unsupportedModel: "该智能体不支持所选模型。",
+  officialNotAuthorized:
+    "这个型号不在官方货架上，请换一个列表里的模型。",
+  needOpenRouterKey:
+    "OpenRouter 是自备钥匙：钥匙在 agent 运行时里，Interfaze 不会代收。Host 看不见钥匙，只认心跳型号。请写进它的 OpenClaw / runtime，或去 Store 买额度让 Owner 写入。",
+  buyOpenRouterCredits: "去 Store 买 OpenRouter 额度",
+  officialModelUnsupported:
+    "官方通道跑不了思考/推理模，请换一个列表里的对话模型。",
   modelPricingUnavailable: "平台暂无该模型报价，请换一个；或等 Host 价包录入后再试。",
   pricingMismatch: (listed, observed) =>
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
@@ -1081,19 +1479,37 @@ const zh: RanchMessages = {
   orchCalled: (name) => `调用了 ${name}`,
   orchAsked: (name) => `已请 ${name}`,
   orchFailed: (name) => `没叫到 ${name}`,
-  pieceReject: "拒按张",
-  pieceHeld: (amount) => `按张结算中 ${amount} 星币`,
-  pieceCaptured: "按张已入账",
-  pieceRejected: "已拒按张",
-  pieceRejectFailed: "无法拒按张。",
+  orchIdLabel: "id",
+  orchHopLabel: "hop",
+  orchCopy: "复制",
+  orchProposeTitle: "提议开群",
+  orchProposeNeedTwo: "开群至少要两个 agent。",
+  orchProposeCreate: "创建群聊",
+  orchProposeOpenExisting: "打开已有群",
+  orchProposeDismiss: "先不",
+  orchProposeMembers: (names) => `拉上 ${names}`,
+  orchProposePartial: (names) => `${names} 进不去（没权限）`,
+  orchTaskLead: "用你的名义发这张单",
+  orchTaskReward: (reward) => `赏金 ${reward} 积分，点头后锁定`,
+  orchTaskDeadline: (hours) => `${hours} 小时内`,
+  orchTaskConfirm: "发单并招人",
+  orchTaskDismiss: "先不",
+  orchTaskPosted: "这张单已经发出",
+  orchTaskRecruitAgain: "再招一次人",
+  orchTaskAck: "知道了",
+  orchTaskRecruitFailed: "单已经发出，积分已锁定。招人没成功，可以再试一次。",
+  orchTaskNeedReward: "这条提议没有赏金，不能发单。",
+  pieceHeld: (amount) => `按件结算中 ${amount} Credits`,
+  pieceCaptured: "已入账",
+  composerProviderLabel: "供应商",
   composerModelLabel: "模型",
   composerModelUnknown: "—",
   composerModelListing: "挂牌",
   composerModelNoPrice: "—",
+  composerModelPrice: (input, output) => `${input} 入 · ${output} 出`,
   composerModelMismatch: (listed, runtime) =>
     `挂牌 ${listed} ≠ 运行 ${runtime}（仍按挂牌价结算）`,
   sendFailed: "发送失败",
-  offlineSendBlocked: "当前网络离线，消息未发送。草稿已保留，联网后请重试。",
   expand: "全屏",
   collapse: "收起",
   close: "关闭",
@@ -1102,12 +1518,17 @@ const zh: RanchMessages = {
   faceChatOpening: "正在打开面聊…",
   faceChatFailed: "打不开面聊。",
   faceChatClosed: "对方还没开放面聊。",
-  faceChatOffline: "对面还没接上。",
-  faceChatUnauthorized: "请先登录。",
+  bodyChat: "身体",
+  bodyChatOpen: "身体中",
+  bodyChatOpening: "正在打开身体…",
+  bodyChatFailed: "打不开这具身体。",
+  bodyChatClosed: "这个 agent 还没有身体。",
+  bodyChatPick: "开哪一具？",
+  bodyChatLive: "开着",
+  bodyChatOff: "还没开",
+  bodyChatSim: "仿真",
+  bodyChatRobot: "真机",
   windowClose: "关闭窗口",
-  showWindow: "展示窗口",
-  hideWindow: "收起窗口",
-  windowEmpty: "从输入栏打开面聊。以后别的窗口也开在这里。",
   collapseSidebar: "收起侧栏",
   expandSidebar: "打开侧栏",
   searchChats: "搜索会话…",
@@ -1115,7 +1536,6 @@ const zh: RanchMessages = {
   newDirectChat: "私聊",
   newGroupChat: "群聊",
   gatewayUnavailable: "Gateway 不可用",
-  chatLoadFailed: "暂时无法加载会话，请重试。",
   loading: "加载中…",
   noChatsYet: "还没有会话",
   startChat: "开始聊天",
@@ -1128,14 +1548,26 @@ const zh: RanchMessages = {
   decisionGoal: "把这句记成目标",
   decisionAuto: "自动决策",
   decisionAutoHint:
-    "这场对话列出下一步时，Jev 可以替你选并发出去。该问你、或连续几次之后会停。",
-  decisionAutoNeedGoal: "请先在输入框勾选「把这句记成目标」。没有目标时自动决策不会发。",
+    "这场对话已有计划、并列出下一步时，Jev 可以替你选并发出去。该问你、或连续几次之后会停。",
+  decisionAutoNeedGoal: "智能体会根据你已经说的需求写出计划。没有计划时自动决策不会发。",
   decisionAutoEnable: "为此会话开启",
   decisionSuggested: "建议",
   decisionPicked: "已选",
   decisionScoring: "打分中…",
   decisionAskHuman: "等你来选",
   decisionCap: "自动决策已暂停——达到次数上限。",
+  historyChats: "对话",
+  historyPlans: "目标",
+  historyTasks: "任务",
+  historyPlansEmpty: "还没有计划。智能体根据这场对话写出计划后，会出现在这里。",
+  historyTasksEmpty: "还没有任务。在对话里点头确认发单后，会出现在这里。",
+  historyTaskPending: "等你确认",
+  historyTaskPosted: "已发单",
+  historyTaskOpen: "打开任务",
+  planViewerBack: "返回",
+  planViewerSource: "查看来源消息",
+  planViewerLoading: "加载计划中…",
+  planViewerEmpty: "暂无计划正文。",
   send: "发送",
   justNow: "刚刚",
   minsAgo: (n) => `${n} 分钟前`,
@@ -1150,9 +1582,10 @@ const zh: RanchMessages = {
   groupInfo: "群资料",
   agentInfo: "Agent 资料",
   topics: "话题",
-  chatsTab: "对话",
+  chatsTab: "历史",
   startNewChat: "新对话",
-  noAgentChatsHint: "和这个 agent 的每一场对话都是独立的。",
+  untitledChat: "未命名对话",
+  noAgentChatsHint: "和这个 agent 的对话都在这里，包括 Studio 等其它渠道。",
   newTopic: "新建话题",
   createTopic: "创建",
   topicTitle: "话题标题",
@@ -1221,7 +1654,17 @@ const zh: RanchMessages = {
   accountProfile: "个人资料",
   accountProfileHint: "登录账号来自身份提供方。目前请在那里修改名称与头像。",
   accountWallet: "钱包",
-  accountWalletHint: "你本人的星币余额。Agent 钱包在各自 Agent 详情里。",
+  accountBilling: "收据与发票",
+  accountWalletHint: "你本人的 Credits 余额。Agent 钱包在各自 Agent 详情里。",
+  accountKeys: "模型额度",
+  accountKeysHint: "Store 买的模型额度。自己买 = 拿到哪都能用，不会自动写进已有机。不是 agent 的 API key。",
+  accountKeysLoadFailed: "无法加载模型额度。",
+  accountKeysEmpty: "还没有模型额度。",
+  accountKeysBuy: "去 Store 买",
+  accountKeysBuyHint: "创建新机时可以代买并写入那一台。自己买完不会自动配到已有机。",
+  accountKeysWrittenTo: "已写入 {name}",
+  accountKeysNotWritten: "未写入任何 agent",
+  accountKeysOpenList: "查看模型额度",
   collabBudget: "协作预算",
   collabBudgetHint: "多智能体协作用的额度油箱。有剩余时自动放行，不用每次点同意。",
   collabAccountCap: "默认额度",
@@ -1236,6 +1679,8 @@ const zh: RanchMessages = {
   accountWalletLoadFailed: "无法加载钱包。",
   accountWalletEmptyTx: "暂无流水。",
   accountWalletRecent: "最近流水",
+  accountWalletAgentWallets: "Agent 钱包",
+  accountWalletNoAgents: "还没有 Agent。",
   accountPlanUsage: "方案与用量",
   accountPlanUsageLoadFailed: "无法加载方案与用量。",
   accountPlanCurrent: "当前方案",
@@ -1271,10 +1716,10 @@ const zh: RanchMessages = {
   accountPlanUpgrade: "订阅",
   accountPlanRenew: "续费",
   accountPlanExpiresOn: "有效期至 {date}",
-  accountPlanBuyBusy: "正在跳转…",
+  accountPlanBuyBusy: "打开收银台…",
   accountPlanBuyConfirmTitle: "前往支付",
   accountPlanBuyConfirmBody:
-    "将支付 {price} 获得 {plan} 30 天。含包对话用量：{pack}。订阅不扣钱包星币。",
+    "将支付 {price} 获得 {plan} 30 天（在 AgentPlanet 用法币结账）。含包对话用量：{pack}。订阅不扣钱包星币。",
   accountPlanBuyConfirmRenewBody:
     "将支付 {price} 为 {plan} 续费 30 天，并刷新含包（{pack}）。订阅不扣钱包星币。",
   accountPlanBuyConfirm: "去支付",
@@ -1286,7 +1731,7 @@ const zh: RanchMessages = {
   accountPlanBuySuccess: "已开通 {plan}，有效至 {date}。",
   accountPlanBuySuccessRenew: "已续费 {plan}，有效至 {date}。",
   accountPlanBuyFailed: "无法打开该方案的收银台。",
-  accountPlanNeedCredits: "星币不足。请先给钱包购买星币，再重试。",
+  accountPlanNeedCredits: "星币不足。请先给钱包充值，再重试。",
   accountPlanOpenWallet: "打开钱包",
   accountPlanOpenCheckout: "去 AgentPlanet 支付",
   accountPlanCheckoutPending: "已打开收银台。支付完成后回到此页，我们会刷新套餐状态。",
@@ -1309,9 +1754,47 @@ const zh: RanchMessages = {
   networkOrgs: "组织",
   comingSoon: "即将支持",
   myAgentsTitle: "我的 Agents",
-  myAgentsEmptyTitle: "还没有认领的 agent",
+  myAgentsEmptyTitle: "还没有 agent",
   myAgentsEmptyBody:
-    "用提示词、链接或二维码接入已有 agent。认领在 Interfaze 完成，不要分享认领 token。",
+    "可以创建一台托管机，或用提示词、链接、二维码接入已有 agent。认领在 Interfaze 完成，不要分享认领 token。",
+  createAgent: "创建",
+  createAgentTitle: "创建托管 agent",
+  createAgentBlurb:
+    "付一台托管机，再选一笔模型额度。钥匙写进你的机器，用你自己的额度。",
+  createAgentName: "名字",
+  createAgentTier: "档位",
+  createAgentServerSection: "服务器",
+  createAgentRuntimeSection: "框架",
+  createAgentRuntimeHermes: "Hermes",
+  createAgentRuntimeOpenclaw: "OpenClaw",
+  createAgentRegionSg: "开在海外机器。",
+  createAgentRegionCn: "开在中国区机器。",
+  createAgentKeySection: "模型额度",
+  createAgentStarter: "入门 · 2C2G / 30 天",
+  createAgentStandard: "标准 · 2C4G / 30 天",
+  createAgentTierCredits: "{n} 星币",
+  createAgentKeyUsd: "${usd} OpenRouter",
+  createAgentMachineLine: "机费 {n} 星币",
+  createAgentKeyQuotaLine: "模型额度 {n} 星币",
+  createAgentKeyFeeLine: "服务费 {n} 星币（{pct}%）",
+  createAgentKeyLine: "起步模型额度 {n} 星币（含 10% 服务费）",
+  createAgentTotalLine: "合计 {n} 星币",
+  createAgentSubmit: "付款并创建",
+  createAgentWorking: "处理中…",
+  createAgentProgress: "正在部署并写入起步 key…",
+  createAgentReady: "已就绪",
+  createAgentPendingPay: "待支付。",
+  createAgentNeedCredits: "余额不足。充值后再点重试支付。",
+  createAgentRecharge: "去充值",
+  createAgentRetryPay: "重试支付",
+  createAgentStartOver: "重新创建",
+  createAgentOrderExpired: "这张结账单过期了。请重新创建。",
+  createAgentRetryBind: "重试绑定",
+  createAgentUnavailable: "这个区域还不能创建。",
+  createAgentSoldOut: "售罄",
+  createAgentSoldOutPage: "暂时售罄。",
+  createAgentFailed: "创建失败。",
+  createAgentSlow: "还在部署。可以关掉这个窗口，就绪后会自动打开对话。",
   myAgentsOfflineHint:
     "此 agent 已注册但离线——请启动保持在线的进程，或检查收信方式是否已配置。",
   myAgentsSectionIdentity: "资料",
@@ -1344,28 +1827,65 @@ const zh: RanchMessages = {
   myAgentsSaveProfile: "保存资料",
   myAgentsProfileSaved: "已保存",
   myAgentsProfileFailed: "保存失败。",
-  myAgentsSectionPricing: "定价",
+  myAgentsSectionPricing: "Agent 定价",
   myAgentsPricingHint:
-    "只需设默认模型与上浮%。结算 = Host Catalog/价包底价 ×（1+上浮%）。",
+    "这是 agent 对外的调用费：该跳底价 ×（1+上浮%）。官方底价 = 同步价 × 1.15；自持钥仍是 Catalog/价包。",
   myAgentsPricingInputLabel: "结算预览 · 输入 USD / 百万",
   myAgentsPricingOutputLabel: "结算预览 · 输出 USD / 百万",
-  myAgentsPricingModelLabel: "默认模型",
+  myAgentsPricingModelLabel: "默认模型 · USD / 百万 token",
   myAgentsPricingModelHint:
     "从这只 agent 已自报的模型里选默认。这里不能增删模型。",
   myAgentsPricingModelsEmpty: "这只 agent 还没有自报任何模型。",
-  myAgentsPricingCreditsLine: "钱包预览（星币 / 百万，向上取整）：入 ${in} / 出 ${out}",
-  myAgentsPricingCreditsNote: "按现网汇率 1 星币 = $0.10。每跳按整数星币结算。",
-  myAgentsPricingRuntimeHint: "Runtime 上报：${model}（自报，未验真）。",
+  myAgentsPricingModelSearch: "搜索",
+  myAgentsPricingOfficialEmpty: "Host Catalog 里没有匹配的 OpenRouter 模型。",
+  myAgentsPricingOptionLine: "${name} · 入 ${in} · 出 ${out}",
+  myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} Credits /百万",
+  myAgentsPricingCreditsNote: "与钱包充值相同：100 Credits = $1。每跳按整数 Credits 结算。",
+  myAgentsPricingRuntimeHint: "Runtime 上报：${model}（只认心跳型号，Host 看不见钥匙）。",
   myAgentsPricingSelfReportNote:
     "Owner 只设默认模型 + 上浮；底价由 Host 维护，智能体不能改写全网结算价。",
   myAgentsInferencePathByo: "自持钥",
   myAgentsInferencePathByoHint:
     "这只 agent 用自己的钥匙打模型。用量自报，平台未核验。官方代打尚未开放。",
-  myAgentsPricingMarkupLabel: "相对 Host 底价上浮",
+  myAgentsInferencePathByoHintReady:
+    "聊天只选模型。「官方 · OpenRouter」是 Interfaze 持钥。这里的 OpenRouter 是写在 agent 上的 Store 钥匙。",
+  myAgentsProviderLabel: "供应商",
+  myAgentsProviderHint:
+    "「官方 · OpenRouter」是 Interfaze 持钥、本 Host 货架。「OpenRouter」是写在 agent 上的 Store/自持钥匙。聊天只选模型，路径由挂牌推断。自持厂家跟心跳走。",
+  myAgentsProviderByo: "我的",
+  myAgentsProviderOfficial: "官方 · OpenRouter",
+  myAgentsProviderMine: "我的",
+  myAgentsProviderAgent: "本 agent",
+  myAgentsProviderOther: "其他",
+  myAgentsProviderOfficialOpenRouter: "官方 · OpenRouter",
+  myAgentsProviderOpenRouter: "OpenRouter",
+  myAgentsOfficialHostHint:
+    "官方跳走 Interfaze 持钥，报价是对外 Catalog，不是 Store 同步价。本 Host 国内卡账户打不了 GPT / Claude / Gemini。机器默认型号仍在 agent 自持钥上。",
+  myAgentsNeedStoreKey:
+    "OpenRouter 需要这只 agent 自己的钥匙。Host 看不见钥匙，只认心跳型号。还没有的话，去 Store 买额度、写入 runtime，再点「刷新状态」。",
+  myAgentsOpenRouterRuntimeRequired:
+    "运行时仍是这只 agent 自己的厂家。Host 看不见钥匙是否装上——请先把 Store 钥匙写进 runtime，再点「刷新状态」。只有它自报了 OpenRouter 型号才能保存。",
+  myAgentsBuyStoreKey: "去 Store 购买",
+  myAgentsRefreshRuntime: "刷新状态",
+  myAgentsListingStaleHint:
+    "挂牌还写着 OpenRouter，但这只 agent 正在用自己的钥匙。那是旧挂牌，不是真的 OpenRouter。只有它自报了 OpenRouter 型号才能保存。",
+  myAgentsOfficialSectionHint:
+    "「官方 · OpenRouter」走 Interfaze 持钥、本 Host 货架。「OpenRouter」是写在 agent 上的 Store/自持钥匙。",
+  myAgentsMineSectionHint:
+    "下列模型走这只 agent 自己的钥匙。供应商跟运行时走。",
+  myAgentsProviderUnlisted: "已授权，但 agent 尚未自报——写进自报之前不会出现在聊天下拉。",
+  myAgentsSaveProviders: "保存供应商",
+  myAgentsProvidersSaved: "供应商已保存",
+  myAgentsProvidersFailed: "保存供应商失败。",
+  myAgentsPricingMarkupLabel: "上浮",
   myAgentsPricingMarkupHint:
-    "结算 = Catalog/价包(模型) ×（1+上浮%）。换模型会保留该比例并重算预览。",
-  myAgentsPricingCatalogLine: "Host 底价（Catalog/价包）：输入 ${in} / 输出 ${out}",
-  myAgentsPricingListingLine: "结算预览（对方付给你）：输入 ${in} / 输出 ${out}",
+    "结算 = 该跳底价 ×（1+上浮%）。官方用对外 Catalog（同步价 × 1.15），自持钥用 Catalog/价包。换模型保留该比例。",
+  myAgentsPricingCatalogLine: "底价 ${in} / ${out}",
+  myAgentsPricingSourceOpenRouter: "参考底价 · OpenRouter",
+  myAgentsPricingSourceTokenHub: "参考底价 · TokenHub",
+  myAgentsPricingSourceHint:
+    "Host Catalog 取自该公示价目。官方结算用对外 Catalog（同步价 × 1.15），不是公示牌价。TokenHub 仍含汇率。",
+  myAgentsPricingListingLine: "入 ${in} · 出 ${out} / 百万",
   myAgentsPricingExampleLine:
     "例：100 万 input → 对方约付你 $${pay}；Host 底价约 $${cost}",
   myAgentsPricingCatalogMissing:
@@ -1374,14 +1894,43 @@ const zh: RanchMessages = {
   myAgentsSavePricing: "保存默认模型与上浮",
   myAgentsPricingSaved: "定价已保存",
   myAgentsPricingFailed: "保存定价失败。",
-  myAgentsSectionPieceSku: "按张",
+  myAgentsSectionPieceSku: "按件",
   myAgentsPieceSkuHint:
-    "图进这场对话即按张成交。0 = 不卖按张。不满意不退；没出货不占。对话 token 仍另结。",
-  myAgentsPieceSkuLabel: "每张星币",
-  myAgentsPieceSkuOff: "0 = 不卖按张。图仍可进这场对话，只是不占钱包。",
-  myAgentsSavePieceSku: "保存按张价",
-  myAgentsPieceSkuSaved: "按张价已保存",
-  myAgentsPieceSkuFailed: "保存按张价失败。",
+    "每个文件进邮箱时贴猎人价签。这里只设封顶：占位按 min(价签, 封顶)。0 = 全不占。对话 token 仍另结。",
+  myAgentsPieceSkuLabel: "单文件封顶 Credits",
+  myAgentsPieceSkuLabelImage: "每张图 Credits（猎人一口价）",
+  myAgentsPieceSkuLabelVideo: "每秒 Credits（猎人一口价）",
+  myAgentsPieceSkuLabelAudio: "每条音频 Credits",
+  myAgentsPieceSkuLabelFile: "每份其他文件 Credits",
+  myAgentsPieceSkuOff: "默认 100000。0 = 附件永不占钱包。货仍可进。",
+  myAgentsPieceSkuNumeric: "填数字（绘图软件 / 目录没价）",
+  myAgentsPieceSkuModel: "生图模型",
+  myAgentsPieceSkuModelVideo: "视频模型",
+  myAgentsPieceSkuNoneHang: "这台机没有目录认得出价的这种模型，填数字。",
+  myAgentsPieceSkuPocketHint: "图 / 视频 / 音频以外的文件。种类由 Host 定，不能自己加。",
+  myAgentsPieceSkuMarkup: "加价 %",
+  myAgentsPieceSkuPreview: "猎人付 ${listed} · 你实收 ${net}",
+  myAgentsPieceSkuPreviewVideo:
+    "读不到文件时长时，猎人付 ${listed}（按 ${seconds} 秒）· 你实收 ${net}",
+  myAgentsPieceSkuSeconds: "读不到时长时按几秒",
+  myAgentsPieceSkuSecondsHint: "文件能读出秒数就按实际秒数成交；读不到才用这一档。1–120。",
+  myAgentsPieceSkuPerSecond: "目录 ${usd} / 秒",
+  myAgentsPieceSkuKindImage: "图",
+  myAgentsPieceSkuKindVideo: "视频",
+  myAgentsPieceSkuKindAudio: "音频",
+  myAgentsPieceSkuKindFile: "其他文件",
+  myAgentsPieceSkuFillCredits: "填 Credits",
+  myAgentsPieceSkuMeterLabel: "计价方式",
+  myAgentsPieceSkuMeterFile: "按件",
+  myAgentsPieceSkuMeterSecond: "按秒",
+  myAgentsPieceSkuMeterNumeric: "你自己填每件 Credits",
+  myAgentsPieceSkuMarketFile: "目录 ${usd} / 张",
+  myAgentsPieceSkuMarketSecond: "目录 ${usd} / 秒",
+  myAgentsSavePieceSku: "保存封顶",
+  myAgentsPieceSkuSaved: "封顶已保存",
+  myAgentsPieceSkuFailed: "保存封顶失败。",
+  myAgentsPricingSyncing: "正在同步到机上…",
+  myAgentsPricingNoAck: "机上没有回执，未保存。",
   myAgentsNameHint: "2–100 字，至少含一个字母",
   myAgentsDescHint: "10–500 字",
   myAgentsDescClearHint: "此处无法清空描述——保持原样，或填写 10 字以上。",
@@ -1431,7 +1980,7 @@ const zh: RanchMessages = {
   myAgentsPolicyOpenHelp: "网络上能发现你的人都可以开聊。",
   myAgentsPolicyAllowlist: "仅白名单",
   myAgentsPolicyAllowlistHelp:
-    "信任的 agent 直达收件箱，其他人进队列。仅限 agent，不含人类用户；也不等于免费对话或免扣星币。",
+    "信任的 agent 直达收件箱，其他人进队列。仅限 agent，不含人类用户；也不等于免费对话或免扣 Credits。",
   myAgentsPolicyClosed: "已关闭",
   myAgentsPolicyClosedHelp: "拒绝入站网络消息。你作为主人仍可在 Interfaze 开聊，但别人不能随意找这个 agent。",
   myAgentsPolicyManifest: "收件箱 / 排队",
@@ -1444,7 +1993,7 @@ const zh: RanchMessages = {
   myAgentsPolicyClosedConfirmLabel: "关闭入站",
   myAgentsAllowlistTitle: "白名单",
   myAgentsAllowlistHint:
-    "ACN 上其他 agent 的信任名单：在名单内→直达收件箱；不在→进队列。不管人类用户，也不代表免费对话或免扣星币。",
+    "ACN 上其他 agent 的信任名单：在名单内→直达收件箱；不在→进队列。不管人类用户，也不代表免费对话或免扣 Credits。",
   myAgentsAllowlistEmpty: "白名单还是空的。",
   myAgentsAllowlistAdd: "添加",
   myAgentsAllowlistRemove: "移除",
@@ -1495,36 +2044,60 @@ const zh: RanchMessages = {
     "此 agent 仍拥有子网。请先在 AgentPlanet 转移或删除这些子网。",
   walletTab: "钱包",
   walletBalance: "星币",
-  walletCreditsHint: "可转账。转入 / 提取只针对星币。",
+  walletCreditsHint: "可转账。充值 / 提取只针对星币。",
   walletApPoints: "AP 积分",
   walletApPointsHint: "平台行为奖励，不可转出。",
   walletOwnerBalance: "你的星币",
-  walletTopup: "转入",
+  walletTopup: "充值",
   walletWithdraw: "提取",
   walletAmount: "金额（星币）",
   walletAmountHint: "整数星币。100 星币 = 1 本区法币单位。",
-  walletTopupDialogTitle: "从钱包转入星币",
+  walletTopupDialogTitle: "充值星币",
   walletWithdrawDialogTitle: "提取星币",
-  walletTopupConfirmLabel: "确认转入",
+  walletTopupConfirmLabel: "确认充值",
   walletWithdrawConfirmLabel: "确认提取",
-  walletTopupOk: "已转入",
+  walletTopupOk: "已充值",
   walletWithdrawOk: "已提取",
   walletFailed: "钱包操作失败。",
-  walletInsufficient: "星币不足，无法完成本次转账。",
-  walletRechargeExternal: "购买星币",
+  walletInsufficient: "Credits 不足，无法完成本次转账。",
+  walletRechargeExternal: "充值",
   walletRechargeExternalHint: "在界面内完成支付，星币直接进入这个钱包。通道费在结账时另列。",
   walletTxTitle: "最近流水",
   walletTxEmpty: "暂无交易记录。",
+  walletTxTypeRewardGrant: "奖励",
+  walletTxTypeWalletTransfer: "转账",
+  walletTxTypeRefund: "退款",
+  walletTxTypeStorePurchase: "商店购买",
+  walletTxTypePlanPurchase: "方案购买",
+  walletTxTypeRecharge: "充值",
+  walletBillingDocs: "收据与发票",
+  walletBillingDocsHint:
+    "每笔收款均可下载英文收据；中国站用户可申请增值税电子普通发票（人工开具，1-3 个工作日内发送到邮箱）。",
+  walletBillingDocsEmpty: "还没有收款记录",
+  walletBillingDocsLoadFailed: "收据记录加载失败",
+  walletDownloadReceipt: "下载收据",
+  walletRequestInvoice: "申请发票",
+  walletInvoiceStatusPending: "开票中",
+  walletInvoiceStatusIssued: "已开具",
+  walletInvoiceTitleTypePersonal: "个人",
+  walletInvoiceTitleTypeBusiness: "企业",
+  walletInvoiceTitlePlaceholder: "发票抬头（姓名或公司全称）",
+  walletInvoiceTaxNoPlaceholder: "税号（统一社会信用代码）",
+  walletInvoiceEmailPlaceholder: "接收发票的邮箱",
+  walletInvoiceSubmit: "提交申请",
+  walletInvoiceSubmitting: "提交中…",
+  walletInvoiceSubmitted: "已提交，发票开具后将发送到你的邮箱",
+  walletInvoiceFailed: "提交失败，请重试",
   walletLoadFailed: "无法加载此 agent 的钱包。",
   spendPolicyTitle: "消费授权",
   spendPolicyHint:
-    "此 agent 可在不询问你的情况下，自主花掉多少星币。适用于所有自主星币流出。",
+    "此 agent 可在不询问你的情况下，自主花掉多少 Credits。适用于所有自主 Credits 流出。",
   spendPolicyEdit: "编辑",
   spendPolicySave: "保存授权",
   spendPolicySaved: "消费授权已更新",
   spendPolicyFailed: "无法更新消费授权。",
   spendPolicyLoadFailed: "无法加载消费授权。",
-  spendPolicyInvalidLimits: "请填写非负整数星币，某项留空表示不限。",
+  spendPolicyInvalidLimits: "请填写非负整数 Credits，某项留空表示不限。",
   spendAutonomyDisabled: "仅主人",
   spendAutonomyDisabledHelp: "agent 不能自主消费。",
   spendAutonomyLimited: "有限额",
@@ -1532,12 +2105,12 @@ const zh: RanchMessages = {
   spendAutonomyUnlimited: "不限额",
   spendAutonomyUnlimitedHelp: "自主消费无上限。",
   spendAutonomyUnlimitedWarn:
-    "不限额意味着 agent 可不经询问花光其星币。除非你信任运行环境，建议用「有限额」。",
+    "不限额意味着 agent 可不经询问花光其 Credits。除非你信任运行环境，建议用「有限额」。",
   spendPerTxLimit: "单笔上限",
   spendWindowLimit: "窗口累计上限",
   spendWindowHours: "窗口（小时）",
   spendReserveFloor: "保留余额",
-  spendReserveFloorHint: "自主消费不得使星币低于此值。",
+  spendReserveFloorHint: "自主消费不得使 Credits 低于此值。",
   spendNoCap: "不限",
   spendWindowSpent: (hours) => `近 ${hours} 小时已花`,
   spendWindowRemaining: "剩余",
@@ -1547,7 +2120,7 @@ const zh: RanchMessages = {
   spendApprovals: "审批",
   spendApprovalsTitle: "消费审批",
   spendApprovalsHint:
-    "超过消费授权额度的支出申请。批准后会立即从星币扣款。",
+    "超过消费授权额度的支出申请。批准后会立即从 Credits 扣款。",
   spendApprovalsEmpty: "暂无待审批的支出申请。",
   spendApprovalsLoadFailed: "无法加载消费审批。",
   spendApprovalsApprove: "批准",

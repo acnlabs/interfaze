@@ -10,6 +10,7 @@
     ".": "./src/index.ts"
   },
   "peerDependencies": {
+    "qrcode.react": "^4.2.0",
     "react": ">=18",
     "react-dom": ">=18"
   },

@@ -7,6 +7,8 @@ import { btnGhost, btnPrimary, colors } from "./styles";
 type Props = {
   allowGroupChat: boolean;
   messages: RanchMessages;
+  showCreateHosted?: boolean;
+  onCreateHosted?: () => void;
   onConnectExisting: () => void;
   onDirect: () => void;
   onGroup: () => void;
@@ -15,6 +17,8 @@ type Props = {
 export function NewComposeMenu({
   allowGroupChat,
   messages: t,
+  showCreateHosted,
+  onCreateHosted,
   onConnectExisting,
   onDirect,
   onGroup,
@@ -58,6 +62,14 @@ export function NewComposeMenu({
       </button>
       {open ? (
         <div role="menu" style={menu}>
+          {showCreateHosted && onCreateHosted ? (
+            <>
+              <button type="button" role="menuitem" style={item} onClick={() => pick(onCreateHosted)}>
+                {t.createAgentTitle}
+              </button>
+              <div aria-hidden style={divider} />
+            </>
+          ) : null}
           <button type="button" role="menuitem" style={item} onClick={() => pick(onConnectExisting)}>
             {t.connectExisting}
           </button>
@@ -97,4 +109,10 @@ const item: CSSProperties = {
   borderRadius: 8,
   padding: "8px 10px",
   fontSize: 13,
+};
+
+const divider: CSSProperties = {
+  height: 1,
+  margin: "4px 6px",
+  background: colors.border,
 };

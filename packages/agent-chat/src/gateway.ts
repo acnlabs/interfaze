@@ -1,10 +1,12 @@
-import type { ChatMessage, ChatParticipant, ChatSummary, PieceHold, ThreadSummary } from "./types";
+import type { ChatMessage, ChatParticipant, ChatSummary, ThreadSummary } from "./types";
+import { normalizeChatMessage } from "./mailbox";
 
 export class ChatGatewayError extends Error {
   constructor(
     public status: number,
     public code: string | null,
     message: string,
+    public jobId?: string | null,
   ) {
     super(message);
     this.name = "ChatGatewayError";
@@ -20,12 +22,14 @@ function joinUrl(base: string, path: string): string {
 async function parseError(res: Response): Promise<ChatGatewayError> {
   let code: string | null = null;
   let message = res.statusText || `HTTP ${res.status}`;
+  let jobId: string | null = null;
   try {
     const body = await res.json();
     const detail = body?.detail;
     if (detail && typeof detail === "object" && !Array.isArray(detail)) {
       code = typeof detail.code === "string" ? detail.code : null;
       message = typeof detail.message === "string" ? detail.message : message;
+      jobId = typeof detail.job_id === "string" ? detail.job_id : null;
     } else if (typeof detail === "string") {
       message = detail;
     } else if (Array.isArray(detail) && detail.length > 0) {
@@ -44,7 +48,7 @@ async function parseError(res: Response): Promise<ChatGatewayError> {
   } catch {
     /* ignore */
   }
-  return new ChatGatewayError(res.status, code, message);
+  return new ChatGatewayError(res.status, code, message, jobId);
 }
 
 export type ChatAgentSearchHit = {
@@ -55,12 +59,132 @@ export type ChatAgentSearchHit = {
   acl_reason?: string | null;
 };
 
+export type AgentCreateTier = {
+  tier_id: "starter" | "standard" | string;
+  product_id: string;
+  machine_credits: number;
+  key_quota_credits?: number;
+  key_fee_credits?: number;
+  key_credits: number;
+  total_credits: number;
+  available?: boolean;
+  reason?: string | null;
+};
+
+export type AgentCreateMachine = {
+  tier_id: "starter" | "standard" | string;
+  product_id: string;
+  machine_credits: number;
+  available?: boolean;
+  reason?: string | null;
+};
+
+export type AgentCreateKey = {
+  product_id: string;
+  or_usd_limit?: number;
+  key_quota_credits: number;
+  key_fee_credits: number;
+  key_credits: number;
+};
+
+export type AgentCreateAvailability = {
+  available: boolean;
+  reason?: string | null;
+  message?: string | null;
+  machines?: AgentCreateMachine[];
+  keys?: AgentCreateKey[];
+  default_key_product_id?: string;
+  tiers: AgentCreateTier[];
+  key_product_id?: string;
+  key_quota_credits?: number;
+  key_fee_credits?: number;
+  key_credits?: number;
+  checkout_mode?: string;
+  region?: string;
+  default_runtime?: string;
+  runtimes?: { id: string; label: string }[];
+};
+
+export type AgentCreateJob = {
+  job_id: string;
+  status:
+    | "pending_payment"
+    | "deploying"
+    | "joining"
+    | "binding"
+    | "ready"
+    | "failed"
+    | string;
+  name?: string;
+  tier_id?: string;
+  key_product_id?: string | null;
+  order_id?: string | null;
+  key_order_id?: string | null;
+  agent_id?: string | null;
+  store_key_written?: boolean;
+  inference_path?: "byo" | string;
+  error?: string | null;
+};
+
 /** Human Credits wallet from GET /api/chat/wallet. */
 export type HumanWallet = {
   wallet_id: string;
   balance: number;
   status?: string | null;
   owner_id?: string | null;
+};
+
+/** Store model quota — never includes plaintext key material. */
+export type AccountKey = {
+  order_id: string;
+  product_id?: string | null;
+  credits_spent: number;
+  status: string;
+  created_at: string;
+  written_agent_id?: string | null;
+  written_agent_name?: string | null;
+};
+
+export type AccountKeyList = {
+  keys: AccountKey[];
+};
+
+/** Unified fiat payment order (receipt/invoice source of truth). */
+export type PaymentOrder = {
+  order_id: string;
+  order_type: "recharge" | "plan" | string;
+  channel: "paypal" | "alipay" | "wechat_wxpay" | "wechat_xpay" | string;
+  face_cents: number;
+  fee_cents: number;
+  charge_cents: number;
+  currency: "USD" | "CNY" | string;
+  credits: number;
+  plan_code?: string | null;
+  status: "created" | "paid" | "failed" | string;
+  created_at: string;
+  paid_at?: string | null;
+};
+
+/** CN fapiao request record (manual fulfillment). */
+export type InvoiceRequestRecord = {
+  request_id: string;
+  payment_order_id: string;
+  title_type: "personal" | "business" | string;
+  title: string;
+  tax_no?: string | null;
+  email: string;
+  status: "pending" | "issued" | "rejected" | string;
+  created_at: string;
+  issued_at?: string | null;
+  order?: PaymentOrder | null;
+};
+
+export type InvoiceRequestCreateBody = {
+  payment_order_id: string;
+  title_type: "personal" | "business";
+  title: string;
+  tax_no?: string | null;
+  email: string;
 };
 
 /** Catalog tier from GET /api/chat/plan-usage. */
@@ -277,16 +401,26 @@ export type MyAgentSummary = {
    */
   runtime_model_id?: string | null;
   /**
-   * Who calls the model. I1 is always ``byo``. Official hops are I2.
+   * Agent-level path stays ``byo``. Chat picks a model; official is Settings (I2).
    */
   inference_path?: "byo" | "official" | string | null;
+  /** Host holds its own inference key. Official provider is hidden until true. */
+  host_inference_ready?: boolean | null;
+  /** Owner-authorized official model ids (Host table). */
+  official_models?: string[] | null;
   /**
-   * Community per-image hang牌 in Credits. 0 / omitted = not selling stills.
-   * Dialog tokens still settle on L2 separately.
+   * Owner ceiling on per-file hunter listed Credits.
+   * 0 disables occupy. Missing = platform max (100000).
    */
-  image_credits?: number | null;
+  cap_credits?: number | null;
   /** Present after a successful delivery PATCH when ACN returns follow-up copy. */
   next_step_hint?: string | null;
+};
+
+export type PieceSku = {
+  agent_id: string;
+  cap_credits: number;
+  network_usage_fee_rate?: number | null;
 };
 
 export type ModelCatalogItem = {
@@ -294,7 +428,58 @@ export type ModelCatalogItem = {
   display_name?: string | null;
   input_price_per_million: number;
   output_price_per_million: number;
+  /** Official Catalog = Host sync × 1.15. Absent on older Hosts. */
+  published_input_price_per_million?: number | null;
+  published_output_price_per_million?: number | null;
   currency?: string;
+  source?: string | null;
+  modality?: string | null;
+  piece_kind?: string | null;
+  piece_unit?: string | null;
+  piece_unit_usd?: number | null;
+};
+
+export const OFFICIAL_PUBLISH_FACTOR = 1.15;
+
+export function officialCatalogRates(row: {
+  input_price_per_million: number;
+  output_price_per_million: number;
+  published_input_price_per_million?: number | null;
+  published_output_price_per_million?: number | null;
+}): { input: number; output: number } | null {
+  const syncIn = Number(row.input_price_per_million);
+  const syncOut = Number(row.output_price_per_million);
+  if (!Number.isFinite(syncIn) || !Number.isFinite(syncOut)) return null;
+  const publishedIn = Number(row.published_input_price_per_million);
+  const publishedOut = Number(row.published_output_price_per_million);
+  const round = (n: number) => Math.round(n * 1e6) / 1e6;
+  return {
+    input: Number.isFinite(publishedIn)
+      ? publishedIn
+      : round(syncIn * OFFICIAL_PUBLISH_FACTOR),
+    output: Number.isFinite(publishedOut)
+      ? publishedOut
+      : round(syncOut * OFFICIAL_PUBLISH_FACTOR),
+  };
+}
+
+/** BYO / Store OpenRouter listing uses Host sync, not official Catalog × 1.15. */
+export function syncCatalogRates(row: {
+  input_price_per_million: number;
+  output_price_per_million: number;
+}): { input: number; output: number } | null {
+  const syncIn = Number(row.input_price_per_million);
+  const syncOut = Number(row.output_price_per_million);
+  if (!Number.isFinite(syncIn) || !Number.isFinite(syncOut)) return null;
+  const round = (n: number) => Math.round(n * 1e6) / 1e6;
+  return { input: round(syncIn), output: round(syncOut) };
+}
+
+export type ModelCatalogList = {
+  items: ModelCatalogItem[];
+  total: number;
+  limit: number;
+  offset: number;
 };
 
 export type GatewayClient = {
@@ -309,9 +494,19 @@ export type GatewayClient = {
   createGroup: (title: string, agentIds: string[]) => Promise<ChatSummary>;
   /** Alias used by Shell. */
   createGroupChat: (title: string, agentIds: string[]) => Promise<ChatSummary>;
+  createLabsTask: (body: {
+    title: string;
+    description: string;
+    deadline_hours: number;
+    reward: string;
+  }) => Promise<{ task_id: string }>;
+  collabMatchTask: (taskId: string) => Promise<unknown>;
+  getLabsTask: (taskId: string) => Promise<{
+    assignee_id?: string | null;
+    status?: string | null;
+  }>;
+  getChatPlan: (chatId: string, planId: string) => Promise<import("./types").ChatPlanArtifact>;
   listMessages: (chatId: string) => Promise<ChatMessage[]>;
-  fetchChatFile: (chatId: string, attachmentId: string) => Promise<Blob>;
-  rejectPieceHold: (chatId: string, holdId: string) => Promise<PieceHold>;
   listParticipants: (chatId: string) => Promise<ChatParticipant[]>;
   sendMessage: (
     chatId: string,
@@ -320,6 +515,7 @@ export type GatewayClient = {
     threadId?: string | null,
     opts?: {
       requested_model?: string | null;
+      requested_provider?: string | null;
       decision_goal?: string | null;
       decision_choice?: string | null;
     },
@@ -341,19 +537,52 @@ export type GatewayClient = {
     listed_model_id?: string | null;
     runtime_model_id?: string | null;
     inference_path?: "byo" | "official" | string | null;
+    host_inference_ready?: boolean;
+    official_models?: string[];
+    official_key_geo?: string;
+    official_region?: string;
+    official_default_model_id?: string | null;
+    providers?: Array<{
+      id: string;
+      kind: "byo" | "official" | string;
+      brand?: string;
+    }>;
     mismatched: boolean;
     markup_percent?: number | null;
     supported_models?: string[];
+    self_reported_models?: string[];
     model_options?: Array<{
       model_id: string;
       is_listing?: boolean;
       is_runtime?: boolean;
+      inference_path?: "byo" | "official" | string | null;
       input_price_per_million?: number;
       output_price_per_million?: number;
       pricing_source?: string;
       free?: boolean;
       priceable?: boolean;
     }>;
+  }>;
+  /** Owner-authorized official models (Host table) + this Host's key geo. */
+  getMyAgentOfficialModels: (agentId: string) => Promise<{
+    agent_id: string;
+    model_ids: string[];
+    host_inference_ready: boolean;
+    official_key_geo?: string;
+    official_region?: string;
+    official_default_model_id?: string | null;
+  }>;
+  /** Replace Owner-authorized official models. Empty = all hops BYO. */
+  updateMyAgentOfficialModels: (
+    agentId: string,
+    modelIds: string[],
+  ) => Promise<{
+    agent_id: string;
+    model_ids: string[];
+    host_inference_ready: boolean;
+    official_key_geo?: string;
+    official_region?: string;
+    official_default_model_id?: string | null;
   }>;
   /** Rotate ACN API key; plaintext returned once — do not log. */
   rotateMyAgentKey: (agentId: string) => Promise<{
@@ -383,16 +612,24 @@ export type GatewayClient = {
       markup_percent?: number;
     },
   ) => Promise<MyAgentSummary>;
-  /** Owner per-image hang牌. 0 = not selling pieces. */
-  getMyAgentPieceSku: (
-    agentId: string,
-  ) => Promise<{ agent_id: string; image_credits: number }>;
+  /** Owner ceiling on per-file hunter tags. 0 disables occupy. */
+  getMyAgentPieceSku: (agentId: string) => Promise<PieceSku>;
   updateMyAgentPieceSku: (
     agentId: string,
-    imageCredits: number,
-  ) => Promise<{ agent_id: string; image_credits: number }>;
+    sku: Partial<Pick<PieceSku, "cap_credits">>,
+  ) => Promise<PieceSku>;
   /** Public Host Model Catalog (L1) row for a model id. */
   getModelCatalogItem: (modelId: string) => Promise<ModelCatalogItem>;
+  /** Public Host Model Catalog list (OpenRouter + host_pack). */
+  listModelCatalog: (opts?: {
+    q?: string;
+    source?: string;
+    active_only?: boolean;
+    official_shelf?: boolean;
+    piece_kind?: string;
+    limit?: number;
+    offset?: number;
+  }) => Promise<ModelCatalogList>;
   /** Switch receive mode: push-to-URL (direct) or agent-pull (relay). */
   updateMyAgentDelivery: (
     agentId: string,
@@ -405,6 +642,17 @@ export type GatewayClient = {
   ) => Promise<MyAgentSummary>;
   /** Signed-in human Credits wallet. */
   getHumanWallet: () => Promise<HumanWallet>;
+  /** Unified fiat payment orders (receipts/invoices source). */
+  listPaymentOrders: () => Promise<PaymentOrder[]>;
+  /** Authenticated receipt PDF download — returns a Blob for save-as. */
+  fetchReceiptPdf: (orderId: string) => Promise<Blob>;
+  /** CN fapiao request (manual fulfillment). */
+  createInvoiceRequest: (body: InvoiceRequestCreateBody) => Promise<{
+    request: InvoiceRequestRecord;
+  }>;
+  listInvoiceRequests: () => Promise<InvoiceRequestRecord[]>;
+  /** Store model-quota orders for this human. Never returns plaintext keys. */
+  getMyKeys: () => Promise<AccountKeyList>;
   listHumanWalletTransactions: (
     page?: number,
     pageSize?: number,
@@ -425,7 +673,6 @@ export type GatewayClient = {
     fiat_currency: string | null;
     period_days: number;
   }>;
-  /** PayPal order for a Global plan. Capture happens after approve redirect. */
   createPaypalOrder: (input: {
     amount: number;
     currency: string;
@@ -434,24 +681,6 @@ export type GatewayClient = {
     plan_code?: string;
     landing_page?: "LOGIN" | "BILLING" | "NO_PREFERENCE";
   }) => Promise<{ order_id: string; approve_url: string | null }>;
-  /** CNY quote for a Global USD plan (no wallet channel fee). */
-  getAlipayPlanQuote: (planCode: string) => Promise<{
-    plan_code: string;
-    amount_usd: number;
-    amount_cny: number;
-    rate: number;
-  }>;
-  /** Alipay page-pay for a Global plan. Capture happens after return_url. */
-  createAlipayOrder: (input: {
-    amount: number;
-    return_url: string;
-    plan_code?: string;
-  }) => Promise<{
-    out_trade_no: string;
-    pay_url: string;
-    amount_cny?: number;
-    plan_code?: string;
-  }>;
   /** Account default collaboration tank size (preference; no lock). */
   getCollabCap: () => Promise<{ cap_credits: number }>;
   putCollabCap: (capCredits: number) => Promise<{ cap_credits: number }>;
@@ -526,6 +755,16 @@ export type GatewayClient = {
   }>;
   /** Cancel pending gift invite for an owned agent. */
   cancelMyAgentTransferInvite: (agentId: string) => Promise<{ success: boolean }>;
+  getAgentCreateAvailability: () => Promise<AgentCreateAvailability>;
+  createAgentJob: (body: {
+    name: string;
+    tier_id: "starter" | "standard";
+    key_product_id?: string;
+    runtime?: "hermes" | "openclaw";
+  }) => Promise<AgentCreateJob>;
+  getAgentCreateJob: (jobId: string) => Promise<AgentCreateJob>;
+  payAgentCreateJob: (jobId: string) => Promise<AgentCreateJob>;
+  retryBindAgentCreateJob: (jobId: string) => Promise<AgentCreateJob>;
   addParticipant: (chatId: string, agentId: string) => Promise<ChatParticipant>;
   removeParticipant: (chatId: string, participantId: string) => Promise<void>;
   updateChat: (chatId: string, patch: { title?: string; description?: string }) => Promise<ChatSummary>;
@@ -585,6 +824,31 @@ export function createGatewayClient(
     createOrGetDirectChat: createDirect,
     createGroup,
     createGroupChat: createGroup,
+    createLabsTask: (body) =>
+      request<{ task_id: string }>("/api/labs/tasks", {
+        method: "POST",
+        body: JSON.stringify({
+          title: body.title,
+          description: body.description,
+          deadline_hours: body.deadline_hours,
+          reward: body.reward,
+          max_participants: 1,
+          publish_post: true,
+        }),
+      }),
+    collabMatchTask: (taskId) =>
+      request<unknown>(`/api/labs/tasks/${encodeURIComponent(taskId)}/collab-match`, {
+        method: "POST",
+        body: "{}",
+      }),
+    getLabsTask: (taskId) =>
+      request<{ assignee_id?: string | null; status?: string | null }>(
+        `/api/labs/tasks/${encodeURIComponent(taskId)}`,
+      ),
+    getChatPlan: (chatId, planId) =>
+      request<import("./types").ChatPlanArtifact>(
+        `/api/chats/${encodeURIComponent(chatId)}/plans/${encodeURIComponent(planId)}`,
+      ),
     searchAgents: async (q = "", limit = 20) => {
       const params = new URLSearchParams();
       if (q.trim()) params.set("q", q.trim());
@@ -610,13 +874,25 @@ export function createGatewayClient(
         listed_model_id?: string | null;
         runtime_model_id?: string | null;
         inference_path?: "byo" | "official" | string | null;
+        host_inference_ready?: boolean;
+        official_models?: string[];
+        providers?: Array<{
+          id: string;
+          kind: "byo" | "official" | string;
+          brand?: string;
+        }>;
+        official_key_geo?: string;
+        official_region?: string;
+        official_default_model_id?: string | null;
         mismatched: boolean;
         markup_percent?: number | null;
         supported_models?: string[];
+        self_reported_models?: string[];
         model_options?: Array<{
           model_id: string;
           is_listing?: boolean;
           is_runtime?: boolean;
+          inference_path?: "byo" | "official" | string | null;
           input_price_per_million?: number;
           output_price_per_million?: number;
           pricing_source?: string;
@@ -624,6 +900,27 @@ export function createGatewayClient(
           priceable?: boolean;
         }>;
       }>(`/api/chat/agents/${encodeURIComponent(agentId)}/model-status`),
+    getMyAgentOfficialModels: (agentId) =>
+      request<{
+        agent_id: string;
+        model_ids: string[];
+        host_inference_ready: boolean;
+        official_key_geo?: string;
+        official_region?: string;
+        official_default_model_id?: string | null;
+      }>(`/api/chat/my-agents/${encodeURIComponent(agentId)}/official-models`),
+    updateMyAgentOfficialModels: (agentId, modelIds) =>
+      request<{
+        agent_id: string;
+        model_ids: string[];
+        host_inference_ready: boolean;
+        official_key_geo?: string;
+        official_region?: string;
+        official_default_model_id?: string | null;
+      }>(`/api/chat/my-agents/${encodeURIComponent(agentId)}/official-models`, {
+        method: "PUT",
+        body: JSON.stringify({ model_ids: modelIds }),
+      }),
     rotateMyAgentKey: (agentId) =>
       request<{
         success: boolean;
@@ -659,15 +956,15 @@ export function createGatewayClient(
         },
       ),
     getMyAgentPieceSku: (agentId) =>
-      request<{ agent_id: string; image_credits: number }>(
+      request<PieceSku>(
         `/api/chat/my-agents/${encodeURIComponent(agentId)}/piece-sku`,
       ),
-    updateMyAgentPieceSku: (agentId, imageCredits) =>
-      request<{ agent_id: string; image_credits: number }>(
+    updateMyAgentPieceSku: (agentId, sku) =>
+      request<PieceSku>(
         `/api/chat/my-agents/${encodeURIComponent(agentId)}/piece-sku`,
         {
           method: "PUT",
-          body: JSON.stringify({ image_credits: imageCredits }),
+          body: JSON.stringify(sku),
         },
       ),
     getModelCatalogItem: (modelId) => {
@@ -677,6 +974,17 @@ export function createGatewayClient(
         .map((p) => encodeURIComponent(p))
         .join("/");
       return request<ModelCatalogItem>(`/api/model-catalog/${path}`);
+    },
+    listModelCatalog: (opts) => {
+      const params = new URLSearchParams();
+      if (opts?.q?.trim()) params.set("q", opts.q.trim());
+      if (opts?.source?.trim()) params.set("source", opts.source.trim());
+      if (opts?.active_only === false) params.set("active_only", "false");
+      if (opts?.official_shelf) params.set("official_shelf", "true");
+      if (opts?.piece_kind?.trim()) params.set("piece_kind", opts.piece_kind.trim());
+      params.set("limit", String(opts?.limit ?? 100));
+      params.set("offset", String(opts?.offset ?? 0));
+      return request<ModelCatalogList>(`/api/model-catalog?${params.toString()}`);
     },
     updateMyAgentDelivery: (agentId, patch) =>
       request<MyAgentSummary>(
@@ -695,6 +1003,82 @@ export function createGatewayClient(
         },
       ),
     getHumanWallet: () => request<HumanWallet>("/api/chat/wallet"),
+    listPaymentOrders: async () => {
+      const data = await request<{ orders?: PaymentOrder[] }>(
+        "/api/users/me/payment-orders",
+      );
+      return data.orders ?? [];
+    },
+    fetchReceiptPdf: async (orderId) => {
+      const token = await getAccessToken();
+      if (!token) {
+        throw new ChatGatewayError(401, "not_authenticated", "Not authenticated");
+      }
+      const res = await fetch(
+        joinUrl(
+          gatewayBaseUrl,
+          `/api/users/me/payment-orders/${encodeURIComponent(orderId)}/receipt.pdf`,
+        ),
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) throw await parseError(res);
+      return await res.blob();
+    },
+    createInvoiceRequest: (body) =>
+      request<{ request: InvoiceRequestRecord }>("/api/users/me/invoice-requests", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    listInvoiceRequests: async () => {
+      const data = await request<{ requests?: InvoiceRequestRecord[] }>(
+        "/api/users/me/invoice-requests",
+      );
+      return data.requests ?? [];
+    },
+    getMyKeys: async () => {
+      try {
+        return await request<AccountKeyList>("/api/chat/my-keys");
+      } catch (err) {
+        if (!(err instanceof ChatGatewayError) || err.status !== 404) throw err;
+        const raw = await request<{
+          orders?: Array<{
+            order_id: string;
+            product_id?: string | null;
+            product_type?: string | null;
+            credits_spent?: number;
+            or_key_label?: string | null;
+            or_key_value?: string | null;
+            status?: string;
+            created_at?: string;
+          }>;
+        }>("/api/store/orders");
+        const keys: AccountKey[] = (raw.orders || [])
+          .filter((row) => {
+            const productType = String(row.product_type || "").toLowerCase();
+            if (productType === "openrouter_key") return true;
+            if (productType) return false;
+            const productId = String(row.product_id || "").toLowerCase();
+            if (
+              productId.includes("openrouter") ||
+              productId.includes("or-key") ||
+              productId.includes("or_key")
+            ) {
+              return true;
+            }
+            return Boolean(row.or_key_label);
+          })
+          .map((row) => ({
+            order_id: row.order_id,
+            product_id: row.product_id ?? null,
+            credits_spent: Number(row.credits_spent || 0),
+            status: row.status || "completed",
+            created_at: row.created_at || "",
+            written_agent_id: null,
+            written_agent_name: null,
+          }));
+        return { keys };
+      }
+    },
     getPlanUsage: () => request<PlanUsage>("/api/chat/plan-usage"),
     putOnDemandLimit: (mode, limitCredits) =>
       request<PlanUsage>("/api/chat/plan-usage/on-demand-limit", {
@@ -731,26 +1115,6 @@ export function createGatewayClient(
           body: JSON.stringify(input),
         },
       ),
-    getAlipayPlanQuote: (planCode) => {
-      const params = new URLSearchParams();
-      params.set("plan_code", planCode);
-      return request<{
-        plan_code: string;
-        amount_usd: number;
-        amount_cny: number;
-        rate: number;
-      }>(`/api/users/me/wallet/alipay/plan-quote?${params}`);
-    },
-    createAlipayOrder: (input) =>
-      request<{
-        out_trade_no: string;
-        pay_url: string;
-        amount_cny?: number;
-        plan_code?: string;
-      }>("/api/users/me/wallet/alipay/create-order", {
-        method: "POST",
-        body: JSON.stringify(input),
-      }),
     listHumanWalletTransactions: (page = 1, pageSize = 20) => {
       const params = new URLSearchParams();
       params.set("page", String(page));
@@ -902,28 +1266,31 @@ export function createGatewayClient(
         `/api/chat/my-agents/${encodeURIComponent(agentId)}/transfer-invite`,
         { method: "DELETE" },
       ),
-    listMessages: (chatId) =>
-      request<ChatMessage[]>(`/api/chats/${encodeURIComponent(chatId)}/messages?limit=50`),
-    fetchChatFile: async (chatId, attachmentId) => {
-      const token = await getAccessToken();
-      if (!token) {
-        throw new ChatGatewayError(401, "not_authenticated", "Not authenticated");
-      }
-      const res = await fetch(
-        joinUrl(
-          gatewayBaseUrl,
-          `/api/chats/${encodeURIComponent(chatId)}/files/${encodeURIComponent(attachmentId)}`,
-        ),
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      if (!res.ok) throw await parseError(res);
-      return await res.blob();
-    },
-    rejectPieceHold: (chatId, holdId) =>
-      request<PieceHold>(
-        `/api/chats/${encodeURIComponent(chatId)}/piece-holds/${encodeURIComponent(holdId)}/reject`,
-        { method: "POST" },
+    getAgentCreateAvailability: () =>
+      request<AgentCreateAvailability>("/api/chat/agent-create-availability"),
+    createAgentJob: (body) =>
+      request<AgentCreateJob>("/api/chat/agent-create-jobs", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    getAgentCreateJob: (jobId) =>
+      request<AgentCreateJob>(`/api/chat/agent-create-jobs/${encodeURIComponent(jobId)}`),
+    payAgentCreateJob: (jobId) =>
+      request<AgentCreateJob>(`/api/chat/agent-create-jobs/${encodeURIComponent(jobId)}/pay`, {
+        method: "POST",
+        body: "{}",
+      }),
+    retryBindAgentCreateJob: (jobId) =>
+      request<AgentCreateJob>(
+        `/api/chat/agent-create-jobs/${encodeURIComponent(jobId)}/retry-bind`,
+        { method: "POST", body: "{}" },
       ),
+    listMessages: async (chatId) => {
+      const rows = await request<ChatMessage[]>(
+        `/api/chats/${encodeURIComponent(chatId)}/messages?limit=50`,
+      );
+      return rows.map((row) => normalizeChatMessage(row));
+    },
     listParticipants: (chatId) =>
       request<ChatParticipant[]>(`/api/chats/${encodeURIComponent(chatId)}/participants`),
     sendMessage: (chatId, content, mentions, threadId, opts) =>
@@ -935,6 +1302,9 @@ export function createGatewayClient(
           thread_id: threadId || null,
           ...(opts?.requested_model
             ? { requested_model: opts.requested_model }
+            : {}),
+          ...(opts?.requested_provider
+            ? { requested_provider: opts.requested_provider }
             : {}),
           ...(opts?.decision_goal
             ? { decision_goal: opts.decision_goal }

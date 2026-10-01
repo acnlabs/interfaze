@@ -19,11 +19,69 @@ import {
 } from "@/lib/auth/cn";
 import { getGatewayBaseUrl } from "@/lib/gateway";
 import { usePaypalPlanReturn } from "@/lib/paypalPlanReturn";
-import { getAgentPlanetBaseUrl, getAppOrigin, getComicLawStudioUrl, isCnRegion } from "@/lib/region";
+import { currentReturnTo, takeOpenAgentId, clearOpenAgentId } from "@/lib/openAgentDeepLink";
+import { getAgentPlanetBaseUrl, getAppOrigin, getComicLawStudioUrl, getEmbodyUrl, isCnRegion } from "@/lib/region";
 
 type ReauthOpts = {
   forceLogin?: boolean;
 };
+
+function readOfficialConversationAgent(): AgentDirectoryItem | null {
+  const id = (process.env.NEXT_PUBLIC_OFFICIAL_CONVERSATION_AGENT_ID || "").trim();
+  if (!id) return null;
+  const lower = id.toLowerCase();
+  if (lower.startsWith("sys:") || lower.startsWith("local:")) return null;
+  const name = (process.env.NEXT_PUBLIC_OFFICIAL_CONVERSATION_AGENT_NAME || "").trim() || null;
+  const bare = id.replace(/^acn:/i, "");
+  return {
+    agent_id: bare,
+    name,
+    description: null,
+    group: "recommended",
+  };
+}
+
+function mergeOfficialConversationAgent(mine: AgentDirectoryItem[]): AgentDirectoryItem[] {
+  const official = readOfficialConversationAgent();
+  if (!official) return mine;
+  const key = official.agent_id.replace(/^acn:/i, "").toLowerCase();
+  if (mine.some((a) => a.agent_id.replace(/^acn:/i, "").toLowerCase() === key)) {
+    return mine;
+  }
+  return [official, ...mine];
+}
+
+function upsertMineDirectoryAgent(
+  prev: AgentDirectoryItem[],
+  agent: { agent_id: string; name?: string | null; description?: string | null },
+): AgentDirectoryItem[] {
+  const key = agent.agent_id.replace(/^acn:/i, "");
+  const idx = prev.findIndex((a) => {
+    if (a.group !== "mine") return false;
+    const id = a.agent_id.replace(/^acn:/i, "");
+    return id === key || a.agent_id === agent.agent_id;
+  });
+  if (idx >= 0) {
+    return prev.map((a, i) =>
+      i === idx
+        ? {
+            ...a,
+            name: agent.name ?? a.name,
+            description: agent.description ?? a.description,
+          }
+        : a,
+    );
+  }
+  return [
+    {
+      agent_id: agent.agent_id,
+      name: agent.name,
+      description: agent.description,
+      group: "mine",
+    },
+    ...prev,
+  ];
+}
 
 /**
  * Interfaze host — ranch-ported shell chrome + Chat Gateway.
@@ -36,43 +94,76 @@ export default function InterfazeChatHost() {
 
 function useAccountDeepLink() {
   const [initialAccountPanel, setInitialAccountPanel] = useState<
-    "plan" | "wallet" | "manage" | "profile" | null
+    "plan" | "wallet" | "keys" | "manage" | "profile" | null
   >(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const sp = new URLSearchParams(window.location.search);
     const account = (sp.get("account") || "").toLowerCase();
-    if (
-      account !== "plan" &&
-      account !== "wallet" &&
-      account !== "manage" &&
-      account !== "profile"
-    ) {
+    const panel =
+      account === "quota" || account === "credit" || account === "keys"
+        ? "keys"
+        : account === "plan" ||
+            account === "wallet" ||
+            account === "manage" ||
+            account === "profile"
+          ? account
+          : null;
+    if (!panel) {
       return;
     }
-    setInitialAccountPanel(account);
+    setInitialAccountPanel(panel);
   }, []);
 
   return initialAccountPanel;
 }
 
-function useClaimedAgentDeepLink() {
-  const [agentId, setAgentId] = useState<string | null>(null);
+function useCreateAgentDeepLink() {
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const sp = new URLSearchParams(window.location.search);
-    const raw = (sp.get("agent") || "").trim();
-    if (!raw) return;
-    setAgentId(raw);
-    sp.delete("agent");
+    if (sp.get("create") !== "1") return;
+    setOpen(true);
+    sp.delete("create");
     const q = sp.toString();
     window.history.replaceState(
       null,
       "",
       q ? `${window.location.pathname}?${q}` : window.location.pathname,
     );
+  }, []);
+
+  return open;
+}
+
+function useClaimedAgentDeepLink() {
+  const [agentId, setAgentId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const raw = takeOpenAgentId();
+    if (!raw) return;
+    setAgentId(raw);
+  }, []);
+
+  useEffect(() => {
+    const onOpened = () => {
+      clearOpenAgentId();
+      if (typeof window === "undefined") return;
+      const sp = new URLSearchParams(window.location.search);
+      if (!sp.has("agent")) return;
+      sp.delete("agent");
+      const q = sp.toString();
+      window.history.replaceState(
+        null,
+        "",
+        q ? `${window.location.pathname}?${q}` : window.location.pathname,
+      );
+    };
+    window.addEventListener("acnlabs:agent-chat:initial-opened", onOpened);
+    return () => window.removeEventListener("acnlabs:agent-chat:initial-opened", onOpened);
   }, []);
 
   return agentId;
@@ -84,6 +175,7 @@ function CnChatHost() {
   const [sessionUser, setSessionUser] = useState(() => getCnSessionUser());
   const initialAccountPanel = useAccountDeepLink();
   const initialOpenAgentId = useClaimedAgentDeepLink();
+  const initialCreateAgent = useCreateAgentDeepLink();
   const reauthStarted = useRef(false);
 
   const tokenGetter = useCallback(async () => getCnSessionToken(), []);
@@ -96,9 +188,7 @@ function CnChatHost() {
   const handleReauth = useCallback((_opts?: ReauthOpts) => {
     if (reauthStarted.current) return;
     reauthStarted.current = true;
-    startWeChatLogin(
-      typeof window !== "undefined" ? window.location.pathname + window.location.search : "/",
-    );
+    startWeChatLogin(currentReturnTo());
   }, []);
 
   useEffect(() => {
@@ -139,7 +229,7 @@ function CnChatHost() {
       } catch {
         /* best-effort */
       }
-      if (!cancelled) setDirectoryAgents(mine);
+      if (!cancelled) setDirectoryAgents(mergeOfficialConversationAgent(mine));
     })();
     return () => {
       cancelled = true;
@@ -162,6 +252,7 @@ function CnChatHost() {
       agentPlanetBaseUrl={getAgentPlanetBaseUrl()}
       interfazeBaseUrl={getAppOrigin()}
       studioBaseUrl={getComicLawStudioUrl()}
+      embodyBaseUrl={getEmbodyUrl()}
       account={
         sessionUser
           ? {
@@ -173,26 +264,17 @@ function CnChatHost() {
       }
       initialAccountPanel={initialAccountPanel}
       initialOpenAgentId={initialOpenAgentId}
+      initialCreateAgent={initialCreateAgent}
       onLogout={handleLogout}
       onReauth={() => handleReauth({ forceLogin: true })}
       onOwnedAgentUpdated={(agent) => {
-        setDirectoryAgents((prev) =>
-          prev.map((a) =>
-            a.agent_id === agent.agent_id ||
-            a.agent_id.replace(/^acn:/i, "") === agent.agent_id.replace(/^acn:/i, "")
-              ? {
-                  ...a,
-                  name: agent.name ?? a.name,
-                  description: agent.description ?? a.description,
-                }
-              : a,
-          ),
-        );
+        setDirectoryAgents((prev) => upsertMineDirectoryAgent(prev, agent));
       }}
       onOwnedAgentRemoved={(agentId) => {
         const bare = agentId.replace(/^acn:/i, "");
         setDirectoryAgents((prev) =>
           prev.filter((a) => {
+            if (a.group !== "mine") return true;
             const id = a.agent_id.replace(/^acn:/i, "");
             return id !== bare && a.agent_id !== agentId;
           }),
@@ -208,6 +290,7 @@ function GlobalChatHost() {
   const [directoryAgents, setDirectoryAgents] = useState<AgentDirectoryItem[]>([]);
   const deepLinkPanel = useAccountDeepLink();
   const initialOpenAgentId = useClaimedAgentDeepLink();
+  const initialCreateAgent = useCreateAgentDeepLink();
   const reauthStarted = useRef(false);
 
   useEffect(() => {
@@ -236,7 +319,7 @@ function GlobalChatHost() {
           ...(forceLogin ? { prompt: "login" as const } : {}),
         },
         appState: {
-          returnTo: typeof window !== "undefined" ? window.location.pathname + window.location.search : "/",
+          returnTo: currentReturnTo(),
         },
       });
     },
@@ -336,7 +419,7 @@ function GlobalChatHost() {
         /* best-effort */
       }
 
-      if (!cancelled) setDirectoryAgents(mine);
+      if (!cancelled) setDirectoryAgents(mergeOfficialConversationAgent(mine));
     })();
 
     return () => {
@@ -358,6 +441,7 @@ function GlobalChatHost() {
       agentPlanetBaseUrl={getAgentPlanetBaseUrl()}
       interfazeBaseUrl={getAppOrigin()}
       studioBaseUrl={getComicLawStudioUrl()}
+      embodyBaseUrl={getEmbodyUrl()}
       account={
         isAuthenticated && user
           ? {
@@ -369,6 +453,7 @@ function GlobalChatHost() {
       }
       initialAccountPanel={initialAccountPanel}
       initialOpenAgentId={initialOpenAgentId}
+      initialCreateAgent={initialCreateAgent}
       onLogout={isAuthenticated ? handleLogout : undefined}
       onReauth={
         isAuthenticated
@@ -378,23 +463,13 @@ function GlobalChatHost() {
           : undefined
       }
       onOwnedAgentUpdated={(agent) => {
-        setDirectoryAgents((prev) =>
-          prev.map((a) =>
-            a.agent_id === agent.agent_id ||
-            a.agent_id.replace(/^acn:/i, "") === agent.agent_id.replace(/^acn:/i, "")
-              ? {
-                  ...a,
-                  name: agent.name ?? a.name,
-                  description: agent.description ?? a.description,
-                }
-              : a,
-          ),
-        );
+        setDirectoryAgents((prev) => upsertMineDirectoryAgent(prev, agent));
       }}
       onOwnedAgentRemoved={(agentId) => {
         const bare = agentId.replace(/^acn:/i, "");
         setDirectoryAgents((prev) =>
           prev.filter((a) => {
+            if (a.group !== "mine") return true;
             const id = a.agent_id.replace(/^acn:/i, "");
             return id !== bare && a.agent_id !== agentId;
           }),

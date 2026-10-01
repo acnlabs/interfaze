@@ -1,4 +1,4 @@
-/** Conversation-orchestrator callees on agent writeback metadata (D12). */
+/** Conversation-orchestrator metadata on agent writeback (D12 / D9). */
 
 export type OrchestrationCallee = {
   agent_id: string;
@@ -7,8 +7,23 @@ export type OrchestrationCallee = {
   name?: string;
 };
 
+export type OrchestrationProposeTask = {
+  title: string;
+  description?: string;
+  reward?: string;
+  deadline_hours?: number;
+};
+
+export type OrchestrationProposeGroup = {
+  agent_ids: string[];
+  title?: string;
+  summary?: string;
+  existing_chat_id?: string;
+};
+
 const MAX_CALLEES = 8;
 const MAX_DECIDE = 8;
+const MAX_SUMMARY = 4000;
 const STATUS = new Set(["accepted", "sent", "completed", "failed"]);
 const ID_RE = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
 
@@ -21,6 +36,16 @@ function asRecord(v: unknown): Record<string, unknown> | null {
 function bareAgentId(raw: string): string {
   const t = raw.trim();
   return t.toLowerCase().startsWith("acn:") ? t.slice(4).trim() : t;
+}
+
+function isDroppedAgentId(id: string): boolean {
+  const lowered = id.toLowerCase();
+  return (
+    !id ||
+    id.length > 128 ||
+    lowered.startsWith("local:") ||
+    lowered.startsWith("sys:")
+  );
 }
 
 export function calleesFromMetadata(meta: unknown): OrchestrationCallee[] {
@@ -36,9 +61,8 @@ export function calleesFromMetadata(meta: unknown): OrchestrationCallee[] {
     const rawId = row.agent_id ?? row.to;
     if (typeof rawId !== "string") continue;
     const id = bareAgentId(rawId);
-    if (!id || id.length > 128) continue;
+    if (isDroppedAgentId(id)) continue;
     const lowered = id.toLowerCase();
-    if (lowered.startsWith("local:") || lowered.startsWith("sys:")) continue;
     if (seen.has(lowered)) continue;
     seen.add(lowered);
     const callee: OrchestrationCallee = { agent_id: id };
@@ -59,6 +83,112 @@ export function calleesFromMetadata(meta: unknown): OrchestrationCallee[] {
     out.push(callee);
   }
   return out;
+}
+
+export function proposeGroupFromMetadata(meta: unknown): OrchestrationProposeGroup | null {
+  const rec = asRecord(meta);
+  const orch = rec ? asRecord(rec.orchestration) : null;
+  const raw = orch ? asRecord(orch.propose_group) : null;
+  if (!raw) return null;
+  const idsRaw = raw.agent_ids ?? raw.participants;
+  const agent_ids: string[] = [];
+  const seen = new Set<string>();
+  if (Array.isArray(idsRaw)) {
+    for (const item of idsRaw) {
+      if (agent_ids.length >= MAX_CALLEES) break;
+      const row = asRecord(item);
+      const rawId = row ? row.agent_id ?? row.id ?? row.to : item;
+      if (typeof rawId !== "string") continue;
+      const id = bareAgentId(rawId);
+      if (isDroppedAgentId(id)) continue;
+      const lowered = id.toLowerCase();
+      if (seen.has(lowered)) continue;
+      seen.add(lowered);
+      agent_ids.push(id);
+    }
+  }
+  const title =
+    typeof raw.title === "string" ? raw.title.trim().slice(0, 200) : "";
+  const summary =
+    typeof raw.summary === "string" ? raw.summary.trim().slice(0, MAX_SUMMARY) : "";
+  const existingRaw =
+    typeof raw.existing_chat_id === "string"
+      ? raw.existing_chat_id.trim().slice(0, 64)
+      : "";
+  const existing =
+    existingRaw && !isDroppedAgentId(existingRaw) ? existingRaw : "";
+  if (!agent_ids.length && !existing) return null;
+  const out: OrchestrationProposeGroup = { agent_ids };
+  if (title) out.title = title;
+  if (summary) out.summary = summary;
+  if (existing) out.existing_chat_id = existing;
+  return out;
+}
+
+export function proposeTaskFromMetadata(meta: unknown): OrchestrationProposeTask | null {
+  const rec = asRecord(meta);
+  const orch = rec ? asRecord(rec.orchestration) : null;
+  const raw = orch ? asRecord(orch.propose_task) : null;
+  if (!raw || typeof raw.title !== "string") return null;
+  const title = raw.title.trim().slice(0, 200);
+  if (!title) return null;
+  const out: OrchestrationProposeTask = { title };
+  let rewardOk = false;
+  if (typeof raw.description === "string") {
+    const description = raw.description.trim().slice(0, 2000);
+    if (description) out.description = description;
+  }
+  const rewardRaw =
+    typeof raw.reward === "number" && Number.isFinite(raw.reward)
+      ? String(raw.reward)
+      : raw.reward;
+  if (typeof rewardRaw === "string") {
+    const reward = rewardRaw.trim().slice(0, 32);
+    const amount = Number(reward);
+    if (reward && Number.isFinite(amount) && amount >= 0 && amount <= 1_000_000) {
+      out.reward = reward;
+      rewardOk = true;
+    }
+  }
+  if (!rewardOk) return null;
+  if (typeof raw.deadline_hours === "number" && Number.isFinite(raw.deadline_hours)) {
+    const hours = Math.trunc(raw.deadline_hours);
+    if (hours >= 1 && hours <= 2160) out.deadline_hours = hours;
+  }
+  return out;
+}
+
+/** Labs / ACN reject a job description shorter than 10 characters. */
+const LABS_DESCRIPTION_MIN = 10;
+const LABS_DESCRIPTION_MAX = 2000;
+const LABS_DESCRIPTION_PAD = "（这条说明来自聊天）";
+
+export function labsTaskDescription(title: string, description?: string): string {
+  const desc = (description ?? "").trim();
+  const name = title.trim();
+  let text = desc || name;
+  if (desc && name && text.length < LABS_DESCRIPTION_MIN && !desc.includes(name)) {
+    text = `${desc} ${name}`.trim();
+  }
+  if (text.length < LABS_DESCRIPTION_MIN) text = `${text}${LABS_DESCRIPTION_PAD}`;
+  return text.slice(0, LABS_DESCRIPTION_MAX);
+}
+
+const TAKEN_TASK_STATUS = new Set([
+  "assigned",
+  "in_progress",
+  "submitted",
+  "in_review",
+  "completed",
+]);
+
+export function labsTaskTaken(
+  task: { assignee_id?: string | null; status?: string | null } | null | undefined,
+): boolean {
+  if (!task) return false;
+  if (typeof task.assignee_id === "string" && task.assignee_id.trim()) return true;
+  const status = typeof task.status === "string" ? task.status.trim().toLowerCase() : "";
+  return TAKEN_TASK_STATUS.has(status);
 }
 
 export type DecideOption = { id: string; label: string };
@@ -127,6 +257,49 @@ export function decideFromMetadata(meta: unknown): MessageDecide | null {
       const by = typeof applied.by === "string" ? applied.by.trim() : "";
       out.applied = { option_id: optionId, by: by || undefined };
     }
+  }
+  return out;
+}
+
+export type MessagePlan = {
+  title: string;
+  summary?: string;
+  body?: string;
+  plan_id?: string;
+  source_message_id?: string;
+  message_id?: string;
+  id?: string;
+};
+
+export function planFromMetadata(meta: unknown): MessagePlan | null {
+  const rec = asRecord(meta);
+  const orch = rec ? asRecord(rec.orchestration) : null;
+  const plan = orch ? asRecord(orch.plan) : null;
+  if (!plan) return null;
+  const titleRaw = typeof plan.title === "string" ? plan.title : typeof plan.goal === "string" ? plan.goal : "";
+  const title = titleRaw.trim().replace(/\s+/g, " ").slice(0, 200);
+  if (!title) return null;
+  const out: MessagePlan = { title };
+  if (typeof plan.summary === "string") {
+    const summary = plan.summary.trim().replace(/\s+/g, " ").slice(0, 4000);
+    if (summary) out.summary = summary;
+  }
+  if (typeof plan.plan_id === "string" && plan.plan_id.trim()) {
+    out.plan_id = plan.plan_id.trim().slice(0, 64);
+  }
+  if (typeof plan.body === "string") {
+    const body = plan.body.trim().slice(0, 32000);
+    if (body) out.body = body;
+  }
+  if (typeof plan.source_message_id === "string" && plan.source_message_id.trim()) {
+    out.source_message_id = plan.source_message_id.trim().slice(0, 64);
+  }
+  if (typeof plan.message_id === "string" && plan.message_id.trim()) {
+    out.message_id = plan.message_id.trim().slice(0, 64);
+  }
+  if (typeof plan.id === "string" && plan.id.trim()) {
+    out.id = plan.id.trim().slice(0, 64);
+    if (!out.plan_id) out.plan_id = out.id;
   }
   return out;
 }

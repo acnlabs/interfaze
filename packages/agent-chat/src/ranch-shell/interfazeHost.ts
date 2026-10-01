@@ -30,6 +30,11 @@ export function prefersInPanelCheckout(urlOrOrigin: string): boolean {
   }
 }
 
+/** True when the given origin/URL is the CN site (interfaze.acnlabs.cn). */
+export function isCnInterfazeOrigin(urlOrOrigin: string): boolean {
+  return prefersInPanelCheckout(urlOrOrigin);
+}
+
 export function buildWalletCheckoutUrl(opts?: {
   interfazeBaseUrl?: string;
   embed?: boolean;

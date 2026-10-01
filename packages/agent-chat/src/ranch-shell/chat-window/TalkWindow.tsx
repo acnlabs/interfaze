@@ -8,18 +8,19 @@ export function TalkWindow({
   chatId,
   studioBaseUrl,
   payload,
-  t,
+  kind = "talk",
   onExpired,
+  t,
 }: {
   chatId: string;
   studioBaseUrl: string;
   payload: TalkWindowPayload;
-  t: RanchMessages;
+  kind?: "talk" | "body";
   onExpired?: () => void;
+  t: RanchMessages;
 }) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
-  const targetOrigin = studioOriginOf(studioBaseUrl);
-  const frameSrc = useMemo(
+  const src = useMemo(
     () =>
       talkHostSrc({
         studioBaseUrl,
@@ -27,10 +28,9 @@ export function TalkWindow({
         chatId,
         hostToken: payload.hostToken,
       }),
-    // hostToken refresh is postMessage-only; changing src remounts the stage.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- first token only
     [studioBaseUrl, payload.hostPath, chatId],
   );
+  const targetOrigin = studioOriginOf(studioBaseUrl);
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -48,20 +48,22 @@ export function TalkWindow({
 
   useEffect(() => {
     if (!targetOrigin || !onExpired) return;
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== targetOrigin) return;
-      const data = event.data as { type?: string } | null;
-      if (data?.type === "talk:expired") onExpired();
+    const onMessage = (ev: MessageEvent) => {
+      if (ev.origin !== targetOrigin) return;
+      const data = ev.data as { type?: string; chatId?: string };
+      if (data?.type !== "talk:expired") return;
+      if (typeof data.chatId === "string" && data.chatId && data.chatId !== chatId) return;
+      onExpired();
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [onExpired, targetOrigin]);
+  }, [chatId, onExpired, targetOrigin]);
 
   return (
     <iframe
       ref={frameRef}
-      title={payload.name || t.faceChat}
-      src={frameSrc}
+      title={payload.name || (kind === "body" ? t.bodyChat : t.faceChat)}
+      src={src}
       allow="autoplay; fullscreen"
       referrerPolicy="strict-origin-when-cross-origin"
       style={{
@@ -69,7 +71,7 @@ export function TalkWindow({
         width: "100%",
         height: "100%",
         border: "none",
-        background: "#09090b",
+        background: kind === "body" ? "#f4f1ea" : "#09090b",
       }}
     />
   );

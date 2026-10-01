@@ -13,6 +13,8 @@ import {
 import {
   ChatGatewayError,
   createGatewayClient,
+  officialCatalogRates,
+  syncCatalogRates,
   type GatewayClient,
   type MyAgentSummary,
 } from "../gateway";
@@ -25,6 +27,10 @@ import type {
   ThreadSummary,
 } from "../types";
 import { connectChatSocket, type ChatSocket } from "../ws";
+import { MailboxThumbs } from "../MailboxThumbs";
+import { parseMessageAttachments } from "../mailbox";
+import { calleesFromMetadata, decideFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, planFromMetadata, proposeGroupFromMetadata, proposeTaskFromMetadata, type MessageDecide, type MessagePlan, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
+import { settleQueuedDelivery } from "./settleQueuedDelivery";
 import {
   AgentOwnerSettings,
   deliveryLabel,
@@ -33,10 +39,12 @@ import {
 } from "./AgentOwnerSettings";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import {
+  AccountKeysPanel,
   AccountManagePanel,
   AccountPlanUsagePanel,
   AccountProfilePanel,
   AccountWalletPanel,
+  AccountBillingPanel,
   ChatCollabBudgetSection,
 } from "./AccountPanels";
 import {
@@ -45,11 +53,19 @@ import {
   writeAccountPanelToUrl,
   type AccountDeepLinkPanel,
 } from "./accountDeepLink";
+import { CreateAgentDialog } from "./CreateAgentDialog";
+import {
+  readPendingCreateJobId,
+  watchAgentCreateJob,
+  writePendingCreateJobId,
+} from "./watchAgentCreateJob";
 import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
 import { NewComposeMenu } from "./NewComposeMenu";
+import { ConnectAgentModal } from "./ConnectAgentModal";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { copyConnectPromptWithInvite, openJoinLanding } from "./connectPrompt";
+import { copyConnectPromptWithInvite } from "./connectPrompt";
+import { officialShelfAllows, officialV0SupportsModel } from "./officialV0";
 import {
   RANCH_LOCALE_OPTIONS,
   ranchMessages,
@@ -60,22 +76,9 @@ import {
   type RanchMessages,
 } from "./i18n";
 import { btnGhost, btnIcon, btnPrimary, colors, inputStyle, shellRoot } from "./styles";
-import { calleesFromMetadata, decideFromMetadata, orchLine, type OrchestrationCallee, type MessageDecide } from "../orchestration";
-import { MailboxPiece } from "./MailboxPiece";
 import { ChatWindowPane } from "./chat-window/ChatWindowPane";
-import {
-  mergePersistedChatWindows,
-  readPersistedChatWindows,
-  readPersistedPaneOpen,
-  writePersistedChatWindows,
-} from "./chat-window/persist";
-import { openStudioTalk, talkOpenErrorMessage } from "./chat-window/studioTalk";
-import {
-  TALK_REFRESH_LEAD_MS,
-  talkTokenFresh,
-  talkWindowFromOpen,
-  type ChatWindow,
-} from "./chat-window/types";
+import { openEmbodyHost, openStudioTalk } from "./chat-window/studioTalk";
+import { bodyIdFromHostPath, type ChatWindow, type ChatWindowKind } from "./chat-window/types";
 
 function formatRelativeTime(iso: string | null | undefined, t: RanchMessages): string {
   if (!iso) return "";
@@ -109,6 +112,13 @@ function agentIdKey(agentId?: string | null): string {
   return (agentId || "").replace(/^acn:/i, "").trim().toLowerCase();
 }
 
+function isAcnCatalogAgentId(agentId?: string | null): boolean {
+  const id = (agentId || "").trim();
+  if (!id) return false;
+  const lower = id.toLowerCase();
+  return !lower.startsWith("sys:") && !lower.startsWith("local:");
+}
+
 function isAgentInGroup(agentId: string, names: Record<string, string>): boolean {
   const key = agentIdKey(agentId);
   if (!key) return false;
@@ -120,12 +130,12 @@ function agentStatusDotColor(status?: string | null): string | null {
   if (!status) return null;
   switch (status.toLowerCase()) {
     case "active":
-      return colors.online; // ACN online + recent delivery ok
+      return "#22c55e"; // green-500 — ACN online + recent delivery ok
     case "busy":
-      return colors.busy; // ACN busy, or online but undeliverable
+      return "#eab308"; // yellow-500 — ACN busy, or online but undeliverable
     case "idle":
     case "offline":
-      return colors.offline; // ACN not listening
+      return "#64748b"; // slate-500 — ACN not listening
     default:
       return null;
   }
@@ -203,23 +213,67 @@ function chatActivityTs(c: ChatSummary): number {
   return Number.isNaN(ts) ? 0 : ts;
 }
 
-function normalizeOrigin(origin: string): string {
-  return origin.replace(/\/+$/, "").toLowerCase();
+function isGlobalDirect(c: ChatSummary): boolean {
+  return !c.embed?.context;
 }
 
-/** Interfaze inbox: global 1:1 + this host's keyed chats. Hide Studio/Play threads. */
-function isHostVisibleDirect(c: ChatSummary, hostOrigins: string[]): boolean {
-  if (isGroupChat(c)) return true;
-  const context = c.embed?.context;
-  if (!context) return true;
-  const origin = normalizeOrigin(c.embed?.origin || "");
-  const allowed = new Set(hostOrigins.map(normalizeOrigin).filter(Boolean));
-  return allowed.has(origin);
+function hostCaption(origin?: string | null): string {
+  const raw = (origin || "").trim();
+  if (!raw) return "";
+  try {
+    return new URL(raw).host;
+  } catch {
+    return raw.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  }
 }
 
 function conversationLabel(c: ChatSummary, t: RanchMessages): string {
-  const headline = (c.embed?.headline || c.last_message_content || "").trim();
-  return headline || t.startNewChat;
+  const headline = (c.embed?.headline || "").trim();
+  if (headline) return headline;
+  const title = (c.title || "").trim();
+  if (title) return title;
+  return c.last_message_at || c.created_at ? t.untitledChat : t.startNewChat;
+}
+
+/** D10: host-named group, then a group that already has the proposed agents, then same title. */
+function preferredExistingGroup(
+  chats: ChatSummary[],
+  propose: OrchestrationProposeGroup,
+  groupAgents: Record<string, string[]>,
+): ChatSummary | undefined {
+  const groups = chats.filter(isGroupChat);
+  if (propose.existing_chat_id) {
+    const named = groups.find((c) => c.chat_id === propose.existing_chat_id);
+    if (named) return named;
+  }
+  const wanted = [
+    ...new Set(propose.agent_ids.map((id) => agentIdKey(id)).filter(Boolean)),
+  ];
+  if (wanted.length) {
+    const ranked = groups
+      .slice()
+      .sort((a, b) => chatActivityTs(b) - chatActivityTs(a));
+    for (const g of ranked) {
+      const have = new Set((groupAgents[g.chat_id] || []).map(agentIdKey));
+      if (wanted.every((id) => have.has(id))) return g;
+    }
+  }
+  const title = propose.title?.trim();
+  if (!title) return undefined;
+  return groups.find((g) => (g.title || "").trim() === title);
+}
+
+/** ChatGPT-style: a row exists only after someone has spoken. */
+function chatHasStarted(c: ChatSummary): boolean {
+  if ((c.embed?.headline || "").trim()) return true;
+  if ((c.last_message_content || "").trim()) return true;
+  return Boolean(c.last_message_at);
+}
+
+function agentIsMine(agentId: string | null | undefined, mineIds: string[]): boolean {
+  const key = agentIdKey(agentId);
+  if (!key) return false;
+  return mineIds.some((id) => agentIdKey(id) === key);
 }
 
 /** Sidebar is one row per agent (latest chat). Groups stay one row each. */
@@ -278,7 +332,7 @@ function DeliveryStatusIcon({
     height: 14,
   };
   const stroke =
-    delivery === "pending" || delivery === "sent" ? colors.muted : colors.mention;
+    delivery === "pending" || delivery === "sent" ? colors.muted : "#93c5fd";
   const title =
     delivery === "pending"
       ? t.sending
@@ -369,6 +423,89 @@ function shortModelLabel(modelId: string | null | undefined): string {
   return slash >= 0 ? s.slice(slash + 1) : s;
 }
 
+function formatUsdPerMillion(n: number): string {
+  return `$${Number(n.toPrecision(6))}`;
+}
+
+function filterComposerModels(ids: string[], query: string): string[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return ids;
+  return ids.filter((id) => {
+    const short = shortModelLabel(id).toLowerCase();
+    return id.toLowerCase().includes(q) || short.includes(q);
+  });
+}
+
+function applyMarkupUsd(base: number, markupPercent: number | null | undefined): number {
+  const markup =
+    typeof markupPercent === "number" && Number.isFinite(markupPercent) && markupPercent >= 0
+      ? markupPercent
+      : 0;
+  return base * (1 + markup / 100);
+}
+
+function storeOpenRouterUrl(base?: string): string {
+  return `${(base || "https://agentplanet.org").replace(/\/+$/, "")}/store/openrouter`;
+}
+
+function shouldOfferStoreOpenRouterKey(
+  code: string | null | undefined,
+  message: string,
+): boolean {
+  if (code === "insufficient_credits") return false;
+  if (code === "official_not_authorized" || code === "official_model_unsupported") {
+    return false;
+  }
+  const blob = `${code || ""} ${message || ""}`;
+  return /invalid[- ]api[- ]key|missing[- ]api[- ]key|no api key|openrouter.*(?:key|credit|quota)|api key not/i.test(
+    blob,
+  );
+}
+
+function requestedModelForSend(
+  selected: string | null,
+  listed: string | null,
+  official: boolean,
+  keyGeo: string | null | undefined,
+): string | null {
+  if (
+    official &&
+    (keyGeo || "").trim() &&
+    selected &&
+    !officialShelfAllows(selected, keyGeo)
+  ) {
+    return listed;
+  }
+  return selected;
+}
+
+function sendFailureCopy(
+  e: unknown,
+  t: RanchMessages,
+): { text: string; offerStoreKey: boolean } {
+  if (!(e instanceof ChatGatewayError)) return { text: t.sendFailed, offerStoreKey: false };
+  const offerStoreKey = shouldOfferStoreOpenRouterKey(e.code, e.message);
+  const text =
+    e.code === "agent_unreachable"
+      ? t.unreachable
+      : e.code === "rate_limited"
+        ? t.rateLimited
+        : e.code === "acn_unavailable"
+          ? t.billingUnavailable
+          : e.code === "unsupported_model"
+            ? t.unsupportedModel
+            : e.code === "official_not_authorized"
+              ? t.officialNotAuthorized
+              : e.code === "official_model_unsupported"
+                ? t.officialModelUnsupported
+                : offerStoreKey
+                  ? t.needOpenRouterKey
+                  : e.code === "model_pricing_unavailable"
+                    ? t.modelPricingUnavailable
+                    : e.message || t.sendFailed;
+  return { text, offerStoreKey };
+}
+
 /** Bubble footer: drop provider prefix, then cap length so in/out stay visible. */
 function compactModelLabel(modelId: string | null | undefined, max = 16): string {
   const bare = shortModelLabel(modelId);
@@ -376,33 +513,180 @@ function compactModelLabel(modelId: string | null | undefined, max = 16): string
   return `${bare.slice(0, Math.max(1, max - 1))}…`;
 }
 
-/** Case-insensitive; ``provider/name`` equals bare ``name`` (Host settle rule). */
+/** Case-insensitive; ``provider/name`` equals bare ``name``. Different vendors stay distinct SKUs. */
 function sameModelId(left: string | null | undefined, right: string | null | undefined): boolean {
   const a = (left || "").trim().toLowerCase();
   const b = (right || "").trim().toLowerCase();
   if (!a || !b) return false;
   if (a === b) return true;
+  const aSlash = a.includes("/");
+  const bSlash = b.includes("/");
+  if (aSlash && bSlash) return false;
   return a.split("/").pop() === b.split("/").pop();
 }
 
-function pickCanonicalModelId(
-  wanted: string | null | undefined,
-  pool: string[],
-): string | null {
-  if (!wanted) return null;
-  const hit = pool.find((m) => sameModelId(m, wanted));
-  return hit || wanted;
+/** OpenRouter-style ``vendor/model``; empty if the id is bare. */
+function modelVendorId(modelId: string | null | undefined): string {
+  const s = (modelId || "").trim();
+  const slash = s.indexOf("/");
+  return slash > 0 ? s.slice(0, slash) : "";
+}
+
+/**
+ * Settings path is SoT. Keep a session pin only when it belongs to the
+ * current family (Official · OpenRouter vs BYO vendor). Switching providers
+ * drops the other family's pin.
+ */
+function isByoVendor(vendor: string, runtimeVendor: string): boolean {
+  if (!vendor) return false;
+  if (vendor === "tencenttokenplan") return true;
+  return !!runtimeVendor && vendor === runtimeVendor;
+}
+
+/** Live runtime is OpenRouter, not a self-reported BYO vendor (e.g. TokenHub). */
+function isOpenRouterByoListed(
+  listed: string | null | undefined,
+  runtime: string | null | undefined,
+  supported: string[] = [],
+): boolean {
+  const vendor = modelVendorId(runtime).toLowerCase();
+  if (!vendor) return false;
+  if (vendor === "tencenttokenplan") return false;
+  if (supported.some((id) => modelVendorId(id).toLowerCase() === vendor)) {
+    return false;
+  }
+  void listed;
+  return true;
+}
+
+function isKnownByoVendor(vendor: string, supported: string[]): boolean {
+  const v = vendor.trim().toLowerCase();
+  if (!v) return false;
+  if (v === "tencenttokenplan") return true;
+  return supported.some((id) => modelVendorId(id).toLowerCase() === v);
+}
+
+function listingIsStaleOpenRouter(
+  listed: string | null | undefined,
+  runtime: string | null | undefined,
+  supported: string[] = [],
+): boolean {
+  const ls = (listed || "").trim();
+  const rt = (runtime || "").trim();
+  if (!ls || !rt) return false;
+  if (ls.toLowerCase() === rt.toLowerCase()) return false;
+  const rtVendor = modelVendorId(rt);
+  const lsVendor = modelVendorId(ls);
+  if (!rtVendor || !lsVendor) return false;
+  if (!isKnownByoVendor(rtVendor, supported)) return false;
+  if (lsVendor.toLowerCase() === rtVendor.toLowerCase()) return false;
+  if (isKnownByoVendor(lsVendor, supported)) return false;
+  return true;
+}
+
+function modelFitsComposerPath(
+  id: string | null | undefined,
+  args: {
+    official: boolean;
+    openRouterByo: boolean;
+    byoVendor: string;
+    officialIds: string[];
+    catalogIds: string[];
+    fallback: string[];
+    listed: string | null;
+  },
+): boolean {
+  const mid = (id || "").trim();
+  if (!mid) return false;
+  const vendor = modelVendorId(mid).toLowerCase();
+  if (args.official) {
+    if (isByoVendor(vendor, args.byoVendor)) return false;
+    return (
+      args.officialIds.some((item) => sameModelId(item, mid)) ||
+      args.catalogIds.some((item) => sameModelId(item, mid)) ||
+      args.fallback.some((item) => sameModelId(item, mid)) ||
+      sameModelId(mid, args.listed)
+    );
+  }
+  if (args.openRouterByo) {
+    return (
+      args.fallback.some((item) => sameModelId(item, mid)) ||
+      sameModelId(mid, args.listed)
+    );
+  }
+  if (vendor && !isByoVendor(vendor, args.byoVendor)) return false;
+  return (
+    args.fallback.some((item) => sameModelId(item, mid)) ||
+    sameModelId(mid, args.listed)
+  );
+}
+
+function pickComposerModelForPath(args: {
+  official: boolean;
+  openRouterByo: boolean;
+  wanted: string | null;
+  listed: string | null;
+  runtime: string | null;
+  fallback: string[];
+  officialIds: string[];
+  catalogIds: string[];
+}): string | null {
+  const byoVendor = modelVendorId(args.runtime).toLowerCase();
+  const path = {
+    official: args.official,
+    openRouterByo: args.openRouterByo,
+    byoVendor,
+    officialIds: args.officialIds,
+    catalogIds: args.catalogIds,
+    fallback: args.fallback,
+    listed: args.listed,
+  };
+  if (args.wanted && modelFitsComposerPath(args.wanted, path)) {
+    return (
+      args.fallback.find((item) => sameModelId(item, args.wanted)) ||
+      args.officialIds.find((item) => sameModelId(item, args.wanted)) ||
+      args.catalogIds.find((item) => sameModelId(item, args.wanted)) ||
+      (sameModelId(args.wanted, args.listed) ? args.listed : args.wanted)
+    );
+  }
+  if (args.runtime && modelFitsComposerPath(args.runtime, path)) {
+    return (
+      args.fallback.find((item) => sameModelId(item, args.runtime)) ||
+      args.runtime
+    );
+  }
+  if (
+    args.listed &&
+    !listingIsStaleOpenRouter(args.listed, args.runtime, args.fallback) &&
+    modelFitsComposerPath(args.listed, path)
+  ) {
+    return args.listed;
+  }
+  return args.fallback.find((item) => modelFitsComposerPath(item, path)) || null;
 }
 
 function composerModelStorageKey(chatId: string): string {
   return `interfaze:composerModel:${chatId}`;
 }
 
+function composerListedStorageKey(chatId: string): string {
+  return `interfaze:composerListed:${chatId}`;
+}
+
 function readComposerModelPick(chatId: string): string | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(composerModelStorageKey(chatId));
-    return raw && raw.trim() ? raw.trim() : null;
+    if (!raw || !raw.trim()) return null;
+    try {
+      const parsed = JSON.parse(raw) as { model?: unknown };
+      if (parsed && typeof parsed === "object" && typeof parsed.model === "string" && parsed.model.trim()) {
+        return parsed.model.trim();
+      }
+    } catch {
+      /* plain model id */
+    }
+    return raw.trim();
   } catch {
     return null;
   }
@@ -414,6 +698,27 @@ function writeComposerModelPick(chatId: string, modelId: string | null): void {
     const key = composerModelStorageKey(chatId);
     if (!modelId) sessionStorage.removeItem(key);
     else sessionStorage.setItem(key, modelId);
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function readComposerListed(chatId: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(composerListedStorageKey(chatId));
+    return raw && raw.trim() ? raw.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeComposerListed(chatId: string, listed: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    const key = composerListedStorageKey(chatId);
+    if (!listed) sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, listed);
   } catch {
     /* ignore quota / private mode */
   }
@@ -465,6 +770,14 @@ function AgentUsageFooter({
   );
 }
 
+
+function orchStatusDot(status?: string): string {
+  const st = (status || "").toLowerCase();
+  if (st === "failed") return colors.danger;
+  if (st === "accepted" || st === "sent") return "#eab308";
+  return "#22c55e";
+}
+
 function AgentOrchestrationFooter({
   callees,
   names,
@@ -474,36 +787,274 @@ function AgentOrchestrationFooter({
   names: Record<string, string>;
   t: RanchMessages;
 }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
   if (!callees.length) return null;
+
+  const copyText = async (key: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(key);
+      window.setTimeout(() => setCopied((cur) => (cur === key ? null : cur)), 1500);
+    } catch {
+      /* ignore */
+    }
+  };
+
   return (
     <div
       style={{
-        paddingLeft: 4,
-        fontSize: 11,
-        lineHeight: 1.35,
-        color: colors.muted,
-        maxWidth: "100%",
         display: "flex",
         flexDirection: "column",
-        gap: 1,
+        gap: 6,
+        maxWidth: "100%",
       }}
     >
       {callees.map((c) => {
+        const rowKey = c.hop_id || c.agent_id;
+        const open = openId === rowKey;
         const text = orchLine(c, t, names);
         return (
           <div
-            key={c.hop_id || c.agent_id}
-            title={c.hop_id || c.agent_id}
+            key={rowKey}
             style={{
+              border: `1px solid ${colors.border}`,
+              background: colors.panel,
+              borderRadius: 8,
               overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
             }}
           >
-            {text}
+            <button
+              type="button"
+              onClick={() => setOpenId(open ? null : rowKey)}
+              title={c.hop_id || c.agent_id}
+              aria-expanded={open}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                width: "100%",
+                border: "none",
+                background: "transparent",
+                color: colors.text,
+                padding: "6px 8px",
+                fontSize: 12,
+                lineHeight: 1.35,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: 99,
+                  flexShrink: 0,
+                  background: orchStatusDot(c.status),
+                }}
+              />
+              <span
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  flex: 1,
+                }}
+              >
+                {text}
+              </span>
+            </button>
+            {open ? (
+              <div
+                style={{
+                  padding: "0 8px 8px 23px",
+                  fontSize: 11,
+                  lineHeight: 1.45,
+                  color: colors.muted,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                }}
+              >
+                <OrchCopyRow
+                  label={t.orchIdLabel}
+                  value={c.agent_id}
+                  copied={copied === `${rowKey}:id`}
+                  copyLabel={t.orchCopy}
+                  copiedLabel={t.promptCopied}
+                  onCopy={() => copyText(`${rowKey}:id`, c.agent_id)}
+                />
+                {c.hop_id ? (
+                  <OrchCopyRow
+                    label={t.orchHopLabel}
+                    value={c.hop_id}
+                    copied={copied === `${rowKey}:hop`}
+                    copyLabel={t.orchCopy}
+                    copiedLabel={t.promptCopied}
+                    onCopy={() => copyText(`${rowKey}:hop`, c.hop_id || "")}
+                  />
+                ) : null}
+              </div>
+            ) : null}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function OrchCopyRow({
+  label,
+  value,
+  copied,
+  copyLabel,
+  copiedLabel,
+  onCopy,
+}: {
+  label: string;
+  value: string;
+  copied: boolean;
+  copyLabel: string;
+  copiedLabel: string;
+  onCopy: () => void;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+      <span style={{ flexShrink: 0 }}>{label}</span>
+      <span
+        title={value}
+        style={{
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          color: colors.text,
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          flex: 1,
+          minWidth: 0,
+        }}
+      >
+        {value}
+      </span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onCopy();
+        }}
+        style={{
+          ...btnGhost,
+          padding: "2px 6px",
+          fontSize: 10,
+          flexShrink: 0,
+        }}
+      >
+        {copied ? copiedLabel : copyLabel}
+      </button>
+    </div>
+  );
+}
+
+function trimSiteBase(base: string): string {
+  return base.replace(/\/$/, "");
+}
+
+function labsTaskPageUrl(base: string | undefined, taskId: string): string {
+  return `${trimSiteBase(base || "https://agentplanet.org")}/tasks/${encodeURIComponent(taskId)}`;
+}
+
+function ChatPlanViewer({
+  title,
+  summary,
+  body,
+  loading,
+  t,
+  onBack,
+  onSource,
+}: {
+  title: string;
+  summary?: string;
+  body?: string;
+  loading: boolean;
+  t: RanchMessages;
+  onBack: () => void;
+  onSource?: () => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button type="button" onClick={onBack} style={{ ...btnGhost, fontSize: 12 }}>
+          {t.planViewerBack}
+        </button>
+        {onSource ? (
+          <button type="button" onClick={onSource} style={{ ...btnGhost, fontSize: 12, marginLeft: "auto" }}>
+            {t.planViewerSource}
+          </button>
+        ) : null}
+      </div>
+      <div
+        style={{
+          background: colors.panel,
+          border: `1px solid ${colors.border}`,
+          borderRadius: 10,
+          padding: "12px 14px",
+          overflow: "auto",
+        }}
+      >
+        <div style={{ fontWeight: 650, fontSize: 15, color: colors.text, lineHeight: 1.35 }}>{title}</div>
+        {summary ? (
+          <div style={{ fontSize: 12, color: colors.muted, lineHeight: 1.45, marginTop: 6 }}>{summary}</div>
+        ) : null}
+        {loading ? (
+          <div style={{ fontSize: 12, color: colors.muted, marginTop: 12 }}>{t.planViewerLoading}</div>
+        ) : body ? (
+          <pre
+            style={{
+              margin: "12px 0 0",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              fontFamily: "inherit",
+              fontSize: 12,
+              lineHeight: 1.55,
+              color: colors.text,
+            }}
+          >
+            {body}
+          </pre>
+        ) : (
+          <div style={{ fontSize: 12, color: colors.muted, marginTop: 12 }}>{t.planViewerEmpty}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AgentPlanFooter({
+  plan,
+  t,
+}: {
+  plan: MessagePlan;
+  t: RanchMessages;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        paddingLeft: 2,
+        maxWidth: "100%",
+      }}
+    >
+      <div style={{ fontSize: 11, color: colors.muted, lineHeight: 1.35 }}>
+        {t.historyPlans}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 650, color: colors.text, lineHeight: 1.35 }}>
+        {plan.title}
+      </div>
+      {plan.summary ? (
+        <div style={{ fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>{plan.summary}</div>
+      ) : null}
     </div>
   );
 }
@@ -587,7 +1138,6 @@ function AgentDecideFooter({
 
 function ChatDecisionSettings({
   auto,
-  goal,
   hops,
   hopCap,
   busy,
@@ -595,7 +1145,6 @@ function ChatDecisionSettings({
   onToggle,
 }: {
   auto: boolean;
-  goal: string;
   hops: number;
   hopCap: number;
   busy: boolean;
@@ -626,16 +1175,172 @@ function ChatDecisionSettings({
         />
         {t.decisionAutoEnable}
       </label>
-      {!goal ? (
+      {auto && hopCap > 0 ? (
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
-          {t.decisionAutoNeedGoal}
+          {hops}/{hopCap}
         </p>
       ) : (
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
-          {goal}
-          {auto && hopCap > 0 ? ` · ${hops}/${hopCap}` : ""}
+          {t.decisionAutoNeedGoal}
         </p>
       )}
+    </div>
+  );
+}
+
+function AgentProposeGroupFooter({
+  propose,
+  names,
+  existingTitle,
+  busy,
+  t,
+  onCreate,
+  onOpenExisting,
+  onDismiss,
+}: {
+  propose: OrchestrationProposeGroup;
+  names: Record<string, string>;
+  existingTitle?: string;
+  busy: boolean;
+  t: RanchMessages;
+  onCreate: () => void;
+  onOpenExisting?: () => void;
+  onDismiss: () => void;
+}) {
+  const labels = propose.agent_ids
+    .map((id) => {
+      const hit = Object.entries(names).find(
+        ([k]) => k.toLowerCase() === id.toLowerCase(),
+      );
+      return hit?.[1]?.trim() || (id.length > 8 ? id.slice(0, 8) : id);
+    })
+    .filter(Boolean);
+  return (
+    <div
+      style={{
+        border: `1px solid ${colors.border}`,
+        background: colors.panel,
+        borderRadius: 8,
+        padding: "8px 10px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 600, color: colors.text }}>
+        {propose.title?.trim() || t.orchProposeTitle}
+      </div>
+      {labels.length ? (
+        <div style={{ fontSize: 12, color: colors.muted }}>
+          {t.orchProposeMembers(labels.join(" · "))}
+        </div>
+      ) : null}
+      {propose.summary ? (
+        <div
+          style={{
+            fontSize: 11,
+            color: colors.muted,
+            lineHeight: 1.4,
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {propose.summary}
+        </div>
+      ) : null}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {onOpenExisting ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onOpenExisting}
+            style={{ ...btnPrimary, padding: "4px 10px", fontSize: 12 }}
+          >
+            {existingTitle
+              ? `${t.orchProposeOpenExisting} · ${existingTitle}`
+              : t.orchProposeOpenExisting}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onCreate}
+          style={{
+            ...(onOpenExisting ? btnGhost : btnPrimary),
+            padding: "4px 10px",
+            fontSize: 12,
+          }}
+        >
+          {t.orchProposeCreate}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onDismiss}
+          style={{ ...btnGhost, padding: "4px 10px", fontSize: 12 }}
+        >
+          {t.orchProposeDismiss}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AgentProposeTaskFooter({
+  propose,
+  busy,
+  posted,
+  t,
+  onConfirm,
+  onDismiss,
+}: {
+  propose: OrchestrationProposeTask;
+  busy: boolean;
+  posted: boolean;
+  t: RanchMessages;
+  onConfirm: () => void;
+  onDismiss: () => void;
+}) {
+  const reward = propose.reward;
+  const hours = propose.deadline_hours ?? 72;
+  return (
+    <div
+      style={{
+        border: `1px solid ${colors.border}`,
+        background: colors.panel,
+        borderRadius: 8,
+        padding: "8px 10px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 600, color: colors.text }}>{t.orchTaskLead}</div>
+      <div style={{ fontSize: 13, color: colors.text }}>{propose.title}</div>
+      {propose.description ? (
+        <div style={{ fontSize: 11, color: colors.muted, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
+          {propose.description}
+        </div>
+      ) : null}
+      {reward ? (
+        <div style={{ fontSize: 12, color: colors.muted }}>
+          {t.orchTaskReward(reward)} · {t.orchTaskDeadline(hours)}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: colors.muted }}>{t.orchTaskNeedReward}</div>
+      )}
+      {posted ? (
+        <div style={{ fontSize: 12, color: colors.text }}>{t.orchTaskPosted}</div>
+      ) : null}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {reward ? (
+          <button type="button" disabled={busy} onClick={onConfirm} style={{ ...btnPrimary, padding: "4px 10px", fontSize: 12 }}>
+            {posted ? t.orchTaskRecruitAgain : t.orchTaskConfirm}
+          </button>
+        ) : null}
+        <button type="button" disabled={busy} onClick={onDismiss} style={{ ...btnGhost, padding: "4px 10px", fontSize: 12 }}>
+          {posted ? t.orchTaskAck : t.orchTaskDismiss}
+        </button>
+      </div>
     </div>
   );
 }
@@ -748,6 +1453,10 @@ function AgentReplyPendingBubble({ t }: { t: RanchMessages }) {
   );
 }
 
+/** ~112s window — matches Comiclaw COMICLAW_CHAT_COMPLETE_TIMEOUT default (110s). */
+const REPLY_POLL_MS = 2000;
+const REPLY_POLL_ATTEMPTS = 56;
+
 type ReplyTimeoutReason = "offline" | "undeliverable" | "timeout" | "no_reply";
 
 /** Explicit error in agent slot + retry (not a silent blank / endless spinner). */
@@ -755,19 +1464,25 @@ function AgentReplyTimeoutBubble({
   reason,
   onRetry,
   t,
+  offerStoreKey,
+  storeUrl,
 }: {
   reason: ReplyTimeoutReason;
   onRetry: () => void;
   t: RanchMessages;
+  offerStoreKey?: boolean;
+  storeUrl?: string;
 }) {
   const message =
     reason === "offline"
       ? t.timeoutOffline
       : reason === "undeliverable"
         ? t.timeoutUndeliverable
-        : reason === "no_reply"
-          ? t.timeoutNoReply
-          : t.timeoutGeneric;
+        : reason === "no_reply" && offerStoreKey
+          ? t.needOpenRouterKey
+          : reason === "no_reply"
+            ? t.timeoutNoReply
+            : t.timeoutGeneric;
   return (
     <div
       style={{
@@ -801,23 +1516,48 @@ function AgentReplyTimeoutBubble({
           </svg>
           <span>{message}</span>
         </span>
-        <button
-          type="button"
-          onClick={onRetry}
+        <span
           style={{
-            alignSelf: "flex-start",
-            margin: 0,
-            padding: "4px 10px",
-            borderRadius: 6,
-            border: `1px solid ${colors.danger}`,
-            background: "transparent",
-            color: colors.danger,
-            fontSize: 12,
-            cursor: "pointer",
+            display: "inline-flex",
+            flexWrap: "wrap",
+            gap: 8,
+            alignItems: "center",
           }}
         >
-          {t.retry}
-        </button>
+          <button
+            type="button"
+            onClick={onRetry}
+            style={{
+              margin: 0,
+              padding: "4px 10px",
+              borderRadius: 6,
+              border: `1px solid ${colors.danger}`,
+              background: "transparent",
+              color: colors.danger,
+              fontSize: 12,
+              cursor: "pointer",
+            }}
+          >
+            {t.retry}
+          </button>
+          {offerStoreKey && storeUrl ? (
+            <a
+              href={storeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: "4px 10px",
+                borderRadius: 6,
+                border: `1px solid ${colors.border}`,
+                color: colors.text,
+                fontSize: 12,
+                textDecoration: "none",
+              }}
+            >
+              {t.buyOpenRouterCredits}
+            </a>
+          ) : null}
+        </span>
       </div>
     </div>
   );
@@ -828,6 +1568,9 @@ function NoAgentsEmpty({
   connectGuideUrl,
   interfazeBaseUrl,
   locale,
+  officialAgent,
+  onStartOfficial,
+  onConnectExisting,
   onNewChat,
   t,
 }: {
@@ -835,29 +1578,39 @@ function NoAgentsEmpty({
   connectGuideUrl?: string;
   interfazeBaseUrl?: string;
   locale: RanchLocale;
+  officialAgent?: AgentDirectoryItem | null;
+  onStartOfficial?: () => void;
+  onConnectExisting: () => void;
   onNewChat: () => void;
   t: RanchMessages;
 }) {
   const [copied, setCopied] = useState(false);
+  const officialLabel = officialAgent
+    ? t.startOfficialChat(officialAgent.name || officialAgent.agent_id)
+    : null;
   return (
     <div style={{ textAlign: "center", padding: "28px 20px", color: colors.muted }}>
       <p style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 600, color: colors.text }}>
-        {t.noAgentsTitle}
+        {officialAgent ? t.officialEmptyTitle : t.noAgentsTitle}
       </p>
-      <p style={{ margin: "0 0 16px", fontSize: 12, lineHeight: 1.55 }}>{t.noAgentsBody}</p>
+      <p style={{ margin: "0 0 16px", fontSize: 12, lineHeight: 1.55 }}>
+        {officialAgent ? t.officialEmptyBody : t.noAgentsBody}
+      </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
-        <button
-          type="button"
-          style={btnPrimary}
-          onClick={() => {
-            const origin =
-              (interfazeBaseUrl || "").replace(/\/+$/, "") ||
-              (typeof window !== "undefined" ? window.location.origin : "");
-            void openJoinLanding(origin, () => client.createJoinInvite());
-          }}
-        >
-          {t.connectExisting}
-        </button>
+        {officialAgent && onStartOfficial ? (
+          <button type="button" style={btnPrimary} onClick={onStartOfficial}>
+            {officialLabel}
+          </button>
+        ) : (
+          <button type="button" style={btnPrimary} onClick={onConnectExisting}>
+            {t.connectExisting}
+          </button>
+        )}
+        {officialAgent ? (
+          <button type="button" style={btnGhost} onClick={onConnectExisting}>
+            {t.connectExisting}
+          </button>
+        ) : null}
         <button
           type="button"
           style={btnGhost}
@@ -938,6 +1691,65 @@ function writeStickyMention(chatId: string, sticky: StickyMention | null): void 
     else sessionStorage.setItem(key, JSON.stringify(sticky));
   } catch {
     /* ignore */
+  }
+}
+
+const ORCH_PROPOSE_DISMISS_KEY = "interfaze:orchProposeDismissed:v1";
+const ORCH_POSTED_TASK_KEY = "interfaze:orchPostedTask:v1";
+const ORCH_PROPOSE_DISMISS_MAX = 200;
+
+function readDismissedPropose(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(ORCH_PROPOSE_DISMISS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(arr)) return new Set();
+    return new Set(
+      arr
+        .filter((x: unknown): x is string => typeof x === "string")
+        .slice(-ORCH_PROPOSE_DISMISS_MAX),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function readPostedTasks(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(ORCH_POSTED_TASK_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return {};
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (typeof key === "string" && typeof value === "string" && key && value) {
+        out[key] = value;
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function writePostedTasks(tasks: Record<string, string>): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ORCH_POSTED_TASK_KEY, JSON.stringify(tasks));
+  } catch {
+    /* quota */
+  }
+}
+
+function writeDismissedPropose(ids: Set<string>): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      ORCH_PROPOSE_DISMISS_KEY,
+      JSON.stringify([...ids].slice(-ORCH_PROPOSE_DISMISS_MAX)),
+    );
+  } catch {
+    /* quota */
   }
 }
 
@@ -1088,7 +1900,7 @@ function TopicDivider({
       <span
         style={{
           fontSize: 11,
-          color: colors.mention,
+          color: "#93c5fd",
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -1237,24 +2049,6 @@ function IconSidebar() {
   );
 }
 
-/** Right-rail window — mirror of IconSidebar. */
-function IconWindow() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <rect
-        x="3"
-        y="3"
-        width="18"
-        height="18"
-        rx="2"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
-      <path d="M15 3v18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 /** Ranch SystemHeader-style locale control: compact round chip + menu (scales). */
 function LanguageSwitcher({
   locale,
@@ -1366,7 +2160,9 @@ function AccountFooter({
   onProfile,
   onManage,
   onWallet,
+  onKeys,
   onPlanUsage,
+  onBilling,
   onDiscoverAgents,
   t,
 }: {
@@ -1375,7 +2171,9 @@ function AccountFooter({
   onProfile?: () => void;
   onManage?: () => void;
   onWallet?: () => void;
+  onKeys?: () => void;
   onPlanUsage?: () => void;
+  onBilling?: () => void;
   onDiscoverAgents?: () => void;
   t: RanchMessages;
 }) {
@@ -1383,6 +2181,29 @@ function AccountFooter({
   const initial = label.slice(0, 1).toUpperCase() || "?";
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
+
+  const clearCloseTimer = () => {
+    if (closeTimerRef.current != null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
+
+  const openMenu = () => {
+    clearCloseTimer();
+    setMenuOpen(true);
+  };
+
+  const scheduleCloseMenu = () => {
+    clearCloseTimer();
+    closeTimerRef.current = window.setTimeout(() => {
+      setMenuOpen(false);
+      closeTimerRef.current = null;
+    }, 160);
+  };
+
+  useEffect(() => () => clearCloseTimer(), []);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -1445,11 +2266,13 @@ function AccountFooter({
     };
 
   const hasUpper =
-    !!(onProfile || onManage || onWallet || onPlanUsage || onDiscoverAgents);
+    !!(onProfile || onManage || onWallet || onKeys || onPlanUsage || onBilling || onDiscoverAgents);
 
   return (
     <div
       ref={rootRef}
+      onMouseEnter={openMenu}
+      onMouseLeave={scheduleCloseMenu}
       style={{
         position: "relative",
         borderTop: `1px solid ${colors.border}`,
@@ -1474,7 +2297,7 @@ function AccountFooter({
         <div
           className="ranch-account-menu-panel"
           style={{
-            background: colors.panelAlt,
+            background: "#1c2330",
             border: `1px solid ${colors.border}`,
             borderRadius: 10,
             boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
@@ -1514,6 +2337,28 @@ function AccountFooter({
               <span style={{ flex: 1 }}>{t.accountWallet}</span>
             </a>
           ) : null}
+          {onBilling ? (
+            <a
+              href={accountPanelHref("billing")}
+              role="menuitem"
+              style={menuLinkStyle}
+              onClick={accountLinkClick(onBilling)}
+              {...hoverHandlers}
+            >
+              <span style={{ flex: 1 }}>{t.accountBilling}</span>
+            </a>
+          ) : null}
+          {onKeys ? (
+            <a
+              href={accountPanelHref("keys")}
+              role="menuitem"
+              style={menuLinkStyle}
+              onClick={accountLinkClick(onKeys)}
+              {...hoverHandlers}
+            >
+              <span style={{ flex: 1 }}>{t.accountKeys}</span>
+            </a>
+          ) : null}
           {onPlanUsage ? (
             <a
               href={accountPanelHref("plan")}
@@ -1525,7 +2370,7 @@ function AccountFooter({
               <span style={{ flex: 1 }}>{t.accountPlanUsage}</span>
             </a>
           ) : null}
-          {(onProfile || onManage || onWallet || onPlanUsage) && onDiscoverAgents ? (
+          {(onProfile || onManage || onWallet || onKeys || onPlanUsage || onBilling) && onDiscoverAgents ? (
             <div style={{ height: 1, background: colors.border, margin: "2px 0" }} />
           ) : null}
           {onDiscoverAgents ? (
@@ -1600,8 +2445,8 @@ function AccountFooter({
               width: 32,
               height: 32,
               borderRadius: 999,
-              background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
-              color: colors.onAccent,
+              background: "linear-gradient(135deg,#475569,#1e293b)",
+              color: "#fff",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -1692,12 +2537,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
     agentPlanetBaseUrl,
     interfazeBaseUrl,
     studioBaseUrl,
+    embodyBaseUrl,
     locale: localeProp,
     onLocaleChange,
     onOwnedAgentUpdated,
     onOwnedAgentRemoved,
     initialAccountPanel = null,
     initialOpenAgentId = null,
+    initialCreateAgent = false,
   } = props;
 
   const [uiLocale, setUiLocale] = useState<RanchLocale>(() => resolveRanchLocale(localeProp));
@@ -1761,8 +2608,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const viewportWidth = useViewportWidth();
   /** <768px in full mode: single-column, list ↔ conversation like side mode. */
   const isNarrowFull = mode === "full" && viewportWidth < 768;
-  /** Face-chat pane overlays instead of squeezing a third column. */
-  const paneOverlay = mode === "side" || viewportWidth < 900;
 
   const client = useMemo(
     () => createGatewayClient(gatewayBaseUrl, getAccessToken),
@@ -1771,10 +2616,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   const [view, setView] = useState<"list" | "conversation">("list");
   const [pickerMode, setPickerMode] = useState<"direct" | "group" | null>(null);
+  const [showConnect, setShowConnect] = useState(false);
   const [search, setSearch] = useState("");
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [loadingChats, setLoadingChats] = useState(true);
   const [active, setActive] = useState<ChatSummary | null>(null);
+  const [chatWindows, setChatWindows] = useState<Record<string, ChatWindow>>({});
+  const chatWindowsRef = useRef(chatWindows);
+  chatWindowsRef.current = chatWindows;
+  const remintingRef = useRef(new Set<string>());
+  const renewHostTicketRef = useRef<
+    (win: Extract<ChatWindow, { kind: "talk" | "body" }>) => Promise<boolean>
+  >(async () => false);
+  const [windowBusy, setWindowBusy] = useState<ChatWindowKind | null>(null);
+  const [windowError, setWindowError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
@@ -1795,46 +2650,29 @@ export function RanchChatShell(props: RanchChatShellProps) {
   /** Ranch-style: tap header → members panel. */
   const [showMembersPanel, setShowMembersPanel] = useState(false);
   const [showMyAgents, setShowMyAgents] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [pendingCreateJobId, setPendingCreateJobId] = useState<string | null>(null);
+  const openedCreateJobsRef = useRef(new Set<string>());
+  const finishHostedCreateRef = useRef<
+    (agentId: string, info?: { name?: string | null; jobId?: string }) => void
+  >(() => {});
+  const onOwnedAgentUpdatedRef = useRef(onOwnedAgentUpdated);
+  onOwnedAgentUpdatedRef.current = onOwnedAgentUpdated;
+  const [createMenuAvailable, setCreateMenuAvailable] = useState(false);
   const [showAccountProfile, setShowAccountProfile] = useState(false);
   const [showAccountManage, setShowAccountManage] = useState(false);
   const [showAccountWallet, setShowAccountWallet] = useState(false);
+  const [showAccountKeys, setShowAccountKeys] = useState(false);
   const [showAccountPlan, setShowAccountPlan] = useState(false);
-  const [chatWindows, setChatWindows] = useState<Record<string, ChatWindow>>({});
-  const [paneOpenByChat, setPaneOpenByChat] = useState<Record<string, boolean>>({});
-  const [windowBusy, setWindowBusy] = useState(false);
-  const [windowError, setWindowError] = useState<string | null>(null);
-  const chatWindowsRef = useRef(chatWindows);
-  chatWindowsRef.current = chatWindows;
-  const persistedWindowsRef = useRef<ReturnType<typeof readPersistedChatWindows>>({});
-  const talkInflightRef = useRef<string | null>(null);
-  const windowPersistReadyRef = useRef(false);
-
-  useEffect(() => {
-    setWindowError(null);
-  }, [active?.chat_id]);
-
-  useEffect(() => {
-    persistedWindowsRef.current = readPersistedChatWindows();
-    setPaneOpenByChat(readPersistedPaneOpen());
-    windowPersistReadyRef.current = true;
-  }, []);
-
-  useEffect(() => {
-    if (!windowPersistReadyRef.current) return;
-    const next = mergePersistedChatWindows(
-      persistedWindowsRef.current,
-      paneOpenByChat,
-      chatWindows,
-    );
-    persistedWindowsRef.current = next;
-    writePersistedChatWindows(next);
-  }, [chatWindows, paneOpenByChat]);
+  const [showAccountBilling, setShowAccountBilling] = useState(false);
 
   const closeAccountSurfaces = () => {
     setShowAccountProfile(false);
     setShowAccountManage(false);
     setShowAccountWallet(false);
+    setShowAccountKeys(false);
     setShowAccountPlan(false);
+    setShowAccountBilling(false);
     setShowMyAgents(false);
   };
 
@@ -1842,8 +2680,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
     closeAccountSurfaces();
     if (panel === "plan") setShowAccountPlan(true);
     else if (panel === "wallet") setShowAccountWallet(true);
+    else if (panel === "keys") setShowAccountKeys(true);
     else if (panel === "manage") setShowAccountManage(true);
     else if (panel === "profile") setShowAccountProfile(true);
+    else if (panel === "billing") setShowAccountBilling(true);
   };
 
   const openAccountPanel = (panel: AccountDeepLinkPanel) => {
@@ -1868,7 +2708,80 @@ export function RanchChatShell(props: RanchChatShellProps) {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
+
+  // Panels overlay the right pane on desktop — opening a chat must dismiss them.
+  const activeChatId = active?.chat_id ?? null;
+  useEffect(() => {
+    if (!activeChatId) return;
+    closeAccountSurfaces();
+    writeAccountPanelToUrl(null, "replace");
+  }, [activeChatId]);
+
+  useEffect(() => {
+    if (!initialCreateAgent) return;
+    setShowCreateDialog(true);
+  }, [initialCreateAgent]);
+
+  useEffect(() => {
+    const stored = readPendingCreateJobId();
+    if (stored) setPendingCreateJobId(stored);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void client
+      .getAgentCreateAvailability()
+      .then((row) => {
+        if (!cancelled) setCreateMenuAvailable(row.available === true);
+      })
+      .catch(() => {
+        if (!cancelled) setCreateMenuAvailable(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
   const [showAddMember, setShowAddMember] = useState(false);
+  const [dismissedPropose, setDismissedPropose] = useState<Set<string>>(
+    () => readDismissedPropose(),
+  );
+  const [postedTasks, setPostedTasks] = useState<Record<string, string>>(() => readPostedTasks());
+  const postedTasksRef = useRef(postedTasks);
+  postedTasksRef.current = postedTasks;
+  const postingTasksRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const pending = Object.entries(postedTasks).filter(
+      ([messageId]) => !dismissedPropose.has(messageId),
+    );
+    if (!pending.length) return;
+    let cancelled = false;
+    void Promise.all(
+      pending.map(async ([messageId, taskId]) => {
+        try {
+          return labsTaskTaken(await client.getLabsTask(taskId)) ? messageId : null;
+        } catch {
+          return null;
+        }
+      }),
+    ).then((rows) => {
+      if (cancelled) return;
+      const taken = rows.filter((id): id is string => Boolean(id));
+      if (!taken.length) return;
+      setDismissedPropose((cur) => {
+        const next = new Set(cur);
+        for (const id of taken) next.add(id);
+        if (next.size === cur.size) return cur;
+        writeDismissedPropose(next);
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, dismissedPropose, postedTasks]);
+  const [groupAgentsByChat, setGroupAgentsByChat] = useState<Record<string, string[]>>(
+    {},
+  );
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [addMemberId, setAddMemberId] = useState("");
@@ -1880,7 +2793,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [agentRefIndex, setAgentRefIndex] = useState(0);
   const [slashIndex, setSlashIndex] = useState(0);
   const [draft, setDraft] = useState("");
-  /** Escape dismisses the slash menu without wiping the draft; typing re-opens it. */
   const [slashMenuDismissed, setSlashMenuDismissed] = useState(false);
   /** Group: continue with last @'d agent for 15m (chip above composer). */
   const [stickyMention, setStickyMention] = useState<StickyMention | null>(null);
@@ -1888,7 +2800,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [decisionBusy, setDecisionBusy] = useState(false);
-  const [chatLoadError, setChatLoadError] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     message: string;
     confirmLabel: string;
@@ -1896,17 +2807,59 @@ export function RanchChatShell(props: RanchChatShellProps) {
   } | null>(null);
   /** Detail panel tab. Group: members. Direct: info | settings? | wallet? | chats. */
   const [infoTab, setInfoTab] = useState<"info" | "settings" | "wallet" | "members" | "chats">("info");
+  const [historyKind, setHistoryKind] = useState<"chats" | "plans" | "tasks">("chats");
+  const [planViewer, setPlanViewer] = useState<{
+    chatId: string;
+    planId: string;
+    title: string;
+    summary?: string;
+  } | null>(null);
+  const [planViewerDetail, setPlanViewerDetail] = useState<{
+    loading: boolean;
+    body?: string;
+    sourceMessageId?: string;
+  }>({ loading: false });
+  useEffect(() => {
+    if (!planViewer) {
+      setPlanViewerDetail({ loading: false });
+      return;
+    }
+    let cancelled = false;
+    setPlanViewerDetail({ loading: true });
+    void client
+      .getChatPlan(planViewer.chatId, planViewer.planId)
+      .then((row) => {
+        if (cancelled) return;
+        setPlanViewerDetail({
+          loading: false,
+          body: row.body,
+          sourceMessageId: row.source_message_id || row.message_id,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPlanViewerDetail({ loading: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, planViewer]);
   /** Owned-agent ACN detail for Info (read-only) + Settings (manage). */
   const [ownedAgentDetail, setOwnedAgentDetail] = useState<MyAgentSummary | null>(null);
   const [composerModel, setComposerModel] = useState<{
     listed_model_id?: string | null;
     runtime_model_id?: string | null;
     mismatched: boolean;
+    official_channel: boolean;
+    official_models: string[];
+    official_key_geo?: string;
+    markup_percent?: number | null;
     supported_models: string[];
     model_options: Array<{
       model_id: string;
       is_listing?: boolean;
       is_runtime?: boolean;
+      inference_path?: "byo" | "official" | string | null;
       input_price_per_million?: number;
       output_price_per_million?: number;
       free?: boolean;
@@ -1915,7 +2868,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
   } | null>(null);
   /** User pick for this hop (S1). Sticky per chat until changed. */
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-  const [pinDecisionGoal, setPinDecisionGoal] = useState(false);
+  const [composerMenuOpen, setComposerMenuOpen] = useState(false);
+  const [composerMenuQuery, setComposerMenuQuery] = useState("");
+  const [composerCatalog, setComposerCatalog] = useState<Array<{ id: string; in: number; out: number }>>(
+    [],
+  );
+  const [composerCatalogLoading, setComposerCatalogLoading] = useState(false);
+  const composerMenuRef = useRef<HTMLDivElement | null>(null);
+  const composerCatalogRef = useRef(composerCatalog);
+  composerCatalogRef.current = composerCatalog;
+  /** Last Settings listing seen in this chat; change drops the composer pin. */
+  const composerListedRef = useRef<{ chatId: string; listed: string } | null>(null);
   const [ownedAgentLoading, setOwnedAgentLoading] = useState(false);
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [activeTopic, setActiveTopic] = useState<ThreadSummary | null>(null);
@@ -1931,7 +2894,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showCreateTopic, setShowCreateTopic] = useState(false);
   const [topicTitleDraft, setTopicTitleDraft] = useState("");
   const [topicDescDraft, setTopicDescDraft] = useState("");
+  const [loadingTopics, setLoadingTopics] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [storeKeyPrompt, setStoreKeyPrompt] = useState(false);
+  useEffect(() => {
+    if (!error) setStoreKeyPrompt(false);
+  }, [error]);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
   /** Agent-slot: typing → timeout+retry (not endless spinner). */
   const [replySlot, setReplySlot] = useState<null | {
@@ -2092,14 +3060,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   const refreshChats = useCallback(async () => {
     setLoadingChats(true);
-    void client.health().then((h) => setHealthOk(h.ok)).catch(() => setHealthOk(false));
     try {
       const list = await client.listChats();
       setChats(list);
-      setChatLoadError(null);
       setError(null);
     } catch (e) {
-      setChatLoadError(isAuthFailure(e) ? t.sessionExpired : t.chatLoadFailed);
       setError(
         isAuthFailure(e)
           ? t.sessionExpired
@@ -2110,19 +3075,33 @@ export function RanchChatShell(props: RanchChatShellProps) {
     } finally {
       setLoadingChats(false);
     }
-  }, [client, t.sessionExpired, t.chatLoadFailed]);
+  }, [client, t.sessionExpired]);
 
   const searchDiscover = useCallback(
     async (q: string): Promise<AgentDirectoryItem[]> => {
+      const pinned = directoryAgents.filter(
+        (a) => a.group === "recommended" && isAcnCatalogAgentId(a.agent_id),
+      );
       const hits = await client.searchAgents(q, 20);
-      return hits.map((h) => ({
+      const mapped = hits.map((h) => ({
         agent_id: h.agent_id,
         name: h.name,
         description: h.description,
         group: "recommended" as const,
       }));
+      const qn = q.trim().toLowerCase();
+      const pinnedShown = qn
+        ? pinned.filter((a) => {
+            const id = agentIdKey(a.agent_id);
+            const name = (a.name || "").toLowerCase();
+            return id.includes(qn) || name.includes(qn);
+          })
+        : pinned;
+      const seen = new Set(mapped.map((a) => agentIdKey(a.agent_id)));
+      const extra = pinnedShown.filter((a) => !seen.has(agentIdKey(a.agent_id)));
+      return [...extra, ...mapped];
     },
-    [client],
+    [client, directoryAgents],
   );
 
   useEffect(() => {
@@ -2152,22 +3131,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
   // Keep presence dots fresh while a conversation is open.
   useEffect(() => {
     if (!open || !active) return;
-    let cancelled = false;
-    const chatId = active.chat_id;
     const tick = window.setInterval(() => {
       void client.listChats().then((list) => {
-        if (cancelled) return;
         setChats(list);
-        const next = list.find((c) => c.chat_id === chatId);
-        if (next) setActive((current) => current?.chat_id === chatId ? next : current);
-      }).catch(() => {
-        // A transient presence refresh failure should not interrupt the conversation.
+        const next = list.find((c) => c.chat_id === active.chat_id);
+        if (next) setActive(next);
       });
     }, 20000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(tick);
-    };
+    return () => window.clearInterval(tick);
   }, [open, active?.chat_id, client]);
 
   const flashTopicHighlight = useCallback((topicId: string) => {
@@ -2183,6 +3154,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const el = listRef.current?.querySelector(`[data-topic-id="${safe}"]`);
     if (el && "scrollIntoView" in el) {
       (el as HTMLElement).scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, []);
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    const safe = messageId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const el = listRef.current?.querySelector(`[data-message-id="${safe}"]`);
+    if (el && "scrollIntoView" in el) {
+      (el as HTMLElement).scrollIntoView({ block: "center", behavior: "smooth" });
     }
   }, []);
 
@@ -2203,35 +3182,44 @@ export function RanchChatShell(props: RanchChatShellProps) {
   useEffect(() => {
     if (!open) return;
     void refreshChats();
+    (async () => {
+      try {
+        const h = await client.health();
+        setHealthOk(h.ok);
+      } catch {
+        setHealthOk(false);
+      }
+    })();
   }, [open, client, refreshChats]);
 
-  /** Ensure host "mine" ACN agents always have a direct chat row in the list. */
-  const ensuredMineKeyRef = useRef("");
+  /** Ensure host "mine" + official conversation agents have a direct chat row. */
+  const ensuredDirectoryKeyRef = useRef("");
   useEffect(() => {
     if (!open) return;
-    const mine = directoryAgents.filter((a) => a.group === "mine" && a.agent_id.trim());
-    if (mine.length === 0) return;
-    const key = mine
-      .map((a) => a.agent_id)
+    const ensure = directoryAgents.filter(
+      (a) =>
+        (a.group === "mine" || a.group === "recommended") && isAcnCatalogAgentId(a.agent_id),
+    );
+    if (ensure.length === 0) return;
+    const key = ensure
+      .map((a) => `${a.group}:${agentIdKey(a.agent_id)}`)
       .sort()
       .join("|");
-    if (ensuredMineKeyRef.current === key) return;
+    if (ensuredDirectoryKeyRef.current === key) return;
 
     let cancelled = false;
     (async () => {
       try {
         const list = await client.listChats();
         if (cancelled) return;
-        const have = new Set(
-          list.map((c) => (c.agent_id || "").trim()).filter(Boolean),
-        );
-        const missing = mine.filter((a) => !have.has(a.agent_id));
+        const have = new Set(list.map((c) => agentIdKey(c.agent_id)).filter(Boolean));
+        const missing = ensure.filter((a) => !have.has(agentIdKey(a.agent_id)));
         for (const a of missing) {
           if (cancelled) return;
           await client.createOrGetDirectChat(a.agent_id);
         }
         if (cancelled) return;
-        ensuredMineKeyRef.current = key;
+        ensuredDirectoryKeyRef.current = key;
         if (missing.length > 0) await refreshChats();
       } catch {
         /* best-effort — picker still works */
@@ -2270,7 +3258,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setMentionIndex(0);
       setDraft("");
       setRecipientPickerOpen(false);
-      setPinDecisionGoal(false);
       setStickyMention(isGroupChat(chat) ? readStickyMention(chat.chat_id) : null);
       clearReplySlot();
       agentIdsRef.current = [];
@@ -2291,6 +3278,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
           (p) => p.participant_type === "agent" && p.is_active !== false,
         );
         agentIdsRef.current = agents.map((p) => p.participant_id);
+        if (isGroupChat(chat)) {
+          const ids = agents.map((p) => p.participant_id);
+          setGroupAgentsByChat((prev) =>
+            prev[chat.chat_id] === ids ? prev : { ...prev, [chat.chat_id]: ids },
+          );
+        }
         const labels = resolveParticipantLabels(agents, directoryAgents);
         setAgentNames(labels);
         const statuses: Record<string, string> = {};
@@ -2333,55 +3326,125 @@ export function RanchChatShell(props: RanchChatShellProps) {
     [client, clearReplySlot, directoryAgents, resolveAfterDeliveryIssue],
   );
 
-  const restoredOpenWindowRef = useRef(false);
-  useEffect(() => {
-    if (!open || restoredOpenWindowRef.current || !windowPersistReadyRef.current) return;
-    if (active || initialOpenAgentId) return;
-    const openId = Object.entries(persistedWindowsRef.current).find(([, row]) => row.open)?.[0];
-    if (!openId) return;
-    const chat = chats.find((c) => c.chat_id === openId);
-    if (!chat) return;
-    restoredOpenWindowRef.current = true;
-    void openConversation(chat);
-  }, [active, chats, initialOpenAgentId, open, openConversation]);
-
   const openedInitialAgentRef = useRef(false);
   useEffect(() => {
     const want = (initialOpenAgentId || "").replace(/^acn:/i, "").trim().toLowerCase();
-    if (!open || !want || openedInitialAgentRef.current) return;
+    if (!open || !want || openedInitialAgentRef.current || loadingChats) return;
     let cancelled = false;
     void (async () => {
       try {
-        const list = await client.listChats();
-        if (cancelled) return;
-        const hostOrigins = [
-          interfazeBaseUrl || "",
-          "https://interfaze.io",
-          typeof window !== "undefined" ? window.location.origin : "",
-        ];
-        const siblings = list
+        const siblings = chats
           .filter(
             (c) =>
-              isHostVisibleDirect(c, hostOrigins) &&
               !isGroupChat(c) &&
               (c.agent_id || "").replace(/^acn:/i, "").trim().toLowerCase() === want,
           )
           .sort((a, b) => chatActivityTs(b) - chatActivityTs(a));
-        let found = siblings[0];
+        let found = siblings.find(isGlobalDirect) ?? siblings[0];
         if (!found) {
           found = await client.createOrGetDirectChat(initialOpenAgentId as string);
         }
         if (cancelled || !found) return;
         openedInitialAgentRef.current = true;
         await openConversation(found);
-      } catch {
-        /* claim landing still works — user can open from the list */
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("acnlabs:agent-chat:initial-opened"));
+        }
+      } catch (e) {
+        if (cancelled) return;
+        if (isAuthFailure(e)) return;
+        setError(e instanceof Error ? e.message : "Failed to open chat");
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [open, initialOpenAgentId, client, openConversation, interfazeBaseUrl]);
+  }, [open, initialOpenAgentId, client, openConversation, loadingChats]);
+
+  const openedOfficialRef = useRef(false);
+  useEffect(() => {
+    const official = directoryAgents.find(
+      (a) => a.group === "recommended" && isAcnCatalogAgentId(a.agent_id),
+    );
+    if (!official) return;
+    const want = agentIdKey(official.agent_id);
+    if (!open || !want || openedOfficialRef.current || openedInitialAgentRef.current) return;
+    if (initialOpenAgentId || loadingChats || active) return;
+    const others = chats.filter((c) => !isGroupChat(c) && agentIdKey(c.agent_id) !== want);
+    if (others.length > 0) return;
+    openedOfficialRef.current = true;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const siblings = chats
+          .filter((c) => !isGroupChat(c) && agentIdKey(c.agent_id) === want)
+          .sort((a, b) => chatActivityTs(b) - chatActivityTs(a));
+        let found = siblings.find(isGlobalDirect) ?? siblings[0];
+        if (!found) {
+          found = await client.createOrGetDirectChat(official.agent_id);
+        }
+        if (cancelled || !found) {
+          openedOfficialRef.current = false;
+          return;
+        }
+        await openConversation(found);
+      } catch {
+        openedOfficialRef.current = false;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    directoryAgents,
+    initialOpenAgentId,
+    loadingChats,
+    active,
+    chats,
+    client,
+    openConversation,
+  ]);
+
+  const loadTopics = useCallback(
+    async (chatId: string) => {
+      setLoadingTopics(true);
+      try {
+        const list = await client.listThreads(chatId);
+        setTopics(list);
+      } catch {
+        /* keep previous topics on transient errors */
+      } finally {
+        setLoadingTopics(false);
+      }
+    },
+    [client],
+  );
+
+  const openTopic = useCallback((topic: ThreadSummary) => {
+    setActiveTopic(topic);
+    setComposerTopic(topic);
+    setShowMembersPanel(false);
+    setShowAddMember(false);
+    setShowCreateTopic(false);
+  }, []);
+
+  /** Create topic, list it, keep main timeline — next sends tag this thread. */
+  const startTopicInTimeline = useCallback(
+    (created: ThreadSummary) => {
+      setTopics((prev) => [created, ...prev.filter((tp) => tp.id !== created.id)]);
+      setComposerTopic(created);
+      setActiveTopic(null);
+      setShowMembersPanel(false);
+      setShowAddMember(false);
+      setShowCreateTopic(false);
+      setTopicTitleDraft("");
+      setTopicDescDraft("");
+      setDraft("");
+      flashTopicHighlight(created.id);
+    },
+    [flashTopicHighlight],
+  );
 
   const exitTopicFilter = useCallback(() => {
     // Leaving the filtered topic view also leaves the posting context —
@@ -2429,6 +3492,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
         (p) => p.participant_type === "agent" && p.is_active !== false,
       );
       agentIdsRef.current = agents.map((p) => p.participant_id);
+      const ids = agents.map((p) => p.participant_id);
+      setGroupAgentsByChat((prev) => ({ ...prev, [chatId]: ids }));
       const labels = resolveParticipantLabels(agents, directoryAgents);
       setAgentNames(labels);
       const statuses: Record<string, string> = {};
@@ -2508,10 +3573,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               created_at:
                 typeof d.created_at === "string" ? d.created_at : new Date().toISOString(),
               metadata: parseMessageMetadata(d.metadata),
-              attachments:
-                Array.isArray(d.attachments) || typeof d.attachments === "string"
-                  ? (d.attachments as string | string[])
-                  : null,
+              attachments: parseMessageAttachments(d.attachments),
             };
             setMessages((prev) => {
               const idx = prev.findIndex((x) => x.message_id === m.message_id);
@@ -2562,6 +3624,39 @@ export function RanchChatShell(props: RanchChatShellProps) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [messages, view, replySlot]);
 
+  useEffect(() => {
+    if (!pendingCreateJobId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const row = await watchAgentCreateJob(client, pendingCreateJobId, {
+          shouldStop: () => cancelled,
+        });
+        if (cancelled || !row) return;
+        if (row.status === "ready" && row.agent_id) {
+          finishHostedCreateRef.current(row.agent_id, {
+            name: row.name ?? null,
+            jobId: row.job_id,
+          });
+          return;
+        }
+        if (row.status === "failed") {
+          writePendingCreateJobId(null);
+          setPendingCreateJobId(null);
+        }
+      } catch (e) {
+        if (cancelled) return;
+        if (e instanceof ChatGatewayError && (e.status === 404 || e.status === 410)) {
+          writePendingCreateJobId(null);
+          setPendingCreateJobId(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingCreateJobId, client]);
+
   const startFreshDirect = async (agentId: string) => {
     setBusy(true);
     setError(null);
@@ -2570,7 +3665,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         context: `new:${crypto.randomUUID()}`,
       });
       await refreshChats();
-      await openConversation(c, { keepChatsPanel: true });
+      await openConversation(c);
     } catch (e) {
       setError(
         e instanceof ChatGatewayError
@@ -2589,20 +3684,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setError(null);
     try {
       const key = agentIdKey(agentId);
-      const hostOrigins = [
-        interfazeBaseUrl || "",
-        "https://interfaze.io",
-        typeof window !== "undefined" ? window.location.origin : "",
-      ];
-      const latest = chats
-        .filter(
-          (c) =>
-            isHostVisibleDirect(c, hostOrigins) &&
-            !isGroupChat(c) &&
-            agentIdKey(c.agent_id) === key,
-        )
-        .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))[0];
-      const c = latest ?? (await client.createOrGetDirectChat(agentId));
+      const global = chats.find(
+        (c) => !isGroupChat(c) && agentIdKey(c.agent_id) === key && isGlobalDirect(c),
+      );
+      const c = global ?? (await client.createOrGetDirectChat(agentId));
       setPickerMode(null);
       await refreshChats();
       await openConversation(c);
@@ -2618,6 +3703,27 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setBusy(false);
     }
   };
+
+  const finishHostedCreate = (
+    agentId: string,
+    info?: { name?: string | null; jobId?: string },
+  ) => {
+    const jobId = info?.jobId;
+    if (jobId) {
+      if (openedCreateJobsRef.current.has(jobId)) return;
+      openedCreateJobsRef.current.add(jobId);
+    }
+    writePendingCreateJobId(null);
+    setPendingCreateJobId(null);
+    onOwnedAgentUpdatedRef.current?.({
+      agent_id: agentId,
+      name: info?.name ?? null,
+      description: null,
+    });
+    setShowCreateDialog(false);
+    void startDirect(agentId);
+  };
+  finishHostedCreateRef.current = finishHostedCreate;
 
   const startGroup = async (groupTitle: string, agentIds: string[]) => {
     setBusy(true);
@@ -2640,6 +3746,215 @@ export function RanchChatShell(props: RanchChatShellProps) {
     }
   };
 
+  const confirmProposeGroup = async (
+    propose: OrchestrationProposeGroup,
+    messageId: string,
+    opts?: { preferExisting?: boolean },
+  ) => {
+    if (!active || isGroupChat(active)) return;
+    const peer = (active.agent_id || "").trim();
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    const pushId = (raw: string) => {
+      const id = raw.trim();
+      const key = id.toLowerCase();
+      if (!id || seen.has(key)) return;
+      seen.add(key);
+      ids.push(id);
+    };
+    if (peer) pushId(peer);
+    for (const id of propose.agent_ids) pushId(id);
+    if (ids.length < 2) {
+      setError(t.orchProposeNeedTwo);
+      return;
+    }
+    const title =
+      propose.title?.trim() ||
+      t.orchProposeMembers(
+        ids
+          .map((id) => agentNames[id]?.trim() || (id.length > 8 ? id.slice(0, 8) : id))
+          .join(" · "),
+      );
+    const existing = opts?.preferExisting
+      ? preferredExistingGroup(chats, propose, groupAgentsByChat)
+      : undefined;
+    if (opts?.preferExisting && !existing) {
+      setError(t.sendFailed);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      let target = existing || null;
+      const failed: string[] = [];
+      if (existing) {
+        for (const id of ids) {
+          try {
+            await client.addParticipant(existing.chat_id, id);
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : "";
+            if (!/already in chat/i.test(msg)) {
+              failed.push(
+                agentNames[id]?.trim() || (id.length > 8 ? id.slice(0, 8) : id),
+              );
+            }
+          }
+        }
+      } else {
+        target = await client.createGroupChat(title, ids);
+      }
+      if (!target) throw new Error(t.sendFailed);
+      const summary = propose.summary?.trim();
+      if (summary) {
+        try {
+          await client.sendMessage(target.chat_id, summary, ids);
+        } catch {
+          /* group is open even if the digest fails */
+        }
+      }
+      setDismissedPropose((cur) => {
+        const next = new Set(cur).add(messageId);
+        writeDismissedPropose(next);
+        return next;
+      });
+      await refreshChats();
+      await openConversation(target);
+      // After navigate: openConversation clears error, so restore ACL misses here.
+      if (failed.length) setError(t.orchProposePartial(failed.join(" · ")));
+    } catch (e) {
+      setError(
+        e instanceof ChatGatewayError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : t.sendFailed,
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmProposeTask = async (
+    propose: OrchestrationProposeTask,
+    messageId: string,
+  ) => {
+    if (!propose.reward) return;
+    if (postingTasksRef.current.has(messageId)) return;
+    postingTasksRef.current.add(messageId);
+    setBusy(true);
+    setError(null);
+    const dismissTaskCard = () => {
+      setDismissedPropose((cur) => {
+        const next = new Set(cur).add(messageId);
+        writeDismissedPropose(next);
+        return next;
+      });
+    };
+    const taskIsTaken = async (taskId: string) => {
+      try {
+        return labsTaskTaken(await client.getLabsTask(taskId));
+      } catch {
+        return false;
+      }
+    };
+    try {
+      let taskId = postedTasksRef.current[messageId];
+      if (!taskId) {
+        const created = await client.createLabsTask({
+          title: propose.title,
+          description: labsTaskDescription(propose.title, propose.description),
+          deadline_hours: propose.deadline_hours ?? 72,
+          reward: propose.reward,
+        });
+        taskId = created.task_id;
+        if (!taskId) throw new Error(t.sendFailed);
+        const next = { ...postedTasksRef.current, [messageId]: taskId };
+        postedTasksRef.current = next;
+        writePostedTasks(next);
+        setPostedTasks(next);
+      } else if (await taskIsTaken(taskId)) {
+        dismissTaskCard();
+        return;
+      }
+      try {
+        await client.collabMatchTask(taskId);
+      } catch (matchErr) {
+        if (await taskIsTaken(taskId)) {
+          dismissTaskCard();
+          return;
+        }
+        throw matchErr;
+      }
+      dismissTaskCard();
+    } catch (e) {
+      setError(
+        postedTasksRef.current[messageId]
+          ? t.orchTaskRecruitFailed
+          : e instanceof ChatGatewayError
+            ? e.message
+            : e instanceof Error
+              ? e.message
+              : t.sendFailed,
+      );
+    } finally {
+      postingTasksRef.current.delete(messageId);
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!active || isGroupChat(active)) return;
+    const hasPropose = messages.some(
+      (m) =>
+        !dismissedPropose.has(m.message_id) &&
+        proposeGroupFromMetadata(m.metadata),
+    );
+    if (!hasPropose) return;
+    const missing = chats
+      .filter(isGroupChat)
+      .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))
+      .slice(0, 8)
+      .filter((g) => groupAgentsByChat[g.chat_id] == null);
+    if (!missing.length) return;
+    let cancelled = false;
+    void Promise.all(
+      missing.map(async (g) => {
+        try {
+          const ps = await client.listParticipants(g.chat_id);
+          return [
+            g.chat_id,
+            ps
+              .filter(
+                (p) => p.participant_type === "agent" && p.is_active !== false,
+              )
+              .map((p) => p.participant_id),
+          ] as const;
+        } catch {
+          return [g.chat_id, [] as string[]] as const;
+        }
+      }),
+    ).then((rows) => {
+      if (cancelled) return;
+      setGroupAgentsByChat((prev) => {
+        const next = { ...prev };
+        for (const [id, ids] of rows) {
+          if (next[id] == null) next[id] = ids;
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    active,
+    messages,
+    chats,
+    dismissedPropose,
+    groupAgentsByChat,
+    client,
+  ]);
+
   type SendOpts = {
     forceMentions?: string[];
     /** Override composer draft (e.g. /topic title as first message). */
@@ -2653,16 +3968,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const send = async (opts?: SendOpts) => {
     const text = (opts?.text ?? draft).trim();
     if (!text || !active) return;
-    // Soft offline guard: keep the draft, surface a dismissible hint.
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      setError(t.offlineSendBlocked);
-      return;
-    }
-    // Soft agent-offline guard (1:1 only): the message would queue with no one to answer.
-    if (!isGroupChat(active) && isAgentOffline(active.agent_status)) {
-      setError(t.sayHelloOffline);
-      return;
-    }
     const chatId = active.chat_id;
     const group = isGroupChat(active);
     const seq = loadSeqRef.current;
@@ -2715,8 +4020,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
           ? opts.threadId
           : (activeTopic?.id ?? composerTopic?.id ?? null);
       await client.sendMessage(chatId, text, mentions, sendThreadId, {
-        requested_model: selectedModelId,
-        decision_goal: !group && !opts?.decisionChoice && pinDecisionGoal ? text : null,
+        requested_model: requestedModelForSend(
+          selectedModelId,
+          composerModel?.listed_model_id ?? null,
+          Boolean(composerModel?.official_channel),
+          composerModel?.official_key_geo,
+        ),
         decision_choice: opts?.decisionChoice ?? null,
       });
       if (group && mentions) {
@@ -2727,18 +4036,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
           clearStickyMention(chatId);
         }
       }
-      // An option click submits its label independently of the composer draft.
-      if (seq === loadSeqRef.current && !opts?.decisionChoice) {
-        setDraft("");
-        setPinDecisionGoal(false);
-      }
+      setDraft("");
       await reloadMessages(chatId, seq);
       await refreshChats();
       // Mode B writeback is async (~5–30s). WS message.new can be missed; poll DB.
       void (async () => {
         const baseline = awaitingSinceRef.current;
-        for (let i = 0; i < 20; i++) {
-          await new Promise((r) => setTimeout(r, 2000));
+        for (let i = 0; i < REPLY_POLL_ATTEMPTS; i++) {
+          await new Promise((r) => setTimeout(r, REPLY_POLL_MS));
           if (replyPollGenRef.current !== pollGen) return;
           if (activeChatIdRef.current !== chatId) return;
           if (seq !== loadSeqRef.current) return;
@@ -2816,21 +4121,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
           else setDeliveryBroken(chatId, true);
         });
       }
-      setError(
-        e instanceof ChatGatewayError
-          ? e.code === "agent_unreachable"
-            ? t.unreachable
-            : e.code === "rate_limited"
-              ? t.rateLimited
-              : e.code === "acn_unavailable"
-                ? t.billingUnavailable
-                : e.code === "unsupported_model"
-                  ? t.unsupportedModel
-                  : e.code === "model_pricing_unavailable"
-                    ? t.modelPricingUnavailable
-                    : e.message
-          : t.sendFailed,
-      );
+      const fail = sendFailureCopy(e, t);
+      setError(fail.text);
+      setStoreKeyPrompt(fail.offerStoreKey);
       try {
         await reloadMessages(chatId, seq);
       } catch {
@@ -2905,7 +4198,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
           text,
           mentions,
           activeTopic?.id ?? composerTopic?.id ?? null,
-          { requested_model: selectedModelId },
+          {
+            requested_model: requestedModelForSend(
+              selectedModelId,
+              composerModel?.listed_model_id ?? null,
+              Boolean(composerModel?.official_channel),
+              composerModel?.official_key_geo,
+            ),
+          },
         );
         if (group && mentions) {
           if (mentions.length === 1) {
@@ -2920,8 +4220,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
         await refreshChats();
         void (async () => {
           const baseline = awaitingSinceRef.current;
-          for (let i = 0; i < 20; i++) {
-            await new Promise((r) => setTimeout(r, 2000));
+          for (let i = 0; i < REPLY_POLL_ATTEMPTS; i++) {
+            await new Promise((r) => setTimeout(r, REPLY_POLL_MS));
             if (replyPollGenRef.current !== pollGen) return;
             if (activeChatIdRef.current !== chatId) return;
             if (seq !== loadSeqRef.current) return;
@@ -2991,21 +4291,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
             else setDeliveryBroken(chatId, true);
           });
         }
-        setError(
-          e instanceof ChatGatewayError
-            ? e.code === "agent_unreachable"
-              ? t.unreachable
-              : e.code === "rate_limited"
-                ? t.rateLimited
-                : e.code === "acn_unavailable"
-                  ? t.billingUnavailable
-                  : e.code === "unsupported_model"
-                    ? t.unsupportedModel
-                    : e.code === "model_pricing_unavailable"
-                      ? t.modelPricingUnavailable
-                      : e.message
-            : t.sendFailed,
-        );
+        const fail = sendFailureCopy(e, t);
+        setError(fail.text);
+        setStoreKeyPrompt(fail.offerStoreKey);
       } finally {
         setBusy(false);
       }
@@ -3014,19 +4302,31 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   if (!open) return null;
 
-  const hostOrigins = [
-    interfazeBaseUrl || "",
-    "https://interfaze.io",
-    typeof window !== "undefined" ? window.location.origin : "",
-  ];
-  const inboxChats = chats.filter((c) => isHostVisibleDirect(c, hostOrigins));
+  const mineAgentIds = directoryAgents
+    .filter((a) => a.group === "mine" && a.agent_id.trim())
+    .map((a) => a.agent_id);
+  const inboxChats = chats.filter((c) => {
+    if (isGroupChat(c)) return true;
+    if (active && c.chat_id === active.chat_id) return true;
+    if (chatHasStarted(c)) return true;
+    // Own agents stay in the inbox even before the first message.
+    return isGlobalDirect(c) && agentIsMine(c.agent_id, mineAgentIds);
+  });
   const filtered = collapseDirectChatsByAgent(
     inboxChats.filter((c) => {
       // Legacy platform sys:* assistants are retired from Interfaze surfaces.
       if ((c.agent_id || "").startsWith("sys:")) return false;
       const q = search.trim().toLowerCase();
       if (!q) return true;
-      return chatTitle(c).toLowerCase().includes(q) || (c.agent_id ?? "").toLowerCase().includes(q);
+      const hay = [
+        chatTitle(c),
+        conversationLabel(c, t),
+        c.agent_id ?? "",
+        c.embed?.context ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
     }),
   );
   const siblingChats =
@@ -3041,6 +4341,138 @@ export function RanchChatShell(props: RanchChatShellProps) {
           .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))
       : [];
 
+  const historyPlans: Array<{
+    key: string;
+    title: string;
+    summary?: string;
+    chatId: string;
+    planId?: string;
+    messageId?: string;
+  }> = (() => {
+    const rows: Array<{
+      key: string;
+      title: string;
+      summary?: string;
+      chatId: string;
+      planId?: string;
+      messageId?: string;
+    }> = [];
+    const seen = new Set<string>();
+    const push = (
+      chatId: string,
+      title: string,
+      summary?: string,
+      planId?: string,
+      messageId?: string,
+    ) => {
+      const key = `${chatId}:${planId || messageId || title}`;
+      if (seen.has(key) || !title.trim()) return;
+      seen.add(key);
+      rows.push({ key, title, summary, chatId, planId, messageId });
+    };
+    for (const c of siblingChats) {
+      const listed = c.decision?.plans?.length
+        ? c.decision.plans
+        : c.decision?.plan
+          ? [c.decision.plan]
+          : [];
+      for (const p of listed) {
+        if (!p?.title) continue;
+        push(
+          c.chat_id,
+          p.title,
+          p.summary,
+          p.plan_id || p.id,
+          p.source_message_id || p.message_id,
+        );
+      }
+    }
+    if (active && !isGroupChat(active)) {
+      for (const m of messages) {
+        const plan = planFromMetadata(m.metadata);
+        if (plan) {
+          push(
+            active.chat_id,
+            plan.title,
+            plan.summary,
+            plan.plan_id || plan.id,
+            plan.source_message_id || plan.message_id || m.message_id,
+          );
+        }
+      }
+    }
+    return rows;
+  })();
+
+  const openPlanRow = (row: {
+    chatId: string;
+    planId?: string;
+    title: string;
+    summary?: string;
+    messageId?: string;
+  }) => {
+    const launch = () => {
+      if (row.planId) {
+        setPlanViewer({
+          chatId: row.chatId,
+          planId: row.planId,
+          title: row.title,
+          summary: row.summary,
+        });
+        return;
+      }
+      if (row.messageId && active?.chat_id === row.chatId) {
+        setShowMembersPanel(false);
+        scrollToMessage(row.messageId);
+      }
+    };
+    if (row.chatId !== active?.chat_id) {
+      const target = siblingChats.find((c) => c.chat_id === row.chatId);
+      if (target) {
+        void openConversation(target);
+        if (row.planId) {
+          setPlanViewer({
+            chatId: row.chatId,
+            planId: row.planId,
+            title: row.title,
+            summary: row.summary,
+          });
+        }
+      }
+      return;
+    }
+    launch();
+  };
+
+  const historyTasks: Array<{
+    key: string;
+    title: string;
+    pending: boolean;
+    taskId?: string;
+    messageId: string;
+  }> = (() => {
+    const rows: Array<{
+      key: string;
+      title: string;
+      pending: boolean;
+      taskId?: string;
+      messageId: string;
+    }> = [];
+    for (const m of messages) {
+      const task = proposeTaskFromMetadata(m.metadata);
+      if (!task) continue;
+      const taskId = postedTasks[m.message_id];
+      rows.push({
+        key: m.message_id,
+        title: task.title,
+        pending: !taskId,
+        taskId,
+        messageId: m.message_id,
+      });
+    }
+    return rows;
+  })();
+
   const showAgentReplyPending =
     replySlot?.phase === "pending" && replySlot.chatId === active?.chat_id;
   const showAgentReplyTimeout =
@@ -3053,6 +4485,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
   });
   const mineAgents = directoryAgents.filter((a) => a.group === "mine" && a.agent_id.trim());
   const hasMineAgents = mineAgents.length > 0;
+  const officialAgent =
+    directoryAgents.find(
+      (a) => a.group === "recommended" && isAcnCatalogAgentId(a.agent_id),
+    ) ?? null;
 
   const isOwnedDirectAgent = (agentId?: string | null): boolean => {
     if (!agentId?.trim()) return false;
@@ -3114,27 +4550,73 @@ export function RanchChatShell(props: RanchChatShellProps) {
           const options = Array.isArray(row.model_options) ? row.model_options : [];
           const listed = row.listed_model_id ?? null;
           const runtime = row.runtime_model_id ?? null;
+          const officialIds = Array.isArray(row.official_models)
+            ? row.official_models.filter((m): m is string => typeof m === "string" && !!m.trim())
+            : [];
+          const listedOfficial =
+            row.host_inference_ready !== false &&
+            !!listed &&
+            officialIds.some((id) => sameModelId(id, listed));
           setComposerModel({
             listed_model_id: listed,
             runtime_model_id: runtime,
             mismatched: !!row.mismatched,
+            official_channel: listedOfficial,
+            official_models: officialIds,
+            official_key_geo:
+              typeof row.official_key_geo === "string" ? row.official_key_geo : "",
+            markup_percent:
+              typeof row.markup_percent === "number" ? row.markup_percent : null,
             supported_models: supported,
             model_options: options,
           });
-          setSelectedModelId((prev) => {
-            const pool = supported.length
-              ? supported
-              : [listed, runtime].filter((m): m is string => !!m && !!m.trim());
-            const stored = readComposerModelPick(active.chat_id);
-            const kept = pickCanonicalModelId(prev || stored, pool);
-            if (kept) {
-              writeComposerModelPick(active.chat_id, kept);
-              return kept;
-            }
-            const fallback = listed || runtime || pool[0] || null;
-            if (fallback) writeComposerModelPick(active.chat_id, fallback);
-            return fallback;
+          const fallback = supported.length
+            ? supported
+            : [listed].filter((m): m is string => !!m && !!m.trim());
+          const stored = readComposerModelPick(active.chat_id);
+          const storedListed = readComposerListed(active.chat_id);
+          const prevFromRef =
+            composerListedRef.current?.chatId === active.chat_id
+              ? composerListedRef.current.listed
+              : null;
+          const previousListed = prevFromRef || storedListed;
+          const initializingListed = Boolean(listed && !previousListed);
+          const listedChanged = Boolean(
+            listed &&
+              (previousListed
+                ? !sameModelId(previousListed, listed)
+                : initializingListed && stored && !sameModelId(stored, listed)),
+          );
+          composerListedRef.current = listed
+            ? { chatId: active.chat_id, listed }
+            : null;
+          writeComposerListed(active.chat_id, listed);
+          const catalogIds = listedOfficial
+            ? composerCatalogRef.current.map((row) => row.id)
+            : [];
+          const nextModel = pickComposerModelForPath({
+            official: listedOfficial,
+            openRouterByo: isOpenRouterByoListed(listed, runtime, supported),
+            wanted: listedChanged ? listed : stored,
+            listed,
+            runtime,
+            fallback,
+            officialIds,
+            catalogIds,
           });
+          const catalogPending = listedOfficial && catalogIds.length === 0;
+          if (
+            catalogPending &&
+            stored &&
+            !listedChanged &&
+            officialV0SupportsModel(stored) &&
+            officialShelfAllows(stored, row.official_key_geo)
+          ) {
+            setSelectedModelId(stored);
+          } else {
+            setSelectedModelId(nextModel);
+            writeComposerModelPick(active.chat_id, nextModel);
+          }
         })
         .catch(() => {
           if (!cancelled) {
@@ -3148,7 +4630,161 @@ export function RanchChatShell(props: RanchChatShellProps) {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [active?.chat_id, active?.agent_id, active?.type, client]);
+  }, [
+    active?.chat_id,
+    active?.agent_id,
+    active?.type,
+    client,
+    ownedAgentDetail?.token_pricing?.model_id,
+    (ownedAgentDetail?.official_models ?? []).join("\u0001"),
+  ]);
+
+  useEffect(() => {
+    setComposerMenuOpen(false);
+    setComposerMenuQuery("");
+  }, [active?.chat_id]);
+
+  useEffect(() => {
+    if (!composerMenuOpen) setComposerMenuQuery("");
+  }, [composerMenuOpen]);
+
+  useEffect(() => {
+    const official = Boolean(composerModel?.official_channel);
+    const openRouterByo = isOpenRouterByoListed(
+      composerModel?.listed_model_id,
+      composerModel?.runtime_model_id,
+      composerModel?.supported_models,
+    );
+    if (!official && !openRouterByo) {
+      setComposerCatalog([]);
+      setComposerCatalogLoading(false);
+      return;
+    }
+    const keyGeo = (composerModel?.official_key_geo || "").trim();
+    if (official && !keyGeo) {
+      setComposerCatalog([]);
+      setComposerCatalogLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setComposerCatalogLoading(true);
+    void (async () => {
+      const page = 500;
+      const acc: Array<{ id: string; in: number; out: number }> = [];
+      let offset = 0;
+      let total = Number.POSITIVE_INFINITY;
+      try {
+        while (!cancelled && offset < total && offset < 8000) {
+          const data = await client.listModelCatalog({
+            source: "openrouter",
+            active_only: true,
+            official_shelf: official,
+            limit: page,
+            offset,
+          });
+          total = Number.isFinite(data.total) ? data.total : offset + data.items.length;
+          for (const row of data.items) {
+            const src = (row.source || "openrouter").toLowerCase();
+            if (src && src !== "openrouter") continue;
+            const id = (row.model_id || "").trim();
+            if (!id) continue;
+            if (official && !officialShelfAllows(id, keyGeo)) continue;
+            const quote = official ? officialCatalogRates(row) : syncCatalogRates(row);
+            if (!quote) continue;
+            if (quote.input < 0 || quote.output < 0) continue;
+            if (acc.some((item) => sameModelId(item.id, id))) continue;
+            acc.push({ id, in: quote.input, out: quote.output });
+          }
+          if (!cancelled) setComposerCatalog([...acc]);
+          if (!data.items.length) break;
+          offset += data.items.length;
+        }
+      } catch {
+        if (!cancelled) setComposerCatalog([]);
+      } finally {
+        if (!cancelled) setComposerCatalogLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    client,
+    composerModel?.official_channel,
+    composerModel?.official_key_geo,
+    composerModel?.listed_model_id,
+    composerModel?.runtime_model_id,
+  ]);
+
+  useEffect(() => {
+    if (!composerModel?.official_channel) return;
+    if (officialV0SupportsModel(selectedModelId)) return;
+    const next =
+      composerCatalog.find((row) => officialV0SupportsModel(row.id))?.id ||
+      composerModel.listed_model_id ||
+      null;
+    if (!next || sameModelId(next, selectedModelId)) return;
+    setSelectedModelId(next);
+    if (active?.chat_id) writeComposerModelPick(active.chat_id, next);
+  }, [
+    active?.chat_id,
+    composerCatalog,
+    composerModel?.listed_model_id,
+    composerModel?.official_channel,
+    selectedModelId,
+  ]);
+
+  useEffect(() => {
+    if (!composerModel?.official_channel || !active?.chat_id) return;
+    if (composerCatalogLoading || composerCatalog.length === 0) return;
+    const stored = readComposerModelPick(active.chat_id);
+    const listed = composerModel.listed_model_id ?? null;
+    const storedListed = readComposerListed(active.chat_id);
+    const listedChanged = Boolean(
+      listed && storedListed && !sameModelId(storedListed, listed),
+    );
+    const next = pickComposerModelForPath({
+      official: true,
+      openRouterByo: false,
+      wanted: listedChanged ? listed : stored,
+      listed: composerModel.listed_model_id ?? null,
+      runtime: composerModel.runtime_model_id ?? null,
+      fallback: composerModel.supported_models,
+      officialIds: composerModel.official_models,
+      catalogIds: composerCatalog.map((row) => row.id),
+    });
+    if (!next || sameModelId(next, selectedModelId)) return;
+    setSelectedModelId(next);
+    writeComposerModelPick(active.chat_id, next);
+  }, [
+    active?.chat_id,
+    composerCatalog,
+    composerCatalogLoading,
+    composerModel?.listed_model_id,
+    composerModel?.official_channel,
+    (composerModel?.official_models ?? []).join("\u0001"),
+    composerModel?.runtime_model_id,
+    (composerModel?.supported_models ?? []).join("\u0001"),
+  ]);
+
+  useEffect(() => {
+    if (!composerMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const el = composerMenuRef.current;
+      if (el && e.target instanceof Node && !el.contains(e.target)) {
+        setComposerMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setComposerMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [composerMenuOpen]);
 
   /** After owner renames an agent: refresh detail, chat titles, @ labels, host directory. */
   const applyOwnedAgentProfileUpdate = (
@@ -3233,111 +4869,331 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const groupActive = !!(active && isGroupChat(active));
   const latestDecideId = groupActive
     ? undefined
-    : [...displayMessages].reverse().find(
-        (m) => m.sender_type === "agent" && decideFromMetadata(m.metadata),
-      )?.message_id;
+    : [...displayMessages].reverse().find((m) => decideFromMetadata(m.metadata))?.message_id;
   const studioOrigin = (studioBaseUrl || "").replace(/\/+$/, "");
+  const embodyOrigin = (embodyBaseUrl || "").replace(/\/+$/, "");
   const activeWindow = active ? chatWindows[active.chat_id] ?? null : null;
-  const paneOpen = Boolean(active && paneOpenByChat[active.chat_id]);
+  const talkOpen = activeWindow?.kind === "talk";
+  const bodyOpen = activeWindow?.kind === "body" || activeWindow?.kind === "body-pick";
   const canOpenTalk = Boolean(studioOrigin && active?.agent_id && !groupActive);
+  const canOpenBody = Boolean(embodyOrigin && active?.agent_id && !groupActive);
+  const windowHostOrigin =
+    activeWindow?.kind === "body" || activeWindow?.kind === "body-pick"
+      ? embodyOrigin
+      : activeWindow?.kind === "talk"
+        ? studioOrigin
+        : "";
 
-  const setPaneOpen = useCallback((chatId: string, open: boolean) => {
-    setPaneOpenByChat((prev) => ({ ...prev, [chatId]: open }));
+  const closeChatWindow = useCallback((chatId: string) => {
+    setChatWindows((prev) => {
+      if (!prev[chatId]) return prev;
+      const next = { ...prev };
+      delete next[chatId];
+      return next;
+    });
+    setWindowError(null);
   }, []);
 
-  const hidePane = useCallback((chatId: string) => {
-    setPaneOpen(chatId, false);
+  const toggleTalkWindow = useCallback(async () => {
+    if (!active?.chat_id || !active.agent_id || !studioOrigin) return;
+    const current = chatWindows[active.chat_id];
+    if (current?.kind === "talk") {
+      if (current.expired || remintingRef.current.has(`${current.chatId}:talk`)) {
+        setWindowBusy("talk");
+        setWindowError(null);
+        const ok = await renewHostTicketRef.current(current);
+        setWindowBusy(null);
+        if (!ok) setWindowError(t.faceChatFailed);
+        return;
+      }
+      closeChatWindow(active.chat_id);
+      return;
+    }
+    setWindowBusy("talk");
     setWindowError(null);
-  }, [setPaneOpen]);
+    const opened = await openStudioTalk({
+      studioBaseUrl: studioOrigin,
+      getAccessToken,
+      agentId: active.agent_id,
+    });
+    setWindowBusy(null);
+    if (!opened.ok || !opened.data.hostToken) {
+      setWindowError(
+        !opened.ok && opened.code === "chat_closed" ? t.faceChatClosed : t.faceChatFailed,
+      );
+      return;
+    }
+    const expiresIn = opened.data.hostExpiresIn;
+    setChatWindows((prev) => ({
+      ...prev,
+      [active.chat_id]: {
+        chatId: active.chat_id,
+        kind: "talk",
+        title: opened.data.name || t.faceChat,
+        expired: false,
+        payload: {
+          agentId: opened.data.agentId || active.agent_id || "",
+          hostPath: opened.data.hostPath || "",
+          hostToken: opened.data.hostToken || "",
+          hostExpiresAt:
+            typeof expiresIn === "number" ? Date.now() + expiresIn * 1000 : undefined,
+          shareToken: opened.data.shareToken,
+          projectId: opened.data.id,
+          name: opened.data.name,
+        },
+      },
+    }));
+  }, [
+    active?.agent_id,
+    active?.chat_id,
+    chatWindows,
+    closeChatWindow,
+    getAccessToken,
+    studioOrigin,
+    t.faceChat,
+    t.faceChatClosed,
+    t.faceChatFailed,
+  ]);
 
-  const ensureTalkWindow = useCallback(
-    async (opts?: { force?: boolean }) => {
-      if (!active?.chat_id || !active.agent_id || !studioOrigin) return;
-      const chatId = active.chat_id;
-      const agentId = active.agent_id;
-      setPaneOpen(chatId, true);
-      if (!opts?.force && talkTokenFresh(chatWindowsRef.current[chatId])) return;
-      if (talkInflightRef.current === chatId) return;
-      talkInflightRef.current = chatId;
-      setWindowBusy(true);
+  const applyOpenedBody = useCallback(
+    (
+      chatId: string,
+      agentId: string,
+      opened: { data: { hostPath?: string; hostToken?: string; hostExpiresIn?: number; name?: string; agentId?: string; bodyId?: string; id?: string } },
+    ) => {
+      const expiresIn = opened.data.hostExpiresIn;
+      const hostPath = opened.data.hostPath || "";
+      setChatWindows((prev) => ({
+        ...prev,
+        [chatId]: {
+          chatId,
+          kind: "body",
+          title: opened.data.name || t.bodyChat,
+          expired: false,
+          payload: {
+            agentId: opened.data.agentId || agentId,
+            hostPath,
+            hostToken: opened.data.hostToken || "",
+            hostExpiresAt:
+              typeof expiresIn === "number" ? Date.now() + expiresIn * 1000 : undefined,
+            bodyId: opened.data.bodyId || opened.data.id || bodyIdFromHostPath(hostPath),
+            name: opened.data.name,
+          },
+        },
+      }));
+    },
+    [t.bodyChat],
+  );
+
+  const renewHostTicket = useCallback(
+    async (win: Extract<ChatWindow, { kind: "talk" | "body" }>) => {
+      const key = `${win.chatId}:${win.kind}`;
+      if (remintingRef.current.has(key)) return true;
+      remintingRef.current.add(key);
+      try {
+        const opened =
+          win.kind === "body"
+            ? embodyOrigin
+              ? await openEmbodyHost({
+                  embodyBaseUrl: embodyOrigin,
+                  getAccessToken,
+                  agentId: win.payload.agentId,
+                  bodyId: win.payload.bodyId || bodyIdFromHostPath(win.payload.hostPath),
+                })
+              : { ok: false as const, code: "failed" }
+            : studioOrigin
+              ? await openStudioTalk({
+                  studioBaseUrl: studioOrigin,
+                  getAccessToken,
+                  agentId: win.payload.agentId,
+                })
+              : { ok: false as const, code: "failed" };
+        if (!opened.ok || !opened.data.hostToken) {
+          setChatWindows((prev) => {
+            const cur = prev[win.chatId];
+            if (!cur || cur.kind === "body-pick" || cur.kind !== win.kind) return prev;
+            return { ...prev, [win.chatId]: { ...cur, expired: true } };
+          });
+          return false;
+        }
+        const expiresIn = opened.data.hostExpiresIn;
+        setChatWindows((prev) => {
+          const cur = prev[win.chatId];
+          if (!cur || cur.kind === "body-pick" || cur.kind !== win.kind) return prev;
+          return {
+            ...prev,
+            [win.chatId]: {
+              ...cur,
+              expired: false,
+              payload: {
+                ...cur.payload,
+                hostToken: opened.data.hostToken || cur.payload.hostToken,
+                hostPath: opened.data.hostPath || cur.payload.hostPath,
+                hostExpiresAt:
+                  typeof expiresIn === "number"
+                    ? Date.now() + expiresIn * 1000
+                    : cur.payload.hostExpiresAt,
+                bodyId:
+                  opened.data.bodyId ||
+                  opened.data.id ||
+                  cur.payload.bodyId ||
+                  bodyIdFromHostPath(opened.data.hostPath || cur.payload.hostPath),
+              },
+            },
+          };
+        });
+        return true;
+      } finally {
+        remintingRef.current.delete(key);
+      }
+    },
+    [embodyOrigin, getAccessToken, studioOrigin],
+  );
+  renewHostTicketRef.current = renewHostTicket;
+
+  const toggleBodyWindow = useCallback(async () => {
+    if (!active?.chat_id || !active.agent_id || !embodyOrigin) return;
+    const current = chatWindows[active.chat_id];
+    if (current?.kind === "body-pick") {
+      closeChatWindow(active.chat_id);
+      return;
+    }
+    if (current?.kind === "body") {
+      if (current.expired || remintingRef.current.has(`${current.chatId}:body`)) {
+        setWindowBusy("body");
+        setWindowError(null);
+        const ok = await renewHostTicket(current);
+        setWindowBusy(null);
+        if (!ok) setWindowError(t.bodyChatFailed);
+        return;
+      }
+      closeChatWindow(active.chat_id);
+      return;
+    }
+    setWindowBusy("body");
+    setWindowError(null);
+    const opened = await openEmbodyHost({
+      embodyBaseUrl: embodyOrigin,
+      getAccessToken,
+      agentId: active.agent_id,
+    });
+    setWindowBusy(null);
+    if (opened.ok) {
+      const pickBodies = opened.data.pick ? opened.data.bodies : undefined;
+      if (pickBodies?.length) {
+        setChatWindows((prev) => ({
+          ...prev,
+          [active.chat_id]: {
+            chatId: active.chat_id,
+            kind: "body-pick",
+            title: t.bodyChatPick,
+            agentId: opened.data.agentId || active.agent_id || "",
+            bodies: pickBodies,
+          },
+        }));
+        return;
+      }
+      if (!opened.data.hostToken || !opened.data.hostPath) {
+        setWindowError(t.bodyChatFailed);
+        return;
+      }
+      applyOpenedBody(active.chat_id, active.agent_id, opened);
+      return;
+    }
+    setWindowError(opened.code === "no_body" ? t.bodyChatClosed : t.bodyChatFailed);
+  }, [
+    active?.agent_id,
+    active?.chat_id,
+    applyOpenedBody,
+    chatWindows,
+    closeChatWindow,
+    embodyOrigin,
+    getAccessToken,
+    renewHostTicket,
+    t.bodyChatClosed,
+    t.bodyChatFailed,
+    t.bodyChatPick,
+  ]);
+
+  const openPickedBody = useCallback(
+    async (bodyId: string) => {
+      if (!active?.chat_id || !active.agent_id || !embodyOrigin) return;
+      setWindowBusy("body");
       setWindowError(null);
-      const opened = await openStudioTalk({
-        studioBaseUrl: studioOrigin,
+      const opened = await openEmbodyHost({
+        embodyBaseUrl: embodyOrigin,
         getAccessToken,
-        agentId,
+        agentId: active.agent_id,
+        bodyId,
       });
-      if (talkInflightRef.current === chatId) talkInflightRef.current = null;
-      setWindowBusy(false);
-      if (!opened.ok || !opened.data.hostToken) {
-        setWindowError(talkOpenErrorMessage(!opened.ok ? opened.code : "failed", t));
+      setWindowBusy(null);
+      if (!opened.ok || !opened.data.hostToken || !opened.data.hostPath) {
+        setWindowError(
+          !opened.ok && opened.code === "no_body" ? t.bodyChatClosed : t.bodyChatFailed,
+        );
         return;
       }
-      const next = talkWindowFromOpen({
-        chatId,
-        agentId,
-        data: opened.data,
-        title: t.faceChat,
-      });
-      if (!next) {
-        setWindowError(t.faceChatFailed);
-        return;
-      }
-      setChatWindows((prev) => ({ ...prev, [chatId]: next }));
+      applyOpenedBody(active.chat_id, active.agent_id, opened);
     },
     [
       active?.agent_id,
       active?.chat_id,
+      applyOpenedBody,
+      embodyOrigin,
       getAccessToken,
-      setPaneOpen,
-      studioOrigin,
-      t,
+      t.bodyChatClosed,
+      t.bodyChatFailed,
     ],
   );
 
-  const openTalkWindow = useCallback(() => {
-    void ensureTalkWindow();
-  }, [ensureTalkWindow]);
+  const hostRefreshKey = Object.values(chatWindows)
+    .map((win) =>
+      win.kind === "body-pick"
+        ? `${win.chatId}:body-pick`
+        : `${win.chatId}:${win.kind}:${win.payload.hostExpiresAt ?? 0}`,
+    )
+    .sort()
+    .join("|");
 
   useEffect(() => {
-    if (!windowPersistReadyRef.current) return;
-    if (!active?.chat_id || !canOpenTalk || !paneOpen) return;
-    const live = chatWindowsRef.current[active.chat_id];
-    if (talkTokenFresh(live)) return;
-    const persisted = persistedWindowsRef.current[active.chat_id];
-    if (live?.kind === "talk" || persisted?.kind === "talk") {
-      void ensureTalkWindow();
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    let cancelled = false;
+    for (const win of Object.values(chatWindows)) {
+      if (win.kind === "body-pick") continue;
+      const expiresAt = win.payload.hostExpiresAt;
+      if (!expiresAt || !win.payload.hostToken) continue;
+      const delay = Math.max(0, expiresAt - Date.now() - 60_000);
+      timers.push(
+        setTimeout(() => {
+          if (cancelled) return;
+          void renewHostTicket(win);
+        }, delay),
+      );
     }
-  }, [active?.chat_id, canOpenTalk, ensureTalkWindow, paneOpen]);
+    return () => {
+      cancelled = true;
+      for (const timer of timers) clearTimeout(timer);
+    };
+  }, [chatWindows, hostRefreshKey, renewHostTicket]);
 
   useEffect(() => {
-    if (!active?.chat_id || !paneOpen || !canOpenTalk) return;
-    const live = chatWindowsRef.current[active.chat_id];
-    if (live?.kind !== "talk" || !live.payload.hostExpiresAt) return;
-    const delay = Math.max(5_000, live.payload.hostExpiresAt - Date.now() - TALK_REFRESH_LEAD_MS);
-    const timer = window.setTimeout(() => {
-      void ensureTalkWindow({ force: true });
-    }, delay);
-    return () => window.clearTimeout(timer);
-  }, [
-    active?.chat_id,
-    activeWindow?.payload.hostExpiresAt,
-    activeWindow?.payload.hostToken,
-    canOpenTalk,
-    ensureTalkWindow,
-    paneOpen,
-  ]);
-
-  useEffect(() => {
-    const onVis = () => {
-      if (document.visibilityState !== "visible") return;
-      if (!active?.chat_id || !paneOpen || !canOpenTalk) return;
-      if (!talkTokenFresh(chatWindowsRef.current[active.chat_id])) {
-        void ensureTalkWindow();
+    const poke = () => {
+      if (document.visibilityState === "hidden") return;
+      for (const win of Object.values(chatWindowsRef.current)) {
+        if (win.kind === "body-pick") continue;
+        const expiresAt = win.payload.hostExpiresAt;
+        if (!expiresAt || !win.payload.hostToken) continue;
+        if (expiresAt - Date.now() > 60_000) continue;
+        void renewHostTicket(win);
       }
     };
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, [active?.chat_id, canOpenTalk, ensureTalkWindow, paneOpen]);
+    document.addEventListener("visibilitychange", poke);
+    window.addEventListener("focus", poke);
+    return () => {
+      document.removeEventListener("visibilitychange", poke);
+      window.removeEventListener("focus", poke);
+    };
+  }, [renewHostTicket]);
 
   const slashParsed = parseSlashDraft(draft);
   const slashMenuOpen = isSlashMenuDraft(draft) && !slashMenuDismissed;
@@ -3500,6 +5356,99 @@ export function RanchChatShell(props: RanchChatShellProps) {
     Date.now() - stickyMention.setAt <= STICKY_MENTION_TTL_MS &&
     agentIdsRef.current.includes(stickyMention.agentId);
 
+  // Account panels mount in the right pane on desktop (full) and cover the
+  // list column in narrow (side) mode. PanelChrome fills its positioned parent.
+  const accountPanels = (
+    <>
+      {showAccountProfile && account ? (
+        <AccountProfilePanel
+          account={account}
+          messages={t}
+          onClose={() => closeAccountPanel()}
+        />
+      ) : null}
+
+      {showAccountManage ? (
+        <AccountManagePanel
+          messages={t}
+          onClose={() => closeAccountPanel()}
+          onOpenAgents={() => {
+            setShowAccountManage(false);
+            setShowMyAgents(true);
+          }}
+        />
+      ) : null}
+
+      {showAccountWallet ? (
+        <AccountWalletPanel
+          client={client}
+          messages={t}
+          interfazeBaseUrl={interfazeBaseUrl}
+          locale={uiLocale}
+          onClose={() => closeAccountPanel()}
+          onOpenBilling={() => openAccountPanel("billing")}
+        />
+      ) : null}
+
+      {showAccountBilling ? (
+        <AccountBillingPanel
+          client={client}
+          messages={t}
+          interfazeBaseUrl={interfazeBaseUrl}
+          onClose={() => closeAccountPanel()}
+        />
+      ) : null}
+
+      {showAccountKeys ? (
+        <AccountKeysPanel
+          client={client}
+          messages={t}
+          agentPlanetBaseUrl={agentPlanetBaseUrl}
+          onClose={() => closeAccountPanel()}
+        />
+      ) : null}
+
+      {showAccountPlan ? (
+        <AccountPlanUsagePanel
+          client={client}
+          messages={t}
+          locale={uiLocale}
+          agentPlanetBaseUrl={agentPlanetBaseUrl}
+          interfazeBaseUrl={interfazeBaseUrl}
+          onClose={() => closeAccountPanel()}
+        />
+      ) : null}
+
+      {showMyAgents ? (
+        <MyAgentsPanel
+          client={client}
+          connectGuideUrl={connectGuideUrl}
+          agentPlanetBaseUrl={agentPlanetBaseUrl}
+          interfazeBaseUrl={interfazeBaseUrl}
+          locale={uiLocale}
+          messages={t}
+          busy={busy}
+          onClose={() => {
+            setShowMyAgents(false);
+            setShowAccountManage(true);
+          }}
+          onConnectExisting={() => setShowConnect(true)}
+          onCreateHosted={() => setShowCreateDialog(true)}
+          onOpenChat={(id) => {
+            setShowMyAgents(false);
+            setShowAccountManage(false);
+            void startDirect(id);
+          }}
+          onAgentUpdated={(row, previousName) => {
+            applyOwnedAgentProfileUpdate(row, previousName);
+          }}
+          onAgentRemoved={applyOwnedAgentRemoved}
+          onOpenKeys={() => openAccountPanel("keys")}
+        />
+      ) : null}
+    </>
+  );
+
   return (
     <div style={shellRoot(mode)} data-ranch-chat-shell data-mode={mode}>
       <style>{`
@@ -3531,14 +5480,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
           outline: 2px solid ${colors.accent};
           outline-offset: 2px;
         }
-        .ranch-list-item { background: transparent; }
-        .ranch-list-item:hover { background: ${colors.hover}; }
-        .ranch-list-item:focus-visible {
-          outline: 2px solid ${colors.accent};
-          outline-offset: -2px;
-        }
-        .ranch-list-item[data-selected="true"] { background: ${colors.accentSoft}; }
-        .ranch-list-item[data-selected="true"]:hover { background: rgba(59,130,246,0.22); }
       `}</style>
       <div
         style={{
@@ -3635,12 +5576,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
           <NewComposeMenu
             allowGroupChat={allowGroupChat}
             messages={t}
-            onConnectExisting={() => {
-              const origin =
-                (interfazeBaseUrl || "").replace(/\/+$/, "") ||
-                (typeof window !== "undefined" ? window.location.origin : "");
-              void openJoinLanding(origin, () => client.createJoinInvite());
-            }}
+            showCreateHosted={createMenuAvailable}
+            onCreateHosted={() => setShowCreateDialog(true)}
+            onConnectExisting={() => setShowConnect(true)}
             onDirect={() => setPickerMode("direct")}
             onGroup={() => setPickerMode("group")}
           />
@@ -3655,11 +5593,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
         <div style={{ flex: 1, overflow: "auto", padding: 8 }}>
           {loadingChats ? (
             <p style={{ color: colors.muted, textAlign: "center", padding: 24 }}>{t.loading}</p>
-          ) : chatLoadError ? (
-            <div role="status" style={{ padding: 24, color: colors.muted }}>
-              <p>{chatLoadError}</p>
-              <button type="button" style={btnGhost} onClick={() => void refreshChats()}>{t.retry}</button>
-            </div>
           ) : filtered.length === 0 ? (
             hasMineAgents ? (
               <div style={{ textAlign: "center", padding: 32, color: colors.muted }}>
@@ -3674,6 +5607,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 connectGuideUrl={connectGuideUrl}
                 interfazeBaseUrl={interfazeBaseUrl}
                 locale={uiLocale}
+                officialAgent={officialAgent}
+                onStartOfficial={
+                  officialAgent
+                    ? () => {
+                        void startDirect(officialAgent.agent_id);
+                      }
+                    : undefined
+                }
+                onConnectExisting={() => setShowConnect(true)}
                 onNewChat={() => setPickerMode("direct")}
                 t={t}
               />
@@ -3707,10 +5649,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       ? [c.agent_id, listTitle].filter(Boolean).join(" · ") || undefined
                       : undefined
                   }
-                  className="ranch-list-item"
                   data-selected={selected}
                   aria-current={selected ? "true" : undefined}
-                  style={listItem}
+                  style={{
+                    ...listItem,
+                    background: selected ? colors.accentSoft : "transparent",
+                  }}
                 >
                   <span style={{ position: "relative", width: 40, height: 40, flexShrink: 0 }}>
                     <span
@@ -3718,7 +5662,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         width: 40,
                         height: 40,
                         borderRadius: c.type === "group" ? 10 : 999,
-                        background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
+                        background: "linear-gradient(135deg,#334155,#1e293b)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -3766,7 +5710,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       </span>
                       <span style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                         <span style={{ fontSize: 10, color: colors.muted }}>
-                          {formatRelativeTime(c.last_message_at, t)}
+                          {formatRelativeTime(c.last_message_at || c.created_at, t)}
                         </span>
                         {(c.unread_count ?? 0) > 0 ? (
                           <span
@@ -3776,7 +5720,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               padding: "0 5px",
                               borderRadius: 999,
                               background: colors.accent,
-                              color: colors.onAccent,
+                              color: "#fff",
                               fontSize: 10,
                               fontWeight: 700,
                               display: "inline-flex",
@@ -3824,6 +5768,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
             }}
           >
             <span>{error}</span>
+            {storeKeyPrompt ? (
+              <a
+                href={storeOpenRouterUrl(agentPlanetBaseUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: colors.text, textDecoration: "underline" }}
+              >
+                {t.buyOpenRouterCredits}
+              </a>
+            ) : null}
             {/session expired|登录已失效|not authenticated/i.test(error) &&
             (onReauth || onLogout) ? (
               <div style={{ display: "flex", gap: 8 }}>
@@ -3849,7 +5803,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
             onProfile={() => openAccountPanel("profile")}
             onManage={() => openAccountPanel("manage")}
             onWallet={() => openAccountPanel("wallet")}
+            onKeys={() => openAccountPanel("keys")}
             onPlanUsage={() => openAccountPanel("plan")}
+            onBilling={() => openAccountPanel("billing")}
             onDiscoverAgents={() => {
               closeAccountPanel();
               setPickerMode("direct");
@@ -3858,70 +5814,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           />
         ) : null}
 
-        {showAccountProfile && account ? (
-          <AccountProfilePanel
-            account={account}
-            messages={t}
-            onClose={() => closeAccountPanel()}
-          />
-        ) : null}
-
-        {showAccountManage ? (
-          <AccountManagePanel
-            messages={t}
-            onClose={() => closeAccountPanel()}
-            onOpenAgents={() => {
-              setShowAccountManage(false);
-              setShowMyAgents(true);
-            }}
-          />
-        ) : null}
-
-        {showAccountWallet ? (
-          <AccountWalletPanel
-            client={client}
-            messages={t}
-            interfazeBaseUrl={interfazeBaseUrl}
-            locale={uiLocale}
-            onClose={() => closeAccountPanel()}
-          />
-        ) : null}
-
-        {showAccountPlan ? (
-          <AccountPlanUsagePanel
-            client={client}
-            messages={t}
-            locale={uiLocale}
-            agentPlanetBaseUrl={agentPlanetBaseUrl}
-            interfazeBaseUrl={interfazeBaseUrl}
-            onClose={() => closeAccountPanel()}
-          />
-        ) : null}
-
-        {showMyAgents ? (
-          <MyAgentsPanel
-            client={client}
-            connectGuideUrl={connectGuideUrl}
-            agentPlanetBaseUrl={agentPlanetBaseUrl}
-            interfazeBaseUrl={interfazeBaseUrl}
-            locale={uiLocale}
-            messages={t}
-            busy={busy}
-            onClose={() => {
-              setShowMyAgents(false);
-              setShowAccountManage(true);
-            }}
-            onOpenChat={(id) => {
-              setShowMyAgents(false);
-              setShowAccountManage(false);
-              void startDirect(id);
-            }}
-            onAgentUpdated={(row, previousName) => {
-              applyOwnedAgentProfileUpdate(row, previousName);
-            }}
-            onAgentRemoved={applyOwnedAgentRemoved}
-          />
-        ) : null}
+        {mode === "full" ? null : accountPanels}
       </div>
 
       {(view === "conversation" || mode === "full") && (
@@ -3986,19 +5879,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     justifyContent: "center",
                   }}
                 >
-                  {loadingChats || chatLoadError || healthOk === false ? (
-                    <div role="status" style={{ padding: 24, color: colors.muted }}>
-                      <p>{loadingChats ? t.loading : chatLoadError || t.gatewayUnavailable}</p>
-                      {!loadingChats && <button type="button" style={btnGhost} onClick={() => void refreshChats()}>{t.retry}</button>}
-                    </div>
-                  ) : <NoAgentsEmpty
+                  <NoAgentsEmpty
                     client={client}
                     connectGuideUrl={connectGuideUrl}
                     interfazeBaseUrl={interfazeBaseUrl}
                     locale={uiLocale}
+                    officialAgent={officialAgent}
+                    onStartOfficial={
+                      officialAgent
+                        ? () => {
+                            void startDirect(officialAgent.agent_id);
+                          }
+                        : undefined
+                    }
+                    onConnectExisting={() => setShowConnect(true)}
                     onNewChat={() => setPickerMode("direct")}
                     t={t}
-                  />}
+                  />
                 </div>
               )}
             </>
@@ -4070,7 +5967,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           width: 32,
                           height: 32,
                           borderRadius: isGroupChat(active) ? 8 : 999,
-                          background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
+                          background: "linear-gradient(135deg,#334155,#1e293b)",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -4078,7 +5975,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           fontSize: 13,
                         }}
                       >
-                        {chatTitle(active).slice(0, 1).toUpperCase()}
+                        {(isGroupChat(active) || !chatHasStarted(active)
+                          ? chatTitle(active)
+                          : conversationLabel(active, t)
+                        )
+                          .slice(0, 1)
+                          .toUpperCase()}
                       </span>
                       {!isGroupChat(active) && agentStatusDotColor(activePresence) ? (
                         <span
@@ -4113,12 +6015,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         title={
                           activeTopic
                             ? activeTopic.title || t.topics
-                            : active.agent_id || undefined
+                            : isGroupChat(active) || !chatHasStarted(active)
+                              ? chatTitle(active)
+                              : conversationLabel(active, t)
                         }
                       >
                         {activeTopic
                           ? activeTopic.title?.trim() || t.topics
-                          : chatTitle(active)}
+                          : isGroupChat(active) || !chatHasStarted(active)
+                            ? chatTitle(active)
+                            : conversationLabel(active, t)}
                       </strong>
                       {activeTopic ? (
                         <span
@@ -4164,42 +6070,72 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   </button>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                  <button
-                    type="button"
-                    style={{
-                      ...btnIcon,
-                      background: paneOpen ? colors.accentSoft : "transparent",
-                    }}
-                    onClick={() => {
-                      if (!active) return;
-                      setPaneOpen(active.chat_id, !paneOpen);
-                    }}
-                    aria-pressed={paneOpen}
-                    aria-label={paneOpen ? t.hideWindow : t.showWindow}
-                    title={paneOpen ? t.hideWindow : t.showWindow}
-                  >
-                    <IconWindow />
-                  </button>
-                  {mode === "side" ? (
+                  {canOpenTalk ? (
                     <button
                       type="button"
-                      style={btnGhost}
-                      onClick={() => {
-                        if (activeTopic) {
-                          exitTopicFilter();
-                          return;
-                        }
-                        setView("list");
-                        setActive(null);
+                      style={{
+                        ...btnGhost,
+                        background: talkOpen ? colors.accentSoft : "transparent",
+                        borderColor: talkOpen ? colors.accent : colors.border,
                       }}
-                      aria-label={activeTopic ? t.backToMainChat : t.close}
-                      title={activeTopic ? t.backToMainChat : t.close}
+                      disabled={!!windowBusy}
+                      onClick={() => void toggleTalkWindow()}
+                      aria-pressed={talkOpen}
+                      title={talkOpen ? t.faceChatOpen : t.faceChat}
                     >
-                      ✕
+                      {windowBusy === "talk" ? t.faceChatOpening : talkOpen ? t.faceChatOpen : t.faceChat}
                     </button>
                   ) : null}
+                  {canOpenBody ? (
+                    <button
+                      type="button"
+                      style={{
+                        ...btnGhost,
+                        background: bodyOpen ? colors.accentSoft : "transparent",
+                        borderColor: bodyOpen ? colors.accent : colors.border,
+                      }}
+                      disabled={!!windowBusy}
+                      onClick={() => void toggleBodyWindow()}
+                      aria-pressed={bodyOpen}
+                      title={bodyOpen ? t.bodyChatOpen : t.bodyChat}
+                    >
+                      {windowBusy === "body" ? t.bodyChatOpening : bodyOpen ? t.bodyChatOpen : t.bodyChat}
+                    </button>
+                  ) : null}
+                {mode === "side" ? (
+                  <button
+                    type="button"
+                    style={btnGhost}
+                    onClick={() => {
+                      if (activeTopic) {
+                        exitTopicFilter();
+                        return;
+                      }
+                      setView("list");
+                      setActive(null);
+                    }}
+                    aria-label={activeTopic ? t.backToMainChat : t.close}
+                    title={activeTopic ? t.backToMainChat : t.close}
+                  >
+                    ✕
+                  </button>
+                ) : null}
                 </div>
               </div>
+
+              {windowError ? (
+                <div
+                  style={{
+                    padding: "8px 14px",
+                    fontSize: 12,
+                    lineHeight: 1.45,
+                    color: colors.danger,
+                    borderBottom: `1px solid ${colors.border}`,
+                  }}
+                >
+                  {windowError}
+                </div>
+              ) : null}
 
               {activeOffline ? (
                 <div
@@ -4207,7 +6143,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     padding: "8px 14px",
                     fontSize: 12,
                     lineHeight: 1.45,
-                    color: colors.warn,
+                    color: "#fbbf24",
                     background: "rgba(234,179,8,0.1)",
                     borderBottom: `1px solid ${colors.border}`,
                   }}
@@ -4220,7 +6156,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         href={connectGuideUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        style={{ color: colors.warnSoft }}
+                        style={{ color: "#fcd34d" }}
                       >
                         {t.ownerHowToConnect}
                       </a>
@@ -4242,24 +6178,25 @@ export function RanchChatShell(props: RanchChatShellProps) {
               >
                 {displayMessages.length === 0 && (
                   <p style={{ color: colors.muted, fontSize: 13, margin: 0 }}>
-                    {activeTopic
-                      ? t.noMessagesYet
-                      : activeOffline
-                        ? t.sayHelloOffline
-                        : t.sayHello}
+                    {activeTopic ? t.noMessagesYet : t.sayHello}
                   </p>
                 )}
                 {displayMessages.map((m, idx) => {
                   const isUser = m.sender_type === "user";
                   const topicStart = isLocalTopicStartMessage(m);
-                  const delivery =
+                  const rawDelivery =
                     isUser && typeof m.metadata?.delivery === "string" ? m.metadata.delivery : null;
-                  const deliveryByAgent =
+                  const rawDeliveryByAgent =
                     isUser &&
                     m.metadata?.delivery_by_agent &&
                     typeof m.metadata.delivery_by_agent === "object"
                       ? (m.metadata.delivery_by_agent as Record<string, string>)
                       : null;
+                  const settled = isUser
+                    ? settleQueuedDelivery(displayMessages, m, rawDelivery, rawDeliveryByAgent)
+                    : { delivery: rawDelivery, byAgent: rawDeliveryByAgent };
+                  const delivery = settled.delivery;
+                  const deliveryByAgent = settled.byAgent;
                   const group = active ? isGroupChat(active) : false;
                   const senderLabel =
                     !isUser && !topicStart && group
@@ -4316,6 +6253,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </div>
                       ) : null}
                     <div
+                      data-message-id={m.message_id}
                       style={{
                         alignSelf: isUser ? "flex-end" : "flex-start",
                         maxWidth: "85%",
@@ -4352,16 +6290,41 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         }}
                       >
                         {m.content}
-                        {!isUser && active ? (
-                          <div style={{ whiteSpace: "normal" }}>
-                          <MailboxPiece
-                            chatId={active.chat_id}
-                            message={m}
-                            client={client}
-                            t={t}
-                          />
-                          </div>
-                        ) : null}
+                        <MailboxThumbs
+                          chatId={m.chat_id || active?.chat_id || ""}
+                          attachments={m.attachments}
+                          gatewayBaseUrl={gatewayBaseUrl}
+                          getAccessToken={getAccessToken}
+                        />
+                        {!isUser
+                          ? (() => {
+                              const raw = m.metadata?.piece;
+                              if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+                                return null;
+                              }
+                              const rec = raw as { status?: unknown; amount?: unknown };
+                              const status = typeof rec.status === "string" ? rec.status : "";
+                              const amount = Number(rec.amount);
+                              let line: string | null = null;
+                              if (status === "captured") line = t.pieceCaptured;
+                              else if (status === "held" && Number.isFinite(amount) && amount > 0) {
+                                line = t.pieceHeld(amount);
+                              }
+                              if (!line) return null;
+                              return (
+                                <div
+                                  style={{
+                                    marginTop: 6,
+                                    fontSize: 11,
+                                    lineHeight: 1.35,
+                                    color: colors.muted,
+                                  }}
+                                >
+                                  {line}
+                                </div>
+                              );
+                            })()
+                          : null}
                       </div>
                       {isUser && (delivery || deliveryByAgent) ? (
                         <DeliveryStatusFooter
@@ -4376,7 +6339,27 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             const usage = hopUsageFromMessage(m);
                             const callees = calleesFromMetadata(m.metadata);
                             const decide = group ? null : decideFromMetadata(m.metadata);
-                            if (!usage && !callees.length && !decide) return null;
+                            const plan = group ? null : planFromMetadata(m.metadata);
+                            const propose =
+                              active &&
+                              !isGroupChat(active) &&
+                              !dismissedPropose.has(m.message_id)
+                                ? proposeGroupFromMetadata(m.metadata)
+                                : null;
+                            const taskPropose =
+                              active &&
+                              !isGroupChat(active) &&
+                              !dismissedPropose.has(m.message_id)
+                                ? proposeTaskFromMetadata(m.metadata)
+                                : null;
+                            if (!usage && !callees.length && !decide && !plan && !propose && !taskPropose) return null;
+                            const existing = propose
+                              ? preferredExistingGroup(
+                                  chats,
+                                  propose,
+                                  groupAgentsByChat,
+                                )
+                              : undefined;
                             return (
                               <>
                                 {callees.length ? (
@@ -4386,6 +6369,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     t={t}
                                   />
                                 ) : null}
+                                {plan ? <AgentPlanFooter plan={plan} t={t} /> : null}
                                 {decide ? (
                                   <AgentDecideFooter
                                     decide={decide}
@@ -4397,6 +6381,59 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     onPick={(id, label) => {
                                       void send({ text: label, decisionChoice: id });
                                     }}
+                                  />
+                                ) : null}
+                                {propose ? (
+                                  <AgentProposeGroupFooter
+                                    propose={propose}
+                                    names={agentNames}
+                                    existingTitle={
+                                      existing ? chatTitle(existing) : undefined
+                                    }
+                                    busy={busy}
+                                    t={t}
+                                    onCreate={() =>
+                                      void confirmProposeGroup(propose, m.message_id, {
+                                        preferExisting: false,
+                                      })
+                                    }
+                                    onOpenExisting={
+                                      existing
+                                        ? () =>
+                                            void confirmProposeGroup(
+                                              propose,
+                                              m.message_id,
+                                              { preferExisting: true },
+                                            )
+                                        : undefined
+                                    }
+                                    onDismiss={() =>
+                                      setDismissedPropose((cur) => {
+                                        const next = new Set(cur).add(
+                                          m.message_id,
+                                        );
+                                        writeDismissedPropose(next);
+                                        return next;
+                                      })
+                                    }
+                                  />
+                                ) : null}
+                                {taskPropose ? (
+                                  <AgentProposeTaskFooter
+                                    propose={taskPropose}
+                                    busy={busy || postingTasksRef.current.has(m.message_id)}
+                                    posted={Boolean(postedTasks[m.message_id])}
+                                    t={t}
+                                    onConfirm={() =>
+                                      void confirmProposeTask(taskPropose, m.message_id)
+                                    }
+                                    onDismiss={() =>
+                                      setDismissedPropose((cur) => {
+                                        const next = new Set(cur).add(m.message_id);
+                                        writeDismissedPropose(next);
+                                        return next;
+                                      })
+                                    }
                                   />
                                 ) : null}
                                 {usage ? <AgentUsageFooter usage={usage} t={t} /> : null}
@@ -4430,6 +6467,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     reason={replyTimeoutReason}
                     onRetry={retryLastUserMessage}
                     t={t}
+                    offerStoreKey={
+                      replyTimeoutReason === "no_reply" &&
+                      isOpenRouterByoListed(
+                        composerModel?.listed_model_id,
+                        composerModel?.runtime_model_id,
+                        composerModel?.supported_models,
+                      )
+                    }
+                    storeUrl={storeOpenRouterUrl(agentPlanetBaseUrl)}
                   />
                 ) : null}
               </div>
@@ -4448,38 +6494,26 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   {t.collabNeedTopup}
                 </div>
               ) : null}
-              {error || windowError ? (
-                <div
-                  role="alert"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "8px 14px",
-                    color: colors.danger,
-                    fontSize: 12,
-                  }}
-                >
-                  <span style={{ flex: 1, minWidth: 0 }}>{error || windowError}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setError(null);
-                      setWindowError(null);
-                    }}
-                    style={{
-                      ...btnGhost,
-                      padding: "2px 8px",
-                      fontSize: 11,
-                      flexShrink: 0,
-                      lineHeight: 1.4,
-                    }}
-                    aria-label={t.close}
-                  >
-                    ×
-                  </button>
+              {error && (
+                <div style={{ padding: "8px 14px", color: colors.danger, fontSize: 12 }}>
+                  <div>{error}</div>
+                  {storeKeyPrompt ? (
+                    <a
+                      href={storeOpenRouterUrl(agentPlanetBaseUrl)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: "inline-block",
+                        marginTop: 6,
+                        color: colors.text,
+                        textDecoration: "underline",
+                      }}
+                    >
+                      {t.buyOpenRouterCredits}
+                    </a>
+                  ) : null}
                 </div>
-              ) : null}
+              )}
 
               <form
                 onSubmit={(e) => {
@@ -4533,8 +6567,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       onClick={() => setComposerTopic(null)}
                       style={{
                         ...btnIcon,
-                        width: 28,
-                        height: 28,
+                        width: 20,
+                        height: 20,
                         fontSize: 14,
                         lineHeight: 1,
                         color: colors.muted,
@@ -4575,8 +6609,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       onClick={() => clearStickyMention(active?.chat_id)}
                       style={{
                         ...btnIcon,
-                        width: 28,
-                        height: 28,
+                        width: 20,
+                        height: 20,
                         fontSize: 14,
                         lineHeight: 1,
                         color: colors.muted,
@@ -4586,13 +6620,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     </button>
                   </div>
                 ) : null}
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, position: "relative" }}>
+                <div style={{ display: "flex", gap: 8, position: "relative" }}>
                 {slashMenuOpen && slashCandidates.length > 0 ? (
                   <div
                     style={{
                       position: "absolute",
                       left: 0,
-                      right: 0,
+                      right: 72,
                       bottom: "100%",
                       marginBottom: 8,
                       background: colors.panel,
@@ -4647,7 +6681,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     style={{
                       position: "absolute",
                       left: 0,
-                      right: 0,
+                      right: 72,
                       bottom: "100%",
                       marginBottom: 8,
                       background: colors.panel,
@@ -4707,7 +6741,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     style={{
                       position: "absolute",
                       left: 0,
-                      right: 0,
+                      right: 72,
                       bottom: "100%",
                       marginBottom: 8,
                       background: colors.panel,
@@ -4777,7 +6811,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 width: 28,
                                 height: 28,
                                 borderRadius: 999,
-                                background: `linear-gradient(135deg,${colors.avatarSelfFrom},${colors.avatarTo})`,
+                                background: "linear-gradient(135deg,#0f766e,#1e293b)",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
@@ -4812,178 +6846,290 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 ) : null}
                 {composerModel && active && !isGroupChat(active) ? (
                   <div
+                    ref={composerMenuRef}
                     style={{
+                      position: "relative",
                       display: "flex",
-                      flexWrap: "wrap",
                       alignItems: "center",
-                      gap: 8,
                       maxWidth: "100%",
                     }}
                   >
                     {(() => {
-                      const runtime = (composerModel.runtime_model_id || "").trim();
                       const listed = (composerModel.listed_model_id || "").trim();
+                      const official = composerModel.official_channel;
+                      const openRouterByo = isOpenRouterByoListed(
+                        composerModel.listed_model_id,
+                        composerModel.runtime_model_id,
+                        composerModel.supported_models,
+                      );
                       const options = (() => {
                         const fromApi = composerModel.supported_models.length
                           ? composerModel.supported_models
-                          : [listed, runtime].filter(Boolean);
+                          : [listed].filter(Boolean);
+                        const fromShelf = composerCatalog.map((row) => row.id);
                         const seen = new Set<string>();
                         const out: string[] = [];
-                        for (const id of fromApi) {
+                        const source = official
+                          ? [listed, ...fromShelf]
+                          : [listed, ...fromApi];
+                        for (const id of source) {
+                          if (!id || !id.trim()) continue;
                           const k = id.toLowerCase();
                           if (seen.has(k)) continue;
                           seen.add(k);
                           out.push(id);
                         }
-                        if (selectedModelId && !seen.has(selectedModelId.toLowerCase())) {
-                          out.unshift(selectedModelId);
-                        }
                         return out;
                       })();
-                      const value = selectedModelId || listed || runtime || "";
-                      const valueTitle =
-                        composerModel.model_options.find(
-                          (o) => o.model_id.toLowerCase() === value.toLowerCase(),
-                        ) || null;
-                      const priceHint = valueTitle
-                        ? valueTitle.priceable === false
-                          ? t.composerModelNoPrice
-                          : valueTitle.free
-                            ? "free"
-                            : typeof valueTitle.input_price_per_million === "number"
-                              ? `$${Number(valueTitle.input_price_per_million.toPrecision(6))}/M in`
-                              : t.composerModelNoPrice
-                        : "";
-                      const canPick = options.length > 1;
+                      const visible = filterComposerModels(options, composerMenuQuery);
+                      const value =
+                        options.find((id) => sameModelId(id, selectedModelId)) ||
+                        options.find((id) => sameModelId(id, listed)) ||
+                        options[0] ||
+                        "";
+                      const priceFor = (id: string) => {
+                        const cat = composerCatalog.find((row) => sameModelId(row.id, id));
+                        if (official && cat) {
+                          return t.composerModelPrice(
+                            formatUsdPerMillion(
+                              applyMarkupUsd(cat.in, composerModel.markup_percent),
+                            ),
+                            formatUsdPerMillion(
+                              applyMarkupUsd(cat.out, composerModel.markup_percent),
+                            ),
+                          );
+                        }
+                        const priced = composerModel.model_options.find((o) =>
+                          sameModelId(o.model_id, id),
+                        );
+                        if (priced) {
+                          if (priced.priceable === false) return t.composerModelNoPrice;
+                          if (priced.free) return "free";
+                          const inn = priced.input_price_per_million;
+                          const out = priced.output_price_per_million;
+                          if (typeof inn === "number" && typeof out === "number") {
+                            return t.composerModelPrice(
+                              formatUsdPerMillion(inn),
+                              formatUsdPerMillion(out),
+                            );
+                          }
+                          if (typeof inn === "number") {
+                            return `${formatUsdPerMillion(inn)} in`;
+                          }
+                        }
+                        if (cat) {
+                          return t.composerModelPrice(
+                            formatUsdPerMillion(
+                              applyMarkupUsd(cat.in, composerModel.markup_percent),
+                            ),
+                            formatUsdPerMillion(
+                              applyMarkupUsd(cat.out, composerModel.markup_percent),
+                            ),
+                          );
+                        }
+                        return t.composerModelNoPrice;
+                      };
+                      const priceHint = value ? priceFor(value) : "";
+                      const displayName = shortModelLabel(value) || t.composerModelUnknown;
+                      const canPick = options.length > 0 || official || openRouterByo;
                       return (
-                        <label
-                          title={value || t.composerModelUnknown}
-                          aria-label={`${t.composerModelLabel}: ${value || t.composerModelUnknown}`}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 6,
-                            padding: canPick ? "2px 6px 2px 10px" : "4px 10px",
-                            borderRadius: 999,
-                            border: `1px solid ${colors.border}`,
-                            background: colors.panel,
-                            fontSize: 12,
-                            color: colors.text,
-                            maxWidth: "100%",
-                            cursor: canPick ? "pointer" : "default",
-                          }}
-                        >
-                          <span style={{ color: colors.muted }}>{t.composerModelLabel}</span>
-                          {canPick ? (
-                            <>
-                              <select
-                                value={value}
-                                onChange={(e) => {
-                                  const next = e.target.value || null;
-                                  setSelectedModelId(next);
-                                  if (active?.chat_id) writeComposerModelPick(active.chat_id, next);
-                                }}
+                        <>
+                          <button
+                            type="button"
+                            disabled={!canPick}
+                            aria-haspopup="listbox"
+                            aria-expanded={composerMenuOpen}
+                            aria-label={displayName}
+                            onClick={() => {
+                              if (!canPick) return;
+                              setComposerMenuOpen((open) => !open);
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              flexDirection: "column",
+                              alignItems: "flex-start",
+                              gap: 1,
+                              padding: "4px 8px 5px 10px",
+                              borderRadius: 10,
+                              border: `1px solid ${colors.border}`,
+                              background: colors.panel,
+                              color: colors.text,
+                              maxWidth: "100%",
+                              cursor: canPick ? "pointer" : "default",
+                              textAlign: "left",
+                            }}
+                          >
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                minWidth: 0,
+                                maxWidth: "100%",
+                              }}
+                            >
+                              <span
                                 style={{
-                                  appearance: "none",
-                                  WebkitAppearance: "none",
-                                  border: "none",
-                                  background: "transparent",
-                                  color: colors.text,
                                   fontWeight: 600,
-                                  fontSize: 12,
-                                  maxWidth: 160,
-                                  padding: "2px 0",
-                                  cursor: "pointer",
+                                  fontSize: 13,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                  maxWidth: 180,
                                 }}
                               >
-                                {options.map((id) => (
-                                  <option key={id} value={id}>
-                                    {shortModelLabel(id) || id}
-                                  </option>
-                                ))}
-                              </select>
+                                {displayName}
+                              </span>
+                              {canPick ? (
+                                <span
+                                  aria-hidden
+                                  style={{
+                                    color: colors.muted,
+                                    fontSize: 10,
+                                    lineHeight: 1,
+                                  }}
+                                >
+                                  ▾
+                                </span>
+                              ) : null}
+                            </span>
+                            {priceHint ? (
                               <span
-                                aria-hidden
                                 style={{
                                   color: colors.muted,
                                   fontSize: 10,
-                                  lineHeight: 1,
-                                  marginLeft: -2,
-                                  marginRight: 2,
+                                  lineHeight: 1.25,
                                 }}
                               >
-                                ▾
+                                {priceHint}
                               </span>
-                            </>
-                          ) : (
-                            <span
+                            ) : null}
+                          </button>
+                          {composerMenuOpen && canPick ? (
+                            <div
                               style={{
-                                fontWeight: 600,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                                maxWidth: 160,
+                                position: "absolute",
+                                left: 0,
+                                bottom: "calc(100% + 6px)",
+                                minWidth: 300,
+                                maxWidth: 360,
+                                borderRadius: 10,
+                                border: `1px solid ${colors.border}`,
+                                background: colors.panel,
+                                zIndex: 20,
                               }}
                             >
-                              {shortModelLabel(value) || t.composerModelUnknown}
-                            </span>
-                          )}
-                          {!runtime && listed && value.toLowerCase() === listed.toLowerCase() ? (
-                            <span style={{ color: colors.muted, fontSize: 11 }}>
-                              ({t.composerModelListing})
-                            </span>
+                              <input
+                                value={composerMenuQuery}
+                                onChange={(e) => setComposerMenuQuery(e.target.value)}
+                                placeholder={t.myAgentsPricingModelSearch}
+                                aria-label={t.myAgentsPricingModelSearch}
+                                style={{
+                                  ...inputStyle,
+                                  width: "100%",
+                                  boxSizing: "border-box",
+                                  border: "none",
+                                  borderBottom: `1px solid ${colors.border}`,
+                                  borderRadius: "10px 10px 0 0",
+                                  fontSize: 12,
+                                }}
+                              />
+                              <ul
+                                role="listbox"
+                                aria-busy={
+                                  composerCatalogLoading && (official || openRouterByo)
+                                }
+                                style={{
+                                  margin: 0,
+                                  padding: 4,
+                                  listStyle: "none",
+                                  maxHeight: 240,
+                                  overflowY: "auto",
+                                }}
+                              >
+                                {visible.length === 0 &&
+                                !(
+                                  composerCatalogLoading &&
+                                  (official || openRouterByo)
+                                ) ? (
+                                  <li style={{ padding: "8px", fontSize: 12, color: colors.muted }}>
+                                    {t.myAgentsPricingOfficialEmpty}
+                                  </li>
+                                ) : (
+                                  <>
+                                    {visible.map((id) => {
+                                      const selected = sameModelId(id, value);
+                                      const rowPrice = priceFor(id);
+                                      return (
+                                        <li key={id} role="none">
+                                          <button
+                                            type="button"
+                                            role="option"
+                                            aria-selected={selected}
+                                            onClick={() => {
+                                              setSelectedModelId(id);
+                                              if (active?.chat_id) {
+                                                writeComposerModelPick(active.chat_id, id);
+                                              }
+                                              setComposerMenuOpen(false);
+                                            }}
+                                            style={{
+                                              display: "flex",
+                                              alignItems: "baseline",
+                                              justifyContent: "space-between",
+                                              gap: 12,
+                                              width: "100%",
+                                              padding: "6px 8px",
+                                              border: "none",
+                                              borderRadius: 8,
+                                              background: selected
+                                                ? colors.hover
+                                                : "transparent",
+                                              color: colors.text,
+                                              cursor: "pointer",
+                                              textAlign: "left",
+                                            }}
+                                          >
+                                            <span style={{ fontWeight: 600, fontSize: 13 }}>
+                                              {shortModelLabel(id) || id}
+                                            </span>
+                                            {rowPrice ? (
+                                              <span
+                                                style={{
+                                                  color: colors.muted,
+                                                  fontSize: 11,
+                                                  whiteSpace: "nowrap",
+                                                }}
+                                              >
+                                                {rowPrice}
+                                              </span>
+                                            ) : null}
+                                          </button>
+                                        </li>
+                                      );
+                                    })}
+                                    {composerCatalogLoading &&
+                                    (official || openRouterByo) ? (
+                                      <li
+                                        style={{
+                                          padding: "8px",
+                                          fontSize: 12,
+                                          color: colors.muted,
+                                        }}
+                                      >
+                                        {t.loading}
+                                      </li>
+                                    ) : null}
+                                  </>
+                                )}
+                              </ul>
+                            </div>
                           ) : null}
-                          {priceHint ? (
-                            <span style={{ color: colors.muted, fontSize: 11 }}>{priceHint}</span>
-                          ) : null}
-                        </label>
+                        </>
                       );
                     })()}
-                    {composerModel.mismatched &&
-                    composerModel.listed_model_id &&
-                    composerModel.runtime_model_id ? (
-                      <span
-                        title={t.composerModelMismatch(
-                          composerModel.listed_model_id,
-                          composerModel.runtime_model_id,
-                        )}
-                        style={{
-                          fontSize: 11,
-                          lineHeight: 1.35,
-                          color: colors.warn,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          maxWidth: "100%",
-                          flex: "1 1 120px",
-                        }}
-                      >
-                        {t.composerModelMismatch(
-                          shortModelLabel(composerModel.listed_model_id),
-                          shortModelLabel(composerModel.runtime_model_id),
-                        )}
-                      </span>
-                    ) : null}
                   </div>
                 ) : null}
-                {!groupActive && <label
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 12,
-                    color: colors.muted,
-                    userSelect: "none",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={pinDecisionGoal}
-                    onChange={(e) => setPinDecisionGoal(e.target.checked)}
-                  />
-                  {t.decisionGoal}
-                </label>}
-                <div style={{ display: "flex", gap: 8, alignItems: "flex-end", width: "100%" }}>
                 <textarea
                   value={draft}
                   onChange={(e) => {
@@ -5006,8 +7152,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   disabled={busy || healthOk === false}
                   style={{ ...inputStyle, resize: "none", flex: 1 }}
                   onKeyDown={(e) => {
-                    // Enter confirms IME text first; keyCode 229 covers Safari's final event.
-                    if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
                     if (slashMenuOpen && slashCandidates.length > 0) {
                       const total = slashCandidates.length;
                       if (e.key === "ArrowDown") {
@@ -5109,25 +7253,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     }
                   }}
                 />
-                {canOpenTalk ? (
-                  <button
-                    type="button"
-                    style={{
-                      ...btnGhost,
-                      alignSelf: "flex-end",
-                      background:
-                        activeWindow?.kind === "talk" ? colors.accentSoft : "transparent",
-                      borderColor:
-                        activeWindow?.kind === "talk" ? colors.accent : colors.border,
-                    }}
-                    disabled={windowBusy}
-                    onClick={() => void openTalkWindow()}
-                    aria-pressed={activeWindow?.kind === "talk"}
-                    title={windowBusy ? t.faceChatOpening : t.faceChat}
-                  >
-                    {windowBusy ? t.faceChatOpening : t.faceChat}
-                  </button>
-                ) : null}
                 <button
                   type="submit"
                   disabled={busy || !draft.trim() || healthOk === false}
@@ -5135,7 +7260,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 >
                   {t.send}
                 </button>
-                </div>
                 </div>
               </form>
 
@@ -5189,7 +7313,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           width: 56,
                           height: 56,
                           borderRadius: groupActive ? 12 : 999,
-                          background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
+                          background: "linear-gradient(135deg,#334155,#1e293b)",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -5332,8 +7456,228 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
                   {infoTab === "chats" && !groupActive ? (
                     <>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 4,
+                          padding: "8px 12px 0",
+                        }}
+                      >
+                        {(
+                          [
+                            ["chats", t.historyChats],
+                            ["plans", t.historyPlans],
+                            ["tasks", t.historyTasks],
+                          ] as const
+                        ).map(([key, label]) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => {
+                              setHistoryKind(key);
+                              if (key !== "plans") setPlanViewer(null);
+                            }}
+                            style={{
+                              ...btnGhost,
+                              flex: 1,
+                              fontSize: 12,
+                              fontWeight: historyKind === key ? 650 : 500,
+                              background: historyKind === key ? colors.accentSoft : "transparent",
+                              color: historyKind === key ? colors.text : colors.muted,
+                              borderColor:
+                                historyKind === key ? "rgba(59,130,246,0.35)" : colors.border,
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                       <div style={{ flex: 1, overflow: "auto", padding: 12 }}>
-                        {siblingChats.length === 0 ? (
+                        {historyKind === "plans" ? (
+                          planViewer ? (
+                            <ChatPlanViewer
+                              title={planViewer.title}
+                              summary={planViewer.summary}
+                              body={planViewerDetail.body}
+                              loading={planViewerDetail.loading}
+                              t={t}
+                              onBack={() => setPlanViewer(null)}
+                              onSource={
+                                planViewerDetail.sourceMessageId &&
+                                planViewer.chatId === active?.chat_id
+                                  ? () => {
+                                      setShowMembersPanel(false);
+                                      scrollToMessage(planViewerDetail.sourceMessageId!);
+                                    }
+                                  : undefined
+                              }
+                            />
+                          ) : historyPlans.length === 0 ? (
+                            <div
+                              style={{
+                                textAlign: "center",
+                                padding: "28px 12px",
+                                color: colors.muted,
+                              }}
+                            >
+                              <p style={{ margin: 0, fontSize: 12 }}>{t.historyPlansEmpty}</p>
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              {historyPlans.map((row) => {
+                                const planChat =
+                                  row.chatId === active.chat_id
+                                    ? null
+                                    : siblingChats.find((c) => c.chat_id === row.chatId);
+                                return (
+                                  <button
+                                    key={row.key}
+                                    type="button"
+                                    onClick={() => openPlanRow(row)}
+                                    style={{
+                                      ...listItem,
+                                      textAlign: "left",
+                                      background: colors.panel,
+                                      border: `1px solid ${colors.border}`,
+                                      padding: "10px 12px",
+                                    }}
+                                  >
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                      <div
+                                        style={{
+                                          fontWeight: 650,
+                                          fontSize: 13,
+                                          color: colors.text,
+                                          lineHeight: 1.35,
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
+                                        }}
+                                      >
+                                        {row.title}
+                                      </div>
+                                      {row.summary ? (
+                                        <div
+                                          style={{
+                                            fontSize: 12,
+                                            color: colors.text,
+                                            opacity: 0.78,
+                                            lineHeight: 1.45,
+                                            marginTop: 2,
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                          }}
+                                        >
+                                          {row.summary}
+                                        </div>
+                                      ) : null}
+                                      {planChat ? (
+                                        <div
+                                          style={{
+                                            fontSize: 11,
+                                            color: colors.muted,
+                                            marginTop: 4,
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                          }}
+                                        >
+                                          {conversationLabel(planChat, t)}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )
+                        ) : historyKind === "tasks" ? (
+                          historyTasks.length === 0 ? (
+                            <div
+                              style={{
+                                textAlign: "center",
+                                padding: "28px 12px",
+                                color: colors.muted,
+                              }}
+                            >
+                              <p style={{ margin: 0, fontSize: 12 }}>{t.historyTasksEmpty}</p>
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              {historyTasks.map((row) =>
+                                row.taskId ? (
+                                  <a
+                                    key={row.key}
+                                    href={labsTaskPageUrl(agentPlanetBaseUrl, row.taskId)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      ...listItem,
+                                      textAlign: "left",
+                                      textDecoration: "none",
+                                      background: colors.panel,
+                                      border: `1px solid ${colors.border}`,
+                                      padding: "10px 12px",
+                                    }}
+                                  >
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                      <div
+                                        style={{
+                                          fontWeight: 650,
+                                          fontSize: 13,
+                                          color: colors.text,
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
+                                        }}
+                                      >
+                                        {row.title}
+                                      </div>
+                                      <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+                                        {t.historyTaskOpen}
+                                      </div>
+                                    </div>
+                                  </a>
+                                ) : (
+                                  <button
+                                    key={row.key}
+                                    type="button"
+                                    onClick={() => {
+                                      setShowMembersPanel(false);
+                                      scrollToMessage(row.messageId);
+                                    }}
+                                    style={{
+                                      ...listItem,
+                                      textAlign: "left",
+                                      background: colors.panel,
+                                      border: `1px solid ${colors.border}`,
+                                      padding: "10px 12px",
+                                    }}
+                                  >
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                      <div
+                                        style={{
+                                          fontWeight: 650,
+                                          fontSize: 13,
+                                          color: colors.text,
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
+                                        }}
+                                      >
+                                        {row.title}
+                                      </div>
+                                      <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+                                        {t.historyTaskPending}
+                                      </div>
+                                    </div>
+                                  </button>
+                                ),
+                              )}
+                            </div>
+                          )
+                        ) : siblingChats.length === 0 ? (
                           <div
                             style={{
                               textAlign: "center",
@@ -5349,7 +7693,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               <button
                                 key={c.chat_id}
                                 type="button"
-                                onClick={() => void openConversation(c, { keepChatsPanel: true })}
+                                onClick={() => {
+                                  if (active.chat_id === c.chat_id) {
+                                    setShowMembersPanel(false);
+                                    return;
+                                  }
+                                  void openConversation(c);
+                                }}
                                 style={{
                                   ...listItem,
                                   background:
@@ -5371,16 +7721,29 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   >
                                     {conversationLabel(c, t)}
                                   </div>
+                                  {hostCaption(c.embed?.origin) ? (
+                                    <div
+                                      style={{
+                                        fontSize: 11,
+                                        color: colors.muted,
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      {hostCaption(c.embed?.origin)}
+                                    </div>
+                                  ) : null}
                                 </div>
                                 <span style={{ fontSize: 10, color: colors.muted, flexShrink: 0 }}>
-                                  {formatRelativeTime(c.last_message_at, t)}
+                                  {formatRelativeTime(c.last_message_at || c.created_at, t)}
                                 </span>
                               </button>
                             ))}
                           </div>
                         )}
                       </div>
-                      {active.agent_id ? (
+                      {historyKind === "chats" && active.agent_id ? (
                         <div style={{ padding: 12, borderTop: `1px solid ${colors.border}` }}>
                           <button
                             type="button"
@@ -5406,7 +7769,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     >
                       <ChatDecisionSettings
                         auto={Boolean(active.decision?.auto)}
-                        goal={(active.decision?.goal || "").trim()}
                         hops={active.decision?.auto_hops ?? 0}
                         hopCap={active.decision?.auto_hop_cap ?? 5}
                         busy={decisionBusy}
@@ -5427,6 +7789,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             busy={busy}
                             onUpdated={applyOwnedAgentProfileUpdate}
                             onRemoved={applyOwnedAgentRemoved}
+                            onOpenKeys={() => openAccountPanel("keys")}
                           />
                         ) : (
                           <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>
@@ -5445,6 +7808,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         client={client}
                         agentId={active.agent_id.replace(/^acn:/i, "")}
                         messages={t}
+                        agentPlanetBaseUrl={agentPlanetBaseUrl}
                         interfazeBaseUrl={interfazeBaseUrl}
                         busy={busy}
                       />
@@ -5578,7 +7942,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               href={connectGuideUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              style={{ color: colors.mention, fontSize: 13 }}
+                              style={{ color: "#93c5fd", fontSize: 13 }}
                             >
                               {t.ownerHowToConnect}
                             </a>
@@ -5683,7 +8047,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   width: 36,
                                   height: 36,
                                   borderRadius: 999,
-                                  background: `linear-gradient(135deg,${colors.avatarSelfFrom},${colors.avatarTo})`,
+                                  background: "linear-gradient(135deg,#0f766e,#1e293b)",
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
@@ -6000,40 +8364,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
               ) : null}
             </>
           )}
+          {mode === "full" ? accountPanels : null}
         </div>
       )}
 
-      {active && paneOpen ? (
-        paneOverlay ? (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              zIndex: 40,
-              display: "flex",
-              background: colors.bg,
-            }}
-          >
-            <ChatWindowPane
-              window={activeWindow}
-              studioBaseUrl={studioOrigin}
-              busy={windowBusy}
-              onClose={() => hidePane(active.chat_id)}
-              onTalkExpired={() => void ensureTalkWindow({ force: true })}
-              fill
-              t={t}
-            />
-          </div>
-        ) : (
-          <ChatWindowPane
-            window={activeWindow}
-            studioBaseUrl={studioOrigin}
-            busy={windowBusy}
-            onClose={() => hidePane(active.chat_id)}
-            onTalkExpired={() => void ensureTalkWindow({ force: true })}
-            t={t}
-          />
-        )
+      {active && activeWindow && windowHostOrigin ? (
+        <ChatWindowPane
+          window={activeWindow}
+          studioBaseUrl={windowHostOrigin}
+          onClose={() => closeChatWindow(active.chat_id)}
+          onPickBody={openPickedBody}
+          onExpired={() => {
+            const win = activeWindow;
+            if (win && win.kind !== "body-pick") void renewHostTicket(win);
+          }}
+          busy={windowBusy === "body"}
+          t={t}
+        />
       ) : null}
 
       {pickerMode ? (
@@ -6056,6 +8403,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
         />
       ) : null}
 
+      {showConnect ? (
+        <ConnectAgentModal
+          locale={uiLocale}
+          messages={t}
+          interfazeBaseUrl={interfazeBaseUrl}
+          createJoinInvite={() => client.createJoinInvite()}
+          onClose={() => setShowConnect(false)}
+        />
+      ) : null}
+
       {confirmDialog ? (
         <ConfirmDialog
           message={confirmDialog.message}
@@ -6064,6 +8421,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
           busy={busy}
           onConfirm={() => confirmDialog.onConfirm()}
           onCancel={() => setConfirmDialog(null)}
+        />
+      ) : null}
+      {showCreateDialog ? (
+        <CreateAgentDialog
+          client={client}
+          messages={t}
+          agentPlanetBaseUrl={agentPlanetBaseUrl ?? "https://agentplanet.org"}
+          interfazeBaseUrl={interfazeBaseUrl}
+          busy={busy}
+          onClose={() => setShowCreateDialog(false)}
+          onWatchJob={(jobId) => {
+            writePendingCreateJobId(jobId);
+            setPendingCreateJobId(jobId);
+          }}
+          onReady={(agentId, info) => {
+            finishHostedCreate(agentId, info);
+          }}
         />
       ) : null}
     </div>

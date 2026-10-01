@@ -8,14 +8,14 @@ import {
   deliveryLabel,
 } from "./AgentOwnerSettings";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
-import { copyConnectPromptWithInvite, openJoinLanding } from "./connectPrompt";
+import { copyConnectPromptWithInvite } from "./connectPrompt";
 import type { RanchLocale, RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors } from "./styles";
 
 type Props = {
   client: GatewayClient;
   connectGuideUrl?: string;
-  /** AgentPlanet origin for remaining Host-only deep-links. Default https://agentplanet.org */
+  /** AgentPlanet origin for Store / OpenRouter deep-links. Default https://agentplanet.org */
   agentPlanetBaseUrl?: string;
   /** Public Interfaze origin for gift accept links. Default https://interfaze.io */
   interfazeBaseUrl?: string;
@@ -23,11 +23,16 @@ type Props = {
   messages: RanchMessages;
   busy?: boolean;
   onClose: () => void;
+  onConnectExisting?: () => void;
+  /** Open hosted-agent create on the current shell, not this panel. */
+  onCreateHosted?: () => void;
   onOpenChat: (agentId: string) => void;
   /** Notify shell/host after a successful profile save (for chat title / directory). */
   onAgentUpdated?: (agent: MyAgentSummary, previousName?: string | null) => void;
   /** After permanent delete — leave detail and refresh list. */
   onAgentRemoved?: (agentId: string) => void;
+  /** Open the account-level Store keys list. */
+  onOpenKeys?: () => void;
 };
 
 function shortId(id: string): string {
@@ -53,9 +58,12 @@ export function MyAgentsPanel({
   messages: t,
   busy,
   onClose,
+  onConnectExisting,
+  onCreateHosted,
   onOpenChat,
   onAgentUpdated,
   onAgentRemoved,
+  onOpenKeys,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +73,7 @@ export function MyAgentsPanel({
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [createAvailable, setCreateAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,6 +94,21 @@ export function MyAgentsPanel({
       cancelled = true;
     };
   }, [client, t.myAgentsLoadFailed]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void client
+      .getAgentCreateAvailability()
+      .then((row) => {
+        if (!cancelled) setCreateAvailable(row.available === true);
+      })
+      .catch(() => {
+        if (!cancelled) setCreateAvailable(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -164,15 +188,20 @@ export function MyAgentsPanel({
           {selectedId ? detail?.name || shortId(selectedId) : t.myAgentsTitle}
         </strong>
         {!selectedId ? (
-          <button
-            type="button"
-            style={btnGhost}
-            onClick={() => {
-              void openJoinLanding(interfazeBaseUrl, () => client.createJoinInvite());
-            }}
-          >
-            {t.connectExisting}
-          </button>
+          <div style={{ display: "flex", gap: 6 }}>
+            {createAvailable ? (
+              <button type="button" style={btnPrimary} onClick={() => onCreateHosted?.()}>
+                {t.createAgent}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              style={btnGhost}
+              onClick={() => onConnectExisting?.()}
+            >
+              {t.connectExisting}
+            </button>
+          </div>
         ) : (
           <span style={{ width: 40 }} />
         )}
@@ -228,6 +257,7 @@ export function MyAgentsPanel({
                   );
                   onAgentUpdated?.(row, previousName);
                 }}
+                onOpenKeys={onOpenKeys}
                 onRemoved={(agentId) => {
                   setAgents((prev) =>
                     prev.filter(
@@ -245,6 +275,7 @@ export function MyAgentsPanel({
                 client={client}
                 agentId={detail.agent_id.replace(/^acn:/i, "")}
                 messages={t}
+                agentPlanetBaseUrl={agentPlanetBaseUrl}
                 interfazeBaseUrl={interfazeBaseUrl}
                 busy={busy}
               />
@@ -273,12 +304,15 @@ export function MyAgentsPanel({
             </p>
             <p style={{ margin: "0 0 16px", fontSize: 12, lineHeight: 1.55 }}>{t.myAgentsEmptyBody}</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
+              {createAvailable ? (
+                <button type="button" style={btnPrimary} onClick={() => onCreateHosted?.()}>
+                  {t.createAgent}
+                </button>
+              ) : null}
               <button
                 type="button"
-                style={btnPrimary}
-                onClick={() => {
-                  void openJoinLanding(interfazeBaseUrl, () => client.createJoinInvite());
-                }}
+                style={btnGhost}
+                onClick={() => onConnectExisting?.()}
               >
                 {t.connectExisting}
               </button>

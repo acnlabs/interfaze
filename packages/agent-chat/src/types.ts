@@ -31,11 +31,11 @@ export type AgentChatShellProps = {
   getAccessToken: () => Promise<string | null>;
   /** Chat Gateway base, e.g. https://api.example.com or CN BFF origin. */
   gatewayBaseUrl: string;
-  /** Host default / recommended ACN agent ids (Concierge etc.). */
+  /** Host default / recommended ACN agent ids (official conversation agent). */
   defaultAgentIds?: string[];
   /**
    * Claimed + recommended agents for shell picker.
-   * Host loads these (e.g. Labs analytics owner= + system agents).
+   * Host `recommended` is the official conversation agent (not Labs Concierge).
    */
   directoryAgents?: AgentDirectoryItem[];
   /** Allow typing another agent id. Default true for shell; ignored in assistant. */
@@ -65,6 +65,16 @@ export type ChatEmbed = {
   headline?: string | null;
 };
 
+export type ChatPlanArtifact = {
+  plan_id: string;
+  title: string;
+  summary?: string;
+  body?: string;
+  source_message_id?: string;
+  message_id?: string;
+  id?: string;
+};
+
 export type ChatSummary = {
   chat_id: string;
   type: string;
@@ -76,12 +86,31 @@ export type ChatSummary = {
   unread_count?: number;
   agent_status?: string | null;
   embed?: ChatEmbed | null;
-  /** Per-chat decision goal + auto-decide switch (direct chats). */
+  /** Per-chat auto-decide switch and agent-written plans (direct chats). */
   decision?: {
     goal?: string | null;
     auto?: boolean;
     auto_hops?: number;
     auto_hop_cap?: number;
+    plan?: {
+      title: string;
+      summary?: string;
+      body?: string;
+      plan_id?: string;
+      source_message_id?: string;
+      message_id?: string;
+      id?: string;
+    } | null;
+    plans?: Array<{
+      title: string;
+      summary?: string;
+      body?: string;
+      plan_id?: string;
+      source_message_id?: string;
+      message_id?: string;
+      id?: string;
+      chat_id?: string;
+    }>;
   } | null;
   /** Group chats: member counts from Gateway list/detail. */
   total_members?: number;
@@ -99,6 +128,7 @@ export type RanchChatAccount = {
 export type RanchChatShellProps = {
   getAccessToken: () => Promise<string | null>;
   gatewayBaseUrl: string;
+  /** Host mine + official conversation agent (`group: "recommended"`). */
   directoryAgents?: AgentDirectoryItem[];
   title?: string;
   /** Optional brand mark URL (e.g. /logo.png). Shown in the chat-list header. */
@@ -120,7 +150,7 @@ export type RanchChatShellProps = {
    */
   connectGuideUrl?: string;
   /**
-   * AgentPlanet origin for remaining Host-only deep-links (not wallet recharge).
+   * AgentPlanet origin for Store / OpenRouter deep-links (not wallet recharge).
    * Default: https://agentplanet.org
    */
   agentPlanetBaseUrl?: string;
@@ -134,6 +164,11 @@ export type RanchChatShellProps = {
    * Empty / omitted hides the face-chat entry.
    */
   studioBaseUrl?: string;
+  /**
+   * Embody origin for the body room window (kind=body).
+   * Empty / omitted hides the Body entry. CN omitted (Auth0).
+   */
+  embodyBaseUrl?: string;
   /**
    * UI locale (BCP-47). Supported: `en` (default), `zh`.
    * Other values fall back to English.
@@ -160,12 +195,14 @@ export type RanchChatShellProps = {
    * Open an account surface on mount (e.g. after plan checkout return).
    * Host typically sets this from `?account=plan`.
    */
-  initialAccountPanel?: "plan" | "wallet" | "manage" | "profile" | null;
+  initialAccountPanel?: "plan" | "wallet" | "keys" | "manage" | "profile" | null;
   /**
    * After first-claim, open or create the 1:1 with this ACN agent id
    * (from Interfaze ``/?agent=``).
    */
   initialOpenAgentId?: string | null;
+  /** Open My agents + create dialog (from Interfaze ``/?create=1``). */
+  initialCreateAgent?: boolean;
 };
 
 /** Outbound delivery on user messages (Chat Gateway → ACN). */
@@ -178,6 +215,8 @@ export type ChatMessage = {
   sender_id: string;
   content: string | null;
   created_at: string;
+  /** Mailbox refs (``mbx:{id}``). Parsed from API JSON string or WS array. */
+  attachments?: string[] | null;
   /** Topic/thread id when the message belongs to a Topic. */
   thread_id?: string | null;
   /** Topic title for badges (when provided by Gateway). */
@@ -203,17 +242,32 @@ export type ChatMessage = {
         status?: string;
         name?: string;
       }>;
+      propose_group?: {
+        agent_ids?: string[];
+        title?: string;
+        summary?: string;
+        existing_chat_id?: string;
+      };
       decide?: {
         options?: Array<{ id: string; label: string }>;
         shadow?: Record<string, unknown>;
         applied?: { option_id?: string; by?: string };
       };
+      plan?: {
+        title?: string;
+        summary?: string;
+        goal?: string;
+      };
+      propose_task?: {
+        title?: string;
+        description?: string;
+        reward?: string;
+        deadline_hours?: number;
+      };
     };
     piece?: PieceHold | null;
     [key: string]: unknown;
   } | null;
-  /** This-chat mailbox refs (``mbx:…``), JSON string or list. */
-  attachments?: string | string[] | null;
 };
 
 export type PieceHold = {
@@ -227,6 +281,15 @@ export type PieceHold = {
   status: string;
   occupied: boolean;
   reject_deadline?: string | null;
+  lines?: Array<{
+    kind: string;
+    claimed?: number;
+    attachments?: number;
+    billable?: number;
+    unit_credits?: number;
+    amount?: number;
+    status?: string;
+  }>;
 };
 
 /** Chat Topic (API name: Thread). Response field is ``id``, not ``thread_id``. */

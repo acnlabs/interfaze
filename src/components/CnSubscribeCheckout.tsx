@@ -432,7 +432,7 @@ function CnSubscribeInner() {
             </Link>
             {" · "}
             需要充值星币？{" "}
-            <a href="/wallet?return_to=/?account=wallet" style={linkStyle}>
+            <a href={"/wallet?return_to=" + encodeURIComponent("/?account=wallet")} style={linkStyle}>
               打开钱包
             </a>
             {" · "}

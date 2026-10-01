@@ -12,13 +12,17 @@ import {
 import { createPortal } from "react-dom";
 import {
   ChatGatewayError,
+  officialCatalogRates,
+  syncCatalogRates,
   type ChatAgentSearchHit,
   type GatewayClient,
   type MyAgentAllowlistEntry,
   type MyAgentSummary,
+  type PieceSku,
 } from "../gateway";
 import { copyText } from "./connectPrompt";
 import type { RanchMessages } from "./i18n";
+import { officialShelfAllows } from "./officialV0";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 import { useModalA11y } from "./useModalA11y";
 
@@ -55,6 +59,37 @@ function formatTagsInput(tags: string[] | null | undefined): string {
   return (tags ?? []).join(", ");
 }
 
+const MAX_PIECE_CREDITS = 100_000;
+
+function parsePieceCredits(raw: string): number | null {
+  const v = raw.trim();
+  if (!/^\d+$/.test(v)) return null;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 0 || n > MAX_PIECE_CREDITS) return null;
+  return n;
+}
+
+function capFrom(v: unknown): number {
+  if (typeof v === "number" && Number.isFinite(v) && v >= 0) {
+    return Math.min(MAX_PIECE_CREDITS, Math.floor(v));
+  }
+  return MAX_PIECE_CREDITS;
+}
+
+function skuFromDetail(d: MyAgentSummary): Omit<PieceSku, "agent_id"> {
+  return { cap_credits: capFrom(d.cap_credits) };
+}
+
+function skuFromRow(row: PieceSku): Omit<PieceSku, "agent_id"> {
+  return {
+    cap_credits: capFrom(row.cap_credits),
+    network_usage_fee_rate:
+      typeof row.network_usage_fee_rate === "number" && Number.isFinite(row.network_usage_fee_rate)
+        ? row.network_usage_fee_rate
+        : 0.1,
+  };
+}
+
 const FALLBACK_MODEL_ID = "openai/gpt-4o-mini";
 const DEFAULT_MARKUP_PERCENT = 50;
 
@@ -71,39 +106,123 @@ function sameModelId(left: string, right: string): boolean {
   return left.trim().toLowerCase() === right.trim().toLowerCase();
 }
 
-function resolvePricingModelId(detail: MyAgentSummary): string {
-  // Saved listing wins; else runtime heartbeat report; else catalog default.
+function officialSetsEqual(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  const a = left.map((s) => s.trim().toLowerCase()).sort();
+  const b = right.map((s) => s.trim().toLowerCase()).sort();
+  return a.every((id, i) => id === b[i]);
+}
+
+function modelIsOfficial(id: string, official: string[]): boolean {
+  return official.some((item) => sameModelId(item, id));
+}
+
+function isKnownByoVendor(vendor: string, supported: string[]): boolean {
+  const v = vendor.trim().toLowerCase();
+  if (!v) return false;
+  if (v === "tencenttokenplan") return true;
+  return supported.some((id) => modelVendorId(id).toLowerCase() === v);
+}
+
+function providerIdForModel(modelId: string, supported: string[]): string {
+  const id = modelId.trim();
+  if (!id) return "";
+  if (supported.some((item) => sameModelId(item, id))) {
+    return modelVendorId(id) || OTHER_VENDOR;
+  }
+  // Before self-report loads, don't treat leftover listing SKUs as OpenRouter.
+  if (supported.length === 0) return "";
+  // Listing ids like moonshotai/kimi-k2.5 are OpenRouter catalog SKUs, not a vendor we sell.
+  return OPENROUTER_BYO;
+}
+
+/** Settings Provider follows the heartbeat default. Official is one vendor you can switch to, not a second default. */
+function providerIdFromRuntime(
+  runtime: string,
+  listed: string,
+  supported: string[],
+  official: string[] = [],
+  hostReady = false,
+): string {
+  const rt = (runtime || "").trim();
+  if (rt) {
+    if (hostReady && modelIsOfficial(rt, official)) {
+      return OFFICIAL_OPENROUTER;
+    }
+    const vendor = modelVendorId(rt);
+    if (!vendor) return OTHER_VENDOR;
+    if (isKnownByoVendor(vendor, supported)) return vendor;
+    return OPENROUTER_BYO;
+  }
+  return providerIdForModel(listed, supported);
+}
+
+function runtimeIsOpenRouter(runtime: string, supported: string[]): boolean {
+  const vendor = modelVendorId((runtime || "").trim());
+  if (!vendor) return false;
+  return !isKnownByoVendor(vendor, supported);
+}
+
+/** Leftover OpenRouter shelf id while the agent is actually running its own key. */
+function listingIsStaleOpenRouter(
+  listed: string,
+  runtime: string,
+  supported: string[] = [],
+  official: string[] = [],
+): boolean {
+  const ls = listed.trim();
+  const rt = runtime.trim();
+  if (!ls || !rt) return false;
+  if (sameModelId(ls, rt)) return false;
+  if (modelIsOfficial(ls, official)) return false;
+  const rtVendor = modelVendorId(rt);
+  const lsVendor = modelVendorId(ls);
+  if (!rtVendor || !lsVendor) return false;
+  if (!isKnownByoVendor(rtVendor, supported)) return false;
+  if (lsVendor.toLowerCase() === rtVendor.toLowerCase()) return false;
+  if (isKnownByoVendor(lsVendor, supported)) return false;
+  return true;
+}
+
+/** Saving under Official adds the default model; saving under a BYO vendor removes it. */
+function nextOfficialModels(
+  saved: string[],
+  modelId: string,
+  useOfficial: boolean,
+): string[] {
+  const id = modelId.trim();
+  if (!id) return saved;
+  if (useOfficial) {
+    return modelIsOfficial(id, saved) ? saved : [...saved, id];
+  }
+  return modelIsOfficial(id, saved)
+    ? saved.filter((item) => !sameModelId(item, id))
+    : saved;
+}
+
+function resolvePricingModelId(
+  detail: MyAgentSummary,
+  supported: string[] = [],
+  official: string[] = [],
+): string {
   const listed = (detail.token_pricing?.model_id || "").trim();
-  if (listed) return listed;
   const runtime = (detail.runtime_model_id || "").trim();
+  // Heartbeat is the machine default. Official listing must not replace it.
   if (runtime) return runtime;
   const preferred = (detail.preferred_model_id || "").trim();
   if (preferred) return preferred;
+  if (listed && !listingIsStaleOpenRouter(listed, runtime, supported, official)) {
+    return listed;
+  }
   return FALLBACK_MODEL_ID;
 }
 
-/** 1 Credit = $0.10 — same default as Host ``credit_to_usd_rate``. */
-const CREDIT_TO_USD = 0.1;
-const MAX_IMAGE_PIECE_CREDITS = 100_000;
+/** 1 Credit = $0.01 — $1 = 100 Credits, same as wallet recharge. */
+const CREDIT_TO_USD = 0.01;
 
 function usdToCredits(usd: number): number {
   if (!Number.isFinite(usd) || usd <= 0) return 0;
   return Math.max(0, Math.ceil(roundUsdPerMillion(usd) / CREDIT_TO_USD - 1e-12));
-}
-
-function parseImageCredits(raw: string): number | null {
-  const v = raw.trim();
-  if (!/^\d+$/.test(v)) return null;
-  const n = Number(v);
-  if (!Number.isInteger(n) || n < 0 || n > MAX_IMAGE_PIECE_CREDITS) return null;
-  return n;
-}
-
-function imageCreditsFromDetail(d: MyAgentSummary): number {
-  const n = d.image_credits;
-  return typeof n === "number" && Number.isFinite(n) && n >= 0
-    ? Math.min(MAX_IMAGE_PIECE_CREDITS, Math.floor(n))
-    : 0;
 }
 
 function uniqModelIds(...groups: Array<Array<string | null | undefined> | undefined>): string[] {
@@ -125,6 +244,331 @@ function uniqModelIds(...groups: Array<Array<string | null | undefined> | undefi
 function fmtUsd(n: number): string {
   if (!Number.isFinite(n)) return "—";
   return roundUsdPerMillion(n).toFixed(6);
+}
+
+function shortModelLabel(modelId: string): string {
+  const s = modelId.trim();
+  const slash = s.lastIndexOf("/");
+  return slash >= 0 ? s.slice(slash + 1) : s;
+}
+
+type CatalogPair = { in: number; out: number; source?: string };
+
+const TOKENHUB_PRICE_URL = "https://cloud.tencent.com/document/product/1823/130055";
+
+function catalogSourceHref(
+  source: string | null | undefined,
+  modelId: string,
+): string | null {
+  const src = (source || "").trim().toLowerCase();
+  if (src === "openrouter") {
+    const parts = modelId.trim().replace(/^\/+/, "").split("/").filter(Boolean);
+    if (parts.length === 0) return null;
+    return `https://openrouter.ai/${parts.map(encodeURIComponent).join("/")}`;
+  }
+  if (src === "host_pack") return TOKENHUB_PRICE_URL;
+  return null;
+}
+
+const OPENROUTER_BYO = "openrouter";
+const OFFICIAL_OPENROUTER = "official_openrouter";
+const OTHER_VENDOR = "__other__";
+
+function storeOpenRouterUrl(base?: string): string {
+  return `${(base || "https://agentplanet.org").replace(/\/+$/, "")}/store/openrouter`;
+}
+
+/** OpenRouter-style ``vendor/model``; empty if the agent reported a bare id. */
+function modelVendorId(modelId: string): string {
+  const s = modelId.trim();
+  const slash = s.indexOf("/");
+  if (slash <= 0) return "";
+  return s.slice(0, slash);
+}
+
+function vendorsFromModels(ids: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of ids) {
+    const vendor = modelVendorId(id);
+    if (!vendor) continue;
+    const key = vendor.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(vendor);
+  }
+  return out;
+}
+
+function modelsForVendor(ids: string[], vendor: string): string[] {
+  const key = vendor.trim().toLowerCase();
+  if (!key) return ids.filter((id) => !modelVendorId(id));
+  return ids.filter((id) => modelVendorId(id).toLowerCase() === key);
+}
+
+function modelsForProvider(ids: string[], provider: string): string[] {
+  if (!provider) return [];
+  if (provider === OPENROUTER_BYO || provider === OFFICIAL_OPENROUTER) return [];
+  if (provider === OTHER_VENDOR) return modelsForVendor(ids, "");
+  return modelsForVendor(ids, provider);
+}
+
+function findOfficialEquivalent(fromId: string, officialIds: string[]): string | null {
+  const needle = fromId.trim();
+  if (!needle || officialIds.length === 0) return null;
+  const hit = officialIds.find((id) => sameModelId(id, needle));
+  if (hit) return hit;
+  const short = shortModelLabel(needle).toLowerCase();
+  if (!short) return null;
+  const matches = officialIds.filter(
+    (id) => shortModelLabel(id).toLowerCase() === short,
+  );
+  return matches[0] ?? null;
+}
+
+/** Id actually shown in the provider’s model control (not a leftover from the other provider). */
+function pickListedId(ids: string[], draft: string): string {
+  const needle = draft.trim();
+  if (ids.length === 0) return needle;
+  const hit = findOfficialEquivalent(needle, ids);
+  if (hit) return hit;
+  // Keep the heartbeat/draft id until the owner picks another one.
+  if (needle) return needle;
+  return ids[0] ?? "";
+}
+
+function filterModelIds(ids: string[], query: string, keepId: string): string[] {
+  const q = query.trim().toLowerCase();
+  const filtered = !q
+    ? ids
+    : ids.filter((id) => {
+        const short = shortModelLabel(id).toLowerCase();
+        return id.toLowerCase().includes(q) || short.includes(q);
+      });
+  if (
+    keepId.trim() &&
+    ids.some((id) => sameModelId(id, keepId)) &&
+    !filtered.some((id) => sameModelId(id, keepId))
+  ) {
+    const kept = ids.find((id) => sameModelId(id, keepId));
+    if (kept) return [kept, ...filtered];
+  }
+  return filtered;
+}
+
+const OFFICIAL_LIST_MAX_PX = 240;
+
+function OfficialModelPicker({
+  ids,
+  value,
+  disabled,
+  optionLabel,
+  searchPlaceholder,
+  emptyText,
+  ariaLabel,
+  onChange,
+}: {
+  ids: string[];
+  value: string;
+  disabled?: boolean;
+  optionLabel: (id: string) => string;
+  searchPlaceholder: string;
+  emptyText: string;
+  ariaLabel: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [panel, setPanel] = useState<{ top: number; left: number; width: number } | null>(
+    null,
+  );
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
+  const selected = ids.find((id) => sameModelId(id, value)) ?? ids[0] ?? "";
+  const filtered = filterModelIds(ids, query, "");
+
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) {
+      setPanel(null);
+      return;
+    }
+    const place = () => {
+      const r = btnRef.current!.getBoundingClientRect();
+      const panelH = 44 + OFFICIAL_LIST_MAX_PX;
+      let top = r.bottom + 4;
+      if (top + panelH > window.innerHeight - 8) {
+        top = Math.max(8, r.top - panelH - 4);
+      }
+      setPanel({ top, left: r.left, width: r.width });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, filtered.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    searchRef.current?.focus();
+    const onDoc = (e: MouseEvent) => {
+      const node = e.target as Node;
+      if (btnRef.current?.contains(node) || panelRef.current?.contains(node)) return;
+      close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, close]);
+
+  return (
+    <div>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-label={ariaLabel}
+        disabled={disabled || ids.length === 0}
+        onClick={() => (open ? close() : setOpen(true))}
+        style={{
+          ...inputStyle,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+          textAlign: "left",
+          cursor: disabled ? "default" : "pointer",
+        }}
+      >
+        <span
+          style={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            minWidth: 0,
+          }}
+        >
+          {selected ? optionLabel(selected) : emptyText}
+        </span>
+        <span style={{ color: colors.muted, flexShrink: 0, fontSize: 11 }} aria-hidden>
+          {open ? "▴" : "▾"}
+        </span>
+      </button>
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={panelRef}
+              style={{
+                position: "fixed",
+                top: panel?.top ?? -9999,
+                left: panel?.left ?? 0,
+                width: panel?.width ?? 0,
+                zIndex: 10040,
+                background: colors.panel,
+                border: `1px solid ${colors.border}`,
+                borderRadius: 8,
+                boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ padding: 8, borderBottom: `1px solid ${colors.border}` }}>
+                <input
+                  ref={searchRef}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={searchPlaceholder}
+                  aria-label={searchPlaceholder}
+                  autoComplete="off"
+                  style={inputStyle}
+                />
+              </div>
+              <div
+                id={listId}
+                role="listbox"
+                style={{ maxHeight: OFFICIAL_LIST_MAX_PX, overflowY: "auto" }}
+              >
+                {filtered.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "10px 12px",
+                      fontSize: 12,
+                      color: colors.muted,
+                    }}
+                  >
+                    {emptyText}
+                  </div>
+                ) : (
+                  filtered.map((id) => {
+                    const active = sameModelId(id, selected);
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        onClick={() => {
+                          onChange(id);
+                          close();
+                        }}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          textAlign: "left",
+                          border: "none",
+                          background: active ? colors.accentSoft : "transparent",
+                          color: colors.text,
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          cursor: "pointer",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!active) e.currentTarget.style.background = colors.hover;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = active
+                            ? colors.accentSoft
+                            : "transparent";
+                        }}
+                      >
+                        {optionLabel(id)}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+}
+
+function catalogOptionLabel(
+  id: string,
+  pair: { in: number; out: number } | undefined,
+  tmpl: string,
+): string {
+  const name = shortModelLabel(id) || id;
+  if (!pair) return name;
+  return fillTemplate(tmpl, { name, in: fmtUsd(pair.in), out: fmtUsd(pair.out) });
 }
 
 function fillTemplate(
@@ -434,6 +878,8 @@ type Props = {
   onUpdated?: (detail: MyAgentSummary) => void;
   /** Called after permanent delete succeeds. */
   onRemoved?: (agentId: string) => void;
+  /** Open the account-level Store keys list (not this agent's secret). */
+  onOpenKeys?: () => void;
 };
 
 /**
@@ -453,6 +899,7 @@ export function AgentOwnerSettings({
   showConnectSection = true,
   onUpdated,
   onRemoved,
+  onOpenKeys,
 }: Props) {
   const [confirmRotate, setConfirmRotate] = useState(false);
   const [confirmRelay, setConfirmRelay] = useState(false);
@@ -475,30 +922,55 @@ export function AgentOwnerSettings({
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
-  const [modelIdDraft, setModelIdDraft] = useState(() => resolvePricingModelId(detail));
+  const [modelIdDraft, setModelIdDraft] = useState(() =>
+    resolvePricingModelId(detail, [], detail.official_models ?? []),
+  );
   const [supportedModels, setSupportedModels] = useState<string[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
+  const [hostReady, setHostReady] = useState(Boolean(detail.host_inference_ready));
+  const [officialSaved, setOfficialSaved] = useState<string[]>(
+    () => detail.official_models ?? [],
+  );
+  const [officialKeyGeo, setOfficialKeyGeo] = useState<string>("");
+  const [officialDefaultModelId, setOfficialDefaultModelId] = useState<string>("");
+  const [savingOfficial, setSavingOfficial] = useState(false);
+  const [officialMsg, setOfficialMsg] = useState<string | null>(null);
+  const [officialError, setOfficialError] = useState<string | null>(null);
+  const [officialCatalog, setOfficialCatalog] = useState<
+    Array<{ id: string } & CatalogPair>
+  >([]);
+  const [openRouterByoCatalog, setOpenRouterByoCatalog] = useState<
+    Array<{ id: string } & CatalogPair>
+  >([]);
+  const [officialCatalogLoading, setOfficialCatalogLoading] = useState(false);
+  const [byoCatalogLoading, setByoCatalogLoading] = useState(false);
+  const [settingsProvider, setSettingsProvider] = useState(() =>
+    providerIdFromRuntime(
+      detail.runtime_model_id || "",
+      resolvePricingModelId(detail, [], detail.official_models ?? []),
+      [],
+      detail.official_models ?? [],
+      Boolean(detail.host_inference_ready),
+    ),
+  );
   const [markupDraft, setMarkupDraft] = useState(() => {
     const mu = detail.token_pricing?.markup_percent;
     if (typeof mu === "number" && Number.isFinite(mu) && mu >= 0) return String(mu);
     return String(DEFAULT_MARKUP_PERCENT);
   });
-  const [catalogIn, setCatalogIn] = useState<number | null>(null);
-  const [catalogOut, setCatalogOut] = useState<number | null>(null);
-  const [catalogLoading, setCatalogLoading] = useState(false);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogById, setCatalogById] = useState<Record<string, CatalogPair>>({});
+  const [catalogReadyKey, setCatalogReadyKey] = useState("");
   const [savingPricing, setSavingPricing] = useState(false);
   const [pricingMsg, setPricingMsg] = useState<string | null>(null);
   const [pricingError, setPricingError] = useState<string | null>(null);
-  const [imageCreditsDraft, setImageCreditsDraft] = useState(() =>
-    String(imageCreditsFromDetail(detail)),
-  );
-  const [imageCreditsSaved, setImageCreditsSaved] = useState(() =>
-    imageCreditsFromDetail(detail),
+  const [skuSaved, setSkuSaved] = useState(() => skuFromDetail(detail));
+  const [capCreditsDraft, setCapCreditsDraft] = useState(() =>
+    String(skuFromDetail(detail).cap_credits),
   );
   const [savingPieceSku, setSavingPieceSku] = useState(false);
   const [pieceSkuMsg, setPieceSkuMsg] = useState<string | null>(null);
   const [pieceSkuError, setPieceSkuError] = useState<string | null>(null);
+  const [refreshingRuntime, setRefreshingRuntime] = useState(false);
   type DeliveryChoice = "direct" | "relay" | "none";
   const deliveryFromDetail = (d: string | null | undefined): DeliveryChoice => {
     if (d === "direct") return "direct";
@@ -540,16 +1012,6 @@ export function AgentOwnerSettings({
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [allowlistHits, setAllowlistHits] = useState<ChatAgentSearchHit[]>([]);
   const [allowlistSearching, setAllowlistSearching] = useState(false);
-
-  type HumanVis = "public" | "invite_only";
-  const [humanVisibility, setHumanVisibility] = useState<HumanVis>("invite_only");
-  const [humanInvitees, setHumanInvitees] = useState<string[]>([]);
-  const [humanLoading, setHumanLoading] = useState(false);
-  const [humanError, setHumanError] = useState<string | null>(null);
-  const [humanMsg, setHumanMsg] = useState<string | null>(null);
-  const [humanDraft, setHumanDraft] = useState("");
-  const [humanActing, setHumanActing] = useState(false);
-  const [humanRemovingId, setHumanRemovingId] = useState<string | null>(null);
   const [confirmClosedPolicy, setConfirmClosedPolicy] = useState(false);
 
   useEffect(() => {
@@ -561,7 +1023,8 @@ export function AgentOwnerSettings({
   }, [detail.agent_id, detail.name, detail.description, detail.tags?.join("\u0001")]);
 
   useEffect(() => {
-    setModelIdDraft(resolvePricingModelId(detail));
+    const official = detail.official_models ?? [];
+    setModelIdDraft(resolvePricingModelId(detail, supportedModels, official));
     const mu = detail.token_pricing?.markup_percent;
     setMarkupDraft(
       typeof mu === "number" && Number.isFinite(mu) && mu >= 0
@@ -570,19 +1033,33 @@ export function AgentOwnerSettings({
     );
     setPricingMsg(null);
     setPricingError(null);
-    setCatalogError(null);
+    setHostReady(Boolean(detail.host_inference_ready));
+    setOfficialSaved(official);
+    setOfficialMsg(null);
+    setOfficialError(null);
+    setSettingsProvider(
+      providerIdFromRuntime(
+        detail.runtime_model_id || "",
+        resolvePricingModelId(detail, supportedModels, official),
+        supportedModels,
+        official,
+        Boolean(detail.host_inference_ready),
+      ),
+    );
   }, [
     detail.agent_id,
     detail.token_pricing?.model_id,
     detail.token_pricing?.markup_percent,
     detail.preferred_model_id,
     detail.runtime_model_id,
+    detail.host_inference_ready,
+    (detail.official_models ?? []).join("\u0001"),
   ]);
 
   useEffect(() => {
-    const fromDetail = imageCreditsFromDetail(detail);
-    setImageCreditsDraft(String(fromDetail));
-    setImageCreditsSaved(fromDetail);
+    const fromDetail = skuFromDetail(detail);
+    setSkuSaved(fromDetail);
+    setCapCreditsDraft(String(fromDetail.cap_credits));
     setPieceSkuMsg(null);
     setPieceSkuError(null);
     let cancelled = false;
@@ -590,9 +1067,9 @@ export function AgentOwnerSettings({
       .getMyAgentPieceSku(detail.agent_id)
       .then((row) => {
         if (cancelled) return;
-        const n = parseImageCredits(String(row.image_credits ?? 0)) ?? 0;
-        setImageCreditsDraft(String(n));
-        setImageCreditsSaved(n);
+        const next = skuFromRow(row);
+        setSkuSaved(next);
+        setCapCreditsDraft(String(next.cap_credits));
       })
       .catch(() => {
         /* Host without SKU route: keep draft from detail. */
@@ -600,83 +1077,62 @@ export function AgentOwnerSettings({
     return () => {
       cancelled = true;
     };
-  }, [client, detail.agent_id]);
-
-  // Pull L1 catalog for the declared model; settle preview = catalog × (1+markup%).
-  useEffect(() => {
-    const mid = modelIdDraft.trim();
-    if (!mid) {
-      setCatalogIn(null);
-      setCatalogOut(null);
-      setCatalogError(null);
-      setCatalogLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setCatalogLoading(true);
-    setCatalogIn(null);
-    setCatalogOut(null);
-    setCatalogError(null);
-    const timer = window.setTimeout(() => {
-      client
-        .getModelCatalogItem(mid)
-        .then((row) => {
-          if (cancelled) return;
-          const cin = Number(row.input_price_per_million);
-          const cout = Number(row.output_price_per_million);
-          if (!Number.isFinite(cin) || !Number.isFinite(cout)) {
-            setCatalogIn(null);
-            setCatalogOut(null);
-            setCatalogError(t.myAgentsPricingCatalogMissing);
-            return;
-          }
-          setCatalogIn(cin);
-          setCatalogOut(cout);
-          setCatalogError(null);
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setCatalogIn(null);
-          setCatalogOut(null);
-          setCatalogError(t.myAgentsPricingCatalogMissing);
-        })
-        .finally(() => {
-          if (!cancelled) setCatalogLoading(false);
-        });
-    }, 350);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [
-    client,
-    detail.agent_id,
-    modelIdDraft,
-    t.myAgentsPricingCatalogMissing,
-  ]);
+  }, [client, detail.agent_id, detail.cap_credits]);
 
   useEffect(() => {
     let cancelled = false;
     setModelsLoading(true);
-    client
-      .getAgentModelStatus(detail.agent_id)
-      .then((status) => {
+    void Promise.all([
+      client.getAgentModelStatus(detail.agent_id),
+      client.getMyAgentOfficialModels(detail.agent_id).catch(() => null),
+    ])
+      .then(([status, officialRow]) => {
         if (cancelled) return;
-        const ids = uniqModelIds(
-          status.supported_models,
-          [detail.token_pricing?.model_id],
-          [detail.runtime_model_id],
-        );
+        const reported = uniqModelIds(status.self_reported_models);
+        const ids = reported.length
+          ? reported
+          : uniqModelIds(status.supported_models).filter(
+              (id) => !status.official_models?.some((official) => sameModelId(official, id)),
+            );
         setSupportedModels(ids);
-        const current = resolvePricingModelId(detail);
-        if (ids.length > 0 && !ids.some((id) => id.toLowerCase() === current.toLowerCase())) {
-          setModelIdDraft(ids[0]);
+        if (typeof status.host_inference_ready === "boolean") {
+          setHostReady(status.host_inference_ready);
         }
+        const official = Array.isArray(status.official_models)
+          ? status.official_models
+          : officialRow?.model_ids ?? detail.official_models ?? [];
+        setOfficialSaved(official);
+        if (officialRow?.official_key_geo) {
+          setOfficialKeyGeo(officialRow.official_key_geo);
+        }
+        if (officialRow?.official_default_model_id) {
+          setOfficialDefaultModelId(officialRow.official_default_model_id);
+        }
+        if (typeof officialRow?.host_inference_ready === "boolean") {
+          setHostReady(officialRow.host_inference_ready);
+        }
+        setModelIdDraft(resolvePricingModelId(detail, ids, official));
+        setSettingsProvider(
+          providerIdFromRuntime(
+            status.runtime_model_id || detail.runtime_model_id || "",
+            resolvePricingModelId(detail, ids, official),
+            ids,
+            official,
+            Boolean(
+              officialRow?.host_inference_ready ??
+                status.host_inference_ready ??
+                detail.host_inference_ready,
+            ),
+          ),
+        );
       })
       .catch(() => {
         if (cancelled) return;
+        const official = detail.official_models ?? [];
         setSupportedModels(
-          uniqModelIds([detail.token_pricing?.model_id], [detail.runtime_model_id]),
+          uniqModelIds([detail.runtime_model_id]).filter(
+            (id) => !modelIsOfficial(id, official),
+          ),
         );
       })
       .finally(() => {
@@ -686,6 +1142,113 @@ export function AgentOwnerSettings({
       cancelled = true;
     };
   }, [client, detail.agent_id, detail.token_pricing?.model_id, detail.runtime_model_id]);
+
+  const supportedKey = supportedModels.join("\u0001");
+  useEffect(() => {
+    if (supportedModels.length === 0) {
+      setCatalogReadyKey("");
+      return;
+    }
+    let cancelled = false;
+    const key = supportedKey;
+    void Promise.all(
+      supportedModels.map((id) =>
+        client.getModelCatalogItem(id).then(
+          (row) => {
+            const cin = Number(row.input_price_per_million);
+            const cout = Number(row.output_price_per_million);
+            if (!Number.isFinite(cin) || !Number.isFinite(cout)) return [id, null] as const;
+            const source = (row.source || "").trim() || undefined;
+            return [id, { in: cin, out: cout, source }] as const;
+          },
+          () => [id, null] as const,
+        ),
+      ),
+    ).then((rows) => {
+      if (cancelled) return;
+      setCatalogById((prev) => {
+        const next = { ...prev };
+        for (const [id, pair] of rows) {
+          if (pair) next[id] = pair;
+        }
+        return next;
+      });
+      setCatalogReadyKey(key);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, supportedKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const page = 500;
+
+    const loadCatalog = async (official: boolean) => {
+      const acc: Array<{ id: string } & CatalogPair> = [];
+      let offset = 0;
+      let total = Number.POSITIVE_INFINITY;
+      while (!cancelled && offset < total && offset < 8000) {
+        const data = await client.listModelCatalog({
+          source: "openrouter",
+          active_only: true,
+          official_shelf: official || undefined,
+          limit: page,
+          offset,
+        });
+        total = Number.isFinite(data.total) ? data.total : offset + data.items.length;
+        for (const row of data.items) {
+          const src = (row.source || "openrouter").toLowerCase();
+          if (src && src !== "openrouter") continue;
+          const id = (row.model_id || "").trim();
+          if (!id) continue;
+          const quote = official ? officialCatalogRates(row) : syncCatalogRates(row);
+          if (!quote) continue;
+          if (official && !officialShelfAllows(id, officialKeyGeo)) continue;
+          if (acc.some((item) => sameModelId(item.id, id))) continue;
+          acc.push({
+            id,
+            in: quote.input,
+            out: quote.output,
+            source: "openrouter",
+          });
+        }
+        if (!data.items.length) break;
+        offset += data.items.length;
+      }
+      return acc;
+    };
+
+    setOfficialCatalogLoading(true);
+    setByoCatalogLoading(true);
+    void (async () => {
+      try {
+        if (hostReady && officialKeyGeo) {
+          const officialAcc = await loadCatalog(true);
+          if (!cancelled) setOfficialCatalog(officialAcc);
+        } else if (!cancelled) {
+          setOfficialCatalog([]);
+        }
+      } catch {
+        if (!cancelled) setOfficialCatalog([]);
+      } finally {
+        if (!cancelled) setOfficialCatalogLoading(false);
+      }
+    })();
+    void (async () => {
+      try {
+        const byoAcc = await loadCatalog(false);
+        if (!cancelled) setOpenRouterByoCatalog(byoAcc);
+      } catch {
+        if (!cancelled) setOpenRouterByoCatalog([]);
+      } finally {
+        if (!cancelled) setByoCatalogLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [client, hostReady, officialKeyGeo]);
 
   useEffect(() => {
     setDeliveryDraft(deliveryFromDetail(detail.delivery));
@@ -740,8 +1303,122 @@ export function AgentOwnerSettings({
     const n = Number(markupDraft);
     return Number.isFinite(n) && n >= 0 && n <= 1000 ? n : null;
   })();
+  const runtimeId = (detail.runtime_model_id || "").trim();
+  const listingStale = listingIsStaleOpenRouter(
+    oldModelId,
+    runtimeId,
+    supportedModels,
+    officialSaved,
+  );
   const listingPublished =
-    oldModelId.length > 0 && typeof oldMarkup === "number" && Number.isFinite(oldMarkup);
+    !listingStale &&
+    oldModelId.length > 0 &&
+    typeof oldMarkup === "number" &&
+    Number.isFinite(oldMarkup);
+  const officialIds = officialCatalog.map((row) => row.id);
+  const byoOpenRouterIds = openRouterByoCatalog.map((row) => row.id);
+  const byoVendors = vendorsFromModels(supportedModels).filter(
+    (id) => id.toLowerCase() !== OPENROUTER_BYO,
+  );
+  const hasBareModels = supportedModels.some((id) => !modelVendorId(id));
+  const providerOptions: Array<{ id: string; label: string }> = [
+    ...(hostReady
+      ? [{ id: OFFICIAL_OPENROUTER, label: t.myAgentsProviderOfficialOpenRouter }]
+      : []),
+    ...byoVendors.map((id) => ({ id, label: id })),
+    ...(hasBareModels ? [{ id: OTHER_VENDOR, label: t.myAgentsProviderOther }] : []),
+    { id: OPENROUTER_BYO, label: t.myAgentsProviderOpenRouter },
+  ];
+  if (
+    settingsProvider &&
+    settingsProvider !== OPENROUTER_BYO &&
+    settingsProvider !== OFFICIAL_OPENROUTER &&
+    !providerOptions.some((p) => p.id === settingsProvider)
+  ) {
+    providerOptions.unshift({
+      id: settingsProvider,
+      label:
+        settingsProvider === OTHER_VENDOR
+          ? t.myAgentsProviderOther
+          : settingsProvider,
+    });
+  }
+  const activeProvider = settingsProvider
+    ? settingsProvider
+    : modelsLoading
+      ? ""
+      : providerOptions.find(
+          (p) => p.id !== OPENROUTER_BYO && p.id !== OFFICIAL_OPENROUTER,
+        )?.id ||
+        providerOptions.find((p) => p.id !== OPENROUTER_BYO)?.id ||
+        providerOptions[0]?.id ||
+        "";
+  const officialSelected = activeProvider === OFFICIAL_OPENROUTER;
+  const openRouterByoSelected = activeProvider === OPENROUTER_BYO;
+  const vendorModelsBase = officialSelected
+    ? officialIds
+    : openRouterByoSelected
+      ? byoOpenRouterIds
+      : modelsForProvider(supportedModels, activeProvider);
+  const vendorModels =
+    modelIdTrim && !vendorModelsBase.some((id) => sameModelId(id, modelIdTrim))
+      ? [modelIdTrim, ...vendorModelsBase]
+      : vendorModelsBase;
+  const displayedModelId = modelIdTrim || pickListedId(vendorModels, "") || "";
+  const officialRow = officialCatalog.find((row) =>
+    sameModelId(row.id, displayedModelId),
+  );
+  const byoOpenRouterRow = openRouterByoCatalog.find((row) =>
+    sameModelId(row.id, displayedModelId),
+  );
+  const selectedCatalog = officialSelected
+    ? officialRow
+      ? {
+          in: officialRow.in,
+          out: officialRow.out,
+          source: officialRow.source || "openrouter",
+        }
+      : null
+    : openRouterByoSelected
+      ? byoOpenRouterRow
+        ? {
+            in: byoOpenRouterRow.in,
+            out: byoOpenRouterRow.out,
+            source: byoOpenRouterRow.source || "openrouter",
+          }
+        : null
+      : catalogById[displayedModelId] ??
+        Object.entries(catalogById).find(([id]) => sameModelId(id, displayedModelId))?.[1] ??
+        null;
+  const catalogIn = selectedCatalog?.in ?? null;
+  const catalogOut = selectedCatalog?.out ?? null;
+  const catalogSource = (() => {
+    const fromRow = (selectedCatalog?.source || "").trim().toLowerCase();
+    if (fromRow) return fromRow;
+    if (officialSelected || openRouterByoSelected) return "openrouter";
+    if (modelVendorId(displayedModelId).toLowerCase() === "tencenttokenplan") {
+      return "host_pack";
+    }
+    return "";
+  })();
+  const catalogSourceUrl = catalogSourceHref(catalogSource, displayedModelId);
+  const catalogLoading =
+    officialSelected
+      ? officialCatalogLoading
+      : openRouterByoSelected
+        ? byoCatalogLoading
+        : supportedModels.length > 0 && catalogReadyKey !== supportedKey;
+  const catalogError =
+    !catalogLoading &&
+    displayedModelId.length > 0 &&
+    selectedCatalog == null &&
+    (officialSelected
+      ? officialCatalog.length > 0
+      : openRouterByoSelected
+        ? openRouterByoCatalog.length > 0
+        : supportedModels.length > 0)
+      ? t.myAgentsPricingCatalogMissing
+      : null;
   const inputParsed =
     !catalogLoading && catalogIn != null && !catalogError && markupParsed != null
       ? applyMarkup(catalogIn, markupParsed)
@@ -751,34 +1428,71 @@ export function AgentOwnerSettings({
       ? applyMarkup(catalogOut, markupParsed)
       : null;
   const previewReady = inputParsed != null && outputParsed != null;
-  const pricingDirty =
-    modelIdTrim.length > 0 &&
+  const modelDirty = Boolean(
+    displayedModelId &&
+      (runtimeId
+        ? !sameModelId(displayedModelId, runtimeId)
+        : !listingPublished || !sameModelId(displayedModelId, oldModelId)),
+  );
+  const markupDirty =
     markupParsed !== null &&
-    (!listingPublished ||
-      !sameModelId(modelIdTrim, oldModelId) ||
-      markupParsed !== oldMarkup);
-  const runtimeId = (detail.runtime_model_id || "").trim();
-  const runtimeMismatch = Boolean(runtimeId && !sameModelId(runtimeId, modelIdTrim));
+    (typeof oldMarkup !== "number" || markupParsed !== oldMarkup);
+  const pricingDirty =
+    displayedModelId.length > 0 &&
+    markupParsed !== null &&
+    (modelDirty || markupDirty || !listingPublished);
+  const runtimeMismatch = Boolean(
+    runtimeId && !sameModelId(runtimeId, displayedModelId),
+  );
   const modelOnList =
-    supportedModels.length > 0 &&
-    supportedModels.some((id) => id.toLowerCase() === modelIdTrim.toLowerCase());
+    vendorModels.length > 0 &&
+    vendorModels.some((id) => sameModelId(id, displayedModelId));
+  const modelsBusy =
+    officialSelected
+      ? officialCatalogLoading
+      : openRouterByoSelected
+        ? byoCatalogLoading
+        : modelsLoading;
+  const openRouterOnRuntime = runtimeIsOpenRouter(
+    detail.runtime_model_id || "",
+    supportedModels,
+  );
+  const openRouterBlocked = openRouterByoSelected && !openRouterOnRuntime;
   const canSavePricing =
     pricingDirty &&
     previewReady &&
     inputParsed !== null &&
     outputParsed !== null &&
     markupParsed !== null &&
-    modelIdTrim.length > 0 &&
+    displayedModelId.length > 0 &&
     modelOnList &&
-    !modelsLoading &&
+    !openRouterBlocked &&
+    !modelsBusy &&
     !savingPricing &&
     !busy;
-
-  const imageCreditsParsed = parseImageCredits(imageCreditsDraft);
+  const capCreditsParsed = parsePieceCredits(capCreditsDraft);
   const pieceSkuDirty =
-    imageCreditsParsed !== null && imageCreditsParsed !== imageCreditsSaved;
-  const canSavePieceSku =
-    pieceSkuDirty && imageCreditsParsed !== null && !savingPieceSku && !busy;
+    capCreditsParsed !== null && capCreditsParsed !== skuSaved.cap_credits;
+  const canSavePieceSku = pieceSkuDirty && !savingPieceSku && !busy;
+  const vendorModelsKey = vendorModels.join("\u0001");
+  useEffect(() => {
+    if (modelsBusy) return;
+    if (vendorModels.length === 0) return;
+    if (vendorModels.some((id) => sameModelId(id, modelIdDraft))) return;
+    if (runtimeId && sameModelId(modelIdDraft, runtimeId)) return;
+    setModelIdDraft(pickListedId(vendorModels, modelIdDraft));
+  }, [activeProvider, modelsBusy, vendorModelsKey, modelIdDraft, runtimeId]);
+  const nextOfficial = nextOfficialModels(
+    officialSaved,
+    displayedModelId,
+    officialSelected,
+  );
+  const officialDirty =
+    hostReady &&
+    displayedModelId.length > 0 &&
+    !officialSetsEqual(nextOfficial, officialSaved);
+  const canSaveOfficial =
+    officialDirty && !savingOfficial && !busy && !modelsBusy && hostReady;
 
   const policyMode = (detail.policy_mode || "").toLowerCase();
   const currentPolicy = policyFromDetail(detail.policy_mode);
@@ -805,108 +1519,6 @@ export function AgentOwnerSettings({
   const canSavePolicy = policyDirty && !savingPolicy && !busy;
   const showAllowlistEditor =
     selectedPolicy === "allowlist" || savedPolicy === "allowlist";
-
-  const applyHumanAccess = (data: {
-    invitees?: string[] | null;
-    visibility?: string | null;
-  }) => {
-    const vis = (data.visibility || "").trim();
-    setHumanVisibility(vis === "public" ? "public" : "invite_only");
-    setHumanInvitees(Array.isArray(data.invitees) ? data.invitees : []);
-  };
-
-  const loadHumanAccess = useCallback(async () => {
-    setHumanLoading(true);
-    setHumanError(null);
-    try {
-      const data = await client.getMyAgentHumanAccess(detail.agent_id);
-      applyHumanAccess(data);
-    } catch {
-      setHumanInvitees([]);
-      setHumanVisibility("invite_only");
-      setHumanError(t.myAgentsHumansLoadFailed);
-    } finally {
-      setHumanLoading(false);
-    }
-  }, [client, detail.agent_id, t.myAgentsHumansLoadFailed]);
-
-  useEffect(() => {
-    void loadHumanAccess();
-  }, [loadHumanAccess]);
-
-  const persistHumanAccess = async (next: {
-    invitees: string[];
-    visibility: HumanVis;
-  }) => {
-    const data = await client.replaceMyAgentHumanAccess(detail.agent_id, next);
-    applyHumanAccess(data);
-    setHumanMsg(t.myAgentsHumansSaved);
-    window.setTimeout(() => setHumanMsg(null), 2000);
-  };
-
-  const setHumanVisibilityNow = async (visibility: HumanVis) => {
-    if (humanActing || visibility === humanVisibility) return;
-    setHumanActing(true);
-    setHumanError(null);
-    try {
-      await persistHumanAccess({ invitees: humanInvitees, visibility });
-    } catch {
-      setHumanError(t.myAgentsHumansSaveFailed);
-    } finally {
-      setHumanActing(false);
-    }
-  };
-
-  const addHumanInvitee = async () => {
-    if (humanActing) return;
-    const uid = humanDraft.trim();
-    if (!uid || uid.length > 128 || uid.includes("/") || uid.includes("\\") || uid.includes("..")) {
-      setHumanError(t.myAgentsHumansInvalidId);
-      return;
-    }
-    if (humanInvitees.includes(uid)) {
-      setHumanDraft("");
-      return;
-    }
-    if (humanInvitees.length >= 50) {
-      setHumanError(t.myAgentsHumansFull);
-      return;
-    }
-    setHumanActing(true);
-    setHumanError(null);
-    try {
-      await persistHumanAccess({
-        invitees: [...humanInvitees, uid],
-        visibility: humanVisibility,
-      });
-      setHumanDraft("");
-    } catch (e) {
-      const code = e instanceof ChatGatewayError ? e.code : "";
-      setHumanError(
-        code === "rate_limited" ? t.myAgentsHumansFull : t.myAgentsHumansSaveFailed,
-      );
-    } finally {
-      setHumanActing(false);
-    }
-  };
-
-  const removeHumanInvitee = async (userId: string) => {
-    if (humanActing) return;
-    setHumanActing(true);
-    setHumanRemovingId(userId);
-    setHumanError(null);
-    try {
-      await persistHumanAccess({
-        invitees: humanInvitees.filter((id) => id !== userId),
-        visibility: humanVisibility,
-      });
-    } catch {
-      setHumanError(t.myAgentsHumansSaveFailed);
-    } finally {
-      setHumanActing(false);
-      setHumanRemovingId(null);
-    }
-  };
 
   const loadAllowlist = useCallback(async () => {
     setAllowlistLoading(true);
@@ -1014,13 +1626,17 @@ export function AgentOwnerSettings({
   };
 
   const saving =
-    savingProfile || savingDelivery || savingPolicy || savingPricing || savingPieceSku;
-  const hasEdits = profileDirty || deliveryDirty || policyDirty || pricingDirty;
+    savingProfile || savingDelivery || savingPolicy || savingPricing || savingOfficial;
+  const hasEdits =
+    profileDirty || deliveryDirty || policyDirty || pricingDirty || officialDirty;
   const canSaveAny =
-    (canSaveProfile || canSaveDelivery || canSavePolicy) &&
-    !savingProfile &&
-    !savingDelivery &&
-    !savingPolicy &&
+    (canSaveProfile ||
+      canSaveDelivery ||
+      canSavePolicy ||
+      canSavePricing ||
+      canSaveOfficial) &&
+    !openRouterBlocked &&
+    !saving &&
     !busy;
 
   const runSaveProfile = (): Promise<MyAgentSummary | null> => {
@@ -1061,7 +1677,7 @@ export function AgentOwnerSettings({
       inputParsed === null ||
       outputParsed === null ||
       markupParsed === null ||
-      !modelIdTrim
+      !displayedModelId
     ) {
       return Promise.resolve(null);
     }
@@ -1072,12 +1688,18 @@ export function AgentOwnerSettings({
       .updateMyAgentTokenPricing(detail.agent_id, {
         input_price_per_million: inputParsed,
         output_price_per_million: outputParsed,
-        model_id: modelIdTrim,
+        model_id: displayedModelId,
         markup_percent: markupParsed,
       })
       .then((row) => {
         setPricingMsg(t.myAgentsPricingSaved);
-        setModelIdDraft(resolvePricingModelId(row));
+        setModelIdDraft(
+          resolvePricingModelId(
+            row,
+            supportedModels,
+            row.official_models ?? officialSaved,
+          ),
+        );
         const mu = row.token_pricing?.markup_percent;
         if (typeof mu === "number" && Number.isFinite(mu)) setMarkupDraft(String(mu));
         window.setTimeout(() => setPricingMsg(null), 2000);
@@ -1085,30 +1707,37 @@ export function AgentOwnerSettings({
         return row;
       })
       .catch((err: unknown) => {
+        const code = err instanceof ChatGatewayError ? err.code : "";
         const msg =
-          err instanceof ChatGatewayError && err.message.trim()
-            ? err.message.trim()
-            : t.myAgentsPricingFailed;
+          code === "agent_unreachable"
+            ? t.myAgentsPricingNoAck
+            : err instanceof ChatGatewayError && err.message.trim()
+              ? err.message.trim()
+              : t.myAgentsPricingFailed;
         setPricingError(msg);
+        setModelIdDraft(resolvePricingModelId(detail, supportedModels, officialSaved));
         return null;
       })
       .finally(() => setSavingPricing(false));
   };
 
-  const runSavePieceSku = (): Promise<{ agent_id: string; image_credits: number } | null> => {
-    if (!canSavePieceSku || imageCreditsParsed === null) return Promise.resolve(null);
+  const runSavePieceSku = (): Promise<PieceSku | null> => {
+    if (!canSavePieceSku || capCreditsParsed === null) return Promise.resolve(null);
     setSavingPieceSku(true);
     setPieceSkuError(null);
     setPieceSkuMsg(null);
     return client
-      .updateMyAgentPieceSku(detail.agent_id, imageCreditsParsed)
+      .updateMyAgentPieceSku(detail.agent_id, { cap_credits: capCreditsParsed })
       .then((row) => {
-        const n = parseImageCredits(String(row.image_credits ?? 0)) ?? imageCreditsParsed;
-        setImageCreditsDraft(String(n));
-        setImageCreditsSaved(n);
+        const next = skuFromRow(row);
+        setSkuSaved(next);
+        setCapCreditsDraft(String(next.cap_credits));
         setPieceSkuMsg(t.myAgentsPieceSkuSaved);
         window.setTimeout(() => setPieceSkuMsg(null), 2000);
-        onUpdated?.({ ...detail, image_credits: n });
+        onUpdated?.({
+          ...detail,
+          cap_credits: next.cap_credits,
+        });
         return row;
       })
       .catch((err: unknown) => {
@@ -1120,6 +1749,43 @@ export function AgentOwnerSettings({
         return null;
       })
       .finally(() => setSavingPieceSku(false));
+  };
+
+  const runSaveOfficial = (): Promise<{
+    model_ids: string[];
+    host_inference_ready: boolean;
+  } | null> => {
+    if (!canSaveOfficial) return Promise.resolve(null);
+    setSavingOfficial(true);
+    setOfficialError(null);
+    setOfficialMsg(null);
+    return client
+      .updateMyAgentOfficialModels(detail.agent_id, nextOfficial)
+      .then((row) => {
+        setOfficialSaved(row.model_ids);
+        setHostReady(Boolean(row.host_inference_ready));
+        if (row.official_key_geo) setOfficialKeyGeo(row.official_key_geo);
+        if (row.official_default_model_id) {
+          setOfficialDefaultModelId(row.official_default_model_id);
+        }
+        setOfficialMsg(t.myAgentsProvidersSaved);
+        window.setTimeout(() => setOfficialMsg(null), 2000);
+        onUpdated?.({
+          ...detail,
+          official_models: row.model_ids,
+          host_inference_ready: row.host_inference_ready,
+        });
+        return row;
+      })
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof ChatGatewayError && err.message.trim()
+            ? err.message.trim()
+            : t.myAgentsProvidersFailed;
+        setOfficialError(msg);
+        return null;
+      })
+      .finally(() => setSavingOfficial(false));
   };
 
   const runSaveDelivery = (): Promise<MyAgentSummary | null> => {
@@ -1180,10 +1846,62 @@ export function AgentOwnerSettings({
       .finally(() => setSavingPolicy(false));
   };
 
+  const refreshRuntimeStatus = () => {
+    if (refreshingRuntime || modelsLoading || busy) return;
+    setRefreshingRuntime(true);
+    void client
+      .getAgentModelStatus(detail.agent_id)
+      .then((status) => {
+        const reported = uniqModelIds(status.self_reported_models);
+        const ids = reported.length
+          ? reported
+          : uniqModelIds(status.supported_models).filter(
+              (id) => !status.official_models?.some((official) => sameModelId(official, id)),
+            );
+        setSupportedModels(ids);
+        if (typeof status.host_inference_ready === "boolean") {
+          setHostReady(status.host_inference_ready);
+        }
+        const official = Array.isArray(status.official_models)
+          ? status.official_models
+          : officialSaved;
+        if (Array.isArray(status.official_models)) {
+          setOfficialSaved(status.official_models);
+        }
+        const runtime = status.runtime_model_id || detail.runtime_model_id || "";
+        const ready =
+          typeof status.host_inference_ready === "boolean"
+            ? status.host_inference_ready
+            : hostReady;
+        setModelIdDraft(resolvePricingModelId(detail, ids, official));
+        setSettingsProvider(
+          providerIdFromRuntime(
+            runtime,
+            resolvePricingModelId(detail, ids, official),
+            ids,
+            official,
+            ready,
+          ),
+        );
+        onUpdated?.({
+          ...detail,
+          runtime_model_id: status.runtime_model_id ?? detail.runtime_model_id,
+          official_models: status.official_models ?? detail.official_models,
+          host_inference_ready:
+            typeof status.host_inference_ready === "boolean"
+              ? status.host_inference_ready
+              : detail.host_inference_ready,
+        });
+      })
+      .finally(() => setRefreshingRuntime(false));
+  };
+
   const runSaveAll = () => {
     const doProfile = canSaveProfile;
     const doDelivery = canSaveDelivery;
     const doPolicy = canSavePolicy;
+    const doPricing = canSavePricing;
+    const doOfficial = canSaveOfficial;
     // Opening policy before delivery so push/pull can succeed; closing after.
     const openingPolicy = doPolicy && policyDraft === "open";
     const otherPolicy = doPolicy && policyDraft !== "open";
@@ -1193,6 +1911,36 @@ export function AgentOwnerSettings({
       if (openingPolicy) latest = (await runSavePolicy()) ?? latest;
       if (doDelivery) latest = (await runSaveDelivery()) ?? latest;
       if (otherPolicy) latest = (await runSavePolicy()) ?? latest;
+      const saveOfficialThenPricing = officialSelected && (doOfficial || doPricing);
+      if (saveOfficialThenPricing) {
+        let officialOk = !doOfficial;
+        if (doOfficial) {
+          const officialRow = await runSaveOfficial();
+          officialOk = Boolean(officialRow);
+          if (officialRow && latest) {
+            latest = {
+              ...latest,
+              official_models: officialRow.model_ids,
+              host_inference_ready: officialRow.host_inference_ready,
+            };
+          }
+        }
+        if (doPricing && officialOk) {
+          latest = (await runSavePricing()) ?? latest;
+        }
+      } else {
+        if (doPricing) latest = (await runSavePricing()) ?? latest;
+        if (doOfficial) {
+          const officialRow = await runSaveOfficial();
+          if (officialRow && latest) {
+            latest = {
+              ...latest,
+              official_models: officialRow.model_ids,
+              host_inference_ready: officialRow.host_inference_ready,
+            };
+          }
+        }
+      }
       if (latest) onUpdated?.(latest);
     })();
   };
@@ -1468,26 +2216,22 @@ export function AgentOwnerSettings({
       </section>
 
       <section>
-        <h3 style={{ ...sectionTitle, display: "flex", alignItems: "center" }}>
-          {t.myAgentsSectionPricing}
-          <FieldHint
-            text={`${t.myAgentsPricingHint} ${t.myAgentsPricingSelfReportNote}`}
-          />
+        <h3
+          style={{
+            ...sectionTitle,
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
+          <span style={{ display: "inline-flex", alignItems: "center" }}>
+            {t.myAgentsSectionPricing}
+            <FieldHint
+              text={`${t.myAgentsPricingHint} ${t.myAgentsPricingSelfReportNote} ${t.myAgentsPricingModelHint}`}
+            />
+          </span>
         </h3>
-        {(detail.inference_path || "byo") !== "official" ? (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              margin: "0 0 10px",
-              fontSize: 12,
-              color: colors.muted,
-            }}
-          >
-            {t.myAgentsInferencePathByo}
-            <FieldHint text={t.myAgentsInferencePathByoHint} />
-          </div>
-        ) : null}
         {detail.token_pricing == null ? (
           <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
             {t.myAgentsPricingUnlisted}
@@ -1501,31 +2245,291 @@ export function AgentOwnerSettings({
               marginBottom: 6,
               display: "flex",
               alignItems: "center",
+              gap: 8,
             }}
           >
-            {t.myAgentsPricingModelLabel}
-            <FieldHint text={t.myAgentsPricingModelHint} />
+            {t.myAgentsProviderLabel}
+            <FieldHint text={t.myAgentsProviderHint} />
+            <button
+              type="button"
+              onClick={refreshRuntimeStatus}
+              disabled={busy || modelsLoading || refreshingRuntime}
+              style={{
+                ...btnGhost,
+                marginLeft: "auto",
+                padding: "4px 8px",
+                fontSize: 11,
+                opacity: busy || modelsLoading || refreshingRuntime ? 0.55 : 1,
+              }}
+            >
+              {refreshingRuntime ? "…" : t.myAgentsRefreshRuntime}
+            </button>
           </div>
-          {modelsLoading ? (
+          {providerOptions.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>
+              {t.myAgentsPricingModelsEmpty}
+            </p>
+          ) : (
+            <select
+              aria-label={t.myAgentsProviderLabel}
+              value={activeProvider}
+              onChange={(e) => {
+                const next = e.target.value;
+                setSettingsProvider(next);
+                if (next === OFFICIAL_OPENROUTER) {
+                  const equiv =
+                    findOfficialEquivalent(modelIdDraft, officialIds) ||
+                    officialSaved.find((id) =>
+                      officialIds.some((item) => sameModelId(item, id)),
+                    ) ||
+                    (officialDefaultModelId
+                      ? officialIds.find((id) => sameModelId(id, officialDefaultModelId))
+                      : undefined) ||
+                    officialIds[0];
+                  if (equiv) setModelIdDraft(equiv);
+                  return;
+                }
+                if (next === OPENROUTER_BYO) {
+                  const equiv =
+                    findOfficialEquivalent(modelIdDraft, byoOpenRouterIds) ||
+                    byoOpenRouterIds[0];
+                  if (equiv) setModelIdDraft(equiv);
+                  return;
+                }
+                const list = modelsForProvider(supportedModels, next);
+                if (list.length > 0 && !list.some((id) => sameModelId(id, modelIdDraft))) {
+                  setModelIdDraft(list[0]);
+                }
+              }}
+              disabled={busy || modelsLoading}
+              style={inputStyle}
+            >
+              {!activeProvider ? (
+                <option value="" disabled>
+                  …
+                </option>
+              ) : null}
+              {providerOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          )}
+          {officialSelected ? (
+            <p
+              style={{
+                margin: "8px 0 0",
+                fontSize: 12,
+                color: colors.muted,
+                lineHeight: 1.45,
+              }}
+            >
+              {t.myAgentsOfficialHostHint}
+            </p>
+          ) : openRouterByoSelected ? (
+            <p
+              style={{
+                margin: "8px 0 0",
+                fontSize: 12,
+                color: openRouterOnRuntime ? colors.muted : colors.danger,
+                lineHeight: 1.45,
+              }}
+            >
+              {openRouterOnRuntime
+                ? t.myAgentsNeedStoreKey
+                : t.myAgentsOpenRouterRuntimeRequired}{" "}
+              <a
+                href={storeOpenRouterUrl(_agentPlanetBaseUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: colors.text, textDecoration: "underline" }}
+              >
+                {t.myAgentsBuyStoreKey}
+              </a>
+              {onOpenKeys ? (
+                <>
+                  {" · "}
+                  <button
+                    type="button"
+                    onClick={onOpenKeys}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: colors.text,
+                      textDecoration: "underline",
+                      padding: 0,
+                      font: "inherit",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {t.accountKeysOpenList}
+                  </button>
+                </>
+              ) : null}
+            </p>
+          ) : listingStale ? (
+            <p
+              style={{
+                margin: "8px 0 0",
+                fontSize: 12,
+                color: colors.muted,
+                lineHeight: 1.45,
+              }}
+            >
+              {t.myAgentsListingStaleHint}{" "}
+              <a
+                href={storeOpenRouterUrl(_agentPlanetBaseUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: colors.text, textDecoration: "underline" }}
+              >
+                {t.myAgentsBuyStoreKey}
+              </a>
+              {onOpenKeys ? (
+                <>
+                  {" · "}
+                  <button
+                    type="button"
+                    onClick={onOpenKeys}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: colors.text,
+                      textDecoration: "underline",
+                      padding: 0,
+                      font: "inherit",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {t.accountKeysOpenList}
+                  </button>
+                </>
+              ) : null}
+            </p>
+          ) : onOpenKeys ? (
+            <p
+              style={{
+                margin: "8px 0 0",
+                fontSize: 12,
+                color: colors.muted,
+                lineHeight: 1.45,
+              }}
+            >
+              <button
+                type="button"
+                onClick={onOpenKeys}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: colors.text,
+                  textDecoration: "underline",
+                  padding: 0,
+                  font: "inherit",
+                  cursor: "pointer",
+                }}
+              >
+                {t.accountKeysOpenList}
+              </button>
+            </p>
+          ) : null}
+        </div>
+        <div style={{ marginBottom: 10 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              marginBottom: 6,
+            }}
+          >
+            <span style={{ fontSize: 12, color: colors.muted }}>
+              {t.myAgentsPricingModelLabel}
+            </span>
+            {catalogSourceUrl ? (
+              <span style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+                <a
+                  href={catalogSourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    fontSize: 12,
+                    color: colors.muted,
+                    textDecoration: "underline",
+                  }}
+                >
+                  {catalogSource === "openrouter"
+                    ? t.myAgentsPricingSourceOpenRouter
+                    : t.myAgentsPricingSourceTokenHub}
+                </a>
+                <FieldHint text={t.myAgentsPricingSourceHint} align="right" />
+              </span>
+            ) : null}
+          </div>
+          {modelsBusy ? (
             <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>…</p>
-          ) : supportedModels.length === 0 ? (
+          ) : officialSelected ? (
+            officialIds.length === 0 ? (
+              <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
+                {t.myAgentsPricingOfficialEmpty}
+              </p>
+            ) : (
+              <OfficialModelPicker
+                ids={officialIds}
+                value={displayedModelId}
+                disabled={busy || savingPricing}
+                ariaLabel={t.myAgentsPricingModelLabel}
+                searchPlaceholder={t.myAgentsPricingModelSearch}
+                emptyText={t.myAgentsPricingOfficialEmpty}
+                optionLabel={(id) =>
+                  catalogOptionLabel(
+                    id,
+                    officialCatalog.find((row) => sameModelId(row.id, id)),
+                    t.myAgentsPricingOptionLine,
+                  )
+                }
+                onChange={setModelIdDraft}
+              />
+            )
+          ) : openRouterByoSelected ? (
+            byoOpenRouterIds.length === 0 ? (
+              <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
+                {t.myAgentsPricingOfficialEmpty}
+              </p>
+            ) : (
+              <OfficialModelPicker
+                ids={byoOpenRouterIds}
+                value={displayedModelId}
+                disabled={busy || savingPricing}
+                ariaLabel={t.myAgentsPricingModelLabel}
+                searchPlaceholder={t.myAgentsPricingModelSearch}
+                emptyText={t.myAgentsPricingOfficialEmpty}
+                optionLabel={(id) =>
+                  catalogOptionLabel(
+                    id,
+                    openRouterByoCatalog.find((row) => sameModelId(row.id, id)),
+                    t.myAgentsPricingOptionLine,
+                  )
+                }
+                onChange={setModelIdDraft}
+              />
+            )
+          ) : vendorModels.length === 0 ? (
             <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
               {t.myAgentsPricingModelsEmpty}
             </p>
           ) : (
             <select
               aria-label={t.myAgentsPricingModelLabel}
-              value={
-                supportedModels.find((id) => sameModelId(id, modelIdDraft)) ??
-                supportedModels[0]
-              }
+              value={displayedModelId}
               onChange={(e) => setModelIdDraft(e.target.value)}
               disabled={busy || savingPricing}
               style={inputStyle}
             >
-              {supportedModels.map((id) => (
+              {vendorModels.map((id) => (
                 <option key={id} value={id}>
-                  {id}
+                  {catalogOptionLabel(id, catalogById[id], t.myAgentsPricingOptionLine)}
                 </option>
               ))}
             </select>
@@ -1537,17 +2541,8 @@ export function AgentOwnerSettings({
           ) : null}
         </div>
         <label style={{ display: "block", marginBottom: 10 }}>
-          <div
-            style={{
-              fontSize: 12,
-              color: colors.muted,
-              marginBottom: 4,
-              display: "flex",
-              alignItems: "center",
-            }}
-          >
+          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
             {t.myAgentsPricingMarkupLabel}
-            <FieldHint text={t.myAgentsPricingMarkupHint} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
@@ -1579,16 +2574,10 @@ export function AgentOwnerSettings({
                 out: fmtUsd(outputParsed),
               })}
             </div>
-            <div style={{ color: colors.muted, marginTop: 4 }}>
-              {fillTemplate(t.myAgentsPricingCatalogLine, {
-                in: fmtUsd(catalogIn),
-                out: fmtUsd(catalogOut),
-              })}
-            </div>
             <div
               style={{
                 color: colors.muted,
-                marginTop: 4,
+                marginTop: 2,
                 display: "flex",
                 alignItems: "center",
               }}
@@ -1601,24 +2590,16 @@ export function AgentOwnerSettings({
             </div>
           </div>
         ) : null}
-        {pricingError ? (
-          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>{pricingError}</p>
+        {pricingError || officialError ? (
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>
+            {pricingError || officialError}
+          </p>
         ) : null}
-        {pricingMsg ? (
-          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>{pricingMsg}</p>
+        {pricingMsg || officialMsg ? (
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>
+            {pricingMsg || officialMsg}
+          </p>
         ) : null}
-        <button
-          type="button"
-          style={{
-            ...btnGhost,
-            opacity: canSavePricing ? 1 : 0.45,
-            cursor: canSavePricing ? "pointer" : "default",
-          }}
-          disabled={!canSavePricing}
-          onClick={() => void runSavePricing()}
-        >
-          {savingPricing ? "…" : t.myAgentsSavePricing}
-        </button>
       </section>
 
       <section>
@@ -1630,20 +2611,13 @@ export function AgentOwnerSettings({
           {t.myAgentsPieceSkuOff}
         </p>
         <label style={{ display: "block", marginBottom: 10 }}>
-          <div
-            style={{
-              fontSize: 12,
-              color: colors.muted,
-              marginBottom: 4,
-              display: "flex",
-              alignItems: "center",
-            }}
-          >
+          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
             {t.myAgentsPieceSkuLabel}
           </div>
           <input
-            value={imageCreditsDraft}
-            onChange={(e) => setImageCreditsDraft(e.target.value)}
+            aria-label={t.myAgentsPieceSkuLabel}
+            value={capCreditsDraft}
+            onChange={(e) => setCapCreditsDraft(e.target.value)}
             style={inputStyle}
             inputMode="numeric"
             disabled={busy || savingPieceSku}
@@ -1673,10 +2647,7 @@ export function AgentOwnerSettings({
 
       {showConnectSection ? (
         <section>
-          <h3 style={{ ...sectionTitle, display: "flex", alignItems: "center" }}>
-            {t.myAgentsSectionConnect}
-            <FieldHint text={t.myAgentsDeliveryHint} />
-          </h3>
+          <h3 style={sectionTitle}>{t.myAgentsSectionConnect}</h3>
           {!deliveryEditable ? (
             <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
               {t.myAgentsDeliveryLocked}
@@ -1787,153 +2758,8 @@ export function AgentOwnerSettings({
       ) : null}
 
       <section>
-        <h3 style={sectionTitle}>{t.myAgentsSectionAccess}</h3>
-        <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-          {t.myAgentsHumansHint}
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <button
-            type="button"
-            style={optionBtn(humanVisibility === "public")}
-            disabled={busy || humanActing || humanLoading}
-            onClick={() => void setHumanVisibilityNow("public")}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsHumansPublic}</div>
-            <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
-              {t.myAgentsHumansPublicHelp}
-            </div>
-          </button>
-          <button
-            type="button"
-            style={optionBtn(humanVisibility === "invite_only")}
-            disabled={busy || humanActing || humanLoading}
-            onClick={() => void setHumanVisibilityNow("invite_only")}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsHumansInviteOnly}</div>
-            <div style={{ fontSize: 11, color: colors.muted, marginTop: 4, lineHeight: 1.4 }}>
-              {t.myAgentsHumansInviteOnlyHelp}
-            </div>
-          </button>
-        </div>
-        <div
-          style={{
-            marginTop: 12,
-            padding: "12px 12px",
-            borderRadius: 10,
-            border: `1px solid ${colors.border}`,
-            background: colors.bg,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 8,
-              flexWrap: "wrap",
-            }}
-          >
-            <span style={{ fontSize: 12, fontWeight: 650, color: colors.text }}>
-              {t.myAgentsHumansListTitle}
-            </span>
-            <span style={{ fontSize: 11, color: colors.muted }}>
-              {t.myAgentsHumansCount(String(humanInvitees.length))}
-            </span>
-          </div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <input
-              value={humanDraft}
-              onChange={(e) => setHumanDraft(e.target.value)}
-              placeholder={t.myAgentsHumansPlaceholder}
-              disabled={busy || humanActing}
-              style={{ ...inputStyle, flex: 1, minWidth: 0 }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void addHumanInvitee();
-                }
-              }}
-            />
-            <button
-              type="button"
-              style={{ ...btnPrimary, fontSize: 12, fontWeight: 600, flexShrink: 0 }}
-              disabled={busy || humanActing || !humanDraft.trim()}
-              onClick={() => void addHumanInvitee()}
-            >
-              {humanActing && !humanRemovingId ? t.loading : t.myAgentsHumansAdd}
-            </button>
-          </div>
-          {humanError ? (
-            <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>
-              {humanError}
-            </p>
-          ) : null}
-          {humanMsg ? (
-            <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>
-              {humanMsg}
-            </p>
-          ) : null}
-          {humanLoading ? (
-            <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>{t.loading}</p>
-          ) : humanInvitees.length === 0 ? (
-            <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>
-              {t.myAgentsHumansEmpty}
-            </p>
-          ) : (
-            <ul
-              style={{
-                listStyle: "none",
-                margin: 0,
-                padding: 0,
-                display: "flex",
-                flexDirection: "column",
-                gap: 6,
-                maxHeight: 180,
-                overflow: "auto",
-              }}
-            >
-              {humanInvitees.map((uid) => (
-                <li
-                  key={uid}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    border: `1px solid ${colors.border}`,
-                  }}
-                >
-                  <div
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: colors.text,
-                      wordBreak: "break-all",
-                    }}
-                  >
-                    {uid}
-                  </div>
-                  <button
-                    type="button"
-                    style={{ ...btnGhost, fontSize: 11, padding: "4px 8px", flexShrink: 0 }}
-                    disabled={busy || humanActing}
-                    onClick={() => void removeHumanInvitee(uid)}
-                  >
-                    {humanRemovingId === uid ? t.loading : t.myAgentsHumansRemove}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-
-      <section>
         <h3 style={{ ...sectionTitle, display: "flex", alignItems: "center" }}>
-          {t.myAgentsSectionAgents}
+          {t.myAgentsSectionAccess}
           <FieldHint text={t.myAgentsPolicyHint} />
         </h3>
         {currentPolicy === "manifest" ? (
@@ -2177,24 +3003,36 @@ export function AgentOwnerSettings({
             {rotateError || dangerError}
           </p>
         ) : null}
-        {profileError || deliveryError || policyError ? (
+        {profileError || deliveryError || policyError || pricingError || officialError ? (
           <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>
-            {profileError || deliveryError || policyError}
+            {profileError || deliveryError || policyError || pricingError || officialError}
           </p>
         ) : null}
-        {profileMsg || deliveryMsg || policyMsg ? (
+        {profileMsg || deliveryMsg || policyMsg || pricingMsg || officialMsg ? (
           <p style={{ margin: 0, fontSize: 12, color: colors.recommended }}>
-            {profileMsg || deliveryMsg || policyMsg}
+            {profileMsg || deliveryMsg || policyMsg || pricingMsg || officialMsg}
           </p>
         ) : null}
         {hasEdits || saving ? (
           <button
             type="button"
-            style={{ ...btnPrimary, width: "100%" }}
+            style={{
+              ...btnPrimary,
+              width: "100%",
+              ...(canSaveAny
+                ? {}
+                : {
+                    background: "#334155",
+                    borderColor: "#334155",
+                    color: colors.muted,
+                    cursor: "not-allowed",
+                    opacity: 0.75,
+                  }),
+            }}
             disabled={!canSaveAny}
             onClick={saveAll}
           >
-            {saving ? t.loading : t.save}
+            {savingPricing ? t.myAgentsPricingSyncing : saving ? t.loading : t.save}
           </button>
         ) : null}
         <button

@@ -12,7 +12,6 @@ import {
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth0 } from "@auth0/auth0-react";
-import Loading from "@/components/Loading";
 import {
   AUTH0_AUDIENCE,
   AUTH0_SCOPE,
@@ -27,6 +26,7 @@ import { getGatewayBaseUrl } from "@/lib/gateway";
 import { isCnRegion } from "@/lib/region";
 import { planCheckoutReturnHref, safeReturnTo } from "@/lib/safeReturnTo";
 import CnSubscribeCheckout from "@/components/CnSubscribeCheckout";
+import Loading from "@/components/Loading";
 import {
   PlanCatalog,
   PlanSheet,
@@ -122,6 +122,23 @@ function SubscribeInner() {
     return `/subscribe?${q.toString()}`;
   }, [planCode, renew, embed, parentOriginParam, afterPayReturnTo]);
 
+  const promptSignIn = useCallback(
+    (returnTo: string) => {
+      void loginWithRedirect({
+        authorizationParams: { audience: AUTH0_AUDIENCE, scope: AUTH0_SCOPE },
+        appState: { returnTo: withEmbedParentOrigin(returnTo, parentOriginParam) },
+        openUrl:
+          embed && inIframe
+            ? (url) => {
+                const opened = window.open(url, "_blank", "noopener,noreferrer");
+                if (!opened) window.location.href = url;
+              }
+            : undefined,
+      });
+    },
+    [embed, inIframe, loginWithRedirect, parentOriginParam],
+  );
+
   const returnUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
     const q = new URLSearchParams({ plan: planCode, paypal: "success" });
@@ -140,7 +157,12 @@ function SubscribeInner() {
       setPaying(landingPage);
       try {
         const token = await tokenGetter();
-        if (!token) throw new Error("Not signed in");
+        if (!token) {
+          payingLock.current = false;
+          setPaying(null);
+          promptSignIn(cleanSubscribePath());
+          return;
+        }
         const cancelQ = new URLSearchParams({
           plan: planCode,
           paypal: "cancel",
@@ -184,10 +206,12 @@ function SubscribeInner() {
     },
     [
       afterPayReturnTo,
+      cleanSubscribePath,
       gateway,
       parentOriginParam,
       plan,
       planCode,
+      promptSignIn,
       renew,
       returnUrl,
       tokenGetter,
@@ -333,7 +357,7 @@ function SubscribeInner() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && paypalReturn === "success" && paypalOrderId) {
     return (
       <main style={pageStyle(embed)}>
         <PlanSheet
@@ -341,11 +365,7 @@ function SubscribeInner() {
           closeHref={exitHref}
           title="Checkout"
           onBack={() => selectPlan(undefined)}
-          hint={
-            paypalReturn === "success" && paypalOrderId
-              ? "Sign in to finish activating your paid plan."
-              : `Sign in to pay $${plan.amountUsd} for 30 days.`
-          }
+          hint="Sign in to finish activating your paid plan."
         >
           {tier ? <TierSummary tier={tier} /> : null}
           {embed && inIframe ? (
@@ -356,34 +376,17 @@ function SubscribeInner() {
           <button
             type="button"
             style={btnStyle}
-            onClick={() =>
-              void loginWithRedirect({
-                authorizationParams: { audience: AUTH0_AUDIENCE, scope: AUTH0_SCOPE },
-                appState: {
-                  returnTo: withEmbedParentOrigin(
-                    (() => {
-                      const q = new URLSearchParams({ plan: planCode });
-                      if (renew) q.set("renew", "1");
-                      if (embed) q.set("embed", "1");
-                      q.set("return_to", afterPayReturnTo);
-                      // Keep PayPal capture params across Auth0 re-login.
-                      if (paypalReturn) q.set("paypal", paypalReturn);
-                      if (paypalOrderId) q.set("token", paypalOrderId);
-                      return `/subscribe?${q.toString()}`;
-                    })(),
-                    parentOriginParam,
-                  ),
-                },
-                // Auth0 blocks iframe embeds — open top-level authorize URL in a new tab.
-                openUrl:
-                  embed && inIframe
-                    ? (url) => {
-                        const opened = window.open(url, "_blank", "noopener,noreferrer");
-                        if (!opened) window.location.href = url;
-                      }
-                    : undefined,
-              })
-            }
+            onClick={() => {
+              const q = new URLSearchParams({
+                plan: planCode,
+                paypal: "success",
+                token: paypalOrderId,
+              });
+              if (renew) q.set("renew", "1");
+              if (embed) q.set("embed", "1");
+              q.set("return_to", afterPayReturnTo);
+              promptSignIn(`/subscribe?${q.toString()}`);
+            }}
           >
             Sign in
           </button>
@@ -477,7 +480,7 @@ function SubscribeInner() {
             </button>
             {" · "}
             Need Credits top-up?{" "}
-            <a href="/wallet?return_to=/?account=wallet" style={linkStyle}>
+            <a href={"/wallet?return_to=" + encodeURIComponent("/?account=wallet")} style={linkStyle}>
               Open Wallet
             </a>
           </p>
