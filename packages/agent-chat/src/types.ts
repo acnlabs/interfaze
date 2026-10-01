@@ -65,6 +65,16 @@ export type ChatEmbed = {
   headline?: string | null;
 };
 
+export type ChatPlanArtifact = {
+  plan_id: string;
+  title: string;
+  summary?: string;
+  body?: string;
+  source_message_id?: string;
+  message_id?: string;
+  id?: string;
+};
+
 export type ChatSummary = {
   chat_id: string;
   type: string;
@@ -85,12 +95,18 @@ export type ChatSummary = {
     plan?: {
       title: string;
       summary?: string;
+      body?: string;
+      plan_id?: string;
+      source_message_id?: string;
       message_id?: string;
       id?: string;
     } | null;
     plans?: Array<{
       title: string;
       summary?: string;
+      body?: string;
+      plan_id?: string;
+      source_message_id?: string;
       message_id?: string;
       id?: string;
       chat_id?: string;

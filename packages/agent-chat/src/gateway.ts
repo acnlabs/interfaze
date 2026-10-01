@@ -505,6 +505,7 @@ export type GatewayClient = {
     assignee_id?: string | null;
     status?: string | null;
   }>;
+  getChatPlan: (chatId: string, planId: string) => Promise<import("./types").ChatPlanArtifact>;
   listMessages: (chatId: string) => Promise<ChatMessage[]>;
   listParticipants: (chatId: string) => Promise<ChatParticipant[]>;
   sendMessage: (
@@ -843,6 +844,10 @@ export function createGatewayClient(
     getLabsTask: (taskId) =>
       request<{ assignee_id?: string | null; status?: string | null }>(
         `/api/labs/tasks/${encodeURIComponent(taskId)}`,
+      ),
+    getChatPlan: (chatId, planId) =>
+      request<import("./types").ChatPlanArtifact>(
+        `/api/chats/${encodeURIComponent(chatId)}/plans/${encodeURIComponent(planId)}`,
       ),
     searchAgents: async (q = "", limit = 20) => {
       const params = new URLSearchParams();

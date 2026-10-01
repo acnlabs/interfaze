@@ -154,6 +154,11 @@ export type RanchMessages = {
   historyTasksEmpty: string;
   historyTaskPending: string;
   historyTaskPosted: string;
+  historyTaskOpen: string;
+  planViewerBack: string;
+  planViewerSource: string;
+  planViewerLoading: string;
+  planViewerEmpty: string;
   send: string;
   justNow: string;
   minsAgo: (n: number) => string;
@@ -825,6 +830,11 @@ const en: RanchMessages = {
   historyTasksEmpty: "No task yet. Confirm a job card in chat and it will appear here.",
   historyTaskPending: "Waiting for you",
   historyTaskPosted: "Posted",
+  historyTaskOpen: "Open task",
+  planViewerBack: "Back",
+  planViewerSource: "View source message",
+  planViewerLoading: "Loading plan…",
+  planViewerEmpty: "No plan body yet.",
   send: "Send",
   justNow: "Just now",
   minsAgo: (n) => `${n}m ago`,
@@ -1550,6 +1560,11 @@ const zh: RanchMessages = {
   historyTasksEmpty: "还没有任务。在对话里点头确认发单后，会出现在这里。",
   historyTaskPending: "等你确认",
   historyTaskPosted: "已发单",
+  historyTaskOpen: "打开任务",
+  planViewerBack: "返回",
+  planViewerSource: "查看来源消息",
+  planViewerLoading: "加载计划中…",
+  planViewerEmpty: "暂无计划正文。",
   send: "发送",
   justNow: "刚刚",
   minsAgo: (n) => `${n} 分钟前`,

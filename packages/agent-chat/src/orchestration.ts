@@ -252,6 +252,9 @@ export function decideFromMetadata(meta: unknown): MessageDecide | null {
 export type MessagePlan = {
   title: string;
   summary?: string;
+  body?: string;
+  plan_id?: string;
+  source_message_id?: string;
   message_id?: string;
   id?: string;
 };
@@ -269,11 +272,22 @@ export function planFromMetadata(meta: unknown): MessagePlan | null {
     const summary = plan.summary.trim().replace(/\s+/g, " ").slice(0, 4000);
     if (summary) out.summary = summary;
   }
+  if (typeof plan.plan_id === "string" && plan.plan_id.trim()) {
+    out.plan_id = plan.plan_id.trim().slice(0, 64);
+  }
+  if (typeof plan.body === "string") {
+    const body = plan.body.trim().slice(0, 32000);
+    if (body) out.body = body;
+  }
+  if (typeof plan.source_message_id === "string" && plan.source_message_id.trim()) {
+    out.source_message_id = plan.source_message_id.trim().slice(0, 64);
+  }
   if (typeof plan.message_id === "string" && plan.message_id.trim()) {
     out.message_id = plan.message_id.trim().slice(0, 64);
   }
   if (typeof plan.id === "string" && plan.id.trim()) {
     out.id = plan.id.trim().slice(0, 64);
+    if (!out.plan_id) out.plan_id = out.id;
   }
   return out;
 }
