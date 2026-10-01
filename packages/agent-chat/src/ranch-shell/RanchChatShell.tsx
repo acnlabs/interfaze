@@ -954,6 +954,80 @@ function OrchCopyRow({
   );
 }
 
+function trimSiteBase(base: string): string {
+  return base.replace(/\/$/, "");
+}
+
+function labsTaskPageUrl(base: string | undefined, taskId: string): string {
+  return `${trimSiteBase(base || "https://agentplanet.org")}/tasks/${encodeURIComponent(taskId)}`;
+}
+
+function ChatPlanViewer({
+  title,
+  summary,
+  body,
+  loading,
+  t,
+  onBack,
+  onSource,
+}: {
+  title: string;
+  summary?: string;
+  body?: string;
+  loading: boolean;
+  t: RanchMessages;
+  onBack: () => void;
+  onSource?: () => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button type="button" onClick={onBack} style={{ ...btnGhost, fontSize: 12 }}>
+          {t.planViewerBack}
+        </button>
+        {onSource ? (
+          <button type="button" onClick={onSource} style={{ ...btnGhost, fontSize: 12, marginLeft: "auto" }}>
+            {t.planViewerSource}
+          </button>
+        ) : null}
+      </div>
+      <div
+        style={{
+          background: colors.panel,
+          border: `1px solid ${colors.border}`,
+          borderRadius: 10,
+          padding: "12px 14px",
+          overflow: "auto",
+        }}
+      >
+        <div style={{ fontWeight: 650, fontSize: 15, color: colors.text, lineHeight: 1.35 }}>{title}</div>
+        {summary ? (
+          <div style={{ fontSize: 12, color: colors.muted, lineHeight: 1.45, marginTop: 6 }}>{summary}</div>
+        ) : null}
+        {loading ? (
+          <div style={{ fontSize: 12, color: colors.muted, marginTop: 12 }}>{t.planViewerLoading}</div>
+        ) : body ? (
+          <pre
+            style={{
+              margin: "12px 0 0",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              fontFamily: "inherit",
+              fontSize: 12,
+              lineHeight: 1.55,
+              color: colors.text,
+            }}
+          >
+            {body}
+          </pre>
+        ) : (
+          <div style={{ fontSize: 12, color: colors.muted, marginTop: 12 }}>{t.planViewerEmpty}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AgentPlanFooter({
   plan,
   t,
@@ -2716,6 +2790,42 @@ export function RanchChatShell(props: RanchChatShellProps) {
   /** Detail panel tab. Group: members. Direct: info | settings? | wallet? | chats. */
   const [infoTab, setInfoTab] = useState<"info" | "settings" | "wallet" | "members" | "chats">("info");
   const [historyKind, setHistoryKind] = useState<"chats" | "plans" | "tasks">("chats");
+  const [planViewer, setPlanViewer] = useState<{
+    chatId: string;
+    planId: string;
+    title: string;
+    summary?: string;
+  } | null>(null);
+  const [planViewerDetail, setPlanViewerDetail] = useState<{
+    loading: boolean;
+    body?: string;
+    sourceMessageId?: string;
+  }>({ loading: false });
+  useEffect(() => {
+    if (!planViewer) {
+      setPlanViewerDetail({ loading: false });
+      return;
+    }
+    let cancelled = false;
+    setPlanViewerDetail({ loading: true });
+    void client
+      .getChatPlan(planViewer.chatId, planViewer.planId)
+      .then((row) => {
+        if (cancelled) return;
+        setPlanViewerDetail({
+          loading: false,
+          body: row.body,
+          sourceMessageId: row.source_message_id || row.message_id,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPlanViewerDetail({ loading: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, planViewer]);
   /** Owned-agent ACN detail for Info (read-only) + Settings (manage). */
   const [ownedAgentDetail, setOwnedAgentDetail] = useState<MyAgentSummary | null>(null);
   const [composerModel, setComposerModel] = useState<{
@@ -4218,6 +4328,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     title: string;
     summary?: string;
     chatId: string;
+    planId?: string;
     messageId?: string;
   }> = (() => {
     const rows: Array<{
@@ -4225,6 +4336,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       title: string;
       summary?: string;
       chatId: string;
+      planId?: string;
       messageId?: string;
     }> = [];
     const seen = new Set<string>();
@@ -4232,12 +4344,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
       chatId: string,
       title: string,
       summary?: string,
+      planId?: string,
       messageId?: string,
     ) => {
-      const key = `${chatId}:${messageId || title}`;
+      const key = `${chatId}:${planId || messageId || title}`;
       if (seen.has(key) || !title.trim()) return;
       seen.add(key);
-      rows.push({ key, title, summary, chatId, messageId });
+      rows.push({ key, title, summary, chatId, planId, messageId });
     };
     for (const c of siblingChats) {
       const listed = c.decision?.plans?.length
@@ -4247,29 +4360,85 @@ export function RanchChatShell(props: RanchChatShellProps) {
           : [];
       for (const p of listed) {
         if (!p?.title) continue;
-        push(c.chat_id, p.title, p.summary, p.message_id || p.id);
+        push(
+          c.chat_id,
+          p.title,
+          p.summary,
+          p.plan_id || p.id,
+          p.source_message_id || p.message_id,
+        );
       }
     }
     if (active && !isGroupChat(active)) {
       for (const m of messages) {
         const plan = planFromMetadata(m.metadata);
-        if (plan) push(active.chat_id, plan.title, plan.summary, m.message_id);
+        if (plan) {
+          push(
+            active.chat_id,
+            plan.title,
+            plan.summary,
+            plan.plan_id || plan.id,
+            plan.source_message_id || plan.message_id || m.message_id,
+          );
+        }
       }
     }
     return rows;
   })();
+
+  const openPlanRow = (row: {
+    chatId: string;
+    planId?: string;
+    title: string;
+    summary?: string;
+    messageId?: string;
+  }) => {
+    const launch = () => {
+      if (row.planId) {
+        setPlanViewer({
+          chatId: row.chatId,
+          planId: row.planId,
+          title: row.title,
+          summary: row.summary,
+        });
+        return;
+      }
+      if (row.messageId && active?.chat_id === row.chatId) {
+        setShowMembersPanel(false);
+        scrollToMessage(row.messageId);
+      }
+    };
+    if (row.chatId !== active?.chat_id) {
+      const target = siblingChats.find((c) => c.chat_id === row.chatId);
+      if (target) {
+        void openConversation(target);
+        if (row.planId) {
+          setPlanViewer({
+            chatId: row.chatId,
+            planId: row.planId,
+            title: row.title,
+            summary: row.summary,
+          });
+        }
+      }
+      return;
+    }
+    launch();
+  };
 
   const historyTasks: Array<{
     key: string;
     title: string;
     pending: boolean;
     taskId?: string;
+    messageId: string;
   }> = (() => {
     const rows: Array<{
       key: string;
       title: string;
       pending: boolean;
       taskId?: string;
+      messageId: string;
     }> = [];
     for (const m of messages) {
       const task = proposeTaskFromMetadata(m.metadata);
@@ -4280,6 +4449,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         title: task.title,
         pending: !taskId,
         taskId,
+        messageId: m.message_id,
       });
     }
     return rows;
@@ -7266,7 +7436,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           <button
                             key={key}
                             type="button"
-                            onClick={() => setHistoryKind(key)}
+                            onClick={() => {
+                              setHistoryKind(key);
+                              if (key !== "plans") setPlanViewer(null);
+                            }}
                             style={{
                               ...btnGhost,
                               flex: 1,
@@ -7284,7 +7457,25 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       </div>
                       <div style={{ flex: 1, overflow: "auto", padding: 12 }}>
                         {historyKind === "plans" ? (
-                          historyPlans.length === 0 ? (
+                          planViewer ? (
+                            <ChatPlanViewer
+                              title={planViewer.title}
+                              summary={planViewer.summary}
+                              body={planViewerDetail.body}
+                              loading={planViewerDetail.loading}
+                              t={t}
+                              onBack={() => setPlanViewer(null)}
+                              onSource={
+                                planViewerDetail.sourceMessageId &&
+                                planViewer.chatId === active?.chat_id
+                                  ? () => {
+                                      setShowMembersPanel(false);
+                                      scrollToMessage(planViewerDetail.sourceMessageId!);
+                                    }
+                                  : undefined
+                              }
+                            />
+                          ) : historyPlans.length === 0 ? (
                             <div
                               style={{
                                 textAlign: "center",
@@ -7305,15 +7496,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   <button
                                     key={row.key}
                                     type="button"
-                                    onClick={() => {
-                                      if (row.chatId === active.chat_id) {
-                                        setShowMembersPanel(false);
-                                        if (row.messageId) scrollToMessage(row.messageId);
-                                        return;
-                                      }
-                                      const target = siblingChats.find((c) => c.chat_id === row.chatId);
-                                      if (target) void openConversation(target);
-                                    }}
+                                    onClick={() => openPlanRow(row)}
                                     style={{
                                       ...listItem,
                                       textAlign: "left",
@@ -7385,32 +7568,76 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             </div>
                           ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                              {historyTasks.map((row) => (
-                                <div
-                                  key={row.key}
-                                  style={{
-                                    ...listItem,
-                                    cursor: "default",
-                                  }}
-                                >
-                                  <div style={{ minWidth: 0, flex: 1 }}>
-                                    <div
-                                      style={{
-                                        fontWeight: 600,
-                                        fontSize: 13,
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                        whiteSpace: "nowrap",
-                                      }}
-                                    >
-                                      {row.title}
+                              {historyTasks.map((row) =>
+                                row.taskId ? (
+                                  <a
+                                    key={row.key}
+                                    href={labsTaskPageUrl(agentPlanetBaseUrl, row.taskId)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      ...listItem,
+                                      textAlign: "left",
+                                      textDecoration: "none",
+                                      background: colors.panel,
+                                      border: `1px solid ${colors.border}`,
+                                      padding: "10px 12px",
+                                    }}
+                                  >
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                      <div
+                                        style={{
+                                          fontWeight: 650,
+                                          fontSize: 13,
+                                          color: colors.text,
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
+                                        }}
+                                      >
+                                        {row.title}
+                                      </div>
+                                      <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+                                        {t.historyTaskOpen}
+                                      </div>
                                     </div>
-                                    <div style={{ fontSize: 11, color: colors.muted }}>
-                                      {row.pending ? t.historyTaskPending : t.historyTaskPosted}
+                                  </a>
+                                ) : (
+                                  <button
+                                    key={row.key}
+                                    type="button"
+                                    onClick={() => {
+                                      setShowMembersPanel(false);
+                                      scrollToMessage(row.messageId);
+                                    }}
+                                    style={{
+                                      ...listItem,
+                                      textAlign: "left",
+                                      background: colors.panel,
+                                      border: `1px solid ${colors.border}`,
+                                      padding: "10px 12px",
+                                    }}
+                                  >
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                      <div
+                                        style={{
+                                          fontWeight: 650,
+                                          fontSize: 13,
+                                          color: colors.text,
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
+                                        }}
+                                      >
+                                        {row.title}
+                                      </div>
+                                      <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+                                        {t.historyTaskPending}
+                                      </div>
                                     </div>
-                                  </div>
-                                </div>
-                              ))}
+                                  </button>
+                                ),
+                              )}
                             </div>
                           )
                         ) : siblingChats.length === 0 ? (
