@@ -7,6 +7,7 @@ import { AUTH0_AUDIENCE, AUTH0_SCOPE, isAuth0Configured } from "@/lib/auth0";
 import { getCnSessionToken, startWeChatLogin } from "@/lib/auth/cn";
 import { isCnRegion } from "@/lib/region";
 import InterfazeChatHost from "./InterfazeChatHost";
+import Loading from "./Loading";
 
 const siteName = process.env.NEXT_PUBLIC_SITE_NAME ?? (isCnRegion() ? "界面" : "Interfaze");
 
@@ -31,7 +32,7 @@ function CnLandingGate() {
     return (
       <main style={gateStyle}>
         <Brand />
-        <p style={{ color: "var(--muted)" }}>加载中…</p>
+        <Loading label="加载中…" style={{ color: "var(--muted)" }} />
       </main>
     );
   }
@@ -41,7 +42,7 @@ function CnLandingGate() {
       <main style={gateStyle}>
         <Brand />
         <p style={{ color: "var(--muted)", maxWidth: 420, lineHeight: 1.5 }}>
-          与你拥有或被邀请的 ACN 智能体对话协作——微信登录即可。
+          与你拥有或被邀请的智能体对话协作——微信登录即可。
         </p>
         <button type="button" onClick={() => startWeChatLogin(window.location.pathname + window.location.search)} style={ctaStyle}>
           微信登录
@@ -59,10 +60,15 @@ function GlobalLandingGate() {
       <main style={gateStyle}>
         <Brand />
         <p style={{ color: "var(--muted)", maxWidth: 420, lineHeight: 1.5 }}>
-          Auth0 is not configured. Copy <code>.env.example</code> to{" "}
-          <code>.env.local</code> and set <code>NEXT_PUBLIC_AUTH0_CLIENT_ID</code>. Add{" "}
-          <code>http://localhost:3010/auth/callback</code> to Auth0 Allowed Callback URLs.
+          Sign-in is temporarily unavailable. Please try again later.
         </p>
+        {process.env.NODE_ENV !== "production" ? (
+          <p style={{ color: "var(--muted)", maxWidth: 420, lineHeight: 1.5, fontSize: 12 }}>
+            Dev only: copy <code>.env.example</code> to <code>.env.local</code> and set{" "}
+            <code>NEXT_PUBLIC_AUTH0_CLIENT_ID</code>. Add{" "}
+            <code>http://localhost:3010/auth/callback</code> to Auth0 Allowed Callback URLs.
+          </p>
+        ) : null}
       </main>
     );
   }
@@ -76,7 +82,7 @@ function AuthenticatedGate() {
     return (
       <main style={gateStyle}>
         <Brand />
-        <p style={{ color: "var(--muted)" }}>Loading…</p>
+        <Loading label="Loading…" style={{ color: "var(--muted)" }} />
       </main>
     );
   }
@@ -86,7 +92,7 @@ function AuthenticatedGate() {
       <main style={gateStyle}>
         <Brand />
         <p style={{ color: "var(--muted)", maxWidth: 420, lineHeight: 1.5 }}>
-          Chat with ACN agents you own or were invited to — no Labs or ComicLaw pages required.
+          Chat with agents you own or were invited to — sign in to get started.
         </p>
         {error && <p style={{ color: "#f87171", fontSize: 13 }}>{error.message}</p>}
         <button
@@ -117,11 +123,11 @@ function Brand() {
       <img
         src="/logo.png"
         alt={siteName}
-        width={220}
-        height={220}
+        width={120}
+        height={120}
         style={{
           display: "block",
-          width: "min(220px, 56vw)",
+          width: "min(120px, 32vw)",
           height: "auto",
           objectFit: "contain",
         }}

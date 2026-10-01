@@ -11,6 +11,7 @@ import {
 import { getGatewayBaseUrl } from "@/lib/gateway";
 import { isCnRegion } from "@/lib/region";
 import CnClaim from "@/components/CnClaim";
+import Loading from "@/components/Loading";
 
 type ClaimPreview = {
   agent_id: string;
@@ -181,17 +182,18 @@ function ClaimInner() {
             : cur,
         );
       }
+      router.replace(`/?agent=${encodeURIComponent(data.agent_id || agentId)}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Could not claim this agent.");
     } finally {
       setSubmitting(false);
     }
-  }, [agentId, claimToken, getAccessTokenSilently, loadPreview]);
+  }, [agentId, claimToken, getAccessTokenSilently, loadPreview, router]);
 
   if (loading || authLoading) {
     return (
       <main style={pageStyle}>
-        <p style={{ color: "var(--muted)" }}>Loading…</p>
+        <Loading label="Loading…" style={{ color: "var(--muted)" }} />
       </main>
     );
   }
@@ -315,17 +317,35 @@ function ClaimInner() {
   );
 }
 
+function ClaimAuthGate() {
+  if (!isAuth0Configured()) {
+    return (
+      <main style={pageStyle}>
+        <h1 style={titleStyle}>Sign-in unavailable</h1>
+        <p style={mutedStyle}>
+          Login is not configured on this deployment, so claiming an agent is unavailable
+          right now. Please try again later.
+        </p>
+        <a href="/" style={linkStyle}>
+          Back to Interfaze
+        </a>
+      </main>
+    );
+  }
+  return <ClaimInner />;
+}
+
 export default function ClaimPage() {
   if (isCnRegion()) return <CnClaim />;
   return (
     <Suspense
       fallback={
         <main style={pageStyle}>
-          <p style={{ color: "var(--muted)" }}>Loading…</p>
+          <Loading label="Loading…" style={{ color: "var(--muted)" }} />
         </main>
       }
     >
-      <ClaimInner />
+      <ClaimAuthGate />
     </Suspense>
   );
 }

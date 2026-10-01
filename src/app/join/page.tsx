@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth0";
 import { connectPromptForInvite, joinLandingUrl } from "@acnlabs/agent-chat";
 import { getGatewayBaseUrl } from "@/lib/gateway";
+import Loading from "@/components/Loading";
 import { isCnRegion } from "@/lib/region";
 import CnJoin from "@/components/CnJoin";
 
@@ -40,11 +41,18 @@ async function copyText(text: string): Promise<boolean> {
   return false;
 }
 
-function JoinInner() {
+type JoinAuth = {
+  isAuthenticated: boolean;
+  authLoading: boolean;
+  getAccessTokenSilently?: ReturnType<typeof useAuth0>["getAccessTokenSilently"];
+};
+
+function JoinView({ auth }: { auth: JoinAuth }) {
   const searchParams = useSearchParams();
   const invite = (searchParams.get("invite") || "").trim();
-  const { isAuthenticated, isLoading: authLoading, getAccessTokenSilently } = useAuth0();
+  const { isAuthenticated, authLoading, getAccessTokenSilently } = auth;
   const [preview, setPreview] = useState<JoinPreview | null>(null);
+  const [previewError, setPreviewError] = useState(false);
   const [copied, setCopied] = useState<"prompt" | "link" | null>(null);
   const [pageUrl, setPageUrl] = useState("");
 
@@ -65,8 +73,9 @@ function JoinInner() {
 
   const loadPreview = useCallback(async () => {
     if (!invite) return;
+    setPreviewError(false);
     const headers: Record<string, string> = {};
-    if (isAuthenticated && isAuth0Configured()) {
+    if (isAuthenticated && getAccessTokenSilently) {
       try {
         const token = await getAccessTokenSilently({
           authorizationParams: { audience: AUTH0_AUDIENCE, scope: AUTH0_SCOPE },
@@ -76,12 +85,19 @@ function JoinInner() {
         /* anonymous preview is fine */
       }
     }
-    const res = await fetch(
-      joinUrl(getGatewayBaseUrl(), `/api/chat/join-invites/${encodeURIComponent(invite)}`),
-      { headers },
-    );
-    if (!res.ok) return;
-    setPreview((await res.json()) as JoinPreview);
+    try {
+      const res = await fetch(
+        joinUrl(getGatewayBaseUrl(), `/api/chat/join-invites/${encodeURIComponent(invite)}`),
+        { headers },
+      );
+      if (!res.ok) {
+        setPreviewError(true);
+        return;
+      }
+      setPreview((await res.json()) as JoinPreview);
+    } catch {
+      setPreviewError(true);
+    }
   }, [getAccessTokenSilently, invite, isAuthenticated]);
 
   useEffect(() => {
@@ -97,9 +113,21 @@ function JoinInner() {
     <main style={pageStyle}>
       <h1 style={titleStyle}>Connect an existing agent</h1>
       <p style={mutedStyle}>
-        Share this page or the prompt. Your agent joins ACN with the invite code.
-        Claiming uses a separate private link — this page never includes a claim token.
+        Share this page or the prompt so your agent can join with the invite code.
+        Ownership stays with you — this page never includes ownership credentials.
       </p>
+      {previewError ? (
+        <p style={{ ...mutedStyle, marginTop: 12, color: "#f87171" }}>
+          Couldn't load the invite preview.{" "}
+          <button
+            type="button"
+            onClick={() => void loadPreview()}
+            style={{ ...secondaryStyle, padding: "4px 12px", fontSize: 12, marginLeft: 4 }}
+          >
+            Retry
+          </button>
+        </p>
+      ) : null}
       {preview ? (
         <p style={{ ...mutedStyle, marginTop: 12 }}>
           {preview.is_issuer
@@ -112,7 +140,11 @@ function JoinInner() {
       <textarea readOnly value={prompt} style={textareaStyle} />
       <button
         type="button"
-        style={ctaStyle}
+        style={{
+          ...ctaStyle,
+          ...(preview?.expired ? { opacity: 0.5, cursor: "not-allowed" } : null),
+        }}
+        disabled={preview?.expired}
         onClick={() => {
           void copyText(prompt).then((ok) => {
             if (ok) markCopied("prompt");
@@ -125,7 +157,11 @@ function JoinInner() {
         <>
           <button
             type="button"
-            style={secondaryStyle}
+            style={{
+              ...secondaryStyle,
+              ...(preview?.expired ? { opacity: 0.5, cursor: "not-allowed" } : null),
+            }}
+            disabled={preview?.expired}
             onClick={() => {
               void copyText(pageUrl).then((ok) => {
                 if (ok) markCopied("link");
@@ -135,7 +171,7 @@ function JoinInner() {
             {copied === "link" ? "Copied link" : "Copy this page link"}
           </button>
           <div style={qrWrap}>
-            <QRCodeSVG value={pageUrl} size={160} marginSize={0} />
+            <QRCodeSVG value={pageUrl} size={160} marginSize={2} />
           </div>
         </>
       ) : null}
@@ -146,17 +182,32 @@ function JoinInner() {
   );
 }
 
+function JoinAuthed() {
+  const { isAuthenticated, isLoading, getAccessTokenSilently } = useAuth0();
+  return (
+    <JoinView auth={{ isAuthenticated, authLoading: isLoading, getAccessTokenSilently }} />
+  );
+}
+
+function JoinGate() {
+  // Without Auth0 the page still works anonymously — prompt / QR / copy need no login.
+  if (!isAuth0Configured()) {
+    return <JoinView auth={{ isAuthenticated: false, authLoading: false }} />;
+  }
+  return <JoinAuthed />;
+}
+
 export default function JoinPage() {
   if (isCnRegion()) return <CnJoin />;
   return (
     <Suspense
       fallback={
         <main style={pageStyle}>
-          <p style={{ color: "var(--muted)" }}>Loading…</p>
+          <Loading label="Loading…" style={{ color: "var(--muted)" }} />
         </main>
       }
     >
-      <JoinInner />
+      <JoinGate />
     </Suspense>
   );
 }

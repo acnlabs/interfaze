@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth0 } from "@auth0/auth0-react";
+import Loading from "@/components/Loading";
 import {
   AUTH0_AUDIENCE,
   AUTH0_SCOPE,
@@ -268,7 +269,7 @@ function WalletInner() {
     return (
       <main style={pageStyle(embed)}>
         <PlanSheet embed={embed} closeHref={exitHref} title="Add Credits">
-          <p style={muted}>Loading…</p>
+          <Loading label="Loading…" style={muted} block />
         </PlanSheet>
       </main>
     );
@@ -550,8 +551,13 @@ function WalletAuthGate() {
         }}
       >
         <p style={{ color: "#6b7280", fontSize: 13 }}>
-          Auth0 is not configured. Set NEXT_PUBLIC_AUTH0_DOMAIN and NEXT_PUBLIC_AUTH0_CLIENT_ID.
+          Sign-in is temporarily unavailable. Please try again later.
         </p>
+        {process.env.NODE_ENV !== "production" ? (
+          <p style={{ color: "#6b7280", fontSize: 12 }}>
+            Dev only: set NEXT_PUBLIC_AUTH0_DOMAIN and NEXT_PUBLIC_AUTH0_CLIENT_ID.
+          </p>
+        ) : null}
         <Link href="/" style={{ color: "#93c5fd", fontSize: 13 }}>
           Back to Interfaze
         </Link>
@@ -574,7 +580,7 @@ export default function WalletPage() {
               padding: 48,
             }}
           >
-            加载中…
+            <Loading label="加载中…" />
           </main>
         }
       >
@@ -593,7 +599,7 @@ export default function WalletPage() {
             padding: 48,
           }}
         >
-          Loading…
+          <Loading label="Loading…" />
         </main>
       }
     >

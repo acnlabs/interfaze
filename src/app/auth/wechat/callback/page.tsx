@@ -2,10 +2,12 @@
 
 import { Suspense, useEffect, useState, type CSSProperties } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Loading from "@/components/Loading";
 import {
   exchangeWeChatCode,
   parseTokenFromCallback,
   setCnSession,
+  startWeChatLogin,
   verifyCnSessionWithBff,
 } from "@/lib/auth/cn";
 
@@ -56,9 +58,29 @@ function WeChatCallbackInner() {
   }, [searchParams, router]);
 
   if (error) {
+    const returnToRaw = searchParams.get("return_to") || "/";
+    const returnTo =
+      returnToRaw.startsWith("/") && !returnToRaw.startsWith("//") ? returnToRaw : "/";
     return (
       <main style={wrap}>
         <p style={{ color: "#f87171", marginBottom: 16 }}>{error}</p>
+        <button
+          type="button"
+          onClick={() => startWeChatLogin(returnTo)}
+          style={{
+            padding: "10px 20px",
+            borderRadius: 8,
+            border: "none",
+            background: "var(--accent, #34d399)",
+            color: "#0a0a0a",
+            fontWeight: 600,
+            fontSize: 14,
+            cursor: "pointer",
+            marginBottom: 16,
+          }}
+        >
+          重新登录
+        </button>
         <a href="/" style={{ color: "var(--accent)" }}>
           返回首页
         </a>
@@ -68,7 +90,7 @@ function WeChatCallbackInner() {
 
   return (
     <main style={wrap}>
-      <p style={{ color: "var(--muted)" }}>正在登录…</p>
+      <Loading label="正在登录…" style={{ color: "var(--muted)" }} />
     </main>
   );
 }

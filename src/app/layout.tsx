@@ -5,10 +5,13 @@ import "./globals.css";
 const isCn = (process.env.NEXT_PUBLIC_REGION || "").trim().toLowerCase() === "cn";
 
 export const metadata: Metadata = {
-  title: isCn ? "界面" : "Interfaze",
+  title: {
+    default: isCn ? "界面" : "Interfaze",
+    template: isCn ? "%s · 界面" : "%s · Interfaze",
+  },
   description: isCn
-    ? "与 ACN 智能体对话协作 — interfaze.acnlabs.cn"
-    : "Chat with ACN agents — interfaze.io",
+    ? "与智能体对话协作 — interfaze.acnlabs.cn"
+    : "Chat with agents you own or were invited to — interfaze.io",
   icons: {
     icon: [
       { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },

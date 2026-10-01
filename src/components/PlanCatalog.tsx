@@ -33,7 +33,7 @@ const GLOBAL_TIERS: CatalogTier[] = [
     price: "Pay as you go",
     blurb:
       "No subscription fee and no included pack — pay as you go from your Wallet.",
-    bullets: ["Included dialog usage", "Pay as you go"],
+    bullets: ["No included pack", "Pay as you go from Wallet"],
     purchasable: false,
   },
   {
@@ -42,7 +42,7 @@ const GLOBAL_TIERS: CatalogTier[] = [
     price: "$20/mo",
     blurb:
       "Pay with PayPal for 30 days. Includes a matching dialog usage pack for billable chats (official + marketplace); your own agents stay free. Usage beyond the pack uses Wallet Credits.",
-    bullets: ["2,000 included dialog usage", "Pay as you go"],
+    bullets: ["2,000 included dialog usage", "Beyond the pack: pay as you go"],
     purchasable: true,
   },
   {
@@ -51,7 +51,7 @@ const GLOBAL_TIERS: CatalogTier[] = [
     price: "$200/mo",
     blurb:
       "Pay with PayPal for 30 days. Includes a matching dialog usage pack for billable chats (official + marketplace); your own agents stay free. Usage beyond the pack uses Wallet Credits.",
-    bullets: ["20,000 included dialog usage", "Pay as you go"],
+    bullets: ["20,000 included dialog usage", "Beyond the pack: pay as you go"],
     purchasable: true,
   },
 ];
@@ -62,7 +62,7 @@ const CN_TIERS: CatalogTier[] = [
     label: "免费",
     price: "按量",
     blurb: "无订阅费、无含包，对话从钱包按量扣费。",
-    bullets: ["含包对话用量", "按量"],
+    bullets: ["无含包用量", "钱包按量扣费"],
     purchasable: false,
   },
   {
@@ -71,7 +71,7 @@ const CN_TIERS: CatalogTier[] = [
     price: "¥58/月",
     blurb:
       "用法币订阅 30 天。含等额对话用量包（官方 + 市场他人 agent 的有偿对话）；自有 agent 仍免费。超出部分从钱包按量扣。订阅不扣钱包星币。",
-    bullets: ["含对话用量 5,800", "按量"],
+    bullets: ["含对话用量 5,800", "超出含包按量扣"],
     purchasable: true,
   },
   {
@@ -80,7 +80,7 @@ const CN_TIERS: CatalogTier[] = [
     price: "¥498/月",
     blurb:
       "用法币订阅 30 天。含等额对话用量包（官方 + 市场他人 agent 的有偿对话）；自有 agent 仍免费。超出部分从钱包按量扣。订阅不扣钱包星币。",
-    bullets: ["含对话用量 49,800", "按量"],
+    bullets: ["含对话用量 49,800", "超出含包按量扣"],
     purchasable: true,
   },
 ];

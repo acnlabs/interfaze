@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState, type CSSProperties } from "
 import { useSearchParams } from "next/navigation";
 import { getCnSessionToken, startWeChatLogin } from "@/lib/auth/cn";
 import { getGatewayBaseUrl } from "@/lib/gateway";
+import Loading from "@/components/Loading";
 
 type InvitePreview = {
   agent: { name: string; description: string | null; status: string };
@@ -46,6 +47,7 @@ function CnTransferInner() {
   const [submitting, setSubmitting] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [apiKey, setApiKey] = useState<string | null>(null);
+  const [keyCopied, setKeyCopied] = useState(false);
 
   useEffect(() => {
     setAuthed(Boolean(getCnSessionToken()));
@@ -114,10 +116,21 @@ function CnTransferInner() {
     }
   }, [inviteToken]);
 
+  const copyKey = async () => {
+    if (!apiKey) return;
+    try {
+      await navigator.clipboard.writeText(apiKey);
+      setKeyCopied(true);
+      window.setTimeout(() => setKeyCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  };
+
   if (!hydrated || loading) {
     return (
       <main style={pageStyle}>
-        <p style={{ color: "var(--muted)" }}>加载中…</p>
+        <Loading label="加载中…" style={{ color: "var(--muted)" }} />
       </main>
     );
   }
@@ -160,12 +173,21 @@ function CnTransferInner() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>领取成功</h1>
+        <p style={mutedStyle}>
+          「{preview?.agent.name || "智能体"}」现在是你的了。
+        </p>
         {apiKey ? (
-          <p style={mutedStyle}>
-            API Key：<code>{apiKey}</code>
-          </p>
+          <div style={cardStyle}>
+            <p style={{ ...mutedStyle, marginBottom: 8 }}>
+              新 API Key（只显示这一次，旧 Key 已失效）：
+            </p>
+            <code style={keyBoxStyle}>{apiKey}</code>
+            <button type="button" onClick={() => void copyKey()} style={secondaryBtnStyle}>
+              {keyCopied ? "已复制" : "复制 Key"}
+            </button>
+          </div>
         ) : null}
-        <a href="/" style={linkStyle}>
+        <a href="/" style={ctaLinkStyle}>
           打开界面
         </a>
       </main>
@@ -177,7 +199,7 @@ function CnTransferInner() {
       <main style={pageStyle}>
         <h1 style={titleStyle}>领取赠送</h1>
         <p style={mutedStyle}>
-          {preview?.from_nickname || "好友"} 赠送了「{preview?.agent.name || "Agent"}」
+          {preview?.from_nickname || "好友"} 赠送了「{preview?.agent.name || "智能体"}」
         </p>
         <button
           type="button"
@@ -200,7 +222,10 @@ function CnTransferInner() {
     <main style={pageStyle}>
       <h1 style={titleStyle}>领取赠送</h1>
       <p style={mutedStyle}>
-        {preview?.from_nickname || "好友"} 赠送了「{preview?.agent.name || "Agent"}」
+        {preview?.from_nickname || "好友"} 赠送了「{preview?.agent.name || "智能体"}」
+      </p>
+      <p style={{ color: "#d97706", fontSize: 13, lineHeight: 1.45, margin: 0 }}>
+        领取后所有权转到你的账号，原主人将失去控制；自主运行的智能体会换发新 API Key。
       </p>
       {error ? <p style={{ color: "#f87171", fontSize: 13 }}>{error}</p> : null}
       <button type="button" style={btnStyle} disabled={submitting} onClick={() => void handleAccept()}>
@@ -215,7 +240,7 @@ export default function CnTransferAccept() {
     <Suspense
       fallback={
         <main style={pageStyle}>
-          <p style={{ color: "var(--muted)" }}>加载中…</p>
+          <Loading label="加载中…" style={{ color: "var(--muted)" }} />
         </main>
       }
     >
@@ -238,6 +263,47 @@ const pageStyle: CSSProperties = {
 const titleStyle: CSSProperties = { fontSize: 22, fontWeight: 700, margin: 0 };
 const mutedStyle: CSSProperties = { color: "var(--muted)", fontSize: 13, lineHeight: 1.5, margin: 0 };
 const linkStyle: CSSProperties = { color: "var(--accent)", textDecoration: "none", fontSize: 13 };
+const cardStyle: CSSProperties = {
+  width: "100%",
+  padding: 16,
+  borderRadius: 12,
+  border: "1px solid var(--border, #27272a)",
+  background: "var(--panel, #18181b)",
+  boxSizing: "border-box",
+};
+const keyBoxStyle: CSSProperties = {
+  display: "block",
+  width: "100%",
+  padding: 10,
+  borderRadius: 8,
+  background: "#0a0a0a",
+  border: "1px solid var(--border, #27272a)",
+  fontSize: 12,
+  wordBreak: "break-all",
+  boxSizing: "border-box",
+};
+const secondaryBtnStyle: CSSProperties = {
+  marginTop: 10,
+  padding: "8px 14px",
+  borderRadius: 8,
+  border: "1px solid var(--border, #27272a)",
+  background: "transparent",
+  color: "var(--fg, #fafafa)",
+  fontSize: 13,
+  cursor: "pointer",
+};
+const ctaLinkStyle: CSSProperties = {
+  marginTop: 8,
+  display: "inline-block",
+  border: "none",
+  borderRadius: 999,
+  background: "var(--accent)",
+  color: "#052e1f",
+  fontWeight: 600,
+  fontSize: 14,
+  padding: "12px 22px",
+  textDecoration: "none",
+};
 const btnStyle: CSSProperties = {
   marginTop: 8,
   border: "none",
