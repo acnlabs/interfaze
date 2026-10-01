@@ -68,7 +68,6 @@ function CnWalletInner() {
 
   useEffect(() => {
     let cancelled = false;
-    setPkgLoading(true);
     void listRechargePackages("wxpay")
       .then((rows) => {
         if (cancelled) return;
@@ -190,7 +189,7 @@ function CnWalletInner() {
             {!embed ? " 正在返回钱包…" : ""}
           </p>
         ) : null}
-        {error ? (
+        {error && (packages.length > 0 || nativeQr) ? (
           <p style={{ color: "#f87171", fontSize: 13, margin: "0 0 12px" }}>{error}</p>
         ) : null}
 
@@ -235,6 +234,7 @@ function CnWalletInner() {
                   disabled={pkgLoading}
                   onClick={() => {
                     setError(null);
+                    setPkgLoading(true);
                     setPkgRetryNonce((n) => n + 1);
                   }}
                 >

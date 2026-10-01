@@ -624,7 +624,7 @@ function ChatDecisionSettings({
           disabled={busy}
           onChange={(e) => onToggle(e.target.checked)}
         />
-        {t.decisionAuto}
+        {t.decisionAutoEnable}
       </label>
       {!goal ? (
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
@@ -1887,6 +1887,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   /** Group: forced recipient picker when send has no @ / sticky (ranch-style). */
   const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [decisionBusy, setDecisionBusy] = useState(false);
   const [chatLoadError, setChatLoadError] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     message: string;
@@ -2844,7 +2845,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const toggleChatDecision = async (next: boolean) => {
     if (!active || isGroupChat(active)) return;
     const chatId = active.chat_id;
-    setBusy(true);
+    setDecisionBusy(true);
     setError(null);
     try {
       const updated = await client.patchChatDecision(chatId, next);
@@ -2860,7 +2861,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     } catch (e) {
       setError(e instanceof ChatGatewayError ? e.message : t.sendFailed);
     } finally {
-      setBusy(false);
+      setDecisionBusy(false);
     }
   };
 
@@ -3232,7 +3233,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const groupActive = !!(active && isGroupChat(active));
   const latestDecideId = groupActive
     ? undefined
-    : [...messages].reverse().find(
+    : [...displayMessages].reverse().find(
         (m) => m.sender_type === "agent" && decideFromMetadata(m.metadata),
       )?.message_id;
   const studioOrigin = (studioBaseUrl || "").replace(/\/+$/, "");
@@ -5408,7 +5409,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         goal={(active.decision?.goal || "").trim()}
                         hops={active.decision?.auto_hops ?? 0}
                         hopCap={active.decision?.auto_hop_cap ?? 5}
-                        busy={busy}
+                        busy={decisionBusy}
                         t={t}
                         onToggle={(next) => void toggleChatDecision(next)}
                       />

@@ -166,6 +166,7 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
         }
         const list = await client.listMessages(data.chat_id);
         if (cancelled) return;
+        setError(null);
         setSession(data);
         setMessages(list);
         const height = document.documentElement.scrollHeight || 480;
