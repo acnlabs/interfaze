@@ -9,6 +9,7 @@ import {
 } from "./connectPrompt";
 import type { RanchLocale, RanchMessages } from "./i18n";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
+import { useModalA11y } from "./useModalA11y";
 
 type Props = {
   locale: RanchLocale;
@@ -32,6 +33,8 @@ export function ConnectAgentModal({
   const [failed, setFailed] = useState(false);
   const [copied, setCopied] = useState<CopiedKind | null>(null);
   const qrRef = useRef<HTMLButtonElement>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  useModalA11y({ open: true, onClose, containerRef: cardRef });
 
   const origin = useMemo(() => {
     const fromProp = (interfazeBaseUrl || "").replace(/\/+$/, "");
@@ -65,14 +68,6 @@ export function ConnectAgentModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const prompt = connectPromptForInvite(locale, code, origin);
   const pageUrl = joinLandingUrl(origin, code);
 
@@ -104,7 +99,7 @@ export function ConnectAgentModal({
       style={overlay}
       onClick={onClose}
     >
-      <div style={card} onClick={(e) => e.stopPropagation()}>
+      <div style={card} onClick={(e) => e.stopPropagation()} ref={cardRef} tabIndex={-1}>
         <div style={header}>
           <strong style={{ fontSize: 16 }}>{t.connectExisting}</strong>
           <button type="button" onClick={onClose} style={btnGhost} aria-label={t.close}>

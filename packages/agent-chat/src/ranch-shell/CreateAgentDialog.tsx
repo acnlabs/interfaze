@@ -12,6 +12,7 @@ import {
 import type { RanchMessages } from "./i18n";
 import { buildWalletCheckoutUrl } from "./interfazeHost";
 import { btnGhost, btnPrimary, colors } from "./styles";
+import { useModalA11y } from "./useModalA11y";
 import { watchAgentCreateJob } from "./watchAgentCreateJob";
 
 function machinesFrom(avail: AgentCreateAvailability | null): AgentCreateMachine[] {
@@ -84,6 +85,16 @@ export function CreateAgentDialog({
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
   const cancelledRef = useRef(false);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  useModalA11y({
+    open: true,
+    onClose: () => {
+      // Submit in flight — don't let Escape abandon it silently.
+      if (acting) return;
+      onClose();
+    },
+    containerRef: cardRef,
+  });
   const onReadyRef = useRef(onReady);
   const onWatchJobRef = useRef(onWatchJob);
   onReadyRef.current = onReady;
@@ -256,8 +267,8 @@ export function CreateAgentDialog({
   };
 
   return (
-    <div style={overlay} role="dialog" aria-label={t.createAgentTitle}>
-      <div style={card}>
+    <div style={overlay} role="dialog" aria-modal="true" aria-label={t.createAgentTitle}>
+      <div style={card} ref={cardRef} tabIndex={-1}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
           <strong style={{ flex: 1, fontSize: 16 }}>{t.createAgentTitle}</strong>
           <button type="button" style={btnGhost} onClick={onClose}>
