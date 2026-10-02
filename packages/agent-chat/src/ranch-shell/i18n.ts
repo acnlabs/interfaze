@@ -167,6 +167,7 @@ export type RanchMessages = {
   daysAgo: (n: number) => string;
   groupChat: string;
   groupMode: string;
+  directMode: string;
   minTwoAgents: string;
   agentsCount: (n: number) => string;
   /** Group subtitle: total agents + how many are online. */
@@ -277,6 +278,7 @@ export type RanchMessages = {
   collabAutoOn: string;
   collabAutoOff: string;
   collabNeedTopup: string;
+  collabNeedTopupCta: string;
   accountWalletLoadFailed: string;
   accountWalletEmptyTx: string;
   accountWalletRecent: string;
@@ -419,6 +421,7 @@ export type RanchMessages = {
   myAgentsDescLabel: string;
   myAgentsTagsLabel: string;
   myAgentsTagsHint: string;
+  fieldHintLabel: string;
   myAgentsSaveProfile: string;
   myAgentsProfileSaved: string;
   myAgentsProfileFailed: string;
@@ -611,6 +614,9 @@ export type RanchMessages = {
   walletWithdraw: string;
   walletAmount: string;
   walletAmountHint: string;
+  walletAmountInvalid: string;
+  walletAmountExceeds: string;
+  attachmentLoadFailed: string;
   walletTopupDialogTitle: string;
   walletWithdrawDialogTitle: string;
   walletTopupConfirmLabel: string;
@@ -679,6 +685,7 @@ export type RanchMessages = {
   spendApprovalsLoadFailed: string;
   spendApprovalsApprove: string;
   spendApprovalsReject: string;
+  spendApprovalsRejectConfirm: string;
   spendApprovalsApproveOk: string;
   spendApprovalsRejectOk: string;
   spendApprovalsActionFailed: string;
@@ -844,6 +851,7 @@ const en: RanchMessages = {
   daysAgo: (n) => `${n}d ago`,
   groupChat: "Group chat",
   groupMode: "Group",
+  directMode: "1:1",
   minTwoAgents: "Select at least 2 agents",
   agentsCount: (n) => (n === 1 ? "1 agent" : `${n} agents`),
   agentsOnlineCount: (online, total) =>
@@ -955,6 +963,7 @@ const en: RanchMessages = {
   collabAutoOn: "Auto collaboration on",
   collabAutoOff: "Empty — add Credits to allow collaboration",
   collabNeedTopup: "Collaboration budget is empty. Add Credits in Info to continue multi-agent help.",
+  collabNeedTopupCta: "Open collaboration budget",
   accountWalletLoadFailed: "Couldn’t load wallet.",
   accountWalletEmptyTx: "No transactions yet.",
   accountWalletRecent: "Recent activity",
@@ -1106,6 +1115,7 @@ const en: RanchMessages = {
   myAgentsDescLabel: "Description",
   myAgentsTagsLabel: "Tags",
   myAgentsTagsHint: "Comma-separated, up to 20. Helps others discover this agent (e.g. coding, research).",
+  fieldHintLabel: "More info",
   myAgentsSaveProfile: "Save profile",
   myAgentsProfileSaved: "Saved",
   myAgentsProfileFailed: "Couldn’t save profile.",
@@ -1341,6 +1351,9 @@ const en: RanchMessages = {
   walletWithdraw: "Withdraw",
   walletAmount: "Amount (Credits)",
   walletAmountHint: "Integer Credits. 100 Credits = 1 USD.",
+  walletAmountInvalid: "Enter a whole number between 1 and 100,000,000.",
+  walletAmountExceeds: "Exceeds available balance.",
+  attachmentLoadFailed: "Attachment failed to load",
   walletTopupDialogTitle: "Top up Credits",
   walletWithdrawDialogTitle: "Withdraw Credits",
   walletTopupConfirmLabel: "Top up",
@@ -1414,6 +1427,7 @@ const en: RanchMessages = {
   spendApprovalsLoadFailed: "Couldn’t load spend approvals.",
   spendApprovalsApprove: "Approve",
   spendApprovalsReject: "Reject",
+  spendApprovalsRejectConfirm: "Confirm reject?",
   spendApprovalsApproveOk: "Spend approved",
   spendApprovalsRejectOk: "Spend rejected",
   spendApprovalsActionFailed: "Couldn’t update this spend request.",
@@ -1430,16 +1444,16 @@ const zh: RanchMessages = {
   deliveryUnreachable: "在线 · 消息未送达",
   sending: "发送中",
   sent: "已发送",
-  queuedOffline: "已进 inbox，等待智能体拉取",
+  queuedOffline: "已进收件箱，等待智能体拉取",
   deliveryFailed: "投递失败",
   delivered: "已送达",
   replying: "正在回复",
   retry: "重试",
   timeoutOffline: "当前智能体离线，无法回复，请等状态变绿后再试。",
   timeoutUndeliverable:
-    "消息没有送到智能体。ACN 上可能仍显示在线——请检查 listen / 回写，再点 Retry。",
+    "消息没有送到智能体。ACN 上可能仍显示在线——请检查 acn listen / 回写，再点重试。",
   timeoutNoReply:
-    "消息已送到智能体，但超时仍无回复。若刚切换模型，可先切回默认（如 kimi）再试——该模型在 runtime 上可能跑失败。",
+    "消息已送到智能体，但超时仍无回复。若刚切换模型，可先切回默认（如 kimi）再试——该模型在运行环境里可能跑失败。",
   timeoutGeneric: "对方长时间没有回复。可能暂时不可达，或还没接上这边的回复通道。",
   noAgentsTitle: "还没有可聊的智能体",
   noAgentsBody:
@@ -1467,7 +1481,7 @@ const zh: RanchMessages = {
   officialNotAuthorized:
     "这个型号不在官方货架上，请换一个列表里的模型。",
   needOpenRouterKey:
-    "OpenRouter 是自备钥匙：钥匙在智能体运行时里，Interfaze 不会代收。Host 看不见钥匙，只认心跳型号。请写进它的 OpenClaw / runtime，或去 Store 买额度让 Owner 写入。",
+    "OpenRouter 是自备钥匙：钥匙在智能体运行时里，Interfaze 不会代收。Host 看不见钥匙，只认心跳型号。请写进它的 OpenClaw / 运行环境，或去 Store 买额度让 Owner 写入。",
   buyOpenRouterCredits: "去 Store 买 OpenRouter 额度",
   officialModelUnsupported:
     "官方通道跑不了思考/推理模，请换一个列表里的对话模型。",
@@ -1575,6 +1589,7 @@ const zh: RanchMessages = {
   daysAgo: (n) => `${n} 天前`,
   groupChat: "群聊",
   groupMode: "群聊",
+  directMode: "单聊",
   minTwoAgents: "至少选择 2 个智能体",
   agentsCount: (n) => `${n} 个智能体`,
   agentsOnlineCount: (online, total) => `${total} 个智能体 · ${online} 在线`,
@@ -1676,6 +1691,7 @@ const zh: RanchMessages = {
   collabAutoOn: "自动协作已开启",
   collabAutoOff: "额度空 — 加星币后才可自动协作",
   collabNeedTopup: "协作预算已用完。请在 Info 里加额度，才能继续多智能体协作。",
+  collabNeedTopupCta: "打开协作预算",
   accountWalletLoadFailed: "无法加载钱包。",
   accountWalletEmptyTx: "暂无流水。",
   accountWalletRecent: "最近流水",
@@ -1824,6 +1840,7 @@ const zh: RanchMessages = {
   myAgentsDescLabel: "描述",
   myAgentsTagsLabel: "标签",
   myAgentsTagsHint: "逗号分隔，最多 20 个。用于发现（如 coding、research）。",
+  fieldHintLabel: "更多信息",
   myAgentsSaveProfile: "保存资料",
   myAgentsProfileSaved: "已保存",
   myAgentsProfileFailed: "保存失败。",
@@ -1841,7 +1858,7 @@ const zh: RanchMessages = {
   myAgentsPricingOptionLine: "${name} · 入 ${in} · 出 ${out}",
   myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} Credits /百万",
   myAgentsPricingCreditsNote: "与钱包充值相同：100 Credits = $1。每跳按整数 Credits 结算。",
-  myAgentsPricingRuntimeHint: "Runtime 上报：${model}（只认心跳型号，Host 看不见钥匙）。",
+  myAgentsPricingRuntimeHint: "运行环境上报：${model}（只认心跳型号，Host 看不见钥匙）。",
   myAgentsPricingSelfReportNote:
     "Owner 只设默认模型 + 上浮；底价由 Host 维护，智能体不能改写全网结算价。",
   myAgentsInferencePathByo: "自持钥",
@@ -1862,9 +1879,9 @@ const zh: RanchMessages = {
   myAgentsOfficialHostHint:
     "官方跳走 Interfaze 持钥，报价是对外 Catalog，不是 Store 同步价。本 Host 国内卡账户打不了 GPT / Claude / Gemini。机器默认型号仍在智能体自持钥上。",
   myAgentsNeedStoreKey:
-    "OpenRouter 需要这只智能体自己的钥匙。Host 看不见钥匙，只认心跳型号。还没有的话，去 Store 买额度、写入 runtime，再点「刷新状态」。",
+    "OpenRouter 需要这只智能体自己的钥匙。Host 看不见钥匙，只认心跳型号。还没有的话，去 Store 买额度、写入运行环境，再点「刷新状态」。",
   myAgentsOpenRouterRuntimeRequired:
-    "运行时仍是这只智能体自己的厂家。Host 看不见钥匙是否装上——请先把 Store 钥匙写进 runtime，再点「刷新状态」。只有它自报了 OpenRouter 型号才能保存。",
+    "运行时仍是这只智能体自己的厂家。Host 看不见钥匙是否装上——请先把 Store 钥匙写进运行环境，再点「刷新状态」。只有它自报了 OpenRouter 型号才能保存。",
   myAgentsBuyStoreKey: "去 Store 购买",
   myAgentsRefreshRuntime: "刷新状态",
   myAgentsListingStaleHint:
@@ -2051,7 +2068,10 @@ const zh: RanchMessages = {
   walletTopup: "充值",
   walletWithdraw: "提取",
   walletAmount: "金额（星币）",
-  walletAmountHint: "整数星币。100 星币 = 1 本区法币单位。",
+  walletAmountHint: "整数星币。100 星币 = 1 美元或 1 元人民币（按所在区）。",
+  walletAmountInvalid: "请输入 1–100,000,000 之间的整数。",
+  walletAmountExceeds: "超出可用余额。",
+  attachmentLoadFailed: "附件加载失败",
   walletTopupDialogTitle: "充值星币",
   walletWithdrawDialogTitle: "提取星币",
   walletTopupConfirmLabel: "确认充值",
@@ -2125,6 +2145,7 @@ const zh: RanchMessages = {
   spendApprovalsLoadFailed: "无法加载消费审批。",
   spendApprovalsApprove: "批准",
   spendApprovalsReject: "拒绝",
+  spendApprovalsRejectConfirm: "确认拒绝？",
   spendApprovalsApproveOk: "已批准支出",
   spendApprovalsRejectOk: "已拒绝支出",
   spendApprovalsActionFailed: "无法处理该支出申请。",

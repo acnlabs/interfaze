@@ -343,7 +343,7 @@ function WalletInner() {
           </p>
         ) : null}
         {error ? (
-          <p style={{ color: "#f87171", fontSize: 13, margin: "0 0 12px" }}>{error}</p>
+          <p style={{ color: "var(--danger)", fontSize: 13, margin: "0 0 12px" }}>{error}</p>
         ) : null}
 
         {!success ? (
@@ -466,7 +466,7 @@ const muted: CSSProperties = {
 };
 
 const linkStyle: CSSProperties = {
-  color: "#93c5fd",
+  color: "var(--info)",
   textDecoration: "none",
   fontSize: 13,
 };
@@ -558,7 +558,7 @@ function WalletAuthGate() {
             Dev only: set NEXT_PUBLIC_AUTH0_DOMAIN and NEXT_PUBLIC_AUTH0_CLIENT_ID.
           </p>
         ) : null}
-        <Link href="/" style={{ color: "#93c5fd", fontSize: 13 }}>
+        <Link href="/" style={{ color: "var(--info)", fontSize: 13 }}>
           Back to Interfaze
         </Link>
       </main>

@@ -34,7 +34,7 @@ function GlobalAuthCallback() {
 
   if (error) {
     return (
-      <main style={{ padding: 48 }}>
+      <main style={wrap}>
         <img
           src="/logo.png"
           alt="Interfaze"
@@ -42,14 +42,39 @@ function GlobalAuthCallback() {
           height={120}
           style={{ display: "block", width: 120, height: "auto", marginBottom: 16 }}
         />
-        <p style={{ color: "#f87171" }}>{error.message}</p>
-        <a href="/">Back</a>
+        <p
+          style={{
+            color: "var(--danger)",
+            fontSize: 14,
+            lineHeight: 1.5,
+            margin: 0,
+            maxWidth: 420,
+            textAlign: "center",
+          }}
+        >
+          {error.message}
+        </p>
+        <a
+          href="/"
+          style={{
+            marginTop: 16,
+            padding: "10px 20px",
+            borderRadius: 8,
+            background: "var(--accent, #3b82f6)",
+            color: "#fff",
+            textDecoration: "none",
+            fontSize: 14,
+            fontWeight: 600,
+          }}
+        >
+          Back to Interfaze
+        </a>
       </main>
     );
   }
 
   return (
-    <main style={{ padding: 48, color: "#a1a1aa" }}>
+    <main style={{ ...wrap, color: "#a1a1aa" }}>
       <Loading label={isLoading ? "Completing sign-in…" : "Redirecting…"} />
     </main>
   );

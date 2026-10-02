@@ -41,8 +41,8 @@ import {
 } from "@/lib/api/cnPlanCheckout";
 
 const PLAN_CNY: Record<string, { label: string; amountYuan: number }> = {
-  pro: { label: "界面 Pro", amountYuan: 58 },
-  max: { label: "界面 Max", amountYuan: 498 },
+  pro: { label: "Pro", amountYuan: 58 },
+  max: { label: "Max", amountYuan: 498 },
 };
 
 function normalizePlan(raw: string | null | undefined): string {

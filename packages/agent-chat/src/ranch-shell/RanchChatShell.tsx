@@ -2049,6 +2049,37 @@ function IconSidebar() {
   );
 }
 
+/** Lucide Settings — account menu affordance. */
+function IconGear() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+/** Lucide MessageCircle — chat list header fallback when no logo. */
+function IconChat() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 /** Ranch SystemHeader-style locale control: compact round chip + menu (scales). */
 function LanguageSwitcher({
   locale,
@@ -2181,29 +2212,6 @@ function AccountFooter({
   const initial = label.slice(0, 1).toUpperCase() || "?";
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const closeTimerRef = useRef<number | null>(null);
-
-  const clearCloseTimer = () => {
-    if (closeTimerRef.current != null) {
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-  };
-
-  const openMenu = () => {
-    clearCloseTimer();
-    setMenuOpen(true);
-  };
-
-  const scheduleCloseMenu = () => {
-    clearCloseTimer();
-    closeTimerRef.current = window.setTimeout(() => {
-      setMenuOpen(false);
-      closeTimerRef.current = null;
-    }, 160);
-  };
-
-  useEffect(() => () => clearCloseTimer(), []);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -2271,8 +2279,6 @@ function AccountFooter({
   return (
     <div
       ref={rootRef}
-      onMouseEnter={openMenu}
-      onMouseLeave={scheduleCloseMenu}
       style={{
         position: "relative",
         borderTop: `1px solid ${colors.border}`,
@@ -2445,7 +2451,7 @@ function AccountFooter({
               width: 32,
               height: 32,
               borderRadius: 999,
-              background: "linear-gradient(135deg,#475569,#1e293b)",
+              background: `linear-gradient(135deg,#475569,${colors.avatarTo})`,
               color: "#fff",
               display: "flex",
               alignItems: "center",
@@ -2499,7 +2505,7 @@ function AccountFooter({
             flexShrink: 0,
           }}
         >
-          ⚙
+          <IconGear />
         </span>
       </button>
     </div>
@@ -5515,7 +5521,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 }}
               />
             ) : (
-              <span aria-hidden>💬</span>
+              <span aria-hidden style={{ display: "inline-flex", color: colors.muted, flexShrink: 0 }}>
+                <IconChat />
+              </span>
             )}
             {title}
           </h2>
@@ -5662,7 +5670,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         width: 40,
                         height: 40,
                         borderRadius: c.type === "group" ? 10 : 999,
-                        background: "linear-gradient(135deg,#334155,#1e293b)",
+                        background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -5967,7 +5975,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           width: 32,
                           height: 32,
                           borderRadius: isGroupChat(active) ? 8 : 999,
-                          background: "linear-gradient(135deg,#334155,#1e293b)",
+                          background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -6256,7 +6264,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       data-message-id={m.message_id}
                       style={{
                         alignSelf: isUser ? "flex-end" : "flex-start",
-                        maxWidth: "85%",
+                        maxWidth: "min(85%, 36rem)",
                         display: "flex",
                         flexDirection: "column",
                         gap: 3,
@@ -6282,7 +6290,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       <div
                         style={{
                           background: isUser ? colors.userBubble : colors.agentBubble,
-                          borderRadius: 12,
+                          borderRadius: isUser ? "12px 12px 4px 12px" : "12px 12px 12px 4px",
                           padding: "8px 12px",
                           fontSize: 14,
                           lineHeight: 1.5,
@@ -6295,6 +6303,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           attachments={m.attachments}
                           gatewayBaseUrl={gatewayBaseUrl}
                           getAccessToken={getAccessToken}
+                          loadFailedLabel={t.attachmentLoadFailed}
                         />
                         {!isUser
                           ? (() => {
@@ -6489,9 +6498,34 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     lineHeight: 1.45,
                     borderTop: `1px solid ${colors.border}`,
                     background: colors.accentSoft,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    flexWrap: "wrap",
                   }}
                 >
-                  {t.collabNeedTopup}
+                  <span>{t.collabNeedTopup}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInfoTab("info");
+                      setShowMembersPanel(true);
+                    }}
+                    style={{
+                      border: `1px solid ${colors.border}`,
+                      background: colors.panel,
+                      color: colors.text,
+                      borderRadius: 8,
+                      padding: "4px 10px",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {t.collabNeedTopupCta}
+                  </button>
                 </div>
               ) : null}
               {error && (
@@ -6530,99 +6564,53 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 style={{
                   borderTop: `1px solid ${colors.border}`,
                   padding: 12,
+                  paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
                   display: "flex",
                   flexDirection: "column",
                   gap: 8,
                   position: "relative",
                 }}
               >
-                {!activeTopic && composerTopic ? (
-                  <div
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      alignSelf: "flex-start",
-                      gap: 6,
-                      padding: "4px 8px 4px 10px",
-                      borderRadius: 999,
-                      background: "rgba(147,197,253,0.12)",
-                      border: "1px solid rgba(147,197,253,0.28)",
-                      fontSize: 12,
-                      color: colors.text,
-                      maxWidth: "100%",
-                    }}
-                  >
-                    <span
-                      style={{
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {t.postingInTopic(composerTopic.title?.trim() || t.topics)}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={t.close}
-                      onClick={() => setComposerTopic(null)}
-                      style={{
-                        ...btnIcon,
-                        width: 20,
-                        height: 20,
-                        fontSize: 14,
-                        lineHeight: 1,
-                        color: colors.muted,
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ) : null}
-                {stickyChipActive && stickyMention ? (
-                  <div
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      alignSelf: "flex-start",
-                      gap: 6,
-                      padding: "4px 8px 4px 10px",
-                      borderRadius: 999,
-                      background: "rgba(147,197,253,0.12)",
-                      border: "1px solid rgba(147,197,253,0.28)",
-                      fontSize: 12,
-                      color: colors.text,
-                      maxWidth: "100%",
-                    }}
-                  >
-                    <span
-                      style={{
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {t.continueWith(stickyMention.name)}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={t.close}
-                      onClick={() => clearStickyMention(active?.chat_id)}
-                      style={{
-                        ...btnIcon,
-                        width: 20,
-                        height: 20,
-                        fontSize: 14,
-                        lineHeight: 1,
-                        color: colors.muted,
-                      }}
-                    >
-                      ×
-                    </button>
+                {(!activeTopic && composerTopic) || (stickyChipActive && stickyMention) ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {!activeTopic && composerTopic ? (
+                      <div style={composerChip}>
+                        <span style={composerChipLabel}>
+                          {t.postingInTopic(composerTopic.title?.trim() || t.topics)}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={t.close}
+                          onClick={() => setComposerTopic(null)}
+                          style={composerChipClose}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : null}
+                    {stickyChipActive && stickyMention ? (
+                      <div style={composerChip}>
+                        <span style={composerChipLabel}>
+                          {t.continueWith(stickyMention.name)}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={t.close}
+                          onClick={() => clearStickyMention(active?.chat_id)}
+                          style={composerChipClose}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
                 <div style={{ display: "flex", gap: 8, position: "relative" }}>
                 {slashMenuOpen && slashCandidates.length > 0 ? (
                   <div
+                    role="listbox"
+                    id="ranch-slash-listbox"
+                    aria-label={t.slashCommands}
                     style={{
                       position: "absolute",
                       left: 0,
@@ -6640,6 +6628,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     }}
                   >
                     <div
+                      role="presentation"
                       style={{
                         padding: "8px 12px",
                         fontSize: 11,
@@ -6653,6 +6642,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       <button
                         key={cmd.id}
                         type="button"
+                        role="option"
+                        id={`slash-opt-${cmd.id}`}
+                        aria-selected={slashIndex === i}
                         onClick={() => {
                           if (cmd.id === "agent") {
                             setDraft("/agent ");
@@ -6678,6 +6670,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 ) : null}
                 {agentRefOpen ? (
                   <div
+                    role="listbox"
+                    id="ranch-agentref-listbox"
+                    aria-label={t.agentRefPickerTitle}
                     style={{
                       position: "absolute",
                       left: 0,
@@ -6695,6 +6690,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     }}
                   >
                     <div
+                      role="presentation"
                       style={{
                         padding: "8px 12px",
                         fontSize: 11,
@@ -6713,6 +6709,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         <button
                           key={a.id}
                           type="button"
+                          role="option"
+                          id={`agentref-opt-${a.id}`}
+                          aria-selected={agentRefIndex === i}
                           onClick={() => insertAgentRef(a.name)}
                           style={{
                             ...mentionRow,
@@ -6738,6 +6737,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 ) : null}
                 {mentionOpen ? (
                   <div
+                    role="listbox"
+                    id="ranch-mention-listbox"
+                    aria-label={t.mentionAll}
                     style={{
                       position: "absolute",
                       left: 0,
@@ -6756,6 +6758,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   >
                     {recipientPickerOpen && mentionQuery === null ? (
                       <div
+                        role="presentation"
                         style={{
                           padding: "8px 12px",
                           fontSize: 11,
@@ -6768,6 +6771,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     ) : null}
                     <button
                       type="button"
+                      role="option"
+                      id="mention-opt-all"
+                      aria-selected={mentionIndex === 0}
                       onClick={() => insertMention("all")}
                       style={{
                         ...mentionRow,
@@ -6789,6 +6795,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       <button
                         key={a.id}
                         type="button"
+                        role="option"
+                        id={`mention-opt-${a.id}`}
+                        aria-selected={mentionIndex === i + 1}
                         onClick={() => insertMention(a.name)}
                         title={statusLabel || undefined}
                         style={{
@@ -6811,7 +6820,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 width: 28,
                                 height: 28,
                                 borderRadius: 999,
-                                background: "linear-gradient(135deg,#0f766e,#1e293b)",
+                                background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
@@ -7132,6 +7141,32 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 ) : null}
                 <textarea
                   value={draft}
+                  role="combobox"
+                  aria-expanded={Boolean(
+                    (slashMenuOpen && slashCandidates.length > 0) || agentRefOpen || mentionOpen,
+                  )}
+                  aria-controls={
+                    slashMenuOpen && slashCandidates.length > 0
+                      ? "ranch-slash-listbox"
+                      : agentRefOpen
+                        ? "ranch-agentref-listbox"
+                        : mentionOpen
+                          ? "ranch-mention-listbox"
+                          : undefined
+                  }
+                  aria-activedescendant={
+                    slashMenuOpen && slashCandidates.length > 0
+                      ? `slash-opt-${(slashCandidates[slashIndex] || slashCandidates[0])?.id}`
+                      : agentRefOpen && agentRefCandidates.length > 0
+                        ? `agentref-opt-${agentRefCandidates[Math.min(agentRefIndex, agentRefCandidates.length - 1)]?.id}`
+                        : mentionOpen
+                          ? mentionIndex === 0
+                            ? "mention-opt-all"
+                            : mentionCandidates[mentionIndex - 1]
+                              ? `mention-opt-${mentionCandidates[mentionIndex - 1].id}`
+                              : undefined
+                          : undefined
+                  }
                   onChange={(e) => {
                     setDraft(e.target.value);
                     setMentionIndex(0);
@@ -7313,7 +7348,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           width: 56,
                           height: 56,
                           borderRadius: groupActive ? 12 : 999,
-                          background: "linear-gradient(135deg,#334155,#1e293b)",
+                          background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -7925,6 +7960,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             >
                               {t.myAgentsDelivery}
                               <FieldHint
+                                label={t.fieldHintLabel}
                                 text={
                                   deliveryValueHint(ownedAgentDetail.delivery, t) ||
                                   t.myAgentsDeliveryHint
@@ -8047,7 +8083,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   width: 36,
                                   height: 36,
                                   borderRadius: 999,
-                                  background: "linear-gradient(135deg,#0f766e,#1e293b)",
+                                  background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
@@ -8479,4 +8515,34 @@ const mentionRow: CSSProperties = {
   color: colors.text,
   cursor: "pointer",
   textAlign: "left",
+};
+
+/** Shared pill for composer context chips (topic / sticky mention). */
+const composerChip: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "4px 8px 4px 10px",
+  borderRadius: 999,
+  background: "rgba(147,197,253,0.12)",
+  border: "1px solid rgba(147,197,253,0.28)",
+  fontSize: 12,
+  color: colors.text,
+  maxWidth: "100%",
+  minWidth: 0,
+};
+
+const composerChipLabel: CSSProperties = {
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const composerChipClose: CSSProperties = {
+  ...btnIcon,
+  width: 20,
+  height: 20,
+  fontSize: 14,
+  lineHeight: 1,
+  color: colors.muted,
 };

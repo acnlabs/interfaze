@@ -216,6 +216,7 @@ export function MyAgentsPanel({
               <section>
                 <h3 style={sectionTitle}>{t.myAgentsSectionOverview}</h3>
                 <DetailRows
+                  hintLabel={t.fieldHintLabel}
                   rows={[
                     {
                       label: t.statusLabel,

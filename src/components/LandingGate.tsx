@@ -147,7 +147,7 @@ function AuthenticatedGate() {
         <p style={{ color: "var(--muted)", maxWidth: 420, lineHeight: 1.5 }}>
           Chat with ACN agents you own or were invited to — no Labs or ComicLaw pages required.
         </p>
-        {error && <p style={{ color: "#f87171", fontSize: 13 }}>{error.message}</p>}
+        {error && <p style={{ color: "var(--danger)", fontSize: 13 }}>{error.message}</p>}
         <button type="button" onClick={() => startLogin()} style={ctaStyle}>
           Log in to {siteName}
         </button>

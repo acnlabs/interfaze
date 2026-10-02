@@ -227,7 +227,7 @@ function CnTransferInner() {
       <p style={{ color: "#d97706", fontSize: 13, lineHeight: 1.45, margin: 0 }}>
         领取后所有权转到你的账号，原主人将失去控制；自主运行的智能体会换发新 API Key。
       </p>
-      {error ? <p style={{ color: "#f87171", fontSize: 13 }}>{error}</p> : null}
+      {error ? <p style={{ color: "var(--danger)", fontSize: 13 }}>{error}</p> : null}
       <button type="button" style={btnStyle} disabled={submitting} onClick={() => void handleAccept()}>
         {submitting ? "领取中…" : "确认领取"}
       </button>
@@ -255,12 +255,19 @@ const pageStyle: CSSProperties = {
   flexDirection: "column",
   alignItems: "flex-start",
   justifyContent: "center",
-  padding: "48px 32px",
+  padding: "48px 24px",
+  paddingInline: "max(24px, calc((100vw - 480px) / 2))",
   gap: 12,
+  boxSizing: "border-box",
   background:
     "radial-gradient(ellipse 80% 50% at 20% 0%, rgba(34,211,238,0.12), transparent 55%), var(--bg)",
 };
-const titleStyle: CSSProperties = { fontSize: 22, fontWeight: 700, margin: 0 };
+const titleStyle: CSSProperties = {
+  fontSize: 28,
+  fontWeight: 700,
+  margin: 0,
+  letterSpacing: "-0.02em",
+};
 const mutedStyle: CSSProperties = { color: "var(--muted)", fontSize: 13, lineHeight: 1.5, margin: 0 };
 const linkStyle: CSSProperties = { color: "var(--accent)", textDecoration: "none", fontSize: 13 };
 const cardStyle: CSSProperties = {
@@ -307,7 +314,7 @@ const ctaLinkStyle: CSSProperties = {
 const btnStyle: CSSProperties = {
   marginTop: 8,
   border: "none",
-  borderRadius: 999,
+  borderRadius: 8,
   background: "var(--accent)",
   color: "#052e16",
   fontWeight: 600,

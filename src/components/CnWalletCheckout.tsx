@@ -190,7 +190,7 @@ function CnWalletInner() {
           </p>
         ) : null}
         {error && (packages.length > 0 || nativeQr) ? (
-          <p style={{ color: "#f87171", fontSize: 13, margin: "0 0 12px" }}>{error}</p>
+          <p style={{ color: "var(--danger)", fontSize: 13, margin: "0 0 12px" }}>{error}</p>
         ) : null}
 
         {nativeQr && nativeOrderId ? (
@@ -326,7 +326,7 @@ const muted: CSSProperties = {
 };
 
 const linkStyle: CSSProperties = {
-  color: "#93c5fd",
+  color: "var(--info)",
   textDecoration: "none",
   fontSize: 13,
 };

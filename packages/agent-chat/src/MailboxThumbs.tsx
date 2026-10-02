@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { mailboxIdsFromAttachments, parseMessageAttachments, isReadableAttachmentName } from "./mailbox";
+import { colors } from "./ranch-shell/styles";
 
 function joinUrl(base: string, path: string): string {
   const b = base.replace(/\/+$/, "");
@@ -51,7 +52,7 @@ function ListedTag({ n }: { n: number }) {
         borderRadius: 999,
         background: "rgba(0,0,0,0.72)",
         color: "#fff",
-        fontSize: 11,
+        fontSize: 12,
         lineHeight: 1.4,
         pointerEvents: "none",
       }}
@@ -66,18 +67,22 @@ export function MailboxThumbs({
   attachments,
   gatewayBaseUrl,
   getAccessToken,
+  loadFailedLabel = "Attachment failed to load",
 }: {
   chatId: string;
   attachments?: string[] | string | null;
   gatewayBaseUrl: string;
   getAccessToken: () => Promise<string | null>;
+  loadFailedLabel?: string;
 }) {
   const ids = mailboxIdsFromAttachments(parseMessageAttachments(attachments ?? []));
   const [files, setFiles] = useState<FileBlob[]>([]);
+  const [failedIds, setFailedIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (ids.length === 0 || !chatId) {
       setFiles([]);
+      setFailedIds([]);
       return;
     }
     let cancelled = false;
@@ -86,6 +91,7 @@ export function MailboxThumbs({
       const token = await getAccessToken();
       if (!token || cancelled) return;
       const next: FileBlob[] = [];
+      const failed: string[] = [];
       for (const id of ids) {
         try {
           const res = await fetch(
@@ -95,7 +101,10 @@ export function MailboxThumbs({
             ),
             { headers: { Authorization: `Bearer ${token}` } },
           );
-          if (!res.ok) continue;
+          if (!res.ok) {
+            failed.push(id);
+            continue;
+          }
           const blob = await res.blob();
           const url = URL.createObjectURL(blob);
           created.push(url);
@@ -114,10 +123,13 @@ export function MailboxThumbs({
             ),
           });
         } catch {
-          /* skip broken blob */
+          failed.push(id);
         }
       }
-      if (!cancelled) setFiles(next);
+      if (!cancelled) {
+        setFiles(next);
+        setFailedIds(failed);
+      }
     })();
     return () => {
       cancelled = true;
@@ -132,7 +144,7 @@ export function MailboxThumbs({
       f.contentType.startsWith("image/");
     return playable || isReadableAttachmentName(f.name, f.mailboxId);
   });
-  if (visible.length === 0) return null;
+  if (visible.length === 0 && failedIds.length === 0) return null;
   return (
     <div
       style={{
@@ -165,7 +177,7 @@ export function MailboxThumbs({
           ) : (
             <img
               src={f.url}
-              alt=""
+              alt={f.name}
               style={{ maxWidth: "100%", borderRadius: 8, display: "block" }}
             />
           );
@@ -194,6 +206,20 @@ export function MailboxThumbs({
           </div>
         );
       })}
+      {failedIds.map((id) => (
+        <div
+          key={`failed-${id}`}
+          style={{
+            fontSize: 12,
+            color: colors.muted,
+            padding: "8px 10px",
+            border: `1px dashed ${colors.border}`,
+            borderRadius: 8,
+          }}
+        >
+          {loadFailedLabel}
+        </div>
+      ))}
     </div>
   );
 }
