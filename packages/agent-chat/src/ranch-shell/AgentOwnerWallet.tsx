@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   ChatGatewayError,
   type GatewayClient,
@@ -15,6 +15,7 @@ import type { RanchMessages } from "./i18n";
 import { buildWalletCheckoutUrl } from "./interfazeHost";
 import { cleanTxDescription, fmtTxTimeShort, txTypeLabel } from "./txDisplay";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
+import { useModalA11y } from "./useModalA11y";
 
 /** Match Gateway ``MyAgentWalletAmount.amount`` upper bound. */
 const MAX_CREDITS = 100_000_000;
@@ -198,6 +199,25 @@ export function AgentOwnerWallet({
     setAmountDraft("");
     setDialogError(null);
   };
+
+  const transferDialogRef = useRef<HTMLDivElement | null>(null);
+  const policyDialogRef = useRef<HTMLDivElement | null>(null);
+  const approvalsDialogRef = useRef<HTMLDivElement | null>(null);
+  useModalA11y({ open: !!dialog, onClose: closeDialog, containerRef: transferDialogRef });
+  useModalA11y({
+    open: showPolicy,
+    onClose: () => {
+      if (!policyLoading) setShowPolicy(false);
+    },
+    containerRef: policyDialogRef,
+  });
+  useModalA11y({
+    open: showApprovals,
+    onClose: () => {
+      if (!actioningId) setShowApprovals(false);
+    },
+    containerRef: approvalsDialogRef,
+  });
 
   const openPolicy = async () => {
     setShowPolicy(true);
@@ -596,6 +616,8 @@ export function AgentOwnerWallet({
               padding: 20,
             }}
             onClick={(e) => e.stopPropagation()}
+            ref={transferDialogRef}
+            tabIndex={-1}
           >
             <h3 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 650, color: colors.text }}>
               {dialog === "topup" ? t.walletTopupDialogTitle : t.walletWithdrawDialogTitle}
@@ -702,6 +724,8 @@ export function AgentOwnerWallet({
               margin: "auto",
             }}
             onClick={(e) => e.stopPropagation()}
+            ref={policyDialogRef}
+            tabIndex={-1}
           >
             <h3 style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 650, color: colors.text }}>
               {t.spendPolicyTitle}
@@ -942,6 +966,8 @@ export function AgentOwnerWallet({
               margin: "auto",
             }}
             onClick={(e) => e.stopPropagation()}
+            ref={approvalsDialogRef}
+            tabIndex={-1}
           >
             <h3 style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 650, color: colors.text }}>
               {t.spendApprovalsTitle}

@@ -16,8 +16,9 @@ import type {
 } from "../gateway";
 import type { RanchChatAccount } from "../types";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
-import type { RanchMessages } from "./i18n";
+import type { RanchLocale, RanchMessages } from "./i18n";
 import { btnGhost, btnIcon, btnPrimary, colors } from "./styles";
+import { useModalA11y } from "./useModalA11y";
 import {
   buildWalletCheckoutUrl,
   isCnInterfazeOrigin,
@@ -433,6 +434,18 @@ export function AccountPlanUsagePanel({
   const [buyMsgTone, setBuyMsgTone] = useState<"muted" | "ok" | "danger">("muted");
   /** In-shell Interfaze /subscribe embed (QR / PayPal). */
   const [checkoutEmbedUrl, setCheckoutEmbedUrl] = useState<string | null>(null);
+  const [checkoutCloseArmed, setCheckoutCloseArmed] = useState(false);
+  const adjustPanelRef = useRef<HTMLDivElement | null>(null);
+  useModalA11y({
+    open: adjustOpen,
+    onClose: () => {
+      // Embedded checkout overlays this dialog — let its own dismiss run first.
+      if (checkoutEmbedUrl) return;
+      if (buyBusy) return;
+      setAdjustOpen(false);
+    },
+    containerRef: adjustPanelRef,
+  });
   type CheckoutWatch = {
     code: string;
     priorCode: string;
@@ -707,6 +720,7 @@ export function AccountPlanUsagePanel({
       const data = ev.data;
       if (!data || typeof data !== "object") return;
       if ((data as { type?: string }).type !== PLAN_ACTIVATED_MSG) return;
+      setCheckoutCloseArmed(false);
       setCheckoutEmbedUrl(null);
       setBuyMsgTone("ok");
       void refreshAfterCheckout();
@@ -1005,6 +1019,7 @@ export function AccountPlanUsagePanel({
           label={t.accountPlanAdjustTitle}
           zIndex={10050}
           onBackdrop={() => {
+            if (checkoutEmbedUrl) return;
             if (buyBusy) return;
             setAdjustOpen(false);
           }}
@@ -1022,6 +1037,8 @@ export function AccountPlanUsagePanel({
               position: "relative",
             }}
             onClick={(e) => e.stopPropagation()}
+            ref={adjustPanelRef}
+            tabIndex={-1}
           >
             <div
               style={{
@@ -1253,67 +1270,147 @@ export function AccountPlanUsagePanel({
       ) : null}
 
       {checkoutEmbedUrl ? (
-        <ViewportOverlay
-          label={locale === "zh" ? "界面订阅" : "Interfaze Subscribe"}
-          zIndex={10060}
-          onBackdrop={() => setCheckoutEmbedUrl(null)}
-        >
-          <div
-            style={{
-              width: "min(420px, 100%)",
-              height: "min(640px, 92%)",
-              background: "#0a0a0a",
-              borderRadius: 14,
-              border: `1px solid ${colors.border}`,
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-              boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "10px 12px",
-                borderBottom: `1px solid ${colors.border}`,
-              }}
-            >
-              <strong style={{ fontSize: 14 }}>
-                {locale === "zh" ? "界面订阅" : "Interfaze Subscribe"}
-              </strong>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <a
-                  href={checkoutEmbedUrl.replace(/([?&])embed=1&?/, "$1").replace(/[?&]$/, "")}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ fontSize: 12, color: colors.muted }}
-                >
-                  {locale === "zh" ? "新窗口打开" : "Open page"}
-                </a>
-                <button
-                  type="button"
-                  style={{ ...btnGhost, width: 28, height: 28, padding: 0 }}
-                  onClick={() => setCheckoutEmbedUrl(null)}
-                  aria-label={t.close}
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-            <iframe
-              title={locale === "zh" ? "界面订阅" : "Interfaze Subscribe"}
-              src={checkoutEmbedUrl}
-              allow="payment"
-              referrerPolicy="strict-origin-when-cross-origin"
-              style={{ flex: 1, width: "100%", border: 0, background: "#0a0a0a" }}
-            />
-          </div>
-        </ViewportOverlay>
+        <CheckoutEmbedDialog
+          url={checkoutEmbedUrl}
+          title={locale === "zh" ? "Interfaze 订阅" : "Interfaze Subscribe"}
+          locale={locale}
+          closeLabel={t.close}
+          openPageLabel={locale === "zh" ? "新窗口打开" : "Open page"}
+          armed={checkoutCloseArmed}
+          onRequestClose={() => setCheckoutCloseArmed(true)}
+          onCancelClose={() => setCheckoutCloseArmed(false)}
+          onConfirmClose={() => {
+            setCheckoutCloseArmed(false);
+            setCheckoutEmbedUrl(null);
+          }}
+        />
       ) : null}
     </PanelChrome>
+  );
+}
+
+function CheckoutEmbedDialog({
+  url,
+  title,
+  locale,
+  closeLabel,
+  openPageLabel,
+  armed,
+  onRequestClose,
+  onCancelClose,
+  onConfirmClose,
+}: {
+  url: string;
+  title: string;
+  locale: RanchLocale;
+  closeLabel: string;
+  openPageLabel: string;
+  armed: boolean;
+  onRequestClose: () => void;
+  onCancelClose: () => void;
+  onConfirmClose: () => void;
+}) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useModalA11y({ open: true, onClose: onRequestClose, containerRef: panelRef });
+
+  return (
+    <ViewportOverlay label={title} zIndex={10060} onBackdrop={onRequestClose}>
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        style={{
+          width: "min(420px, 100%)",
+          height: "min(640px, 92%)",
+          background: "#0a0a0a",
+          borderRadius: 14,
+          border: `1px solid ${colors.border}`,
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
+          outline: "none",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "10px 12px",
+            borderBottom: `1px solid ${colors.border}`,
+          }}
+        >
+          <strong style={{ fontSize: 14 }}>{title}</strong>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <a
+              href={url.replace(/([?&])embed=1&?/, "$1").replace(/[?&]$/, "")}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: 12, color: colors.muted }}
+            >
+              {openPageLabel}
+            </a>
+            <button
+              type="button"
+              style={{ ...btnGhost, width: 28, height: 28, padding: 0 }}
+              onClick={onRequestClose}
+              aria-label={closeLabel}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+        {armed ? (
+          <div
+            role="alert"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 12px",
+              fontSize: 12,
+              color: colors.warn,
+              background: "rgba(251,191,36,0.08)",
+              borderBottom: `1px solid ${colors.border}`,
+            }}
+          >
+            <span style={{ flex: 1 }}>
+              {locale === "zh"
+                ? "支付可能尚未完成，确定要关闭吗？"
+                : "Payment may not be complete. Close anyway?"}
+            </span>
+            <button
+              type="button"
+              style={{ ...btnGhost, padding: "4px 10px", fontSize: 12 }}
+              onClick={onCancelClose}
+            >
+              {locale === "zh" ? "继续支付" : "Keep paying"}
+            </button>
+            <button
+              type="button"
+              style={{
+                ...btnGhost,
+                padding: "4px 10px",
+                fontSize: 12,
+                borderColor: "rgba(248,113,113,0.45)",
+                color: colors.danger,
+              }}
+              onClick={onConfirmClose}
+            >
+              {locale === "zh" ? "确定关闭" : "Close"}
+            </button>
+          </div>
+        ) : null}
+        <iframe
+          title={title}
+          src={url}
+          allow="payment"
+          referrerPolicy="strict-origin-when-cross-origin"
+          style={{ flex: 1, width: "100%", border: 0, background: "#0a0a0a" }}
+        />
+      </div>
+    </ViewportOverlay>
   );
 }
 
@@ -1811,12 +1908,14 @@ export function AccountWalletPanel({
   client,
   messages: t,
   interfazeBaseUrl = "https://interfaze.io",
+  locale = "en",
   onClose,
   onOpenBilling,
 }: {
   client: GatewayClient;
   messages: RanchMessages;
   interfazeBaseUrl?: string;
+  locale?: RanchLocale;
   onClose: () => void;
   onOpenBilling?: () => void;
 }) {
@@ -1825,6 +1924,7 @@ export function AccountWalletPanel({
   const [wallet, setWallet] = useState<HumanWallet | null>(null);
   const [txs, setTxs] = useState<MyAgentWalletTx[]>([]);
   const [checkoutEmbedUrl, setCheckoutEmbedUrl] = useState<string | null>(null);
+  const [rechargeCloseArmed, setRechargeCloseArmed] = useState(false);
   const baselineBalanceRef = useRef<number | null>(null);
   const [agentRows, setAgentRows] = useState<{ agent: MyAgentSummary; balance: number | null }[]>([]);
   const [agentWalletsLoading, setAgentWalletsLoading] = useState(true);
@@ -1927,6 +2027,7 @@ export function AccountWalletPanel({
       const data = ev.data;
       if (!data || typeof data !== "object") return;
       if ((data as { type?: string }).type !== WALLET_CREDITED_MSG) return;
+      setRechargeCloseArmed(false);
       setCheckoutEmbedUrl(null);
       void reload().catch(() => undefined);
     };
@@ -1942,6 +2043,7 @@ export function AccountWalletPanel({
         const w = await client.getHumanWallet();
         setWallet(w);
         if (baseline != null && w.balance > baseline) {
+          setRechargeCloseArmed(false);
           setCheckoutEmbedUrl(null);
           void reload().catch(() => undefined);
         }
@@ -2174,63 +2276,20 @@ export function AccountWalletPanel({
         </div>
       )}
       {checkoutEmbedUrl ? (
-        <ViewportOverlay
-          label={t.walletRechargeExternal}
-          zIndex={10060}
-          onBackdrop={() => setCheckoutEmbedUrl(null)}
-        >
-          <div
-            style={{
-              width: "min(420px, 100%)",
-              height: "min(640px, 92%)",
-              background: "#0a0a0a",
-              borderRadius: 14,
-              border: `1px solid ${colors.border}`,
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-              boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "10px 12px",
-                borderBottom: `1px solid ${colors.border}`,
-              }}
-            >
-              <strong style={{ fontSize: 14 }}>{t.walletRechargeExternal}</strong>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <a
-                  href={checkoutEmbedUrl.replace(/([?&])embed=1&?/, "$1").replace(/[?&]$/, "")}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ fontSize: 12, color: colors.muted }}
-                >
-                  {t.accountPlanOpenWallet}
-                </a>
-                <button
-                  type="button"
-                  style={{ ...btnGhost, width: 28, height: 28, padding: 0 }}
-                  onClick={() => setCheckoutEmbedUrl(null)}
-                  aria-label={t.close}
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-            <iframe
-              title={t.walletRechargeExternal}
-              src={checkoutEmbedUrl}
-              allow="payment"
-              referrerPolicy="strict-origin-when-cross-origin"
-              style={{ flex: 1, width: "100%", border: 0, background: "#0a0a0a" }}
-            />
-          </div>
-        </ViewportOverlay>
+        <CheckoutEmbedDialog
+          url={checkoutEmbedUrl}
+          title={t.walletRechargeExternal}
+          locale={locale}
+          closeLabel={t.close}
+          openPageLabel={t.accountPlanOpenWallet}
+          armed={rechargeCloseArmed}
+          onRequestClose={() => setRechargeCloseArmed(true)}
+          onCancelClose={() => setRechargeCloseArmed(false)}
+          onConfirmClose={() => {
+            setRechargeCloseArmed(false);
+            setCheckoutEmbedUrl(null);
+          }}
+        />
       ) : null}
     </PanelChrome>
   );

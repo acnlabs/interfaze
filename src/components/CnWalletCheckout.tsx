@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "r
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
+import Loading from "@/components/Loading";
 import {
   getCnSessionToken,
   startWeChatLogin,
@@ -47,6 +48,8 @@ function CnWalletInner() {
   const [success, setSuccess] = useState<string | null>(null);
   const [nativeQr, setNativeQr] = useState<string | null>(null);
   const [nativeOrderId, setNativeOrderId] = useState<string | null>(null);
+  const [pkgRetryNonce, setPkgRetryNonce] = useState(0);
+  const [pkgLoading, setPkgLoading] = useState(true);
 
   const selected = packages.find((p) => p.id === selectedId) || null;
 
@@ -73,11 +76,14 @@ function CnWalletInner() {
       })
       .catch((e) => {
         if (!cancelled) setError(e instanceof Error ? e.message : "无法加载充值套餐");
+      })
+      .finally(() => {
+        if (!cancelled) setPkgLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [pkgRetryNonce]);
 
   const finishPaid = useCallback(
     (balance: number) => {
@@ -144,7 +150,7 @@ function CnWalletInner() {
     return (
       <main style={pageStyle(embed)}>
         <PlanSheet embed={embed} closeHref={exitHref} title="充值" brand="界面">
-          <p style={muted}>加载中…</p>
+          <Loading label="加载中…" style={muted} />
         </PlanSheet>
       </main>
     );
@@ -183,7 +189,7 @@ function CnWalletInner() {
             {!embed ? " 正在返回钱包…" : ""}
           </p>
         ) : null}
-        {error ? (
+        {error && (packages.length > 0 || nativeQr) ? (
           <p style={{ color: "#f87171", fontSize: 13, margin: "0 0 12px" }}>{error}</p>
         ) : null}
 
@@ -195,7 +201,7 @@ function CnWalletInner() {
                 : "请用微信扫码支付"}
             </p>
             <div style={{ background: "#fff", padding: 8, borderRadius: 8 }}>
-              <QRCodeSVG value={nativeQr} size={168} marginSize={0} />
+              <QRCodeSVG value={nativeQr} size={168} marginSize={2} />
             </div>
             <p style={muted}>扫码后此页会自动确认到账</p>
             <button
@@ -213,6 +219,30 @@ function CnWalletInner() {
         ) : !success ? (
           <>
             <p style={{ ...muted, marginBottom: 10 }}>选择金额</p>
+            {packages.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "8px 0 4px" }}>
+                <p style={{ ...muted, marginBottom: 12 }}>
+                  {pkgLoading
+                    ? "正在加载充值套餐…"
+                    : error
+                      ? "套餐加载失败"
+                      : "暂无可用充值套餐"}
+                </p>
+                <button
+                  type="button"
+                  style={{ ...ghostBtn, opacity: pkgLoading ? 0.5 : 1 }}
+                  disabled={pkgLoading}
+                  onClick={() => {
+                    setError(null);
+                    setPkgLoading(true);
+                    setPkgRetryNonce((n) => n + 1);
+                  }}
+                >
+                  重试
+                </button>
+              </div>
+            ) : (
+              <>
             <div style={pkgGrid}>
               {packages.map((pkg) => (
                 <button
@@ -261,6 +291,8 @@ function CnWalletInner() {
                   ? `微信支付 ¥${selected.price_yuan}`
                   : "微信支付"}
             </button>
+              </>
+            )}
           </>
         ) : null}
 

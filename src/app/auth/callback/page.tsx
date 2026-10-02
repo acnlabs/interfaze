@@ -3,6 +3,7 @@
 import { useEffect, type CSSProperties } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { isCnRegion } from "@/lib/region";
+import Loading from "@/components/Loading";
 
 /**
  * Auth0 redirect landing (Global).
@@ -49,7 +50,7 @@ function GlobalAuthCallback() {
 
   return (
     <main style={{ padding: 48, color: "#a1a1aa" }}>
-      {isLoading ? "Completing sign-in…" : "Redirecting…"}
+      <Loading label={isLoading ? "Completing sign-in…" : "Redirecting…"} />
     </main>
   );
 }

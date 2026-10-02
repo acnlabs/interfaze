@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState, type CSSProperties } from "
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getCnSessionToken, startWeChatLogin } from "@/lib/auth/cn";
 import { getGatewayBaseUrl } from "@/lib/gateway";
+import Loading from "@/components/Loading";
 
 type ClaimPreview = {
   agent_id: string;
@@ -49,6 +50,7 @@ function CnClaimInner() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => {
     setAuthed(Boolean(getCnSessionToken()));
@@ -85,7 +87,7 @@ function CnClaimInner() {
           if (data.is_owner) setDone(true);
         }
       } catch {
-        if (!cancelled) setError("找不到这只 agent");
+        if (!cancelled) setError("找不到这只智能体");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -93,7 +95,7 @@ function CnClaimInner() {
     return () => {
       cancelled = true;
     };
-  }, [agentId, hydrated, loadPreview]);
+  }, [agentId, hydrated, loadPreview, retryNonce]);
 
   const openChat = () => {
     const id = preview?.agent_id || agentId;
@@ -132,17 +134,18 @@ function CnClaimInner() {
         throw new Error(await parseError(res));
       }
       setDone(true);
+      router.replace(`/?agent=${encodeURIComponent(agentId)}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "认领失败");
     } finally {
       setSubmitting(false);
     }
-  }, [agentId, claimToken, loadPreview]);
+  }, [agentId, claimToken, loadPreview, router]);
 
   if (!hydrated || loading) {
     return (
       <main style={pageStyle}>
-        <p style={{ color: "var(--muted)" }}>加载中…</p>
+        <Loading label="加载中…" style={{ color: "var(--muted)" }} />
       </main>
     );
   }
@@ -151,7 +154,7 @@ function CnClaimInner() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>链接无效</h1>
-        <p style={mutedStyle}>缺少认领凭证。请让你的 agent 再发一次，或回界面接入。</p>
+        <p style={mutedStyle}>缺少认领凭证。请让你的智能体再发一次，或回界面接入。</p>
         <a href="/" style={linkStyle}>
           返回界面
         </a>
@@ -164,6 +167,17 @@ function CnClaimInner() {
       <main style={pageStyle}>
         <h1 style={titleStyle}>无法认领</h1>
         <p style={mutedStyle}>{error}</p>
+        <button
+          type="button"
+          style={btnStyle}
+          onClick={() => {
+            setError(null);
+            setLoading(true);
+            setRetryNonce((n) => n + 1);
+          }}
+        >
+          重试
+        </button>
         <a href="/" style={linkStyle}>
           返回界面
         </a>
@@ -175,7 +189,7 @@ function CnClaimInner() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>已被认领</h1>
-        <p style={mutedStyle}>这只 agent 已经有主人了。</p>
+        <p style={mutedStyle}>这只智能体已经有主人了。</p>
         <a href="/" style={linkStyle}>
           返回界面
         </a>
@@ -187,12 +201,12 @@ function CnClaimInner() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>认领成功</h1>
-        <p style={mutedStyle}>「{preview?.name || "Agent"}」已经是你的了。</p>
+        <p style={mutedStyle}>「{preview?.name || "智能体"}」已经是你的了。</p>
         <button type="button" style={btnStyle} onClick={openChat}>
           开聊
         </button>
         <a href="/?account=manage" style={linkStyle}>
-          管理这只 agent
+          管理这只智能体
         </a>
       </main>
     );
@@ -201,8 +215,8 @@ function CnClaimInner() {
   if (!authed) {
     return (
       <main style={pageStyle}>
-        <h1 style={titleStyle}>认领你的 agent</h1>
-        <p style={mutedStyle}>登录后认领「{preview?.name || "这只 agent"}」并开始对话。</p>
+        <h1 style={titleStyle}>认领你的智能体</h1>
+        <p style={mutedStyle}>登录后认领「{preview?.name || "这只智能体"}」并开始对话。</p>
         <button
           type="button"
           style={btnStyle}
@@ -244,7 +258,7 @@ export default function CnClaim() {
     <Suspense
       fallback={
         <main style={pageStyle}>
-          <p style={{ color: "var(--muted)" }}>加载中…</p>
+          <Loading label="加载中…" style={{ color: "var(--muted)" }} />
         </main>
       }
     >

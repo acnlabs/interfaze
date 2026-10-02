@@ -26,6 +26,7 @@ import { getGatewayBaseUrl } from "@/lib/gateway";
 import { isCnRegion } from "@/lib/region";
 import { planCheckoutReturnHref, safeReturnTo } from "@/lib/safeReturnTo";
 import CnSubscribeCheckout from "@/components/CnSubscribeCheckout";
+import Loading from "@/components/Loading";
 import {
   PlanCatalog,
   PlanSheet,
@@ -319,6 +320,13 @@ function SubscribeInner() {
     return () => window.clearTimeout(timer);
   }, [success, embed, afterPayReturnTo]);
 
+  useEffect(() => {
+    if (paypalReturn === "cancel") {
+      setError("Payment cancelled.");
+      if (typeof history !== "undefined") history.replaceState(null, "", cleanSubscribePath());
+    }
+  }, [paypalReturn, cleanSubscribePath]);
+
   if (!plan) {
     return (
       <main style={pageStyle(embed)}>
@@ -343,7 +351,7 @@ function SubscribeInner() {
           title="Checkout"
           onBack={() => selectPlan(undefined)}
         >
-          <p style={muted}>Loading…</p>
+          <Loading label="Loading…" style={muted} block />
         </PlanSheet>
       </main>
     );
@@ -609,8 +617,13 @@ function SubscribeAuthGate() {
     return (
       <main style={{ minHeight: "100vh", background: planSheetColors.bg, color: planSheetColors.text, padding: 48 }}>
         <p style={{ color: "#6b7280", fontSize: 13 }}>
-          Auth0 is not configured. Set NEXT_PUBLIC_AUTH0_DOMAIN and NEXT_PUBLIC_AUTH0_CLIENT_ID.
+          Sign-in is temporarily unavailable. Please try again later.
         </p>
+        {process.env.NODE_ENV !== "production" ? (
+          <p style={{ color: "#6b7280", fontSize: 12 }}>
+            Dev only: set NEXT_PUBLIC_AUTH0_DOMAIN and NEXT_PUBLIC_AUTH0_CLIENT_ID.
+          </p>
+        ) : null}
         <Link href="/" style={{ color: "#93c5fd", fontSize: 13 }}>
           Back to Interfaze
         </Link>
@@ -626,7 +639,7 @@ export default function SubscribePage() {
     <Suspense
       fallback={
         <main style={{ minHeight: "100vh", background: planSheetColors.bg, color: planSheetColors.muted, padding: 48 }}>
-          Loading…
+          <Loading label="Loading…" />
         </main>
       }
     >

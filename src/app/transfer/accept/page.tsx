@@ -11,6 +11,7 @@ import {
 import { getGatewayBaseUrl } from "@/lib/gateway";
 import { isCnRegion } from "@/lib/region";
 import CnTransferAccept from "@/components/CnTransferAccept";
+import Loading from "@/components/Loading";
 
 type InvitePreview = {
   agent: { name: string; description: string | null; status: string };
@@ -157,7 +158,7 @@ function TransferAcceptInner() {
   if (loading || authLoading) {
     return (
       <main style={pageStyle}>
-        <p style={{ color: "var(--muted)" }}>Loading…</p>
+        <Loading label="Loading…" style={{ color: "var(--muted)" }} />
       </main>
     );
   }
@@ -267,7 +268,7 @@ function TransferAcceptInner() {
         </div>
       ) : null}
       <p style={{ color: "#d97706", fontSize: 13, lineHeight: 1.45, margin: "0 0 16px" }}>
-        Accepting transfers ACN ownership to your account. The previous owner loses
+        Accepting transfers ownership to your account. The previous owner loses
         control; autonomous agents may receive a new API key.
       </p>
       {error ? (
@@ -285,17 +286,35 @@ function TransferAcceptInner() {
   );
 }
 
+function TransferAuthGate() {
+  if (!isAuth0Configured()) {
+    return (
+      <main style={pageStyle}>
+        <h1 style={titleStyle}>Sign-in unavailable</h1>
+        <p style={mutedStyle}>
+          Login is not configured on this deployment, so accepting a gift is unavailable
+          right now. Please try again later.
+        </p>
+        <a href="/" style={linkStyle}>
+          Back to Interfaze
+        </a>
+      </main>
+    );
+  }
+  return <TransferAcceptInner />;
+}
+
 export default function TransferAcceptPage() {
   if (isCnRegion()) return <CnTransferAccept />;
   return (
     <Suspense
       fallback={
         <main style={pageStyle}>
-          <p style={{ color: "var(--muted)" }}>Loading…</p>
+          <Loading label="Loading…" style={{ color: "var(--muted)" }} />
         </main>
       }
     >
-      <TransferAcceptInner />
+      <TransferAuthGate />
     </Suspense>
   );
 }

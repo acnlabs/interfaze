@@ -63,6 +63,7 @@ import { MyAgentsPanel } from "./MyAgentsPanel";
 import { NewChatPicker } from "./NewChatPicker";
 import { NewComposeMenu } from "./NewComposeMenu";
 import { ConnectAgentModal } from "./ConnectAgentModal";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { copyConnectPromptWithInvite } from "./connectPrompt";
 import { officialShelfAllows, officialV0SupportsModel } from "./officialV0";
 import {
@@ -1172,7 +1173,7 @@ function ChatDecisionSettings({
           disabled={busy}
           onChange={(e) => onToggle(e.target.checked)}
         />
-        {t.decisionAuto}
+        {t.decisionAutoEnable}
       </label>
       {auto && hopCap > 0 ? (
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
@@ -2505,6 +2506,18 @@ function AccountFooter({
   );
 }
 
+function useViewportWidth(): number {
+  // Fixed SSR-safe initial value; synced to the real width on mount.
+  const [width, setWidth] = useState(1024);
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return width;
+}
+
 export function RanchChatShell(props: RanchChatShellProps) {
   const {
     getAccessToken,
@@ -2592,6 +2605,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, [modeProp]);
 
   const showSidebar = mode !== "full" || !sidebarCollapsed;
+  const viewportWidth = useViewportWidth();
+  /** <768px in full mode: single-column, list ↔ conversation like side mode. */
+  const isNarrowFull = mode === "full" && viewportWidth < 768;
 
   const client = useMemo(
     () => createGatewayClient(gatewayBaseUrl, getAccessToken),
@@ -2777,11 +2793,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [agentRefIndex, setAgentRefIndex] = useState(0);
   const [slashIndex, setSlashIndex] = useState(0);
   const [draft, setDraft] = useState("");
+  const [slashMenuDismissed, setSlashMenuDismissed] = useState(false);
   /** Group: continue with last @'d agent for 15m (chip above composer). */
   const [stickyMention, setStickyMention] = useState<StickyMention | null>(null);
   /** Group: forced recipient picker when send has no @ / sticky (ranch-style). */
   const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [decisionBusy, setDecisionBusy] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     message: string;
     confirmLabel: string;
@@ -4120,7 +4138,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const toggleChatDecision = async (next: boolean) => {
     if (!active || isGroupChat(active)) return;
     const chatId = active.chat_id;
-    setBusy(true);
+    setDecisionBusy(true);
     setError(null);
     try {
       const updated = await client.patchChatDecision(chatId, next);
@@ -4136,7 +4154,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     } catch (e) {
       setError(e instanceof ChatGatewayError ? e.message : t.sendFailed);
     } finally {
-      setBusy(false);
+      setDecisionBusy(false);
     }
   };
 
@@ -5178,7 +5196,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, [renewHostTicket]);
 
   const slashParsed = parseSlashDraft(draft);
-  const slashMenuOpen = isSlashMenuDraft(draft);
+  const slashMenuOpen = isSlashMenuDraft(draft) && !slashMenuDismissed;
   const slashCommands: SlashCmdDef[] = (
     [
       { id: "agent" as const, label: "/agent", description: t.slashAgentDesc },
@@ -5260,6 +5278,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     .map(([id, name]) => ({ id, name }));
 
   const tryRunSlashFromDraft = () => {
+    // Menu dismissed with Escape — Enter sends the raw text instead.
+    if (slashMenuDismissed) return false;
     const parsed = parseSlashDraft(draft);
     if (!parsed) return false;
     // Bare "/" — keep menu open, don't send as chat text.
@@ -5364,6 +5384,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           client={client}
           messages={t}
           interfazeBaseUrl={interfazeBaseUrl}
+          locale={uiLocale}
           onClose={() => closeAccountPanel()}
           onOpenBilling={() => openAccountPanel("billing")}
         />
@@ -5453,14 +5474,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
         }
         @media (prefers-reduced-motion: reduce) {
           .ranch-account-menu-panel { animation: none; }
+          .ranch-reply-dot { animation: none; opacity: 1; }
+        }
+        [data-ranch-chat-shell] :focus-visible {
+          outline: 2px solid ${colors.accent};
+          outline-offset: 2px;
         }
       `}</style>
       <div
         style={{
-          width: mode === "full" ? 360 : "100%",
-          maxWidth: mode === "full" ? 360 : undefined,
-          borderRight: mode === "full" ? `1px solid ${colors.border}` : undefined,
-          display: showSidebar && (view === "list" || mode === "full") ? "flex" : "none",
+          width: mode === "full" && !isNarrowFull ? 360 : "100%",
+          maxWidth: mode === "full" && !isNarrowFull ? 360 : undefined,
+          borderRight:
+            mode === "full" && !isNarrowFull ? `1px solid ${colors.border}` : undefined,
+          display:
+            showSidebar && (view === "list" || (mode === "full" && !isNarrowFull))
+              ? "flex"
+              : "none",
           flexDirection: "column",
           minWidth: 0,
           height: "100%",
@@ -5619,6 +5649,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       ? [c.agent_id, listTitle].filter(Boolean).join(" · ") || undefined
                       : undefined
                   }
+                  data-selected={selected}
+                  aria-current={selected ? "true" : undefined}
                   style={{
                     ...listItem,
                     background: selected ? colors.accentSoft : "transparent",
@@ -5789,8 +5821,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
         <div
           style={{
             flex: 1,
-            // full: always show right pane (empty state when no selection)
-            display: mode === "full" || view === "conversation" ? "flex" : "none",
+            // full: always show right pane (empty state when no selection);
+            // narrow full (<768px): single-column, list view hides it.
+            display:
+              (mode === "full" && !isNarrowFull) || view === "conversation"
+                ? "flex"
+                : "none",
             flexDirection: "column",
             minWidth: 0,
             height: "100%",
@@ -5867,7 +5903,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             <>
               <div style={listHeader}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  {(mode === "side" || activeTopic) && (
+                  {(mode === "side" || isNarrowFull || activeTopic) && (
                     <button
                       type="button"
                       style={btnGhost}
@@ -7100,6 +7136,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     setDraft(e.target.value);
                     setMentionIndex(0);
                     setSlashIndex(0);
+                    setSlashMenuDismissed(false);
                     if (recipientPickerOpen && trailingMentionQuery(e.target.value) !== null) {
                       setRecipientPickerOpen(false);
                     }
@@ -7129,7 +7166,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       }
                       if (e.key === "Escape") {
                         e.preventDefault();
-                        setDraft("");
+                        setSlashMenuDismissed(true);
                         return;
                       }
                       if (e.key === "Enter" && !e.shiftKey) {
@@ -7734,7 +7771,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         auto={Boolean(active.decision?.auto)}
                         hops={active.decision?.auto_hops ?? 0}
                         hopCap={active.decision?.auto_hop_cap ?? 5}
-                        busy={busy}
+                        busy={decisionBusy}
                         t={t}
                         onToggle={(next) => void toggleChatDecision(next)}
                       />
@@ -8377,70 +8414,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
       ) : null}
 
       {confirmDialog ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 120,
-            background: "rgba(0,0,0,0.55)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 24,
-          }}
-          onClick={() => {
-            if (!busy) setConfirmDialog(null);
-          }}
-        >
-          <div
-            style={{
-              width: "min(340px, 100%)",
-              background: colors.panel,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 12,
-              padding: 20,
-              boxShadow: "0 16px 48px rgba(0,0,0,0.45)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p
-              style={{
-                margin: "0 0 16px",
-                fontSize: 14,
-                lineHeight: 1.5,
-                color: colors.text,
-              }}
-            >
-              {confirmDialog.message}
-            </p>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                style={btnGhost}
-                disabled={busy}
-                onClick={() => setConfirmDialog(null)}
-              >
-                {t.cancel}
-              </button>
-              <button
-                type="button"
-                style={{
-                  ...btnGhost,
-                  background: "rgba(248,113,113,0.15)",
-                  borderColor: "rgba(248,113,113,0.45)",
-                  color: colors.danger,
-                  fontWeight: 600,
-                }}
-                disabled={busy}
-                onClick={() => confirmDialog.onConfirm()}
-              >
-                {confirmDialog.confirmLabel}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          message={confirmDialog.message}
+          confirmLabel={confirmDialog.confirmLabel}
+          cancelLabel={t.cancel}
+          busy={busy}
+          onConfirm={() => confirmDialog.onConfirm()}
+          onCancel={() => setConfirmDialog(null)}
+        />
       ) : null}
       {showCreateDialog ? (
         <CreateAgentDialog

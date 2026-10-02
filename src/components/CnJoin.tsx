@@ -6,6 +6,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { connectPromptForInvite, joinLandingUrl } from "@acnlabs/agent-chat";
 import { getCnSessionToken } from "@/lib/auth/cn";
 import { getGatewayBaseUrl } from "@/lib/gateway";
+import Loading from "@/components/Loading";
 
 type JoinPreview = {
   code: string;
@@ -37,6 +38,7 @@ function CnJoinInner() {
   const searchParams = useSearchParams();
   const invite = (searchParams.get("invite") || "").trim();
   const [preview, setPreview] = useState<JoinPreview | null>(null);
+  const [previewError, setPreviewError] = useState(false);
   const [copied, setCopied] = useState<"prompt" | "link" | null>(null);
   const [pageUrl, setPageUrl] = useState("");
 
@@ -57,15 +59,23 @@ function CnJoinInner() {
 
   const loadPreview = useCallback(async () => {
     if (!invite) return;
+    setPreviewError(false);
     const headers: Record<string, string> = {};
     const token = getCnSessionToken();
     if (token) headers.Authorization = `Bearer ${token}`;
-    const res = await fetch(
-      joinUrl(getGatewayBaseUrl(), `/api/chat/join-invites/${encodeURIComponent(invite)}`),
-      { headers },
-    );
-    if (!res.ok) return;
-    setPreview((await res.json()) as JoinPreview);
+    try {
+      const res = await fetch(
+        joinUrl(getGatewayBaseUrl(), `/api/chat/join-invites/${encodeURIComponent(invite)}`),
+        { headers },
+      );
+      if (!res.ok) {
+        setPreviewError(true);
+        return;
+      }
+      setPreview((await res.json()) as JoinPreview);
+    } catch {
+      setPreviewError(true);
+    }
   }, [invite]);
 
   useEffect(() => {
@@ -79,10 +89,22 @@ function CnJoinInner() {
 
   return (
     <main style={pageStyle}>
-      <h1 style={titleStyle}>接入已有 agent</h1>
+      <h1 style={titleStyle}>接入已有智能体</h1>
       <p style={mutedStyle}>
-        分享这个页面或提示词。Agent 加入 ACN 时带上邀请码。认领是另一条私密链接，本页不含认领 token。
+        分享这个页面或提示词，让你的智能体凭邀请码加入。所有权始终在你手里——本页不含任何所有权凭证。
       </p>
+      {previewError ? (
+        <p style={{ ...mutedStyle, marginTop: 12, color: "#f87171" }}>
+          邀请预览加载失败。{" "}
+          <button
+            type="button"
+            onClick={() => void loadPreview()}
+            style={{ ...btnStyle, background: "transparent", color: "var(--fg, #fafafa)", border: "1px solid var(--border, #27272a)", padding: "4px 12px", fontSize: 12, marginLeft: 4 }}
+          >
+            重试
+          </button>
+        </p>
+      ) : null}
       {preview ? (
         <p style={{ ...mutedStyle, marginTop: 12 }}>
           {preview.is_issuer ? "这是你发出的邀请。" : `邀请人：${preview.from_nickname}。`}
@@ -92,20 +114,31 @@ function CnJoinInner() {
       <textarea readOnly value={prompt} style={textareaStyle} />
       <button
         type="button"
-        style={btnStyle}
+        style={{
+          ...btnStyle,
+          ...(preview?.expired ? { opacity: 0.5, cursor: "not-allowed" } : null),
+        }}
+        disabled={preview?.expired}
         onClick={() => {
           void copyText(prompt).then((ok) => {
             if (ok) markCopied("prompt");
           });
         }}
       >
-        {copied === "prompt" ? "已复制提示词" : "复制给 agent 的提示词"}
+        {copied === "prompt" ? "已复制提示词" : "复制给智能体的提示词"}
       </button>
       {pageUrl ? (
         <>
           <button
             type="button"
-            style={{ ...btnStyle, background: "transparent", color: "var(--fg, #fafafa)", border: "1px solid var(--border, #27272a)" }}
+            style={{
+              ...btnStyle,
+              background: "transparent",
+              color: "var(--fg, #fafafa)",
+              border: "1px solid var(--border, #27272a)",
+              ...(preview?.expired ? { opacity: 0.5, cursor: "not-allowed" } : null),
+            }}
+            disabled={preview?.expired}
             onClick={() => {
               void copyText(pageUrl).then((ok) => {
                 if (ok) markCopied("link");
@@ -115,13 +148,10 @@ function CnJoinInner() {
             {copied === "link" ? "已复制链接" : "复制本页链接"}
           </button>
           <div style={qrWrap}>
-            <QRCodeSVG value={pageUrl} size={160} marginSize={0} />
+            <QRCodeSVG value={pageUrl} size={160} marginSize={2} />
           </div>
         </>
       ) : null}
-      <a href="/?create=1" style={linkStyle}>
-        还没有 agent？去创建
-      </a>
       <a href="/" style={linkStyle}>
         返回界面
       </a>
@@ -134,7 +164,7 @@ export default function CnJoin() {
     <Suspense
       fallback={
         <main style={pageStyle}>
-          <p style={{ color: "var(--muted)" }}>加载中…</p>
+          <Loading label="加载中…" style={{ color: "var(--muted)" }} />
         </main>
       }
     >

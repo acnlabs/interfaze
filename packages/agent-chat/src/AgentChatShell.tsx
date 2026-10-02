@@ -565,7 +565,6 @@ export function AgentChatShell(props: AgentChatShellProps) {
                     color: "#f4f4f5",
                     padding: "8px 14px",
                     fontSize: 14,
-                    outline: "none",
                     opacity: inputDisabled ? 0.6 : 1,
                   }}
                 />
@@ -894,7 +893,6 @@ const inputStyle: CSSProperties = {
   color: "#e2e8f0",
   padding: "8px 10px",
   fontSize: 13,
-  outline: "none",
 };
 
 /** Host helper: dispatch open event. */

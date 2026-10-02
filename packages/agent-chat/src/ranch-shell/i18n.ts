@@ -142,6 +142,7 @@ export type RanchMessages = {
   decisionAuto: string;
   decisionAutoHint: string;
   decisionAutoNeedGoal: string;
+  decisionAutoEnable: string;
   decisionSuggested: string;
   decisionPicked: string;
   decisionScoring: string;
@@ -818,6 +819,7 @@ const en: RanchMessages = {
   decisionAutoHint:
     "When this chat has a plan with next steps, Jev can pick and send for you. It stops if it should ask you, and after a few hops.",
   decisionAutoNeedGoal: "The agent writes a plan from what you already said. Auto-decide does nothing without one.",
+  decisionAutoEnable: "Enable for this chat",
   decisionSuggested: "Suggested",
   decisionPicked: "Picked",
   decisionScoring: "Scoring…",
@@ -1539,8 +1541,8 @@ const zh: RanchMessages = {
   startChat: "开始聊天",
   selectOrStart: "选择一个会话，或新建聊天",
   sayHello: "打个招呼开始对话。",
-  sayHelloOffline: "当前agent离线，无法回复，请等状态变绿后再试。",
-  offlineBanner: "当前agent离线，无法回复，请等状态变绿后再试。",
+  sayHelloOffline: "当前 agent 离线，无法回复，请等状态变绿后再试。",
+  offlineBanner: "当前 agent 离线，无法回复，请等状态变绿后再试。",
   ownerHowToConnect: "如何接上",
   messagePlaceholder: "输入消息…（输入 / 打开命令）",
   decisionGoal: "把这句记成目标",
@@ -1548,6 +1550,7 @@ const zh: RanchMessages = {
   decisionAutoHint:
     "这场对话已有计划、并列出下一步时，Jev 可以替你选并发出去。该问你、或连续几次之后会停。",
   decisionAutoNeedGoal: "智能体会根据你已经说的需求写出计划。没有计划时自动决策不会发。",
+  decisionAutoEnable: "为此会话开启",
   decisionSuggested: "建议",
   decisionPicked: "已选",
   decisionScoring: "打分中…",

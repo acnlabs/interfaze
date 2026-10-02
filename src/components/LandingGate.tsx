@@ -12,6 +12,7 @@ import {
 } from "@/lib/openAgentDeepLink";
 import { isCnRegion } from "@/lib/region";
 import InterfazeChatHost from "./InterfazeChatHost";
+import Loading from "./Loading";
 
 const siteName = process.env.NEXT_PUBLIC_SITE_NAME ?? (isCnRegion() ? "界面" : "Interfaze");
 
@@ -46,7 +47,7 @@ function CnLandingGate() {
     return (
       <main style={gateStyle}>
         <Brand />
-        <p style={{ color: "var(--muted)" }}>加载中…</p>
+        <Loading label="加载中…" style={{ color: "var(--muted)" }} />
       </main>
     );
   }
@@ -58,7 +59,7 @@ function CnLandingGate() {
         <p style={{ color: "var(--muted)", maxWidth: 420, lineHeight: 1.5 }}>
           {openingChat
             ? "正在打开对话…"
-            : "与你拥有或被邀请的 ACN 智能体对话协作——微信登录即可。"}
+            : "与你拥有或被邀请的智能体对话协作——微信登录即可。"}
         </p>
         <button
           type="button"
@@ -84,10 +85,15 @@ function GlobalLandingGate() {
       <main style={gateStyle}>
         <Brand />
         <p style={{ color: "var(--muted)", maxWidth: 420, lineHeight: 1.5 }}>
-          Auth0 is not configured. Copy <code>.env.example</code> to{" "}
-          <code>.env.local</code> and set <code>NEXT_PUBLIC_AUTH0_CLIENT_ID</code>. Add{" "}
-          <code>http://localhost:3010/auth/callback</code> to Auth0 Allowed Callback URLs.
+          Sign-in is temporarily unavailable. Please try again later.
         </p>
+        {process.env.NODE_ENV !== "production" ? (
+          <p style={{ color: "var(--muted)", maxWidth: 420, lineHeight: 1.5, fontSize: 12 }}>
+            Dev only: copy <code>.env.example</code> to <code>.env.local</code> and set{" "}
+            <code>NEXT_PUBLIC_AUTH0_CLIENT_ID</code>. Add{" "}
+            <code>http://localhost:3010/auth/callback</code> to Auth0 Allowed Callback URLs.
+          </p>
+        ) : null}
       </main>
     );
   }
@@ -126,9 +132,10 @@ function AuthenticatedGate() {
     return (
       <main style={gateStyle}>
         <Brand />
-        <p style={{ color: "var(--muted)" }}>
-          {openingChat ? "Opening chat…" : "Loading…"}
-        </p>
+        <Loading
+          label={openingChat ? "Opening chat…" : "Loading…"}
+          style={{ color: "var(--muted)" }}
+        />
       </main>
     );
   }

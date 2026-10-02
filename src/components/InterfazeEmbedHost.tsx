@@ -34,15 +34,19 @@ const copy = {
     placeholder: "Message…",
     send: "Send",
     empty: "Say something to start.",
-    missing: "Missing embed token.",
+    connecting: "Connecting…",
+    missing: "This chat couldn't be opened. Please reload it from the host page.",
     loadFailed: "Could not open this chat.",
+    retry: "Retry",
   },
   zh: {
     placeholder: "输入消息…",
     send: "发送",
     empty: "说一句，开始这一站。",
-    missing: "缺少 embed token。",
+    connecting: "正在连接…",
+    missing: "这个对话暂时打不开，请从原页面重新进入。",
     loadFailed: "打不开这场对话。",
+    retry: "重试",
   },
 };
 
@@ -58,6 +62,7 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
   const parentOriginRef = useRef<string>("");
   const allowedOriginsRef = useRef<string[]>([]);
@@ -97,15 +102,21 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
       setToken(next);
     };
     window.addEventListener("message", onMsg);
-    const timer = window.setTimeout(() => {
-      if (!cancelled) setToken((prev) => prev ?? "");
-    }, 8000);
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
       window.removeEventListener("message", onMsg);
     };
   }, []);
+
+  // Fallback: if no INIT arrives within 8s of entering the waiting state,
+  // surface the missing-token error. Restarts whenever we re-enter waiting (retry).
+  useEffect(() => {
+    if (token !== null) return;
+    const timer = window.setTimeout(() => {
+      setToken((prev) => prev ?? "");
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [token]);
 
   const getAccessToken = useCallback(async () => token || null, [token]);
   const client = useMemo(
@@ -155,6 +166,7 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
         }
         const list = await client.listMessages(data.chat_id);
         if (cancelled) return;
+        setError(null);
         setSession(data);
         setMessages(list);
         const height = document.documentElement.scrollHeight || 480;
@@ -176,7 +188,7 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [client, gatewayBaseUrl, notifyError, t.loadFailed, t.missing, token]);
+  }, [client, gatewayBaseUrl, notifyError, t.loadFailed, t.missing, token, retryNonce]);
 
   useEffect(() => {
     if (!session?.chat_id || !token) return;
@@ -260,7 +272,11 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
           gap: 10,
         }}
       >
-        {messages.length === 0 && !error ? (
+        {token === null && !error ? (
+          <p style={{ color: "var(--muted)", fontSize: 14, margin: "24px 0" }} role="status">
+            {t.connecting}
+          </p>
+        ) : messages.length === 0 && !error ? (
           <p style={{ color: "var(--muted)", fontSize: 14, margin: "24px 0" }}>{t.empty}</p>
         ) : null}
         {messages.map((m) => {
@@ -287,7 +303,41 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
         })}
       </div>
       {error ? (
-        <p style={{ margin: "0 16px 8px", color: "#f87171", fontSize: 12 }}>{error}</p>
+        <div
+          style={{
+            margin: "0 16px 8px",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <p style={{ margin: 0, color: "#f87171", fontSize: 12, flex: 1 }} role="alert">
+            {error}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              if (!token) {
+                setToken(null);
+              } else {
+                setRetryNonce((n) => n + 1);
+              }
+            }}
+            style={{
+              borderRadius: 999,
+              border: "1px solid var(--border)",
+              background: "transparent",
+              color: "inherit",
+              fontSize: 12,
+              padding: "4px 12px",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            {t.retry}
+          </button>
+        </div>
       ) : null}
       <form
         onSubmit={(ev) => {
@@ -314,7 +364,6 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
             color: "inherit",
             padding: "10px 14px",
             fontSize: 14,
-            outline: "none",
           }}
         />
         <button

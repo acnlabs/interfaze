@@ -14,6 +14,7 @@ import {
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
+import Loading from "@/components/Loading";
 import {
   clearCnSession,
   cnDisplayName,
@@ -277,7 +278,7 @@ function CnSubscribeInner() {
   if (!hydrated) {
     return (
       <main style={pageStyle(embed)}>
-        <p style={{ ...muted, padding: 48, textAlign: "center" }}>加载中…</p>
+        <Loading label="加载中…" style={{ ...muted, padding: 48, justifyContent: "center" }} block />
       </main>
     );
   }
@@ -383,7 +384,7 @@ function CnSubscribeInner() {
                 borderRadius: 8,
               }}
             >
-              <QRCodeSVG value={nativeQr} size={180} marginSize={0} />
+              <QRCodeSVG value={nativeQr} size={180} marginSize={2} />
             </div>
             <p style={{ ...muted, marginTop: 10 }}>请使用微信扫码支付</p>
             <p style={{ ...muted, marginTop: 6, fontSize: 12 }}>
@@ -478,7 +479,7 @@ export default function CnSubscribeCheckout() {
     <Suspense
       fallback={
         <main style={pageStyle(false)}>
-          <p style={{ ...muted, padding: 48, textAlign: "center" }}>加载中…</p>
+          <Loading label="加载中…" style={{ ...muted, padding: 48, justifyContent: "center" }} block />
         </main>
       }
     >
