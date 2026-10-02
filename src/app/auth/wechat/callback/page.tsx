@@ -63,7 +63,7 @@ function WeChatCallbackInner() {
       returnToRaw.startsWith("/") && !returnToRaw.startsWith("//") ? returnToRaw : "/";
     return (
       <main style={wrap}>
-        <p style={{ color: "#f87171", marginBottom: 16 }}>{error}</p>
+        <p style={{ color: "var(--danger)", marginBottom: 16 }}>{error}</p>
         <button
           type="button"
           onClick={() => startWeChatLogin(returnTo)}

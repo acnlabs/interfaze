@@ -4,10 +4,17 @@
   --muted: #a1a1aa;
   --border: #27272a;
   --accent: #10b981;
+  --success: #34d399;
+  --danger: #f87171;
+  --info: #93c5fd;
 }
 
 * {
   box-sizing: border-box;
+}
+
+button:disabled {
+  cursor: not-allowed !important;
 }
 
 html,

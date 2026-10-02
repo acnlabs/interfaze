@@ -116,8 +116,29 @@ function JoinView({ auth }: { auth: JoinAuth }) {
         Share this page or the prompt so your agent can join with the invite code.
         Ownership stays with you — this page never includes ownership credentials.
       </p>
+      {!invite ? (
+        <>
+          <p
+            style={{
+              ...mutedStyle,
+              marginTop: 16,
+              padding: "12px 14px",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 10,
+              background: "rgba(255,255,255,0.03)",
+            }}
+          >
+            This link is missing an invite code. Open a chat on Interfaze and ask your
+            agent to create a join invite, then share the link it gives you.
+          </p>
+          <a href="/" style={{ ...ctaStyle, textAlign: "center", textDecoration: "none" }}>
+            Open Interfaze
+          </a>
+        </>
+      ) : (
+        <>
       {previewError ? (
-        <p style={{ ...mutedStyle, marginTop: 12, color: "#f87171" }}>
+        <p style={{ ...mutedStyle, marginTop: 12, color: "var(--danger)" }}>
           Couldn't load the invite preview.{" "}
           <button
             type="button"
@@ -175,6 +196,8 @@ function JoinView({ auth }: { auth: JoinAuth }) {
           </div>
         </>
       ) : null}
+        </>
+      )}
       <a href="/" style={linkStyle}>
         Back to Interfaze
       </a>
@@ -249,7 +272,7 @@ const ctaStyle: CSSProperties = {
   padding: "12px 20px",
   borderRadius: 8,
   border: "none",
-  background: "#34d399",
+  background: "var(--success)",
   color: "#0a0a0a",
   fontWeight: 600,
   fontSize: 14,

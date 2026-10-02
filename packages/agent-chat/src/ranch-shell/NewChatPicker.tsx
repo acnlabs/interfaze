@@ -103,6 +103,7 @@ export function NewChatPicker({
         key={a.agent_id}
         type="button"
         disabled={busy}
+        aria-pressed={on}
         onClick={() => toggle(a.agent_id)}
         style={{
           ...rowBtn,
@@ -114,8 +115,8 @@ export function NewChatPicker({
           style={{
             width: 36,
             height: 36,
-            borderRadius: mode === "group" ? 8 : 999,
-            background: `linear-gradient(135deg, ${accent}, #0f766e)`,
+            borderRadius: 999,
+            background: `linear-gradient(135deg, ${accent}, ${colors.avatarTo})`,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -126,7 +127,7 @@ export function NewChatPicker({
         >
           {(a.name || a.agent_id).slice(0, 1).toUpperCase()}
         </span>
-        <span style={{ textAlign: "left", minWidth: 0 }}>
+        <span style={{ textAlign: "left", minWidth: 0, flex: 1 }}>
           <span style={{ display: "block", fontWeight: 600, fontSize: 13 }}>
             {a.name?.trim() || a.agent_id}
           </span>
@@ -143,6 +144,28 @@ export function NewChatPicker({
             {a.description?.trim() || a.agent_id}
           </span>
         </span>
+        {mode === "group" ? (
+          <span
+            aria-hidden
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 999,
+              flexShrink: 0,
+              border: `1.5px solid ${on ? colors.accent : colors.border}`,
+              background: on ? colors.accent : "transparent",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#fff",
+              fontSize: 11,
+              fontWeight: 700,
+              lineHeight: 1,
+            }}
+          >
+            {on ? "✓" : ""}
+          </span>
+        ) : null}
       </button>
     );
   };
@@ -187,7 +210,7 @@ export function NewChatPicker({
                 setSelected((s) => s.slice(0, 1));
               }}
             >
-              1:1
+              {t.directMode}
             </button>
             <button
               type="button"

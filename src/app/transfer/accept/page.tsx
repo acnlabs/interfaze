@@ -272,7 +272,7 @@ function TransferAcceptInner() {
         control; autonomous agents may receive a new API key.
       </p>
       {error ? (
-        <p style={{ color: "#f87171", fontSize: 13, marginBottom: 12 }}>{error}</p>
+        <p style={{ color: "var(--danger)", fontSize: 13, marginBottom: 12 }}>{error}</p>
       ) : null}
       <button
         type="button"
@@ -356,7 +356,7 @@ const ctaStyle: CSSProperties = {
   padding: "12px 20px",
   borderRadius: 8,
   border: "none",
-  background: "#34d399",
+  background: "var(--success)",
   color: "#0a0a0a",
   fontWeight: 600,
   fontSize: 14,

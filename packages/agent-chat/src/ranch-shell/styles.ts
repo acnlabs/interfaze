@@ -25,6 +25,11 @@ export const colors = {
   avatarTo: "#1e293b",
   avatarSelfFrom: "#0f766e",
   panelAlt: "#1c2330",
+  panelElevated: "#141a22",
+  inputBg: "#121820",
+  embedBg: "#0a0a0a",
+  accentBright: "#7aa2f7",
+  success: "#34d399",
   onAccent: "#ffffff",
 };
 
@@ -45,7 +50,7 @@ export const shellRoot = (mode: "side" | "full"): CSSProperties =>
         top: 0,
         right: 0,
         width: "min(420px, 100vw)",
-        height: "100vh",
+        height: "100dvh",
         zIndex: 9999,
         display: "flex",
         flexDirection: "column",
@@ -89,7 +94,7 @@ export const btnPrimary: CSSProperties = {
 
 export const inputStyle: CSSProperties = {
   width: "100%",
-  background: "#1e293b",
+  background: colors.inputBg,
   border: `1px solid ${colors.border}`,
   borderRadius: 8,
   color: colors.text,

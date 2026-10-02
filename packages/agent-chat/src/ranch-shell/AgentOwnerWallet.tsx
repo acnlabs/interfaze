@@ -137,6 +137,19 @@ export function AgentOwnerWallet({
   const [approvalsLoading, setApprovalsLoading] = useState(false);
   const [approvalsError, setApprovalsError] = useState<string | null>(null);
   const [actioningId, setActioningId] = useState<string | null>(null);
+  const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!flash) return;
+    const id = window.setTimeout(() => setFlash(null), 2500);
+    return () => window.clearTimeout(id);
+  }, [flash]);
+
+  useEffect(() => {
+    if (!rejectConfirmId) return;
+    const id = window.setTimeout(() => setRejectConfirmId(null), 3000);
+    return () => window.clearTimeout(id);
+  }, [rejectConfirmId]);
 
   const rechargeUrl = buildWalletCheckoutUrl({
     interfazeBaseUrl,
@@ -275,6 +288,11 @@ export function AgentOwnerWallet({
 
   const handleReject = async (requestId: string) => {
     if (actioningId) return;
+    if (rejectConfirmId !== requestId) {
+      setRejectConfirmId(requestId);
+      return;
+    }
+    setRejectConfirmId(null);
     setActioningId(requestId);
     setApprovalsError(null);
     try {
@@ -399,7 +417,7 @@ export function AgentOwnerWallet({
               }}
             >
               {t.walletBalance}
-              <FieldHint text={t.walletCreditsHint} />
+              <FieldHint label={t.fieldHintLabel} text={t.walletCreditsHint} />
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, color: colors.text }}>
               {fmtCredits(wallet.balance)}
@@ -425,7 +443,7 @@ export function AgentOwnerWallet({
                 }}
               >
                 {t.spendPolicyTitle}
-                <FieldHint text={t.spendPolicyHint} />
+                <FieldHint label={t.fieldHintLabel} text={t.spendPolicyHint} />
               </span>
               <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, flex: 1, minWidth: 0 }}>
                 {policy
@@ -535,7 +553,7 @@ export function AgentOwnerWallet({
               }}
             >
               {t.walletApPoints}
-              <FieldHint text={t.walletApPointsHint} />
+              <FieldHint label={t.fieldHintLabel} text={t.walletApPointsHint} />
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, color: colors.text }}>
               {fmtCredits(wallet.ap_points)}
@@ -657,6 +675,16 @@ export function AgentOwnerWallet({
             <p style={{ margin: "0 0 12px", fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
               {t.walletAmountHint}
             </p>
+
+            {amountDraft.trim() !== "" && amount == null ? (
+              <p style={{ margin: "0 0 12px", fontSize: 12, color: colors.danger }}>
+                {t.walletAmountInvalid}
+              </p>
+            ) : dialog === "withdraw" && amount != null && wallet && amount > wallet.balance ? (
+              <p style={{ margin: "0 0 12px", fontSize: 12, color: colors.danger }}>
+                {t.walletAmountExceeds}
+              </p>
+            ) : null}
 
             {dialog === "topup" && amount != null && amount > wallet.owner_balance ? (
               <p style={{ margin: "0 0 12px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
@@ -1043,18 +1071,28 @@ export function AgentOwnerWallet({
                       <button
                         type="button"
                         style={{ ...btnPrimary, flex: 1, fontSize: 12, fontWeight: 600 }}
-                        disabled={actioningId === r.request_id}
+                        disabled={actioningId !== null}
                         onClick={() => void handleApprove(r.request_id)}
                       >
                         {actioningId === r.request_id ? t.loading : t.spendApprovalsApprove}
                       </button>
                       <button
                         type="button"
-                        style={{ ...btnGhost, flex: 1, fontSize: 12, fontWeight: 600 }}
-                        disabled={actioningId === r.request_id}
+                        style={{
+                          ...btnGhost,
+                          flex: 1,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          ...(rejectConfirmId === r.request_id
+                            ? { borderColor: colors.danger, color: colors.danger }
+                            : null),
+                        }}
+                        disabled={actioningId !== null}
                         onClick={() => void handleReject(r.request_id)}
                       >
-                        {t.spendApprovalsReject}
+                        {rejectConfirmId === r.request_id
+                          ? t.spendApprovalsRejectConfirm
+                          : t.spendApprovalsReject}
                       </button>
                     </div>
                   </div>

@@ -94,7 +94,7 @@ function CnJoinInner() {
         分享这个页面或提示词，让你的智能体凭邀请码加入。所有权始终在你手里——本页不含任何所有权凭证。
       </p>
       {previewError ? (
-        <p style={{ ...mutedStyle, marginTop: 12, color: "#f87171" }}>
+        <p style={{ ...mutedStyle, marginTop: 12, color: "var(--danger)" }}>
           邀请预览加载失败。{" "}
           <button
             type="button"
@@ -210,7 +210,7 @@ const btnStyle: CSSProperties = {
   padding: "12px 20px",
   borderRadius: 8,
   border: "none",
-  background: "#34d399",
+  background: "var(--success)",
   color: "#0a0a0a",
   fontWeight: 600,
   fontSize: 14,

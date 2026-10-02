@@ -658,9 +658,11 @@ function InfoIcon({ size = 12 }: { size?: number }) {
 export function FieldHint({
   text,
   align = "left",
+  label = "More info",
 }: {
   text: string;
   align?: "left" | "right";
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{
@@ -773,7 +775,7 @@ export function FieldHint({
     >
       <button
         type="button"
-        aria-label="More info"
+        aria-label={label}
         aria-describedby={open ? tipId : undefined}
         onFocus={show}
         onBlur={scheduleHide}
@@ -787,10 +789,10 @@ export function FieldHint({
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
-          width: 14,
-          height: 14,
+          width: 24,
+          height: 24,
           padding: 0,
-          margin: 0,
+          margin: "-5px 0",
           border: "none",
           background: "transparent",
           color: "rgba(148,163,184,0.7)",
@@ -824,8 +826,10 @@ const rowStyle: CSSProperties = {
 
 export function DetailRows({
   rows,
+  hintLabel,
 }: {
   rows: Array<{ label: string; value: string; hint?: string; valueHint?: string }>;
+  hintLabel?: string;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -844,7 +848,7 @@ export function DetailRows({
               }}
             >
               {r.label}
-              {tip ? <FieldHint text={tip} /> : null}
+              {tip ? <FieldHint label={hintLabel} text={tip} /> : null}
             </span>
             <span
               style={{
@@ -2191,7 +2195,7 @@ export function AgentOwnerSettings({
             }}
           >
             {t.myAgentsTagsLabel}
-            <FieldHint text={t.myAgentsTagsHint} />
+            <FieldHint label={t.fieldHintLabel} text={t.myAgentsTagsHint} />
             {tagsParsed.length > 0 ? (
               <span style={{ marginLeft: "auto" }}>{tagsParsed.length}/20</span>
             ) : null}
@@ -2228,6 +2232,7 @@ export function AgentOwnerSettings({
           <span style={{ display: "inline-flex", alignItems: "center" }}>
             {t.myAgentsSectionPricing}
             <FieldHint
+              label={t.fieldHintLabel}
               text={`${t.myAgentsPricingHint} ${t.myAgentsPricingSelfReportNote} ${t.myAgentsPricingModelHint}`}
             />
           </span>
@@ -2249,7 +2254,7 @@ export function AgentOwnerSettings({
             }}
           >
             {t.myAgentsProviderLabel}
-            <FieldHint text={t.myAgentsProviderHint} />
+            <FieldHint label={t.fieldHintLabel} text={t.myAgentsProviderHint} />
             <button
               type="button"
               onClick={refreshRuntimeStatus}
@@ -2262,7 +2267,7 @@ export function AgentOwnerSettings({
                 opacity: busy || modelsLoading || refreshingRuntime ? 0.55 : 1,
               }}
             >
-              {refreshingRuntime ? "…" : t.myAgentsRefreshRuntime}
+              {refreshingRuntime ? t.loading : t.myAgentsRefreshRuntime}
             </button>
           </div>
           {providerOptions.length === 0 ? (
@@ -2463,7 +2468,7 @@ export function AgentOwnerSettings({
                     ? t.myAgentsPricingSourceOpenRouter
                     : t.myAgentsPricingSourceTokenHub}
                 </a>
-                <FieldHint text={t.myAgentsPricingSourceHint} align="right" />
+                <FieldHint label={t.fieldHintLabel} text={t.myAgentsPricingSourceHint} align="right" />
               </span>
             ) : null}
           </div>
@@ -2586,7 +2591,7 @@ export function AgentOwnerSettings({
                 in: String(usdToCredits(inputParsed)),
                 out: String(usdToCredits(outputParsed)),
               })}
-              <FieldHint text={t.myAgentsPricingCreditsNote} />
+              <FieldHint label={t.fieldHintLabel} text={t.myAgentsPricingCreditsNote} />
             </div>
           </div>
         ) : null}
@@ -2605,7 +2610,7 @@ export function AgentOwnerSettings({
       <section>
         <h3 style={{ ...sectionTitle, display: "flex", alignItems: "center" }}>
           {t.myAgentsSectionPieceSku}
-          <FieldHint text={t.myAgentsPieceSkuHint} />
+          <FieldHint label={t.fieldHintLabel} text={t.myAgentsPieceSkuHint} />
         </h3>
         <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
           {t.myAgentsPieceSkuOff}
@@ -2641,7 +2646,7 @@ export function AgentOwnerSettings({
           disabled={!canSavePieceSku}
           onClick={() => void runSavePieceSku()}
         >
-          {savingPieceSku ? "…" : t.myAgentsSavePieceSku}
+          {savingPieceSku ? t.loading : t.myAgentsSavePieceSku}
         </button>
       </section>
 
@@ -2669,7 +2674,7 @@ export function AgentOwnerSettings({
               >
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsDeliveryOptionPull}</div>
               </button>
-              <FieldHint text={t.myAgentsDeliveryPullHelp} />
+              <FieldHint label={t.fieldHintLabel} text={t.myAgentsDeliveryPullHelp} />
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <button
@@ -2680,14 +2685,14 @@ export function AgentOwnerSettings({
               >
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsDeliveryOptionPush}</div>
               </button>
-              <FieldHint text={t.myAgentsDeliveryPushHelp} />
+              <FieldHint label={t.fieldHintLabel} text={t.myAgentsDeliveryPushHelp} />
             </div>
           </div>
           {deliveryDraft === "direct" ? (
             <label style={{ display: "block", marginTop: 10 }}>
               <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
                 {t.myAgentsEndpointInput}
-                <FieldHint text={t.myAgentsEndpointHint} />
+                <FieldHint label={t.fieldHintLabel} text={t.myAgentsEndpointHint} />
               </div>
               <input
                 value={endpointDraft}
@@ -2711,6 +2716,7 @@ export function AgentOwnerSettings({
           {detail.delivery === "direct" ? (
             <div style={{ marginTop: 10 }}>
               <DetailRows
+                hintLabel={t.fieldHintLabel}
                 rows={[
                   {
                     label: t.myAgentsInbound,
@@ -2760,7 +2766,7 @@ export function AgentOwnerSettings({
       <section>
         <h3 style={{ ...sectionTitle, display: "flex", alignItems: "center" }}>
           {t.myAgentsSectionAccess}
-          <FieldHint text={t.myAgentsPolicyHint} />
+          <FieldHint label={t.fieldHintLabel} text={t.myAgentsPolicyHint} />
         </h3>
         {currentPolicy === "manifest" ? (
           <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
@@ -2777,7 +2783,7 @@ export function AgentOwnerSettings({
             >
               <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyOpen}</div>
             </button>
-            <FieldHint text={t.myAgentsPolicyOpenHelp} />
+            <FieldHint label={t.fieldHintLabel} text={t.myAgentsPolicyOpenHelp} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <button
@@ -2788,7 +2794,7 @@ export function AgentOwnerSettings({
             >
               <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyAllowlist}</div>
             </button>
-            <FieldHint text={t.myAgentsPolicyAllowlistHelp} />
+            <FieldHint label={t.fieldHintLabel} text={t.myAgentsPolicyAllowlistHelp} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <button
@@ -2799,7 +2805,7 @@ export function AgentOwnerSettings({
             >
               <div style={{ fontSize: 13, fontWeight: 600 }}>{t.myAgentsPolicyClosed}</div>
             </button>
-            <FieldHint text={t.myAgentsPolicyClosedHelp} />
+            <FieldHint label={t.fieldHintLabel} text={t.myAgentsPolicyClosedHelp} />
           </div>
         </div>
 
@@ -2986,6 +2992,7 @@ export function AgentOwnerSettings({
         ) : null}
         <div style={{ marginTop: 12 }}>
           <DetailRows
+            hintLabel={t.fieldHintLabel}
             rows={[
               {
                 label: t.myAgentsChatOpen,
@@ -3082,6 +3089,7 @@ export function AgentOwnerSettings({
         <div
           role="dialog"
           aria-modal="true"
+          aria-label={t.myAgentsDeliveryRelayConfirmLabel}
           style={{
             position: "fixed",
             inset: 0,
@@ -3137,6 +3145,7 @@ export function AgentOwnerSettings({
         <div
           role="dialog"
           aria-modal="true"
+          aria-label={t.myAgentsPolicyClosedConfirmLabel}
           style={{
             position: "fixed",
             inset: 0,
@@ -3309,6 +3318,7 @@ export function AgentOwnerSettings({
         <div
           role="dialog"
           aria-modal="true"
+          aria-label={t.myAgentsRotateConfirmLabel}
           style={{
             position: "fixed",
             inset: 0,
@@ -3370,6 +3380,7 @@ export function AgentOwnerSettings({
         <div
           role="dialog"
           aria-modal="true"
+          aria-label={t.myAgentsDeleteConfirmLabel}
           style={{
             position: "fixed",
             inset: 0,
@@ -3444,6 +3455,7 @@ export function AgentOwnerSettings({
         <div
           role="dialog"
           aria-modal="true"
+          aria-label={t.myAgentsRotateDone}
           style={{
             position: "fixed",
             inset: 0,

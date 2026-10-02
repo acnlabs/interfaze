@@ -311,7 +311,7 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
             gap: 10,
           }}
         >
-          <p style={{ margin: 0, color: "#f87171", fontSize: 12, flex: 1 }} role="alert">
+          <p style={{ margin: 0, color: "var(--danger)", fontSize: 12, flex: 1 }} role="alert">
             {error}
           </p>
           <button

@@ -20,7 +20,7 @@ export const planSheetColors = {
   card: "#161c24",
   border: "rgba(255,255,255,0.06)",
   text: "#e8eef5",
-  muted: "#94a3b8",
+  muted: "#a6b4c6",
   accent: "#3b82f6",
 };
 

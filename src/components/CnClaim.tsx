@@ -239,7 +239,7 @@ function CnClaimInner() {
       <h1 style={titleStyle}>认领并开聊</h1>
       {preview?.description ? <p style={mutedStyle}>{preview.description}</p> : null}
       {error ? (
-        <p style={{ color: "#f87171", fontSize: 13, margin: "12px 0" }}>{error}</p>
+        <p style={{ color: "var(--danger)", fontSize: 13, margin: "12px 0" }}>{error}</p>
       ) : null}
       <button
         type="button"
@@ -304,7 +304,7 @@ const btnStyle: CSSProperties = {
   padding: "12px 20px",
   borderRadius: 8,
   border: "none",
-  background: "#34d399",
+  background: "var(--success)",
   color: "#0a0a0a",
   fontWeight: 600,
   fontSize: 14,

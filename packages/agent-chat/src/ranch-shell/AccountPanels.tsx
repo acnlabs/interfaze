@@ -17,7 +17,7 @@ import type {
 import type { RanchChatAccount } from "../types";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import type { RanchLocale, RanchMessages } from "./i18n";
-import { btnGhost, btnIcon, btnPrimary, colors } from "./styles";
+import { btnGhost, btnIcon, btnPrimary, colors, inputStyle } from "./styles";
 import { useModalA11y } from "./useModalA11y";
 import {
   buildWalletCheckoutUrl,
@@ -86,9 +86,9 @@ function Badge({
 }) {
   const palette: CSSProperties =
     tone === "accent"
-      ? { background: colors.accentSoft, color: "#7aa2f7" }
+      ? { background: colors.accentSoft, color: colors.accentBright }
       : tone === "ok"
-        ? { background: "rgba(16,185,129,0.14)", color: "#34d399" }
+        ? { background: "rgba(16,185,129,0.14)", color: colors.success }
         : { background: "rgba(255,255,255,0.07)", color: colors.muted };
   return (
     <span
@@ -116,7 +116,7 @@ function AvatarDot({ label, size = 34 }: { label: string; size?: number }) {
         borderRadius: 999,
         flexShrink: 0,
         background: colors.accentSoft,
-        color: "#7aa2f7",
+        color: colors.accentBright,
         display: "grid",
         placeItems: "center",
         fontSize: Math.round(size * 0.42),
@@ -358,7 +358,7 @@ function UsageBar({
           borderRadius: 999,
           background:
             tone === "accent"
-              ? "linear-gradient(90deg, #3b82f6, #7aa2f7)"
+              ? `linear-gradient(90deg, ${colors.accent}, ${colors.accentBright})`
               : "rgba(232,238,245,0.55)",
           transition: "width 240ms ease",
         }}
@@ -914,10 +914,10 @@ export function AccountPlanUsagePanel({
                       setLimitMode(e.target.value === "fixed" ? "fixed" : "unlimited")
                     }
                     style={{
-                      ...btnGhost,
+                      ...inputStyle,
+                      width: "auto",
                       padding: "6px 8px",
                       appearance: "auto",
-                      background: "#121820",
                     }}
                   >
                     <option value="fixed">{t.accountPlanLimitFixed}</option>
@@ -930,15 +930,7 @@ export function AccountPlanUsagePanel({
                       step={1}
                       value={limitInput}
                       onChange={(e) => setLimitInput(e.target.value)}
-                      style={{
-                        width: 72,
-                        border: `1px solid ${colors.border}`,
-                        background: "#121820",
-                        color: colors.text,
-                        borderRadius: 8,
-                        padding: "6px 8px",
-                        fontSize: 13,
-                      }}
+                      style={{ ...inputStyle, width: 72, padding: "6px 8px" }}
                     />
                   ) : null}
                   <button
@@ -1029,7 +1021,7 @@ export function AccountPlanUsagePanel({
               width: "min(920px, calc(100vw - 32px))",
               maxHeight: "min(90vh, 900px)",
               overflow: "auto",
-              background: "#141a22",
+              background: colors.panelElevated,
               borderRadius: 14,
               border: `1px solid ${colors.border}`,
               padding: "20px 18px 16px",
@@ -1058,7 +1050,7 @@ export function AccountPlanUsagePanel({
                 }}
                 aria-label={t.close}
               >
-                ×
+                  ✕
               </button>
             </div>
             <div
@@ -1107,7 +1099,7 @@ export function AccountPlanUsagePanel({
                     style={{
                       ...planCard,
                       position: "relative",
-                      background: isCurrent ? "#1a2330" : colors.panel,
+                      background: isCurrent ? colors.panelAlt : colors.panel,
                       border: isCurrent
                         ? "1px solid rgba(59,130,246,0.45)"
                         : `1px solid ${colors.border}`,
@@ -1240,7 +1232,7 @@ export function AccountPlanUsagePanel({
                     fontSize: 12,
                     color:
                       buyMsgTone === "ok"
-                        ? "#7dcea0"
+                        ? colors.success
                         : buyMsgTone === "danger"
                           ? colors.danger
                           : colors.muted,
@@ -1321,7 +1313,7 @@ function CheckoutEmbedDialog({
         style={{
           width: "min(420px, 100%)",
           height: "min(640px, 92%)",
-          background: "#0a0a0a",
+          background: colors.embedBg,
           borderRadius: 14,
           border: `1px solid ${colors.border}`,
           overflow: "hidden",
@@ -1357,7 +1349,7 @@ function CheckoutEmbedDialog({
               onClick={onRequestClose}
               aria-label={closeLabel}
             >
-              ×
+              ✕
             </button>
           </div>
         </div>
@@ -1407,7 +1399,7 @@ function CheckoutEmbedDialog({
           src={url}
           allow="payment"
           referrerPolicy="strict-origin-when-cross-origin"
-          style={{ flex: 1, width: "100%", border: 0, background: "#0a0a0a" }}
+          style={{ flex: 1, width: "100%", border: 0, background: colors.embedBg }}
         />
       </div>
     </ViewportOverlay>
@@ -1482,15 +1474,7 @@ export function ChatCollabBudgetSection({
           min={0}
           value={capDraft}
           onChange={(e) => setCapDraft(e.target.value)}
-          style={{
-            flex: 1,
-            padding: "9px 12px",
-            borderRadius: 10,
-            border: `1px solid ${colors.border}`,
-            background: colors.bg,
-            color: colors.text,
-            fontSize: 14,
-          }}
+          style={{ ...inputStyle, flex: 1, padding: "9px 12px", fontSize: 14 }}
         />
         <button
           type="button"
@@ -1532,15 +1516,7 @@ export function ChatCollabBudgetSection({
               min={1}
               value={addDraft}
               onChange={(e) => setAddDraft(e.target.value)}
-              style={{
-                width: 96,
-                padding: "9px 12px",
-                borderRadius: 10,
-                border: `1px solid ${colors.border}`,
-                background: colors.bg,
-                color: colors.text,
-                fontSize: 14,
-              }}
+              style={{ ...inputStyle, width: 96, padding: "9px 12px", fontSize: 14 }}
             />
             <button
               type="button"
@@ -1661,17 +1637,6 @@ function WalletBillingDocsSection({
 
   const paidOrders = orders.filter((o) => o.status === "paid");
   const reqByOrder = new Map(requests.map((r) => [r.payment_order_id, r]));
-
-  const inputStyle: CSSProperties = {
-    width: "100%",
-    padding: "9px 12px",
-    borderRadius: 10,
-    border: `1px solid ${colors.border}`,
-    background: colors.bg,
-    color: colors.text,
-    fontSize: 13,
-    boxSizing: "border-box",
-  };
 
   const downloadReceipt = (orderId: string) => {
     setDownloading(orderId);
@@ -2209,7 +2174,7 @@ export function AccountWalletPanel({
                           height: 8,
                           borderRadius: 999,
                           flexShrink: 0,
-                          background: positive ? "#34d399" : negative ? colors.danger : colors.muted,
+                          background: positive ? colors.success : negative ? colors.danger : colors.muted,
                         }}
                       />
                       <span style={{ flex: 1, minWidth: 0 }}>
@@ -2236,7 +2201,7 @@ export function AccountWalletPanel({
                           fontSize: 13,
                           fontWeight: 700,
                           fontVariantNumeric: "tabular-nums",
-                          color: positive ? "#34d399" : negative ? colors.danger : colors.text,
+                          color: positive ? colors.success : negative ? colors.danger : colors.text,
                           flexShrink: 0,
                         }}
                       >
@@ -2365,7 +2330,7 @@ export function AccountKeysPanel({
                     borderRadius: 10,
                     flexShrink: 0,
                     background: colors.accentSoft,
-                    color: "#7aa2f7",
+                    color: colors.accentBright,
                     display: "grid",
                     placeItems: "center",
                     fontSize: 12,
