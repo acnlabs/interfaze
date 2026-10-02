@@ -33,7 +33,7 @@ const GLOBAL_TIERS: CatalogTier[] = [
     price: "Pay as you go",
     blurb:
       "No subscription fee and no included pack — pay as you go from your Wallet.",
-    bullets: ["Included dialog usage", "Pay as you go"],
+    bullets: ["No included pack", "Pay as you go"],
     purchasable: false,
   },
   {
@@ -62,7 +62,7 @@ const CN_TIERS: CatalogTier[] = [
     label: "免费",
     price: "按量",
     blurb: "无订阅费、无含包，对话从钱包按量扣费。",
-    bullets: ["含包对话用量", "按量"],
+    bullets: ["无含包", "按量"],
     purchasable: false,
   },
   {

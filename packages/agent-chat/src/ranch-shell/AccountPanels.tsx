@@ -1083,7 +1083,7 @@ export function AccountPlanUsagePanel({
                 })();
                 const blurb = isFree ? t.accountPlanFreeBlurb : t.accountPlanProBlurb;
                 const bullets = isFree
-                  ? [t.accountPlanIncludedUsage, t.accountPlanPayg]
+                  ? [t.accountPlanNotIncluded, t.accountPlanPayg]
                   : [
                       tier.dialog_allowance_credits != null
                         ? fmtTpl(t.accountPlanIncludedPack, {
