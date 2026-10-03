@@ -18,6 +18,7 @@ import {
   startWeChatLogin,
 } from "@/lib/auth/cn";
 import { getGatewayBaseUrl } from "@/lib/gateway";
+import { rememberDirectoryNameWithRetry } from "@/lib/directoryName";
 import { usePaypalPlanReturn } from "@/lib/paypalPlanReturn";
 import { currentReturnTo, takeOpenAgentId, clearOpenAgentId } from "@/lib/openAgentDeepLink";
 import { getAgentPlanetBaseUrl, getAppOrigin, getComicLawStudioUrl, getEmbodyUrl, isCnRegion } from "@/lib/region";
@@ -196,10 +197,16 @@ function CnChatHost() {
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+    void rememberDirectoryNameWithRetry(() => tokenGetter(), controller.signal).catch(() => undefined);
+    return () => controller.abort();
+  }, [tokenGetter]);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       const token = await tokenGetter();
-      if (!token) return;
+      if (!token || cancelled) return;
       const headers: Record<string, string> = {
         Accept: "application/json",
         Authorization: `Bearer ${token}`,
