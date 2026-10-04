@@ -4,6 +4,7 @@
   "private": true,
   "description": "Interfaze — standalone ACN chat host (interfaze.io)",
   "scripts": {
+    "test": "node --test tests/*.test.cjs",
     "dev": "next dev --port 3010",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && next build",

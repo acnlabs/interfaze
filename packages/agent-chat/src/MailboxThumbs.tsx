@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { mailboxIdsFromAttachments, parseMessageAttachments, isReadableAttachmentName } from "./mailbox";
 import { colors } from "./ranch-shell/styles";
+import { SignedAttachmentLink } from "./SignedAttachmentLink";
 
 function joinUrl(base: string, path: string): string {
   const b = base.replace(/\/+$/, "");
@@ -38,6 +39,7 @@ type FileBlob = {
   mailboxId: string;
   listedCredits: number;
   retainUntil?: string | null;
+  remote?: boolean;
 };
 
 function retainLabel(iso: string | null | undefined): string | null {
@@ -157,6 +159,7 @@ export function MailboxThumbs({
             }
             next.push({
               url: remoteUrl,
+              remote: true,
               contentType: typeof body.content_type === "string" ? body.content_type : "",
               mailboxId: id,
               name: typeof body.filename === "string" && body.filename ? body.filename : id,
@@ -210,6 +213,8 @@ export function MailboxThumbs({
       f.contentType.startsWith("image/");
     return playable || isReadableAttachmentName(f.name, f.mailboxId);
   });
+  const mediaFailed = (id: string) => setFailedIds((previous) =>
+    previous.includes(id) ? previous : [...previous, id]);
   if (visible.length === 0 && failedIds.length === 0) return null;
   return (
     <div
@@ -230,6 +235,7 @@ export function MailboxThumbs({
           const media = f.contentType.startsWith("video/") ? (
             <video
               src={f.url}
+              onError={() => mediaFailed(f.mailboxId)}
               controls
               playsInline
               style={{ maxWidth: "100%", borderRadius: 8, display: "block" }}
@@ -237,12 +243,14 @@ export function MailboxThumbs({
           ) : f.contentType.startsWith("audio/") ? (
             <audio
               src={f.url}
+              onError={() => mediaFailed(f.mailboxId)}
               controls
               style={{ width: "100%", display: "block" }}
             />
           ) : (
             <img
               src={f.url}
+              onError={() => mediaFailed(f.mailboxId)}
               alt={f.name}
               style={{ maxWidth: "100%", borderRadius: 8, display: "block" }}
             />
@@ -262,6 +270,11 @@ export function MailboxThumbs({
         if (!isReadableAttachmentName(f.name, f.mailboxId)) return null;
         return (
           <div key={f.url}>
+            {f.remote ? <SignedAttachmentLink
+              endpoint={joinUrl(gatewayBaseUrl,
+                `/api/chats/${encodeURIComponent(chatId)}/files/${encodeURIComponent(f.mailboxId)}`)}
+              getAccessToken={getAccessToken} name={f.name}
+              onError={() => mediaFailed(f.mailboxId)} /> : (
             <a
               href={f.url}
               download={f.name}
@@ -274,6 +287,7 @@ export function MailboxThumbs({
             >
               {f.name}
             </a>
+            )}
           </div>
         );
       })}
