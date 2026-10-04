@@ -3201,13 +3201,54 @@ export function RanchChatShell(props: RanchChatShellProps) {
     [messageIdForMailbox, scrollToMessage],
   );
 
+  const loadOlderUntilMailbox = useCallback(
+    async (chatId: string, mailboxId: string, current: ChatMessage[]) => {
+      let msgs = current;
+      for (let i = 0; i < 6; i++) {
+        if (messageIdForMailbox(msgs, mailboxId)) return msgs;
+        const oldest = msgs.find((m) => !String(m.message_id).startsWith(LOCAL_TOPIC_START_PREFIX));
+        if (!oldest) break;
+        const older = await client.listMessages(chatId, { before: oldest.message_id, limit: 50 });
+        if (older.length === 0) break;
+        const seen = new Set(msgs.map((m) => m.message_id));
+        const prepend = older.filter((m) => !seen.has(m.message_id));
+        if (prepend.length === 0) break;
+        msgs = [...prepend, ...msgs];
+      }
+      return msgs;
+    },
+    [client, messageIdForMailbox],
+  );
+
   useEffect(() => {
+    if (showMembersPanel) return;
     const mailboxId = pendingMailboxRef.current;
-    if (!mailboxId || messages.length === 0) return;
-    pendingMailboxRef.current = null;
-    const timer = window.setTimeout(() => scrollToMailbox(mailboxId, messages), 50);
-    return () => window.clearTimeout(timer);
-  }, [messages, active?.chat_id, scrollToMailbox]);
+    if (!mailboxId || !active?.chat_id || messages.length === 0) return;
+    if (messageIdForMailbox(messages, mailboxId)) {
+      pendingMailboxRef.current = null;
+      const timer = window.setTimeout(() => scrollToMailbox(mailboxId, messages), 80);
+      return () => window.clearTimeout(timer);
+    }
+    let cancelled = false;
+    const chatId = active.chat_id;
+    void (async () => {
+      const next = await loadOlderUntilMailbox(chatId, mailboxId, messages);
+      if (cancelled) return;
+      pendingMailboxRef.current = null;
+      setMessages((prev) => mergeServerMessagesWithLocalTopicMarkers(next, prev));
+      window.setTimeout(() => scrollToMailbox(mailboxId, next), 80);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    messages,
+    active?.chat_id,
+    showMembersPanel,
+    loadOlderUntilMailbox,
+    messageIdForMailbox,
+    scrollToMailbox,
+  ]);
 
   const reloadMessages = useCallback(
     async (chatId: string, seq?: number) => {
@@ -7809,13 +7850,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             emptyLabel={t.historyFilesEmpty}
                             loadingLabel={t.loading}
                             onPick={(chat, mailboxId) => {
-                              setShowMembersPanel(false);
-                              if (active.chat_id === chat.chat_id) {
-                                scrollToMailbox(mailboxId, messages);
-                                return;
-                              }
                               pendingMailboxRef.current = mailboxId;
-                              void openConversation(chat);
+                              setShowMembersPanel(false);
+                              if (active.chat_id !== chat.chat_id) {
+                                void openConversation(chat);
+                              }
                             }}
                           />
                         ) : siblingChats.length === 0 ? (

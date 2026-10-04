@@ -524,7 +524,10 @@ export type GatewayClient = {
       listed_credits?: number;
     }>
   >;
-  listMessages: (chatId: string) => Promise<ChatMessage[]>;
+  listMessages: (
+    chatId: string,
+    opts?: { before?: string; limit?: number },
+  ) => Promise<ChatMessage[]>;
   listParticipants: (chatId: string) => Promise<ChatParticipant[]>;
   sendMessage: (
     chatId: string,
@@ -1324,9 +1327,12 @@ export function createGatewayClient(
         `/api/chat/agent-create-jobs/${encodeURIComponent(jobId)}/retry-bind`,
         { method: "POST", body: "{}" },
       ),
-    listMessages: async (chatId) => {
+    listMessages: async (chatId, opts) => {
+      const params = new URLSearchParams();
+      params.set("limit", String(opts?.limit ?? 50));
+      if (opts?.before) params.set("before", opts.before);
       const rows = await request<ChatMessage[]>(
-        `/api/chats/${encodeURIComponent(chatId)}/messages?limit=50`,
+        `/api/chats/${encodeURIComponent(chatId)}/messages?${params.toString()}`,
       );
       return rows.map((row) => normalizeChatMessage(row));
     },
