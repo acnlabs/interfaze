@@ -28,7 +28,8 @@ import type {
 } from "../types";
 import { connectChatSocket, type ChatSocket } from "../ws";
 import { MailboxThumbs } from "../MailboxThumbs";
-import { parseMessageAttachments } from "../mailbox";
+import { HistoryFilesPanel } from "../HistoryFilesPanel";
+import { mailboxIdsFromAttachments, parseMessageAttachments } from "../mailbox";
 import { calleesFromMetadata, decideFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, planFromMetadata, proposeGroupFromMetadata, proposeTaskFromMetadata, type MessageDecide, type MessagePlan, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
 import { settleQueuedDelivery } from "./settleQueuedDelivery";
 import {
@@ -2816,7 +2817,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   } | null>(null);
   /** Detail panel tab. Group: members. Direct: info | settings? | wallet? | chats. */
   const [infoTab, setInfoTab] = useState<"info" | "settings" | "wallet" | "members" | "chats">("info");
-  const [historyKind, setHistoryKind] = useState<"chats" | "plans" | "tasks">("chats");
+  const [historyKind, setHistoryKind] = useState<"chats" | "plans" | "tasks" | "files">("chats");
   const [planViewer, setPlanViewer] = useState<{
     chatId: string;
     planId: string;
@@ -2944,6 +2945,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const agentIdsRef = useRef<string[]>([]);
   const activeChatIdRef = useRef<string | null>(null);
   activeChatIdRef.current = active?.chat_id ?? null;
+  const pendingMailboxRef = useRef<string | null>(null);
 
   const setDeliveryBroken = useCallback((chatId: string, broken: boolean) => {
     setDeliveryBrokenByChat((prev) => {
@@ -3182,6 +3184,30 @@ export function RanchChatShell(props: RanchChatShellProps) {
       (el as HTMLElement).scrollIntoView({ block: "center", behavior: "smooth" });
     }
   }, []);
+
+  const messageIdForMailbox = useCallback((msgs: ChatMessage[], mailboxId: string) => {
+    for (const m of msgs) {
+      const ids = mailboxIdsFromAttachments(parseMessageAttachments(m.attachments ?? []));
+      if (ids.includes(mailboxId)) return m.message_id;
+    }
+    return null;
+  }, []);
+
+  const scrollToMailbox = useCallback(
+    (mailboxId: string, msgs: ChatMessage[]) => {
+      const mid = messageIdForMailbox(msgs, mailboxId);
+      if (mid) scrollToMessage(mid);
+    },
+    [messageIdForMailbox, scrollToMessage],
+  );
+
+  useEffect(() => {
+    const mailboxId = pendingMailboxRef.current;
+    if (!mailboxId || messages.length === 0) return;
+    pendingMailboxRef.current = null;
+    const timer = window.setTimeout(() => scrollToMailbox(mailboxId, messages), 50);
+    return () => window.clearTimeout(timer);
+  }, [messages, active?.chat_id, scrollToMailbox]);
 
   const reloadMessages = useCallback(
     async (chatId: string, seq?: number) => {
@@ -7563,6 +7589,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             ["chats", t.historyChats],
                             ["plans", t.historyPlans],
                             ["tasks", t.historyTasks],
+                            ["files", t.historyFiles],
                           ] as const
                         ).map(([key, label]) => (
                           <button
@@ -7772,6 +7799,25 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               )}
                             </div>
                           )
+                        ) : historyKind === "files" ? (
+                          <HistoryFilesPanel
+                            chats={siblingChats}
+                            labelFor={(c) => conversationLabel(c, t)}
+                            client={client}
+                            gatewayBaseUrl={gatewayBaseUrl}
+                            getAccessToken={getAccessToken}
+                            emptyLabel={t.historyFilesEmpty}
+                            loadingLabel={t.loading}
+                            onPick={(chat, mailboxId) => {
+                              setShowMembersPanel(false);
+                              if (active.chat_id === chat.chat_id) {
+                                scrollToMailbox(mailboxId, messages);
+                                return;
+                              }
+                              pendingMailboxRef.current = mailboxId;
+                              void openConversation(chat);
+                            }}
+                          />
                         ) : siblingChats.length === 0 ? (
                           <div
                             style={{
