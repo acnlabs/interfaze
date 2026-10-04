@@ -865,6 +865,54 @@ export function AccountPlanUsagePanel({
             </div>
           </section>
 
+          {data?.files && data.files.quota_bytes > 0 ? (
+            <section>
+              <h3 style={planSectionLabel}>{t.accountPlanFiles}</h3>
+              <div style={planCard}>
+                {(() => {
+                  const files = data.files;
+                  const quota = files.quota_bytes;
+                  const usedBytes = files.used_bytes;
+                  const ratio = quota > 0 ? Math.min(1, usedBytes / quota) : 0;
+                  const near = files.remaining_bytes <= quota * 0.1;
+                  return (
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600 }}>{t.accountPlanFiles}</span>
+                        <span
+                          style={{
+                            fontSize: 13,
+                            color: near ? colors.danger : colors.muted,
+                            fontVariantNumeric: "tabular-nums",
+                          }}
+                        >
+                          {fmtTpl(t.accountPlanUsedOfLimit, {
+                            used: fmtBytes(usedBytes),
+                            limit: fmtBytes(quota),
+                          })}
+                        </span>
+                      </div>
+                      <UsageBar ratio={ratio} tone={near ? "accent" : "neutral"} />
+                      <p
+                        style={{
+                          margin: "8px 0 0",
+                          fontSize: 11,
+                          color: near ? colors.danger : colors.muted,
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        {near ? t.accountPlanFilesNearCap : t.accountPlanFilesHint}
+                      </p>
+                      <p style={{ margin: "6px 0 0", fontSize: 11, color: colors.muted }}>
+                        {fmtTpl(t.accountPlanFilesKeep, { n: files.retain_days })}
+                      </p>
+                    </div>
+                  );
+                })()}
+              </div>
+            </section>
+          ) : null}
+
           <section>
             <h3 style={planSectionLabel}>{t.accountPlanOnDemand}</h3>
             <div style={{ ...planCard, display: "flex", flexDirection: "column", gap: 18 }}>
@@ -1408,6 +1456,18 @@ function CheckoutEmbedDialog({
 
 function fmtCredits(n: number): string {
   return Math.trunc(n).toLocaleString();
+}
+
+function fmtBytes(n: number): string {
+  const units = ["B", "KB", "MB", "GB"];
+  let value = Math.max(0, n);
+  let i = 0;
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024;
+    i += 1;
+  }
+  const digits = i === 0 ? 0 : value >= 10 ? 0 : 1;
+  return `${value.toFixed(digits)} ${units[i]}`;
 }
 
 function fmtTxTime(iso: string | null | undefined): string {

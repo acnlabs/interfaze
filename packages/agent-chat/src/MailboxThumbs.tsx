@@ -37,7 +37,15 @@ type FileBlob = {
   name: string;
   mailboxId: string;
   listedCredits: number;
+  retainUntil?: string | null;
 };
+
+function retainLabel(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return null;
+  return at.toLocaleDateString();
+}
 
 function ListedTag({ n }: { n: number }) {
   if (n <= 0) return null;
@@ -68,44 +76,100 @@ export function MailboxThumbs({
   gatewayBaseUrl,
   getAccessToken,
   loadFailedLabel = "Attachment failed to load",
+  retryLabel = "Retry",
+  unavailableLabel = "Attachment not found or no longer available",
+  accessDeniedLabel = "Cannot access attachment. Check your login and chat access.",
 }: {
   chatId: string;
   attachments?: string[] | string | null;
   gatewayBaseUrl: string;
   getAccessToken: () => Promise<string | null>;
   loadFailedLabel?: string;
+  retryLabel?: string;
+  unavailableLabel?: string;
+  accessDeniedLabel?: string;
 }) {
   const ids = mailboxIdsFromAttachments(parseMessageAttachments(attachments ?? []));
   const [files, setFiles] = useState<FileBlob[]>([]);
   const [failedIds, setFailedIds] = useState<string[]>([]);
+  const [retryCount, setRetryCount] = useState(0);
+  const [failedStatus, setFailedStatus] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (ids.length === 0 || !chatId) {
       setFiles([]);
       setFailedIds([]);
+      setFailedStatus({});
       return;
     }
     let cancelled = false;
+    const controller = new AbortController();
     const created: string[] = [];
+    setFiles([]);
+    setFailedIds([]);
+    setFailedStatus({});
     (async () => {
-      const token = await getAccessToken();
-      if (!token || cancelled) return;
+      let token: string | null;
+      try {
+        token = await getAccessToken();
+      } catch {
+        if (!cancelled) setFailedIds(ids);
+        return;
+      }
+      if (cancelled) return;
+      if (!token) {
+        setFailedIds(ids);
+        return;
+      }
       const next: FileBlob[] = [];
       const failed: string[] = [];
+      const statuses: Record<string, number> = {};
       for (const id of ids) {
+        if (cancelled) return;
         try {
           const res = await fetch(
             joinUrl(
               gatewayBaseUrl,
               `/api/chats/${encodeURIComponent(chatId)}/files/${encodeURIComponent(id)}`,
             ),
-            { headers: { Authorization: `Bearer ${token}` } },
+            { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal },
           );
+          if (cancelled) return;
           if (!res.ok) {
             failed.push(id);
+            statuses[id] = res.status;
+            continue;
+          }
+          const headerType = (res.headers?.get("content-type") || "").toLowerCase();
+          if (headerType.includes("application/json")) {
+            const body = (await res.json()) as {
+              url?: unknown;
+              content_type?: unknown;
+              filename?: unknown;
+              listed_credits?: unknown;
+              retain_until?: unknown;
+            };
+            if (cancelled) return;
+            const remoteUrl = typeof body.url === "string" ? body.url : "";
+            if (!remoteUrl) {
+              failed.push(id);
+              continue;
+            }
+            next.push({
+              url: remoteUrl,
+              contentType: typeof body.content_type === "string" ? body.content_type : "",
+              mailboxId: id,
+              name: typeof body.filename === "string" && body.filename ? body.filename : id,
+              listedCredits:
+                typeof body.listed_credits === "number"
+                  ? Math.min(100_000, Math.max(0, Math.floor(body.listed_credits)))
+                  : listedFromHeader(String(body.listed_credits ?? "")),
+              retainUntil: typeof body.retain_until === "string" ? body.retain_until : null,
+            });
             continue;
           }
           const blob = await res.blob();
+          if (cancelled) return;
           const url = URL.createObjectURL(blob);
           created.push(url);
           const contentType = blob.type || res.headers.get("content-type") || "";
@@ -129,13 +193,15 @@ export function MailboxThumbs({
       if (!cancelled) {
         setFiles(next);
         setFailedIds(failed);
+        setFailedStatus(statuses);
       }
     })();
     return () => {
       cancelled = true;
+      controller.abort();
       for (const u of created) URL.revokeObjectURL(u);
     };
-  }, [chatId, gatewayBaseUrl, getAccessToken, ids.join("|")]);
+  }, [chatId, gatewayBaseUrl, getAccessToken, ids.join("|"), retryCount]);
 
   const visible = files.filter((f) => {
     const playable =
@@ -185,6 +251,11 @@ export function MailboxThumbs({
             <div key={f.url} style={{ position: "relative", maxWidth: "100%" }}>
               <ListedTag n={f.listedCredits} />
               {media}
+              {retainLabel(f.retainUntil) ? (
+                <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+                  {retainLabel(f.retainUntil)}
+                </div>
+              ) : null}
             </div>
           );
         }
@@ -209,6 +280,7 @@ export function MailboxThumbs({
       {failedIds.map((id) => (
         <div
           key={`failed-${id}`}
+          data-http-status={failedStatus[id] || undefined}
           style={{
             fontSize: 12,
             color: colors.muted,
@@ -217,9 +289,19 @@ export function MailboxThumbs({
             borderRadius: 8,
           }}
         >
-          {loadFailedLabel}
+          {failedStatus[id] === 404 || failedStatus[id] === 410
+            ? unavailableLabel
+            : failedStatus[id] === 401 || failedStatus[id] === 403
+              ? accessDeniedLabel
+              : loadFailedLabel}
         </div>
       ))}
+      {failedIds.length > 0 ? (
+        <button type="button" onClick={() => setRetryCount((n) => n + 1)}
+          style={{ alignSelf: "flex-start", color: "inherit", cursor: "pointer" }}>
+          {retryLabel}
+        </button>
+      ) : null}
     </div>
   );
 }

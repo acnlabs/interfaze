@@ -244,6 +244,16 @@ export type PlanUsage = {
     remaining_credits: number | null;
   };
   chat_billing_enabled: boolean;
+  /** Conversation-file storage for this human (not piece Credits). */
+  files?: {
+    used_bytes: number;
+    quota_bytes: number;
+    remaining_bytes: number;
+    day_used_bytes: number;
+    day_quota_bytes: number;
+    retain_days: number;
+    auto_delete?: boolean;
+  };
 };
 
 /** Per-chat collaboration oil tank (P13). */
