@@ -1,5 +1,5 @@
 import type { ChatMessage, ChatParticipant, ChatSummary, ThreadSummary } from "./types";
-import { normalizeChatMessage } from "./mailbox";
+import { filesFromMessages, normalizeChatMessage } from "./mailbox";
 
 export class ChatGatewayError extends Error {
   constructor(
@@ -516,6 +516,14 @@ export type GatewayClient = {
     status?: string | null;
   }>;
   getChatPlan: (chatId: string, planId: string) => Promise<import("./types").ChatPlanArtifact>;
+  listChatFiles: (chatId: string) => Promise<
+    Array<{
+      attachment_id: string;
+      content_type: string;
+      filename?: string | null;
+      listed_credits?: number;
+    }>
+  >;
   listMessages: (chatId: string) => Promise<ChatMessage[]>;
   listParticipants: (chatId: string) => Promise<ChatParticipant[]>;
   sendMessage: (
@@ -859,6 +867,27 @@ export function createGatewayClient(
       request<import("./types").ChatPlanArtifact>(
         `/api/chats/${encodeURIComponent(chatId)}/plans/${encodeURIComponent(planId)}`,
       ),
+    listChatFiles: async (chatId) => {
+      try {
+        const data = await request<{
+          files?: Array<{
+            attachment_id: string;
+            content_type: string;
+            filename?: string | null;
+            listed_credits?: number;
+          }>;
+        }>(`/api/chats/${encodeURIComponent(chatId)}/files`);
+        return data.files ?? [];
+      } catch (err) {
+        if (!(err instanceof ChatGatewayError) || (err.status !== 404 && err.status !== 405)) {
+          throw err;
+        }
+        const msgs = await request<ChatMessage[]>(
+          `/api/chats/${encodeURIComponent(chatId)}/messages?limit=50`,
+        );
+        return filesFromMessages(msgs.map((row) => normalizeChatMessage(row)));
+      }
+    },
     searchAgents: async (q = "", limit = 20) => {
       const params = new URLSearchParams();
       if (q.trim()) params.set("q", q.trim());

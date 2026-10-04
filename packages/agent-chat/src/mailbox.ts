@@ -44,6 +44,24 @@ export function isReadableAttachmentName(name: string, mailboxId: string): boole
   return true;
 }
 
+export function filesFromMessages(
+  msgs: Array<{ attachments?: unknown }>,
+): Array<{ attachment_id: string; content_type: string; filename?: string | null }> {
+  const seen = new Set<string>();
+  const out: Array<{ attachment_id: string; content_type: string; filename?: string | null }> = [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const ids = mailboxIdsFromAttachments(
+      parseMessageAttachments(msgs[i]?.attachments ?? []),
+    );
+    for (const id of ids) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({ attachment_id: id, content_type: "" });
+    }
+  }
+  return out;
+}
+
 export function normalizeChatMessage<T extends { attachments?: unknown }>(
   row: T,
 ): T & { attachments: string[] } {

@@ -154,8 +154,10 @@ export type RanchMessages = {
   historyChats: string;
   historyPlans: string;
   historyTasks: string;
+  historyFiles: string;
   historyPlansEmpty: string;
   historyTasksEmpty: string;
+  historyFilesEmpty: string;
   historyTaskPending: string;
   historyTaskPosted: string;
   historyTaskOpen: string;
@@ -847,8 +849,10 @@ const en: RanchMessages = {
   historyChats: "Chats",
   historyPlans: "Plans",
   historyTasks: "Tasks",
+  historyFiles: "Files",
   historyPlansEmpty: "No plan yet. When the agent writes one from this conversation, it shows up here.",
   historyTasksEmpty: "No task yet. Confirm a job card in chat and it will appear here.",
+  historyFilesEmpty: "No files yet. Images, video, and documents from these chats show up here.",
   historyTaskPending: "Waiting for you",
   historyTaskPosted: "Posted",
   historyTaskOpen: "Open task",
@@ -1595,8 +1599,10 @@ const zh: RanchMessages = {
   historyChats: "对话",
   historyPlans: "目标",
   historyTasks: "任务",
+  historyFiles: "附件",
   historyPlansEmpty: "还没有计划。智能体根据这场对话写出计划后，会出现在这里。",
   historyTasksEmpty: "还没有任务。在对话里点头确认发单后，会出现在这里。",
+  historyFilesEmpty: "还没有附件。这些对话里的图片、视频和文件会出现在这里。",
   historyTaskPending: "等你确认",
   historyTaskPosted: "已发单",
   historyTaskOpen: "打开任务",
