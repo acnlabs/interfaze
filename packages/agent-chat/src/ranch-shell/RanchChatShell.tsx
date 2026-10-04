@@ -2626,6 +2626,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [search, setSearch] = useState("");
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [loadingChats, setLoadingChats] = useState(true);
+  const [chatsLoadError, setChatsLoadError] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [messagesLoadError, setMessagesLoadError] = useState(false);
   const [active, setActive] = useState<ChatSummary | null>(null);
   const [chatWindows, setChatWindows] = useState<Record<string, ChatWindow>>({});
   const chatWindowsRef = useRef(chatWindows);
@@ -3066,11 +3069,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   const refreshChats = useCallback(async () => {
     setLoadingChats(true);
+    setChatsLoadError(false);
     try {
       const list = await client.listChats();
       setChats(list);
       setError(null);
     } catch (e) {
+      setChatsLoadError(true);
       setError(
         isAuthFailure(e)
           ? t.sessionExpired
@@ -3137,14 +3142,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
   // Keep presence dots fresh while a conversation is open.
   useEffect(() => {
     if (!open || !active) return;
+    let cancelled = false;
     const tick = window.setInterval(() => {
       void client.listChats().then((list) => {
+        if (cancelled) return;
         setChats(list);
         const next = list.find((c) => c.chat_id === active.chat_id);
-        if (next) setActive(next);
+        if (next) setActive((current) => current?.chat_id === next.chat_id ? next : current);
+      }).catch(() => {
+        // Presence refresh is best-effort; retain the current conversation.
       });
     }, 20000);
-    return () => window.clearInterval(tick);
+    return () => {
+      cancelled = true;
+      window.clearInterval(tick);
+    };
   }, [open, active?.chat_id, client]);
 
   const flashTopicHighlight = useCallback((topicId: string) => {
@@ -3187,15 +3199,30 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
+    let checking = false;
     void refreshChats();
-    (async () => {
+    const checkHealth = async () => {
+      if (checking || cancelled) return;
+      checking = true;
       try {
         const h = await client.health();
-        setHealthOk(h.ok);
+        if (!cancelled) setHealthOk(h.ok);
       } catch {
-        setHealthOk(false);
+        if (!cancelled) setHealthOk(false);
+      } finally {
+        checking = false;
       }
-    })();
+    };
+    const onOnline = () => { void checkHealth(); };
+    void checkHealth();
+    const retry = window.setInterval(() => { void checkHealth(); }, 20000);
+    window.addEventListener("online", onOnline);
+    return () => {
+      cancelled = true;
+      window.clearInterval(retry);
+      window.removeEventListener("online", onOnline);
+    };
   }, [open, client, refreshChats]);
 
   /** Ensure host "mine" + official conversation agents have a direct chat row. */
@@ -3238,13 +3265,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, [open, directoryAgents, client, refreshChats]);
 
   const openConversation = useCallback(
-    async (chat: ChatSummary, opts?: { keepChatsPanel?: boolean }) => {
+    async (chat: ChatSummary, opts?: { keepChatsPanel?: boolean; preserveDraft?: boolean }) => {
       const seq = ++loadSeqRef.current;
       activeChatIdRef.current = chat.chat_id;
       setActive(chat);
       setView("conversation");
       setError(null);
       setMessages([]);
+      setLoadingMessages(true);
+      setMessagesLoadError(false);
       setAgentNames({});
       setAgentStatuses({});
       const keepChats = !!opts?.keepChatsPanel && !isGroupChat(chat);
@@ -3262,7 +3291,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setTopics([]);
       setTitleDraft(chat.title?.trim() || "");
       setMentionIndex(0);
-      setDraft("");
+      if (!opts?.preserveDraft) setDraft("");
       setRecipientPickerOpen(false);
       setStickyMention(isGroupChat(chat) ? readStickyMention(chat.chat_id) : null);
       clearReplySlot();
@@ -3326,7 +3355,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
           .catch(() => {});
       } catch (e) {
         if (seq !== loadSeqRef.current) return;
+        setMessagesLoadError(true);
         setError(e instanceof Error ? e.message : "Failed to load messages");
+      } finally {
+        if (seq === loadSeqRef.current) setLoadingMessages(false);
       }
     },
     [client, clearReplySlot, directoryAgents, resolveAfterDeliveryIssue],
@@ -4042,7 +4074,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
           clearStickyMention(chatId);
         }
       }
-      setDraft("");
+      if (!opts?.decisionChoice && seq === loadSeqRef.current) {
+        setDraft((current) => current === draft ? "" : current);
+      }
       await reloadMessages(chatId, seq);
       await refreshChats();
       // Mode B writeback is async (~5–30s). WS message.new can be missed; poll DB.
@@ -4875,7 +4909,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const groupActive = !!(active && isGroupChat(active));
   const latestDecideId = groupActive
     ? undefined
-    : [...displayMessages].reverse().find((m) => decideFromMetadata(m.metadata))?.message_id;
+    : [...messages].reverse().find((m) => decideFromMetadata(m.metadata))?.message_id;
   const studioOrigin = (studioBaseUrl || "").replace(/\/+$/, "");
   const embodyOrigin = (embodyBaseUrl || "").replace(/\/+$/, "");
   const activeWindow = active ? chatWindows[active.chat_id] ?? null : null;
@@ -5594,14 +5628,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
         {healthOk === false && (
           <div style={{ padding: "8px 12px", color: colors.danger, fontSize: 12 }}>
-            {t.gatewayUnavailable}
+            {t.gatewayReconnecting}
           </div>
         )}
 
         <div style={{ flex: 1, overflow: "auto", padding: 8 }}>
-          {loadingChats ? (
-            <p style={{ color: colors.muted, textAlign: "center", padding: 24 }}>{t.loading}</p>
-          ) : filtered.length === 0 ? (
+          {chatsLoadError ? (
+            <div role="alert" style={{ padding: 16, color: colors.muted }}>
+              <p>{t.chatsLoadFailed}</p>
+              <button type="button" style={btnGhost} disabled={loadingChats}
+                onClick={() => { void refreshChats(); }}>{t.retry}</button>
+            </div>
+          ) : null}
+          {loadingChats && chats.length === 0 ? (
+            <p role="status" style={{ color: colors.muted, textAlign: "center", padding: 24 }}>{t.loading}</p>
+          ) : chatsLoadError && chats.length === 0 ? null : filtered.length === 0 ? (
             hasMineAgents ? (
               <div style={{ textAlign: "center", padding: 32, color: colors.muted }}>
                 <p style={{ margin: "0 0 12px" }}>{t.noChatsYet}</p>
@@ -5861,7 +5902,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   <IconSidebar />
                 </button>
               ) : null}
-              {hasMineAgents ? (
+              {loadingChats && chats.length === 0 ? (
+                <p role="status" style={{ margin: "auto", color: colors.muted }}>{t.loading}</p>
+              ) : chatsLoadError && chats.length === 0 ? (
+                <div role="alert" style={{ margin: "auto", textAlign: "center", color: colors.muted }}>
+                  <p>{t.chatsLoadFailed}</p>
+                  <button type="button" style={btnGhost} onClick={() => { void refreshChats(); }}>{t.retry}</button>
+                </div>
+              ) : hasMineAgents ? (
                 <div
                   style={{
                     flex: 1,
@@ -6071,7 +6119,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           }}
                           title={active.agent_id || undefined}
                         >
-                          {shortAgentId(active.agent_id)}
+                          {chatTitle(siblingChats[0] ?? active)} · {shortAgentId(active.agent_id)}
                         </span>
                       ) : null}
                     </div>
@@ -6184,11 +6232,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   gap: 10,
                 }}
               >
-                {displayMessages.length === 0 && (
+                {loadingMessages ? (
+                  <p role="status" style={{ color: colors.muted, fontSize: 13, margin: 0 }}>{t.loading}</p>
+                ) : messagesLoadError ? (
+                  <div role="alert" style={{ color: colors.muted, fontSize: 13 }}>
+                    <p>{t.messagesLoadFailed}</p>
+                    <button type="button" style={btnGhost}
+                      onClick={() => { if (active) void openConversation(active, { preserveDraft: true }); }}>{t.retry}</button>
+                  </div>
+                ) : displayMessages.length === 0 ? (
                   <p style={{ color: colors.muted, fontSize: 13, margin: 0 }}>
                     {activeTopic ? t.noMessagesYet : t.sayHello}
                   </p>
-                )}
+                ) : null}
                 {displayMessages.map((m, idx) => {
                   const isUser = m.sender_type === "user";
                   const topicStart = isLocalTopicStartMessage(m);
@@ -6304,6 +6360,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           gatewayBaseUrl={gatewayBaseUrl}
                           getAccessToken={getAccessToken}
                           loadFailedLabel={t.attachmentLoadFailed}
+                          retryLabel={t.retry}
+                          unavailableLabel={t.attachmentUnavailable}
+                          accessDeniedLabel={t.attachmentAccessDenied}
                         />
                         {!isUser
                           ? (() => {
@@ -7187,6 +7246,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   disabled={busy || healthOk === false}
                   style={{ ...inputStyle, resize: "none", flex: 1 }}
                   onKeyDown={(e) => {
+                    if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
                     if (slashMenuOpen && slashCandidates.length > 0) {
                       const total = slashCandidates.length;
                       if (e.key === "ArrowDown") {

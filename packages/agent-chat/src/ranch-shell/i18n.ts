@@ -129,6 +129,9 @@ export type RanchMessages = {
   newDirectChat: string;
   newGroupChat: string;
   gatewayUnavailable: string;
+  gatewayReconnecting: string;
+  chatsLoadFailed: string;
+  messagesLoadFailed: string;
   loading: string;
   noChatsYet: string;
   startChat: string;
@@ -296,6 +299,10 @@ export type RanchMessages = {
   accountPlanIncludedIn: string;
   accountPlanIncludedUsage: string;
   accountPlanIncludedUsageHint: string;
+  accountPlanFiles: string;
+  accountPlanFilesHint: string;
+  accountPlanFilesNearCap: string;
+  accountPlanFilesKeep: string;
   accountPlanNotIncluded: string;
   accountPlanOnDemand: string;
   accountPlanDialogUsage: string;
@@ -617,6 +624,8 @@ export type RanchMessages = {
   walletAmountInvalid: string;
   walletAmountExceeds: string;
   attachmentLoadFailed: string;
+  attachmentUnavailable: string;
+  attachmentAccessDenied: string;
   walletTopupDialogTitle: string;
   walletWithdrawDialogTitle: string;
   walletTopupConfirmLabel: string;
@@ -810,6 +819,9 @@ const en: RanchMessages = {
   newDirectChat: "Direct message",
   newGroupChat: "Group",
   gatewayUnavailable: "Gateway unavailable",
+  gatewayReconnecting: "Connection temporarily unavailable. Retrying automatically…",
+  chatsLoadFailed: "Could not load conversations. Please retry.",
+  messagesLoadFailed: "Could not load messages. Please retry.",
   loading: "Loading…",
   noChatsYet: "No chats yet",
   startChat: "Start a chat",
@@ -982,6 +994,11 @@ const en: RanchMessages = {
   accountPlanIncludedUsage: "Included dialog usage",
   accountPlanIncludedUsageHint:
     "Paid plans cover billable chats with official and marketplace agents. Your own agents stay free and don’t use this pack.",
+  accountPlanFiles: "Conversation files",
+  accountPlanFilesHint:
+    "Space for previews and delivered files in your chats. Original footage stays on your computer. Going over the cap rejects new uploads — it does not charge Credits, and files are not deleted automatically.",
+  accountPlanFilesNearCap: "Almost full. New uploads will be rejected until you upgrade or free space.",
+  accountPlanFilesKeep: "Kept {n} days (shown, not auto-deleted)",
   accountPlanNotIncluded: "Not included",
   accountPlanOnDemand: "On-Demand Usage",
   accountPlanDialogUsage: "On-Demand",
@@ -1354,6 +1371,8 @@ const en: RanchMessages = {
   walletAmountInvalid: "Enter a whole number between 1 and 100,000,000.",
   walletAmountExceeds: "Exceeds available balance.",
   attachmentLoadFailed: "Attachment failed to load",
+  attachmentUnavailable: "Attachment not found or no longer available",
+  attachmentAccessDenied: "Cannot access attachment. Check your login and chat access.",
   walletTopupDialogTitle: "Top up Credits",
   walletWithdrawDialogTitle: "Withdraw Credits",
   walletTopupConfirmLabel: "Top up",
@@ -1550,6 +1569,9 @@ const zh: RanchMessages = {
   newDirectChat: "私聊",
   newGroupChat: "群聊",
   gatewayUnavailable: "Gateway 不可用",
+  gatewayReconnecting: "连接暂时不可用，正在自动重试…",
+  chatsLoadFailed: "会话列表加载失败，请重试。",
+  messagesLoadFailed: "消息加载失败，请重试。",
   loading: "加载中…",
   noChatsYet: "还没有会话",
   startChat: "开始聊天",
@@ -1710,6 +1732,11 @@ const zh: RanchMessages = {
   accountPlanIncludedUsage: "含包对话用量",
   accountPlanIncludedUsageHint:
     "付费方案覆盖与官方及市场上其他智能体的有偿对话。自有智能体仍免费，不消耗含包。",
+  accountPlanFiles: "会话附件",
+  accountPlanFilesHint:
+    "聊天里预览和交付件的空间。原片留在云端电脑或你自己的地方。超额只拒绝新上传，不扣星币，也不会自动删除已有文件。",
+  accountPlanFilesNearCap: "空间将满。升级或腾出空间前，新上传会被拒绝。",
+  accountPlanFilesKeep: "保留 {n} 天（只展示到期日，不会自动删除）",
   accountPlanNotIncluded: "不含",
   accountPlanOnDemand: "按量用量",
   accountPlanDialogUsage: "按量",
@@ -2072,6 +2099,8 @@ const zh: RanchMessages = {
   walletAmountInvalid: "请输入 1–100,000,000 之间的整数。",
   walletAmountExceeds: "超出可用余额。",
   attachmentLoadFailed: "附件加载失败",
+  attachmentUnavailable: "附件不存在或已不可用",
+  attachmentAccessDenied: "无法访问附件，请检查登录状态与会话权限",
   walletTopupDialogTitle: "充值星币",
   walletWithdrawDialogTitle: "提取星币",
   walletTopupConfirmLabel: "确认充值",
