@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
+import { browserAddress } from "./browserAddress";
 import { screenPoint } from "./computerScreenPoint";
 
 const copy = {
@@ -15,6 +16,9 @@ const copy = {
     shot: "Refresh picture",
     type: "Type",
     placeholder: "Type here, then click the picture",
+    browse: "Open browser",
+    browsePlaceholder: "https://",
+    badAddress: "That address can’t be opened.",
     hint: "This is the same computer. Opening the screen keeps the files that are already there.",
     noScreen: "This computer has no screen yet.",
   },
@@ -27,6 +31,9 @@ const copy = {
     shot: "刷新画面",
     type: "输入",
     placeholder: "写在这里，再点画面",
+    browse: "打开浏览器",
+    browsePlaceholder: "https://",
+    badAddress: "这个地址打不开。",
     hint: "还是这一台电脑。打开屏幕时，已经在上面的文件会留着。",
     noScreen: "这台电脑还没有屏幕。",
   },
@@ -66,6 +73,7 @@ export function ComputerScreenPanel({
   const [picture, setPicture] = useState<string | null>(null);
   const [live, setLive] = useState<string | null>(null);
   const [text, setText] = useState("");
+  const [address, setAddress] = useState("");
   const [point, setPoint] = useState<{ x: number; y: number }>({ x: 512, y: 384 });
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -135,6 +143,36 @@ export function ComputerScreenPanel({
         return;
       }
       setLive(url);
+    } catch {
+      setNote(t.loadFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openBrowser = async (raw: string) => {
+    const url = browserAddress(raw);
+    if (!url) {
+      setNote(t.badAddress);
+      return;
+    }
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/browser`, {
+        method: "POST",
+        body: JSON.stringify({ url }),
+      });
+      if (res.status === 409) {
+        setNote(t.noScreen);
+        return;
+      }
+      if (res.status === 400) {
+        setNote(t.badAddress);
+        return;
+      }
+      if (!res.ok) throw new Error(String(res.status));
+      await showPicture();
     } catch {
       setNote(t.loadFailed);
     } finally {
@@ -237,6 +275,24 @@ export function ComputerScreenPanel({
           />
           <button type="submit" disabled={busy || !text.trim()}>
             {t.type}
+          </button>
+        </form>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void openBrowser(address);
+          }}
+          style={{ display: "flex", gap: 8 }}
+        >
+          <input
+            value={address}
+            maxLength={200}
+            placeholder={t.browsePlaceholder}
+            onChange={(event) => setAddress(event.target.value)}
+            style={{ flex: 1, background: colors.panel, color: colors.text, border: `1px solid ${colors.border}`, borderRadius: 8, padding: 8 }}
+          />
+          <button type="submit" disabled={busy || !address.trim()}>
+            {t.browse}
           </button>
         </form>
         {note ? <p style={{ margin: 0, color: colors.danger, fontSize: 13 }}>{note}</p> : null}
