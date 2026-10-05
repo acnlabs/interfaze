@@ -517,7 +517,6 @@ export function AgentChatShell(props: AgentChatShellProps) {
                         gatewayBaseUrl={gatewayBaseUrl}
                         getAccessToken={getAccessToken}
                         showListedPrice={attachmentListedPriceVisible(m.metadata?.piece)}
-                chargedMailboxIds={attachmentBilledRefs(m.metadata?.piece)}
                         chargedMailboxIds={attachmentBilledRefs(m.metadata?.piece)}
                       />
                     </div>
@@ -837,6 +836,7 @@ export function AgentChatShell(props: AgentChatShellProps) {
                 gatewayBaseUrl={gatewayBaseUrl}
                 getAccessToken={getAccessToken}
                 showListedPrice={attachmentListedPriceVisible(m.metadata?.piece)}
+                chargedMailboxIds={attachmentBilledRefs(m.metadata?.piece)}
               />
             </div>
           ))}
