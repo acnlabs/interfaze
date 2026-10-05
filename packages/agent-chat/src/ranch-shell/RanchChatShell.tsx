@@ -2074,6 +2074,60 @@ function IconGear() {
   );
 }
 
+function IconMonitor() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="3" y="4" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M8 20h8M12 16v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconFace() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+      <circle cx="9" cy="10" r="1" fill="currentColor" />
+      <circle cx="15" cy="10" r="1" fill="currentColor" />
+      <path d="M8 15c1.2 1.4 2.5 2 4 2s2.8-.6 4-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconBody() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="7" r="3" stroke="currentColor" strokeWidth="2" />
+      <path d="M6 21v-1.5a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconHistory() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M21 12a8.5 8.5 0 0 1-8.5 8.5A8.5 8.5 0 0 1 5.2 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M3 12a8.5 8.5 0 0 1 14.6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M3 4v5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 8v5l3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function headerIconStyle(on: boolean): CSSProperties {
+  return {
+    ...btnGhost,
+    width: 28,
+    height: 28,
+    padding: 0,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: on ? colors.accentSoft : "transparent",
+    borderColor: on ? colors.accent : colors.border,
+  };
+}
+
 /** Lucide MessageCircle — chat list header fallback when no logo. */
 function IconChat() {
   return (
@@ -2698,8 +2752,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showAccountBilling, setShowAccountBilling] = useState(false);
   const [showComputer, setShowComputer] = useState(false);
   const [screenComputer, setScreenComputer] = useState<{ id: string; label: string } | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   useEffect(() => {
     setScreenComputer(null);
+    setHistoryOpen(false);
   }, [active?.chat_id]);
 
   const closeAccountSurfaces = () => {
@@ -6253,35 +6309,102 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   {canOpenTalk ? (
                     <button
                       type="button"
-                      style={{
-                        ...btnGhost,
-                        background: talkOpen ? colors.accentSoft : "transparent",
-                        borderColor: talkOpen ? colors.accent : colors.border,
-                      }}
+                      style={headerIconStyle(talkOpen)}
                       disabled={!!windowBusy}
                       onClick={() => void toggleTalkWindow()}
                       aria-pressed={talkOpen}
-                      title={talkOpen ? t.faceChatOpen : t.faceChat}
+                      aria-label={talkOpen ? t.faceChatOpen : t.faceChat}
+                      title={windowBusy === "talk" ? t.faceChatOpening : talkOpen ? t.faceChatOpen : t.faceChat}
                     >
-                      {windowBusy === "talk" ? t.faceChatOpening : talkOpen ? t.faceChatOpen : t.faceChat}
+                      <IconFace />
                     </button>
                   ) : null}
                   {canOpenBody ? (
                     <button
                       type="button"
-                      style={{
-                        ...btnGhost,
-                        background: bodyOpen ? colors.accentSoft : "transparent",
-                        borderColor: bodyOpen ? colors.accent : colors.border,
-                      }}
+                      style={headerIconStyle(bodyOpen)}
                       disabled={!!windowBusy}
                       onClick={() => void toggleBodyWindow()}
                       aria-pressed={bodyOpen}
-                      title={bodyOpen ? t.bodyChatOpen : t.bodyChat}
+                      aria-label={bodyOpen ? t.bodyChatOpen : t.bodyChat}
+                      title={windowBusy === "body" ? t.bodyChatOpening : bodyOpen ? t.bodyChatOpen : t.bodyChat}
                     >
-                      {windowBusy === "body" ? t.bodyChatOpening : bodyOpen ? t.bodyChatOpen : t.bodyChat}
+                      <IconBody />
                     </button>
                   ) : null}
+                  <div style={{ position: "relative" }}>
+                    <button
+                      type="button"
+                      style={headerIconStyle(historyOpen)}
+                      onClick={() => setHistoryOpen((open) => !open)}
+                      aria-expanded={historyOpen}
+                      aria-label={t.headerHistory}
+                      title={t.headerHistory}
+                    >
+                      <IconHistory />
+                    </button>
+                    {historyOpen ? (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "100%",
+                          right: 0,
+                          marginTop: 6,
+                          width: 280,
+                          maxHeight: 320,
+                          overflow: "auto",
+                          zIndex: 40,
+                          background: colors.panel,
+                          color: colors.text,
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: 10,
+                          boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
+                          padding: 8,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 4,
+                        }}
+                      >
+                        {siblingChats.length === 0 ? (
+                          <p style={{ margin: 0, padding: 8, color: colors.muted, fontSize: 12 }}>{t.noAgentChatsHint}</p>
+                        ) : (
+                          siblingChats.map((c) => (
+                            <button
+                              key={c.chat_id}
+                              type="button"
+                              onClick={() => {
+                                setHistoryOpen(false);
+                                if (active.chat_id !== c.chat_id) void openConversation(c);
+                              }}
+                              style={{
+                                ...listItem,
+                                alignItems: "center",
+                                background: active.chat_id === c.chat_id ? colors.accentSoft : "transparent",
+                                textAlign: "left",
+                              }}
+                            >
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div
+                                  style={{
+                                    fontWeight: 600,
+                                    fontSize: 13,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {conversationLabel(c, t)}
+                                </div>
+                              </div>
+                              <span style={{ fontSize: 10, color: colors.muted, flexShrink: 0 }}>
+                                {formatRelativeTime(c.last_message_at || c.created_at, t)}
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
                 {mode === "side" ? (
                   <button
                     type="button"
