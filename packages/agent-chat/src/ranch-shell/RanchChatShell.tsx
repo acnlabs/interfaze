@@ -32,6 +32,8 @@ import {
   attachmentListedPriceVisible,
   attachmentSettledVisible,
 } from "../attachmentListedPrice";
+import { ChatComputerControl } from "../ChatComputerControl";
+import { ComputerManagePanel } from "../ComputerManagePanel";
 import { ComputerScreenPanel } from "../ComputerScreenPanel";
 import { MailboxThumbs } from "../MailboxThumbs";
 import { HistoryFilesPanel } from "../HistoryFilesPanel";
@@ -2695,6 +2697,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showAccountPlan, setShowAccountPlan] = useState(false);
   const [showAccountBilling, setShowAccountBilling] = useState(false);
   const [showComputer, setShowComputer] = useState(false);
+  const [screenComputer, setScreenComputer] = useState<{ id: string; label: string } | null>(null);
+  useEffect(() => {
+    setScreenComputer(null);
+  }, [active?.chat_id]);
 
   const closeAccountSurfaces = () => {
     setShowAccountProfile(false);
@@ -5519,7 +5525,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       ) : null}
 
       {showComputer ? (
-        <ComputerScreenPanel
+        <ComputerManagePanel
           gatewayBaseUrl={gatewayBaseUrl}
           getAccessToken={getAccessToken}
           locale={uiLocale}
@@ -5984,6 +5990,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
             position: "relative",
           }}
         >
+          {screenComputer && active ? (
+            <ComputerScreenPanel
+              computerId={screenComputer.id}
+              label={screenComputer.label}
+              gatewayBaseUrl={gatewayBaseUrl}
+              getAccessToken={getAccessToken}
+              locale={uiLocale}
+              onClose={() => setScreenComputer(null)}
+            />
+          ) : null}
           {!active ? (
             <>
               {mode === "full" && sidebarCollapsed ? (
@@ -6227,6 +6243,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   </button>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <ChatComputerControl
+                    chatId={active.chat_id}
+                    gatewayBaseUrl={gatewayBaseUrl}
+                    getAccessToken={getAccessToken}
+                    locale={uiLocale}
+                    onOpenScreen={(id, label) => setScreenComputer({ id, label })}
+                  />
                   {canOpenTalk ? (
                     <button
                       type="button"
