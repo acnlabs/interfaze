@@ -2097,8 +2097,9 @@ function IconFace() {
 function IconBody() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="12" cy="7" r="3" stroke="currentColor" strokeWidth="2" />
-      <path d="M6 21v-1.5a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M12 8V4H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="4" y="8" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M2 14h2M20 14h2M9 13v2M15 13v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
