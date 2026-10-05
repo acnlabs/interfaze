@@ -28,6 +28,7 @@ import type {
 } from "../types";
 import { connectChatSocket, type ChatSocket } from "../ws";
 import { attachmentListedPriceVisible } from "../attachmentListedPrice";
+import { ComputerScreenPanel } from "../ComputerScreenPanel";
 import { MailboxThumbs } from "../MailboxThumbs";
 import { HistoryFilesPanel } from "../HistoryFilesPanel";
 import { mailboxIdsFromAttachments, parseMessageAttachments } from "../mailbox";
@@ -2193,6 +2194,7 @@ function AccountFooter({
   onProfile,
   onManage,
   onWallet,
+  onComputer,
   onKeys,
   onPlanUsage,
   onBilling,
@@ -2204,6 +2206,7 @@ function AccountFooter({
   onProfile?: () => void;
   onManage?: () => void;
   onWallet?: () => void;
+  onComputer?: () => void;
   onKeys?: () => void;
   onPlanUsage?: () => void;
   onBilling?: () => void;
@@ -2276,7 +2279,7 @@ function AccountFooter({
     };
 
   const hasUpper =
-    !!(onProfile || onManage || onWallet || onKeys || onPlanUsage || onBilling || onDiscoverAgents);
+    !!(onProfile || onManage || onWallet || onComputer || onKeys || onPlanUsage || onBilling || onDiscoverAgents);
 
   return (
     <div
@@ -2343,6 +2346,17 @@ function AccountFooter({
               {...hoverHandlers}
             >
               <span style={{ flex: 1 }}>{t.accountWallet}</span>
+            </a>
+          ) : null}
+          {onComputer ? (
+            <a
+              href="#computer"
+              role="menuitem"
+              style={menuLinkStyle}
+              onClick={accountLinkClick(onComputer)}
+              {...hoverHandlers}
+            >
+              <span style={{ flex: 1 }}>{t.accountComputer}</span>
             </a>
           ) : null}
           {onBilling ? (
@@ -2676,6 +2690,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showAccountKeys, setShowAccountKeys] = useState(false);
   const [showAccountPlan, setShowAccountPlan] = useState(false);
   const [showAccountBilling, setShowAccountBilling] = useState(false);
+  const [showComputer, setShowComputer] = useState(false);
 
   const closeAccountSurfaces = () => {
     setShowAccountProfile(false);
@@ -2684,6 +2699,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setShowAccountKeys(false);
     setShowAccountPlan(false);
     setShowAccountBilling(false);
+    setShowComputer(false);
     setShowMyAgents(false);
   };
 
@@ -5498,6 +5514,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
         />
       ) : null}
 
+      {showComputer ? (
+        <ComputerScreenPanel
+          gatewayBaseUrl={gatewayBaseUrl}
+          getAccessToken={getAccessToken}
+          locale={uiLocale}
+          onClose={() => setShowComputer(false)}
+        />
+      ) : null}
+
       {showAccountBilling ? (
         <AccountBillingPanel
           client={client}
@@ -5920,6 +5945,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
             onProfile={() => openAccountPanel("profile")}
             onManage={() => openAccountPanel("manage")}
             onWallet={() => openAccountPanel("wallet")}
+            onComputer={() => {
+              closeAccountSurfaces();
+              setShowComputer(true);
+            }}
             onKeys={() => openAccountPanel("keys")}
             onPlanUsage={() => openAccountPanel("plan")}
             onBilling={() => openAccountPanel("billing")}
