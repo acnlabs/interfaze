@@ -11,6 +11,7 @@ const copy = {
     loadFailed: "Couldn’t load this computer.",
     open: "Open screen",
     opening: "Opening…",
+    watch: "Watch",
     shot: "Refresh picture",
     type: "Type",
     placeholder: "Type here, then click the picture",
@@ -22,6 +23,7 @@ const copy = {
     loadFailed: "这台电脑暂时读不出来。",
     open: "打开屏幕",
     opening: "正在打开…",
+    watch: "看画面",
     shot: "刷新画面",
     type: "输入",
     placeholder: "写在这里，再点画面",
@@ -62,6 +64,7 @@ export function ComputerScreenPanel({
 }) {
   const t = copy[locale] ?? copy.en;
   const [picture, setPicture] = useState<string | null>(null);
+  const [live, setLive] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [point, setPoint] = useState<{ x: number; y: number }>({ x: 512, y: 384 });
   const [busy, setBusy] = useState(false);
@@ -72,6 +75,10 @@ export function ComputerScreenPanel({
       if (picture) URL.revokeObjectURL(picture);
     };
   }, [picture]);
+
+  useEffect(() => {
+    setLive(null);
+  }, [computerId]);
 
   const showPicture = useCallback(async () => {
     const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen`);
@@ -102,6 +109,32 @@ export function ComputerScreenPanel({
       });
       if (!res.ok) throw new Error(String(res.status));
       await showPicture();
+    } catch {
+      setNote(t.loadFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const watchScreen = async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/stream`);
+      if (res.status === 409) {
+        setLive(null);
+        setNote(t.noScreen);
+        return;
+      }
+      if (!res.ok) throw new Error(String(res.status));
+      const body = (await res.json()) as { url?: string };
+      const url = typeof body.url === "string" ? body.url : "";
+      if (!url.startsWith("https://") || /\s/.test(url) || !url.includes("password=")) {
+        setLive(null);
+        setNote(t.noScreen);
+        return;
+      }
+      setLive(url);
     } catch {
       setNote(t.loadFailed);
     } finally {
@@ -159,10 +192,21 @@ export function ComputerScreenPanel({
           <button type="button" disabled={busy} onClick={() => void openScreen()}>
             {busy ? t.opening : t.open}
           </button>
+          <button type="button" disabled={busy} onClick={() => void watchScreen()}>
+            {t.watch}
+          </button>
           <button type="button" disabled={busy} onClick={() => void showPicture().catch(() => setNote(t.loadFailed))}>
             {t.shot}
           </button>
         </div>
+        {live ? (
+          <iframe
+            src={live}
+            title={t.watch}
+            referrerPolicy="no-referrer"
+            style={{ width: "100%", maxWidth: 640, height: 480, border: 0, borderRadius: 8, background: "#000" }}
+          />
+        ) : null}
         {picture ? (
           <img
             src={picture}
