@@ -22,9 +22,10 @@ test("owner and unpaid hops do not show the credits badge", () => {
   assert.equal(attachmentListedPriceVisible({ status: "skipped_insufficient", amount: 0 }), false);
   assert.equal(attachmentListedPriceVisible({ status: "captured", amount: 0 }), false);
   assert.equal(attachmentListedPriceVisible({ status: "held", amount: 0 }), false);
+  assert.equal(attachmentListedPriceVisible({ status: "held", amount: 12 }), false);
 });
 
-test("a hop that actually charged shows the badge", () => {
-  assert.equal(attachmentListedPriceVisible({ status: "held", amount: 12 }), true);
+test("a settled charge shows the badge", () => {
+  assert.equal(attachmentListedPriceVisible({ status: "captured", amount: 12 }), true);
   assert.equal(attachmentListedPriceVisible({ status: "captured", amount: 36 }), true);
 });
