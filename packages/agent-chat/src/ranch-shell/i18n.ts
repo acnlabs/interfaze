@@ -152,6 +152,7 @@ export type RanchMessages = {
   decisionAskHuman: string;
   decisionCap: string;
   historyChats: string;
+  headerHistory: string;
   historyPlans: string;
   historyTasks: string;
   historyFiles: string;
@@ -848,6 +849,7 @@ const en: RanchMessages = {
   decisionAskHuman: "Waiting for you",
   decisionCap: "Auto-decide paused — hop limit reached.",
   historyChats: "Chats",
+  headerHistory: "History",
   historyPlans: "Plans",
   historyTasks: "Tasks",
   historyFiles: "Files",
@@ -1599,6 +1601,7 @@ const zh: RanchMessages = {
   decisionAskHuman: "等你来选",
   decisionCap: "自动决策已暂停——达到次数上限。",
   historyChats: "对话",
+  headerHistory: "历史对话",
   historyPlans: "目标",
   historyTasks: "任务",
   historyFiles: "附件",

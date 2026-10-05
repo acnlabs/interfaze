@@ -1,8 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import type { RanchLocale } from "./ranch-shell/i18n";
 import { btnGhost, colors } from "./ranch-shell/styles";
+
+function IconMonitor() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="3" y="4" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M8 20h8M12 16v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function headerIconStyle(on: boolean): CSSProperties {
+  return {
+    ...btnGhost,
+    width: 28,
+    height: 28,
+    padding: 0,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: on ? colors.accentSoft : "transparent",
+    borderColor: on ? colors.accent : colors.border,
+  };
+}
 import { chatComputerLabel, computerName, extraIndex, type ComputerNameRow } from "./computerLabel";
 
 type ChatPlace = {
@@ -135,12 +158,13 @@ export function ChatComputerControl({
     <div style={{ position: "relative" }}>
       <button
         type="button"
-        style={btnGhost}
+        style={headerIconStyle(menuOpen)}
         onClick={() => setMenuOpen((open) => !open)}
         aria-expanded={menuOpen}
+        aria-label={label}
         title={label}
       >
-        {label}
+        <IconMonitor />
       </button>
       {menuOpen ? (
         <div
