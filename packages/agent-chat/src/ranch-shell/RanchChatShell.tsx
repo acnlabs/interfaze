@@ -27,7 +27,11 @@ import type {
   ThreadSummary,
 } from "../types";
 import { connectChatSocket, type ChatSocket } from "../ws";
-import { attachmentListedPriceVisible } from "../attachmentListedPrice";
+import {
+  attachmentBilledRefs,
+  attachmentListedPriceVisible,
+  attachmentSettledVisible,
+} from "../attachmentListedPrice";
 import { ComputerScreenPanel } from "../ComputerScreenPanel";
 import { MailboxThumbs } from "../MailboxThumbs";
 import { HistoryFilesPanel } from "../HistoryFilesPanel";
@@ -6457,6 +6461,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           gatewayBaseUrl={gatewayBaseUrl}
                           getAccessToken={getAccessToken}
                           showListedPrice={attachmentListedPriceVisible(m.metadata?.piece)}
+                          chargedMailboxIds={attachmentBilledRefs(m.metadata?.piece)}
                           loadFailedLabel={t.attachmentLoadFailed}
                           retryLabel={t.retry}
                           unavailableLabel={t.attachmentUnavailable}
@@ -6472,7 +6477,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               const status = typeof rec.status === "string" ? rec.status : "";
                               const amount = Number(rec.amount);
                               let line: string | null = null;
-                              if (status === "captured") line = t.pieceCaptured;
+                              if (
+                                attachmentSettledVisible(
+                                  raw,
+                                  mailboxIdsFromAttachments(
+                                    parseMessageAttachments(m.attachments),
+                                  ),
+                                )
+                              ) {
+                                line = t.pieceCaptured;
+                              }
                               else if (status === "held" && Number.isFinite(amount) && amount > 0) {
                                 line = t.pieceHeld(amount);
                               }
