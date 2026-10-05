@@ -77,6 +77,7 @@ export function MailboxThumbs({
   attachments,
   gatewayBaseUrl,
   getAccessToken,
+  showListedPrice = false,
   loadFailedLabel = "Attachment failed to load",
   retryLabel = "Retry",
   unavailableLabel = "Attachment not found or no longer available",
@@ -86,6 +87,8 @@ export function MailboxThumbs({
   attachments?: string[] | string | null;
   gatewayBaseUrl: string;
   getAccessToken: () => Promise<string | null>;
+  /** True only when this hop charged the viewer. Owners are not charged. */
+  showListedPrice?: boolean;
   loadFailedLabel?: string;
   retryLabel?: string;
   unavailableLabel?: string;
@@ -257,7 +260,7 @@ export function MailboxThumbs({
           );
           return (
             <div key={f.url} style={{ position: "relative", maxWidth: "100%" }}>
-              <ListedTag n={f.listedCredits} />
+              {showListedPrice ? <ListedTag n={f.listedCredits} /> : null}
               {media}
               {retainLabel(f.retainUntil) ? (
                 <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>

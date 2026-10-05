@@ -27,6 +27,7 @@ import type {
   ThreadSummary,
 } from "../types";
 import { connectChatSocket, type ChatSocket } from "../ws";
+import { attachmentListedPriceVisible } from "../attachmentListedPrice";
 import { MailboxThumbs } from "../MailboxThumbs";
 import { HistoryFilesPanel } from "../HistoryFilesPanel";
 import { mailboxIdsFromAttachments, parseMessageAttachments } from "../mailbox";
@@ -6426,6 +6427,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           attachments={m.attachments}
                           gatewayBaseUrl={gatewayBaseUrl}
                           getAccessToken={getAccessToken}
+                          showListedPrice={attachmentListedPriceVisible(m.metadata?.piece)}
                           loadFailedLabel={t.attachmentLoadFailed}
                           retryLabel={t.retry}
                           unavailableLabel={t.attachmentUnavailable}
