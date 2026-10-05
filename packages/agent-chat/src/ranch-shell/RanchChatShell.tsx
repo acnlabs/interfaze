@@ -2115,6 +2115,16 @@ function IconHistory() {
   );
 }
 
+function IconMore() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="5" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="19" cy="12" r="1.6" fill="currentColor" />
+    </svg>
+  );
+}
+
 function headerIconStyle(on: boolean): CSSProperties {
   return {
     ...btnGhost,
@@ -6406,6 +6416,28 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       </div>
                     ) : null}
                   </div>
+                  <button
+                    type="button"
+                    style={headerIconStyle(showMembersPanel)}
+                    onClick={() => {
+                      setHistoryOpen(false);
+                      if (showMembersPanel) {
+                        setShowMembersPanel(false);
+                        setShowAddMember(false);
+                        setEditingTitle(false);
+                        return;
+                      }
+                      setShowAddMember(false);
+                      setEditingTitle(false);
+                      setInfoTab(isGroupChat(active) ? "members" : "info");
+                      setShowMembersPanel(true);
+                    }}
+                    aria-pressed={showMembersPanel}
+                    aria-label={isGroupChat(active) ? t.groupInfo : t.agentInfo}
+                    title={isGroupChat(active) ? t.groupInfo : t.agentInfo}
+                  >
+                    <IconMore />
+                  </button>
                 {mode === "side" ? (
                   <button
                     type="button"
