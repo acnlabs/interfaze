@@ -29,3 +29,15 @@ test("a settled charge shows the badge", () => {
   assert.equal(attachmentListedPriceVisible({ status: "captured", amount: 12 }), true);
   assert.equal(attachmentListedPriceVisible({ status: "captured", amount: 36 }), true);
 });
+
+test("a later file is not covered by an earlier charge", () => {
+  const piece = { status: "captured", amount: 12, billed_refs: ["file-a"] };
+  assert.equal(moduleExports.attachmentFileBadgeVisible(piece, "file-a"), true);
+  assert.equal(moduleExports.attachmentFileBadgeVisible(piece, "file-b"), false);
+  assert.equal(moduleExports.attachmentSettledVisible(piece, ["file-b"]), false);
+  assert.equal(moduleExports.attachmentSettledVisible(piece, ["file-a", "file-b"]), true);
+  assert.equal(
+    moduleExports.attachmentFileBadgeVisible({ status: "captured", amount: 12 }, "file-b"),
+    true,
+  );
+});

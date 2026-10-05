@@ -78,6 +78,7 @@ export function MailboxThumbs({
   gatewayBaseUrl,
   getAccessToken,
   showListedPrice = false,
+  chargedMailboxIds = null,
   loadFailedLabel = "Attachment failed to load",
   retryLabel = "Retry",
   unavailableLabel = "Attachment not found or no longer available",
@@ -87,8 +88,10 @@ export function MailboxThumbs({
   attachments?: string[] | string | null;
   gatewayBaseUrl: string;
   getAccessToken: () => Promise<string | null>;
-  /** True only when this hop charged the viewer. Owners are not charged. */
+  /** True only when this hop's charge has settled. */
   showListedPrice?: boolean;
+  /** Files this settled charge covered. Null keeps the older all-files behavior. */
+  chargedMailboxIds?: string[] | null;
   loadFailedLabel?: string;
   retryLabel?: string;
   unavailableLabel?: string;
@@ -260,7 +263,10 @@ export function MailboxThumbs({
           );
           return (
             <div key={f.url} style={{ position: "relative", maxWidth: "100%" }}>
-              {showListedPrice ? <ListedTag n={f.listedCredits} /> : null}
+              {showListedPrice &&
+              (chargedMailboxIds == null || chargedMailboxIds.includes(f.mailboxId)) ? (
+                <ListedTag n={f.listedCredits} />
+              ) : null}
               {media}
               {retainLabel(f.retainUntil) ? (
                 <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
