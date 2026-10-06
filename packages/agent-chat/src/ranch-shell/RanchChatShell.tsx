@@ -6053,8 +6053,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
           style={{
             // full: always show right pane (empty state when no selection);
             // narrow full (<768px): single-column, list view hides it.
-            display:
-              (mode === "full" && !isNarrowFull) || view === "conversation"
+            display: screenComputer && (isNarrowFull || mode !== "full")
+              ? "none"
+              : (mode === "full" && !isNarrowFull) || view === "conversation"
                 ? "flex"
                 : "none",
             flexDirection: "column",
