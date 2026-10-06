@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
-import { browserAddress } from "./browserAddress";
 import { screenPoint } from "./computerScreenPoint";
 
 const copy = {
@@ -12,14 +11,7 @@ const copy = {
     loadFailed: "Couldn’t load this computer.",
     open: "Open screen",
     opening: "Opening…",
-    watch: "Watch",
-    shot: "Refresh picture",
-    type: "Type",
-    placeholder: "Type here, then click the picture",
-    browse: "Open browser",
-    browsePlaceholder: "https://",
-    badAddress: "That address can’t be opened.",
-    hint: "This is the same computer. Opening the screen keeps the files that are already there.",
+    screen: "Screen",
     noScreen: "This computer has no screen yet.",
   },
   zh: {
@@ -27,14 +19,7 @@ const copy = {
     loadFailed: "这台电脑暂时读不出来。",
     open: "打开屏幕",
     opening: "正在打开…",
-    watch: "看画面",
-    shot: "刷新画面",
-    type: "输入",
-    placeholder: "写在这里，再点画面",
-    browse: "打开浏览器",
-    browsePlaceholder: "https://",
-    badAddress: "这个地址打不开。",
-    hint: "还是这一台电脑。打开屏幕时，已经在上面的文件会留着。",
+    screen: "画面",
     noScreen: "这台电脑还没有屏幕。",
   },
 } as const;
@@ -72,9 +57,6 @@ export function ComputerScreenPanel({
   const t = copy[locale] ?? copy.en;
   const [picture, setPicture] = useState<string | null>(null);
   const [live, setLive] = useState<string | null>(null);
-  const [text, setText] = useState("");
-  const [address, setAddress] = useState("");
-  const [point, setPoint] = useState<{ x: number; y: number }>({ x: 512, y: 384 });
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
@@ -148,72 +130,14 @@ export function ComputerScreenPanel({
     void openScreen();
   }, [openScreen]);
 
-  const watchScreen = async () => {
-    setBusy(true);
-    setNote(null);
-    try {
-      const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/stream`);
-      if (res.status === 409) {
-        setLive(null);
-        setNote(t.noScreen);
-        return;
-      }
-      if (!res.ok) throw new Error(String(res.status));
-      const body = (await res.json()) as { url?: string };
-      const url = typeof body.url === "string" ? body.url : "";
-      if (!url.startsWith("https://") || /\s/.test(url) || !url.includes("password=")) {
-        setLive(null);
-        setNote(t.noScreen);
-        return;
-      }
-      setLive(url);
-    } catch {
-      setNote(t.loadFailed);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const openBrowser = async (raw: string) => {
-    const url = browserAddress(raw);
-    if (!url) {
-      setNote(t.badAddress);
-      return;
-    }
-    setBusy(true);
-    setNote(null);
-    try {
-      const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/browser`, {
-        method: "POST",
-        body: JSON.stringify({ url }),
-      });
-      if (res.status === 409) {
-        setNote(t.noScreen);
-        return;
-      }
-      if (res.status === 400) {
-        setNote(t.badAddress);
-        return;
-      }
-      if (!res.ok) throw new Error(String(res.status));
-      await showPicture();
-    } catch {
-      setNote(t.loadFailed);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const sendPointer = async (next: { x: number; y: number }, typed: string | null) => {
-    setPoint(next);
+  const sendPointer = async (next: { x: number; y: number }) => {
     setBusy(true);
     try {
       const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/pointer`, {
         method: "POST",
-        body: JSON.stringify({ x: next.x, y: next.y, text: typed || null }),
+        body: JSON.stringify({ x: next.x, y: next.y, text: null }),
       });
       if (!res.ok) throw new Error(String(res.status));
-      if (typed) setText("");
       await showPicture();
     } catch {
       setNote(t.loadFailed);
@@ -248,78 +172,46 @@ export function ComputerScreenPanel({
           {t.close}
         </button>
       </div>
-      <div style={{ padding: 14, overflow: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-        <p style={{ margin: 0, color: colors.muted, fontSize: 13 }}>{t.hint}</p>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" disabled={busy} onClick={() => void openScreen()}>
-            {busy ? t.opening : t.open}
-          </button>
-          <button type="button" disabled={busy} onClick={() => void watchScreen()}>
-            {t.watch}
-          </button>
-          <button type="button" disabled={busy} onClick={() => void showPicture().catch(() => setNote(t.loadFailed))}>
-            {t.shot}
-          </button>
-        </div>
+      <div style={{ flex: 1, minHeight: 0, position: "relative", background: "#000" }}>
         {live ? (
           <iframe
             src={live}
-            title={t.watch}
+            title={t.screen}
             referrerPolicy="no-referrer"
-            style={{ width: "100%", maxWidth: 640, height: 480, border: 0, borderRadius: 8, background: "#000" }}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0, background: "#000" }}
           />
-        ) : null}
-        {picture ? (
+        ) : picture ? (
           <img
             src={picture}
             alt={label}
             onClick={(event) => {
               const rect = event.currentTarget.getBoundingClientRect();
               const next = screenPoint(event.clientX - rect.left, event.clientY - rect.top, rect.width, rect.height);
-              if (next) void sendPointer(next, null);
+              if (next) void sendPointer(next);
             }}
-            style={{ width: "100%", maxWidth: 640, background: "#000", borderRadius: 8, cursor: "crosshair" }}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000", cursor: "crosshair" }}
           />
-        ) : null}
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            const typed = text.trim();
-            if (!typed) return;
-            void sendPointer(point, typed.slice(0, 80));
-          }}
-          style={{ display: "flex", gap: 8 }}
-        >
-          <input
-            value={text}
-            maxLength={80}
-            placeholder={t.placeholder}
-            onChange={(event) => setText(event.target.value)}
-            style={{ flex: 1, background: colors.panel, color: colors.text, border: `1px solid ${colors.border}`, borderRadius: 8, padding: 8 }}
-          />
-          <button type="submit" disabled={busy || !text.trim()}>
-            {t.type}
-          </button>
-        </form>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void openBrowser(address);
-          }}
-          style={{ display: "flex", gap: 8 }}
-        >
-          <input
-            value={address}
-            maxLength={200}
-            placeholder={t.browsePlaceholder}
-            onChange={(event) => setAddress(event.target.value)}
-            style={{ flex: 1, background: colors.panel, color: colors.text, border: `1px solid ${colors.border}`, borderRadius: 8, padding: 8 }}
-          />
-          <button type="submit" disabled={busy || !address.trim()}>
-            {t.browse}
-          </button>
-        </form>
-        {note ? <p style={{ margin: 0, color: colors.danger, fontSize: 13 }}>{note}</p> : null}
+        ) : (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 12,
+              color: colors.muted,
+            }}
+          >
+            <p style={{ margin: 0 }}>{busy ? t.opening : note}</p>
+            {!busy && note ? (
+              <button type="button" onClick={() => void openScreen()}>
+                {t.open}
+              </button>
+            ) : null}
+          </div>
+        )}
       </div>
     </div>
   );
