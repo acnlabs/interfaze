@@ -149,9 +149,8 @@ export function ComputerScreenPanel({
   return (
     <div
       style={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 40,
+        height: "100%",
+        minHeight: 0,
         background: colors.bg,
         color: colors.text,
         display: "flex",
