@@ -5593,6 +5593,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
       {showComputer ? (
         <ComputerManagePanel
+          chatId={active?.chat_id ?? null}
           gatewayBaseUrl={gatewayBaseUrl}
           getAccessToken={getAccessToken}
           locale={uiLocale}
@@ -6315,7 +6316,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     gatewayBaseUrl={gatewayBaseUrl}
                     getAccessToken={getAccessToken}
                     locale={uiLocale}
-                    onOpenScreen={(id, label) => setScreenComputer({ id, label })}
+                    screenOpenId={screenComputer?.id ?? null}
+                    onOpenScreen={(id, label) =>
+                      setScreenComputer((cur) => (cur?.id === id ? null : { id, label }))
+                    }
                   />
                   {canOpenTalk ? (
                     <button

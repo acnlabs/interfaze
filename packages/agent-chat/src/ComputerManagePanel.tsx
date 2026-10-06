@@ -20,6 +20,10 @@ const copy = {
     opening: "Opening…",
     short: "Not enough credits. No computer was opened.",
     failed: "The computer list could not be loaded.",
+    current: "This chat",
+    use: "Use for this chat",
+    kept: "This chat already has files, so it stays on its computer.",
+    missing: "That computer is not available.",
     files: "Has files",
     emptyDisk: "No files yet",
     idle: "Idle",
@@ -34,6 +38,10 @@ const copy = {
     opening: "正在开…",
     short: "积分不够，没有新开电脑。",
     failed: "电脑列表暂时读不出来。",
+    current: "这场聊天",
+    use: "这场聊天用这台",
+    kept: "这场聊天已经有文件，目录留在原来的电脑上。",
+    missing: "没有这台电脑。",
     files: "已有文件",
     emptyDisk: "还没有文件",
     idle: "空闲",
@@ -62,12 +70,19 @@ function statusLabel(status: string, t: (typeof copy)[RanchLocale]): string {
   return status;
 }
 
+type ChatPlace = {
+  computer_id: string | null;
+  can_bind: boolean;
+};
+
 export function ComputerManagePanel({
+  chatId,
   gatewayBaseUrl,
   getAccessToken,
   locale,
   onClose,
 }: {
+  chatId: string | null;
   gatewayBaseUrl: string;
   getAccessToken: () => Promise<string | null>;
   locale: RanchLocale;
@@ -75,15 +90,31 @@ export function ComputerManagePanel({
 }) {
   const t = copy[locale] ?? copy.en;
   const [computers, setComputers] = useState<ComputerRow[]>([]);
+  const [place, setPlace] = useState<ChatPlace | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
   const loadList = useCallback(async () => {
-    const res = await authed(gatewayBaseUrl, getAccessToken, "/api/computers");
-    if (!res.ok) throw new Error(String(res.status));
-    const body = (await res.json()) as { computers?: ComputerRow[] };
+    const listRes = await authed(gatewayBaseUrl, getAccessToken, "/api/computers");
+    if (!listRes.ok) throw new Error(String(listRes.status));
+    const body = (await listRes.json()) as { computers?: ComputerRow[] };
     setComputers(Array.isArray(body.computers) ? body.computers : []);
-  }, [gatewayBaseUrl, getAccessToken]);
+    if (!chatId) {
+      setPlace(null);
+      return;
+    }
+    const placeRes = await authed(
+      gatewayBaseUrl,
+      getAccessToken,
+      `/api/chats/${encodeURIComponent(chatId)}/computer`,
+    );
+    if (placeRes.status === 404) {
+      setPlace(null);
+      return;
+    }
+    if (!placeRes.ok) throw new Error(String(placeRes.status));
+    setPlace((await placeRes.json()) as ChatPlace);
+  }, [chatId, gatewayBaseUrl, getAccessToken]);
 
   useEffect(() => {
     let gone = false;
@@ -94,6 +125,34 @@ export function ComputerManagePanel({
       gone = true;
     };
   }, [loadList, t.failed]);
+
+  const useForChat = async (computerId: string) => {
+    if (!chatId) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await authed(
+        gatewayBaseUrl,
+        getAccessToken,
+        `/api/chats/${encodeURIComponent(chatId)}/computer`,
+        { method: "POST", body: JSON.stringify({ computer_id: computerId }) },
+      );
+      if (res.status === 409) {
+        setNote(t.kept);
+        return;
+      }
+      if (res.status === 404) {
+        setNote(t.missing);
+        return;
+      }
+      if (!res.ok) throw new Error(String(res.status));
+      await loadList();
+    } catch {
+      setNote(t.failed);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const openAnother = async () => {
     setBusy(true);
@@ -158,8 +217,18 @@ export function ComputerManagePanel({
                 gap: 8,
               }}
             >
-              <strong>{computerName(row.is_default, nth, locale)}</strong>
-              <span style={{ color: colors.muted, fontSize: 12 }}>
+              <strong>
+                {computerName(row.is_default, nth, locale)}
+                {place?.computer_id === row.computer_id ? (
+                  <span style={{ color: colors.muted, fontWeight: 400, fontSize: 12 }}> · {t.current}</span>
+                ) : null}
+              </strong>
+              <span style={{ color: colors.muted, fontSize: 12, display: "flex", gap: 8, alignItems: "center" }}>
+                {place?.can_bind && place.computer_id !== row.computer_id ? (
+                  <button type="button" disabled={busy} onClick={() => void useForChat(row.computer_id)}>
+                    {t.use}
+                  </button>
+                ) : null}
                 {statusLabel(row.status, t)} · {row.has_disk ? t.files : t.emptyDisk}
               </span>
             </div>

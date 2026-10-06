@@ -118,21 +118,35 @@ export function ComputerScreenPanel({
     setNote(null);
   }, [computerId, gatewayBaseUrl, getAccessToken, t.noScreen]);
 
-  const openScreen = async () => {
+  const openScreen = useCallback(async () => {
     setBusy(true);
     setNote(null);
     try {
-      const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen`, {
+      const opened = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen`, {
         method: "POST",
       });
-      if (!res.ok) throw new Error(String(res.status));
+      if (!opened.ok) throw new Error(String(opened.status));
+      const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/stream`);
+      if (res.ok) {
+        const body = (await res.json()) as { url?: string };
+        const url = typeof body.url === "string" ? body.url : "";
+        if (url.startsWith("https://") && !/\s/.test(url) && url.includes("password=")) {
+          setLive(url);
+          return;
+        }
+      }
+      setLive(null);
       await showPicture();
     } catch {
       setNote(t.loadFailed);
     } finally {
       setBusy(false);
     }
-  };
+  }, [computerId, gatewayBaseUrl, getAccessToken, showPicture, t.loadFailed]);
+
+  useEffect(() => {
+    void openScreen();
+  }, [openScreen]);
 
   const watchScreen = async () => {
     setBusy(true);
