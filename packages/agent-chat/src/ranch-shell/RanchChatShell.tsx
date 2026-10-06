@@ -6052,22 +6052,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 ? "flex"
                 : "none",
             flexDirection: "column",
-            minWidth: 0,
+            minWidth: screenComputer && mode === "full" && !isNarrowFull ? 320 : 0,
             height: "100%",
             background: colors.bg,
             position: "relative",
           }}
         >
-          {screenComputer && active ? (
-            <ComputerScreenPanel
-              computerId={screenComputer.id}
-              label={screenComputer.label}
-              gatewayBaseUrl={gatewayBaseUrl}
-              getAccessToken={getAccessToken}
-              locale={uiLocale}
-              onClose={() => setScreenComputer(null)}
-            />
-          ) : null}
           {!active ? (
             <>
               {mode === "full" && sidebarCollapsed ? (
@@ -8776,6 +8766,34 @@ export function RanchChatShell(props: RanchChatShellProps) {
           {mode === "full" ? accountPanels : null}
         </div>
       )}
+
+      {screenComputer && active ? (
+        <aside
+          data-computer-screen="open"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: "1 1 50%",
+            minWidth: mode === "full" && !isNarrowFull ? 420 : 0,
+            maxWidth: mode === "full" && !isNarrowFull ? 860 : undefined,
+            width: mode === "full" && !isNarrowFull ? undefined : "100%",
+            height: "100%",
+            minHeight: 0,
+            borderLeft:
+              mode === "full" && !isNarrowFull ? `1px solid ${colors.border}` : undefined,
+            background: colors.bg,
+          }}
+        >
+          <ComputerScreenPanel
+            computerId={screenComputer.id}
+            label={screenComputer.label}
+            gatewayBaseUrl={gatewayBaseUrl}
+            getAccessToken={getAccessToken}
+            locale={uiLocale}
+            onClose={() => setScreenComputer(null)}
+          />
+        </aside>
+      ) : null}
 
       {active && activeWindow && windowHostOrigin ? (
         <ChatWindowPane
