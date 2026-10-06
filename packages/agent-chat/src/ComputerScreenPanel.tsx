@@ -159,16 +159,37 @@ export function ComputerScreenPanel({
         return;
       }
       fitLock.current = true;
+      const recover = async () => {
+        const rect = frameRef.current?.getBoundingClientRect();
+        const sized = paneSize(rect);
+        const query = sized ? `?width=${sized.width}&height=${sized.height}` : "";
+        const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/stream${query}`);
+        if (!res.ok) {
+          setLive(null);
+          setNote(t.loadFailed);
+          return;
+        }
+        const body = (await res.json()) as { url?: string };
+        const url = typeof body.url === "string" ? body.url : "";
+        if (url.startsWith("https://") && !/\s/.test(url) && url.includes("password=")) {
+          fittedRef.current = sized;
+          setLive(url);
+          setFrameKey((key) => key + 1);
+          return;
+        }
+        setLive(null);
+        setNote(t.loadFailed);
+      };
       void authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/fit`, {
         method: "POST",
         body: JSON.stringify(next),
       })
         .then((res) => {
-          if (!res.ok) return;
+          if (!res.ok) return recover();
           fittedRef.current = next;
           setFrameKey((key) => key + 1);
         })
-        .catch(() => undefined)
+        .catch(() => recover())
         .finally(() => {
           fitLock.current = false;
           const pending = pendingFit.current;
