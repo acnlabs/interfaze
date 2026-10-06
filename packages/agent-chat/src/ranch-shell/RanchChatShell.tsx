@@ -6044,7 +6044,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
       {(view === "conversation" || mode === "full") && (
         <div
           style={{
-            flex: 1,
             // full: always show right pane (empty state when no selection);
             // narrow full (<768px): single-column, list view hides it.
             display:
@@ -6052,7 +6051,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 ? "flex"
                 : "none",
             flexDirection: "column",
-            minWidth: screenComputer && mode === "full" && !isNarrowFull ? 320 : 0,
+            flex: screenComputer && mode === "full" && !isNarrowFull ? "1.15 1 0%" : 1,
+            minWidth: screenComputer && mode === "full" && !isNarrowFull ? 280 : 0,
             height: "100%",
             background: colors.bg,
             position: "relative",
@@ -8773,12 +8773,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
           style={{
             display: "flex",
             flexDirection: "column",
-            flex: "1 1 50%",
-            minWidth: mode === "full" && !isNarrowFull ? 420 : 0,
-            maxWidth: mode === "full" && !isNarrowFull ? 860 : undefined,
+            flex: "1 1 0%",
+            minWidth: 0,
+            maxWidth: mode === "full" && !isNarrowFull ? "46%" : undefined,
             width: mode === "full" && !isNarrowFull ? undefined : "100%",
             height: "100%",
             minHeight: 0,
+            overflow: "hidden",
             borderLeft:
               mode === "full" && !isNarrowFull ? `1px solid ${colors.border}` : undefined,
             background: colors.bg,
