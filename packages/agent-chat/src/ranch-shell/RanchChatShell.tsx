@@ -2683,6 +2683,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [mode, setMode] = useState(modeProp);
   /** Fullscreen only: hide/show the left chat list. */
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  /** While a screen is open, the chat list steps aside so the desktop can be wide. */
+  const [screenHidesList, setScreenHidesList] = useState(false);
   const setOpen = useCallback(
     (next: boolean) => {
       onOpenChange?.(next);
@@ -2697,10 +2699,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
     if (modeProp !== "full") setSidebarCollapsed(false);
   }, [modeProp]);
 
-  const showSidebar = mode !== "full" || !sidebarCollapsed;
   const viewportWidth = useViewportWidth();
   /** <768px in full mode: single-column, list ↔ conversation like side mode. */
   const isNarrowFull = mode === "full" && viewportWidth < 768;
+  const listStepsAside = screenHidesList && mode === "full" && !isNarrowFull;
+  const showSidebar = (mode !== "full" || !sidebarCollapsed) && !listStepsAside;
 
   const client = useMemo(
     () => createGatewayClient(gatewayBaseUrl, getAccessToken),
@@ -2766,8 +2769,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
   useEffect(() => {
     setScreenComputer(null);
+    setScreenHidesList(false);
     setHistoryOpen(false);
   }, [active?.chat_id]);
+  useEffect(() => {
+    if (!screenComputer) setScreenHidesList(false);
+  }, [screenComputer]);
 
   const closeAccountSurfaces = () => {
     setShowAccountProfile(false);
@@ -6051,7 +6058,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 ? "flex"
                 : "none",
             flexDirection: "column",
-            flex: screenComputer && mode === "full" && !isNarrowFull ? "1.15 1 0%" : 1,
+            flex: screenComputer && mode === "full" && !isNarrowFull ? "1 1 0%" : 1,
             minWidth: screenComputer && mode === "full" && !isNarrowFull ? 280 : 0,
             height: "100%",
             background: colors.bg,
@@ -6060,7 +6067,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         >
           {!active ? (
             <>
-              {mode === "full" && sidebarCollapsed ? (
+              {mode === "full" && !showSidebar ? (
                 <button
                   type="button"
                   style={{
@@ -6070,7 +6077,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     left: 14,
                     zIndex: 5,
                   }}
-                  onClick={() => setSidebarCollapsed(false)}
+                  onClick={() => {
+                    setSidebarCollapsed(false);
+                    setScreenHidesList(false);
+                  }}
                   aria-label={t.expandSidebar}
                   title={t.expandSidebar}
                 >
@@ -6152,11 +6162,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       ←
                     </button>
                   )}
-                  {mode === "full" && sidebarCollapsed ? (
+                  {mode === "full" && !showSidebar ? (
                     <button
                       type="button"
                       style={btnIcon}
-                      onClick={() => setSidebarCollapsed(false)}
+                      onClick={() => {
+                        setSidebarCollapsed(false);
+                        setScreenHidesList(false);
+                      }}
                       aria-label={t.expandSidebar}
                       title={t.expandSidebar}
                     >
@@ -6307,9 +6320,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     getAccessToken={getAccessToken}
                     locale={uiLocale}
                     screenOpenId={screenComputer?.id ?? null}
-                    onOpenScreen={(id, label) =>
-                      setScreenComputer((cur) => (cur?.id === id ? null : { id, label }))
-                    }
+                    onOpenScreen={(id, label) => {
+                      if (screenComputer?.id === id) {
+                        setScreenComputer(null);
+                        return;
+                      }
+                      if (mode === "full" && !isNarrowFull) setScreenHidesList(true);
+                      setScreenComputer({ id, label });
+                    }}
                   />
                   {canOpenTalk ? (
                     <button
@@ -8773,9 +8791,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
           style={{
             display: "flex",
             flexDirection: "column",
-            flex: "1 1 0%",
+            flex: mode === "full" && !isNarrowFull ? "1.65 1 0%" : "1 1 0%",
             minWidth: 0,
-            maxWidth: mode === "full" && !isNarrowFull ? "46%" : undefined,
             width: mode === "full" && !isNarrowFull ? undefined : "100%",
             height: "100%",
             minHeight: 0,
