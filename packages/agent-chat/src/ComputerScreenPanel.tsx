@@ -20,8 +20,6 @@ const copy = {
     browsePlaceholder: "https://",
     badAddress: "That address can’t be opened.",
     hint: "This is the same computer. Opening the screen keeps the files that are already there.",
-    confirm: "Opening the screen moves those files onto a desktop and pauses the old disk.",
-    confirmOpen: "Open the desktop",
     noScreen: "This computer has no screen yet.",
   },
   zh: {
@@ -37,8 +35,6 @@ const copy = {
     browsePlaceholder: "https://",
     badAddress: "这个地址打不开。",
     hint: "还是这一台电脑。打开屏幕时，已经在上面的文件会留着。",
-    confirm: "打开屏幕会把这些文件搬到桌面，并暂停原来的盘。",
-    confirmOpen: "确认打开",
     noScreen: "这台电脑还没有屏幕。",
   },
 } as const;
@@ -81,7 +77,6 @@ export function ComputerScreenPanel({
   const [point, setPoint] = useState<{ x: number; y: number }>({ x: 512, y: 384 });
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [armOpen, setArmOpen] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -91,7 +86,6 @@ export function ComputerScreenPanel({
 
   useEffect(() => {
     setLive(null);
-    setArmOpen(false);
   }, [computerId]);
 
   useEffect(() => {
@@ -132,7 +126,6 @@ export function ComputerScreenPanel({
         method: "POST",
       });
       if (!res.ok) throw new Error(String(res.status));
-      setArmOpen(false);
       await showPicture();
     } catch {
       setNote(t.loadFailed);
@@ -244,19 +237,8 @@ export function ComputerScreenPanel({
       <div style={{ padding: 14, overflow: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
         <p style={{ margin: 0, color: colors.muted, fontSize: 13 }}>{t.hint}</p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              if (!armOpen) {
-                setArmOpen(true);
-                setNote(t.confirm);
-                return;
-              }
-              void openScreen();
-            }}
-          >
-            {busy ? t.opening : armOpen ? t.confirmOpen : t.open}
+          <button type="button" disabled={busy} onClick={() => void openScreen()}>
+            {busy ? t.opening : t.open}
           </button>
           <button type="button" disabled={busy} onClick={() => void watchScreen()}>
             {t.watch}
