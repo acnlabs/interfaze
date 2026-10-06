@@ -56,10 +56,21 @@ export function ComputerScreenPanel({
 }) {
   const t = copy[locale] ?? copy.en;
   const frameRef = useRef<HTMLDivElement>(null);
+  const fittedRef = useRef<{ width: number; height: number } | null>(null);
+  const fitLock = useRef(false);
+  const pendingFit = useRef<{ width: number; height: number } | null>(null);
   const [picture, setPicture] = useState<string | null>(null);
   const [live, setLive] = useState<string | null>(null);
+  const [frameKey, setFrameKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+
+  const paneSize = (rect: DOMRect | undefined) => {
+    const width = Math.round(rect?.width ?? 0);
+    const height = Math.round(rect?.height ?? 0);
+    if (width < 320 || height < 240 || width > 1600 || height > 1200) return null;
+    return { width, height };
+  };
 
   useEffect(() => {
     return () => {
@@ -110,17 +121,14 @@ export function ComputerScreenPanel({
       });
       if (!opened.ok) throw new Error(String(opened.status));
       const rect = frameRef.current?.getBoundingClientRect();
-      const width = Math.round(rect?.width ?? 0);
-      const height = Math.round(rect?.height ?? 0);
-      const sized =
-        width >= 320 && height >= 240 && width <= 1600 && height <= 1200
-          ? `?width=${width}&height=${height}`
-          : "";
-      const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/stream${sized}`);
+      const sized = paneSize(rect);
+      const query = sized ? `?width=${sized.width}&height=${sized.height}` : "";
+      const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/stream${query}`);
       if (res.ok) {
         const body = (await res.json()) as { url?: string };
         const url = typeof body.url === "string" ? body.url : "";
         if (url.startsWith("https://") && !/\s/.test(url) && url.includes("password=")) {
+          fittedRef.current = sized;
           setLive(url);
           return;
         }
@@ -137,6 +145,50 @@ export function ComputerScreenPanel({
   useEffect(() => {
     void openScreen();
   }, [openScreen]);
+
+  useEffect(() => {
+    if (!live) return;
+    const frame = frameRef.current;
+    if (!frame) return;
+    let timer = 0;
+    const follow = (next: { width: number; height: number }) => {
+      const prev = fittedRef.current;
+      if (prev && Math.abs(prev.width - next.width) < 32 && Math.abs(prev.height - next.height) < 32) return;
+      if (fitLock.current) {
+        pendingFit.current = next;
+        return;
+      }
+      fitLock.current = true;
+      void authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/fit`, {
+        method: "POST",
+        body: JSON.stringify(next),
+      })
+        .then((res) => {
+          if (!res.ok) return;
+          fittedRef.current = next;
+          setFrameKey((key) => key + 1);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          fitLock.current = false;
+          const pending = pendingFit.current;
+          pendingFit.current = null;
+          if (pending && (pending.width !== next.width || pending.height !== next.height)) follow(pending);
+        });
+    };
+    const observer = new ResizeObserver(() => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const next = paneSize(frame.getBoundingClientRect());
+        if (next) follow(next);
+      }, 600);
+    });
+    observer.observe(frame);
+    return () => {
+      window.clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [computerId, gatewayBaseUrl, getAccessToken, live]);
 
   const sendPointer = async (next: { x: number; y: number }) => {
     setBusy(true);
@@ -182,6 +234,7 @@ export function ComputerScreenPanel({
       <div ref={frameRef} style={{ flex: 1, minHeight: 0, position: "relative", background: "#000" }}>
         {live ? (
           <iframe
+            key={frameKey}
             src={live}
             title={t.screen}
             referrerPolicy="no-referrer"
