@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
 import { screenPoint } from "./computerScreenPoint";
@@ -55,6 +55,7 @@ export function ComputerScreenPanel({
   onClose: () => void;
 }) {
   const t = copy[locale] ?? copy.en;
+  const frameRef = useRef<HTMLDivElement>(null);
   const [picture, setPicture] = useState<string | null>(null);
   const [live, setLive] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -108,7 +109,14 @@ export function ComputerScreenPanel({
         method: "POST",
       });
       if (!opened.ok) throw new Error(String(opened.status));
-      const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/stream`);
+      const rect = frameRef.current?.getBoundingClientRect();
+      const width = Math.round(rect?.width ?? 0);
+      const height = Math.round(rect?.height ?? 0);
+      const sized =
+        width >= 320 && height >= 240 && width <= 1600 && height <= 1200
+          ? `?width=${width}&height=${height}`
+          : "";
+      const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/stream${sized}`);
       if (res.ok) {
         const body = (await res.json()) as { url?: string };
         const url = typeof body.url === "string" ? body.url : "";
@@ -171,7 +179,7 @@ export function ComputerScreenPanel({
           {t.close}
         </button>
       </div>
-      <div style={{ flex: 1, minHeight: 0, position: "relative", background: "#000" }}>
+      <div ref={frameRef} style={{ flex: 1, minHeight: 0, position: "relative", background: "#000" }}>
         {live ? (
           <iframe
             src={live}
