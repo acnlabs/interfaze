@@ -84,13 +84,61 @@ export function ComputerScreenPanel({
 
   useEffect(() => {
     if (!live) return;
+    let stopped = false;
+    const waking = { current: false };
+    const wake = async () => {
+      if (waking.current || stopped) return;
+      waking.current = true;
+      try {
+        const kept = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/keep`, {
+          method: "POST",
+        });
+        if (!kept.ok || stopped) return;
+        const keptBody = (await kept.json()) as { screen?: boolean };
+        if (keptBody.screen !== false || stopped) return;
+        const rect = frameRef.current?.getBoundingClientRect();
+        const sized = paneSize(rect);
+        const query = sized ? `?width=${sized.width}&height=${sized.height}` : "";
+        const res = await authed(
+          gatewayBaseUrl,
+          getAccessToken,
+          `/api/computers/${computerId}/screen/stream${query}`,
+        );
+        if (stopped) return;
+        if (!res.ok) {
+          setLive(null);
+          setNote(t.loadFailed);
+          return;
+        }
+        const body = (await res.json()) as { url?: string };
+        const url = typeof body.url === "string" ? body.url : "";
+        if (url.startsWith("https://") && !/\s/.test(url) && url.includes("password=")) {
+          fittedRef.current = sized;
+          setLive(url);
+          setFrameKey((key) => key + 1);
+          return;
+        }
+        setLive(null);
+        setNote(t.loadFailed);
+      } catch {
+        return;
+      } finally {
+        waking.current = false;
+      }
+    };
     const timer = window.setInterval(() => {
-      void authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/keep`, {
-        method: "POST",
-      }).catch(() => undefined);
+      void wake();
     }, 60_000);
-    return () => window.clearInterval(timer);
-  }, [computerId, gatewayBaseUrl, getAccessToken, live]);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void wake();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [computerId, gatewayBaseUrl, getAccessToken, live, t.loadFailed]);
 
   const showPicture = useCallback(async () => {
     const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen`);
