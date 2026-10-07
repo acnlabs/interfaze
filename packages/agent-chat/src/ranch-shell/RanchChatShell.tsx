@@ -8809,6 +8809,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             gatewayBaseUrl={gatewayBaseUrl}
             getAccessToken={getAccessToken}
             locale={uiLocale}
+            chatId={activeChatId}
             onClose={() => setScreenComputer(null)}
           />
         </aside>

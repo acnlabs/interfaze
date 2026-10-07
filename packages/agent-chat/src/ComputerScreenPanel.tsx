@@ -46,6 +46,7 @@ export function ComputerScreenPanel({
   getAccessToken,
   locale,
   onClose,
+  chatId,
 }: {
   computerId: string;
   label: string;
@@ -53,6 +54,7 @@ export function ComputerScreenPanel({
   getAccessToken: () => Promise<string | null>;
   locale: RanchLocale;
   onClose: () => void;
+  chatId?: string | null;
 }) {
   const t = copy[locale] ?? copy.en;
   const frameRef = useRef<HTMLDivElement>(null);
@@ -178,6 +180,12 @@ export function ComputerScreenPanel({
         if (url.startsWith("https://") && !/\s/.test(url) && url.includes("password=")) {
           fittedRef.current = sized;
           setLive(url);
+          if (chatId) {
+            void authed(gatewayBaseUrl, getAccessToken, `/api/chats/${chatId}/computer/folder`, {
+              method: "POST",
+              body: JSON.stringify({ computer_id: computerId }),
+            }).catch(() => undefined);
+          }
           return;
         }
       }
@@ -188,7 +196,7 @@ export function ComputerScreenPanel({
     } finally {
       setBusy(false);
     }
-  }, [computerId, gatewayBaseUrl, getAccessToken, showPicture, t.loadFailed]);
+  }, [chatId, computerId, gatewayBaseUrl, getAccessToken, showPicture, t.loadFailed]);
 
   useEffect(() => {
     void openScreen();
