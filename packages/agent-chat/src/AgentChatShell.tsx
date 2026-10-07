@@ -11,6 +11,7 @@ import type {
 } from "./types";
 import { CHAT_OPEN_EVENT } from "./types";
 import { connectChatSocket, type ChatSocket } from "./ws";
+import { attachmentBilledRefs, attachmentListedPriceVisible } from "./attachmentListedPrice";
 import { MailboxThumbs } from "./MailboxThumbs";
 import { parseMessageAttachments } from "./mailbox";
 
@@ -515,6 +516,8 @@ export function AgentChatShell(props: AgentChatShellProps) {
                         attachments={m.attachments}
                         gatewayBaseUrl={gatewayBaseUrl}
                         getAccessToken={getAccessToken}
+                        showListedPrice={attachmentListedPriceVisible(m.metadata?.piece)}
+                        chargedMailboxIds={attachmentBilledRefs(m.metadata?.piece)}
                       />
                     </div>
                   </div>
@@ -832,6 +835,8 @@ export function AgentChatShell(props: AgentChatShellProps) {
                 attachments={m.attachments}
                 gatewayBaseUrl={gatewayBaseUrl}
                 getAccessToken={getAccessToken}
+                showListedPrice={attachmentListedPriceVisible(m.metadata?.piece)}
+                chargedMailboxIds={attachmentBilledRefs(m.metadata?.piece)}
               />
             </div>
           ))}

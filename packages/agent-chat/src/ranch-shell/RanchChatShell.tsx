@@ -27,8 +27,17 @@ import type {
   ThreadSummary,
 } from "../types";
 import { connectChatSocket, type ChatSocket } from "../ws";
+import {
+  attachmentBilledRefs,
+  attachmentListedPriceVisible,
+  attachmentSettledVisible,
+} from "../attachmentListedPrice";
+import { ChatComputerControl } from "../ChatComputerControl";
+import { ComputerManagePanel } from "../ComputerManagePanel";
+import { ComputerScreenPanel } from "../ComputerScreenPanel";
 import { MailboxThumbs } from "../MailboxThumbs";
-import { parseMessageAttachments } from "../mailbox";
+import { HistoryFilesPanel } from "../HistoryFilesPanel";
+import { mailboxIdsFromAttachments, parseMessageAttachments } from "../mailbox";
 import { calleesFromMetadata, decideFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, planFromMetadata, proposeGroupFromMetadata, proposeTaskFromMetadata, type MessageDecide, type MessagePlan, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
 import { settleQueuedDelivery } from "./settleQueuedDelivery";
 import {
@@ -2065,6 +2074,71 @@ function IconGear() {
   );
 }
 
+function IconMonitor() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="3" y="4" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M8 20h8M12 16v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconFace() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+      <circle cx="9" cy="10" r="1" fill="currentColor" />
+      <circle cx="15" cy="10" r="1" fill="currentColor" />
+      <path d="M8 15c1.2 1.4 2.5 2 4 2s2.8-.6 4-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconBody() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M12 8V4H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="4" y="8" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M2 14h2M20 14h2M9 13v2M15 13v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconHistory() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M21 12a8.5 8.5 0 0 1-8.5 8.5A8.5 8.5 0 0 1 5.2 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M3 12a8.5 8.5 0 0 1 14.6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M3 4v5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 8v5l3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconMore() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="5" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="19" cy="12" r="1.6" fill="currentColor" />
+    </svg>
+  );
+}
+
+function headerIconStyle(on: boolean): CSSProperties {
+  return {
+    ...btnGhost,
+    width: 28,
+    height: 28,
+    padding: 0,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: on ? colors.accentSoft : "transparent",
+    borderColor: on ? colors.accent : colors.border,
+  };
+}
+
 /** Lucide MessageCircle — chat list header fallback when no logo. */
 function IconChat() {
   return (
@@ -2191,6 +2265,7 @@ function AccountFooter({
   onProfile,
   onManage,
   onWallet,
+  onComputer,
   onKeys,
   onPlanUsage,
   onBilling,
@@ -2202,6 +2277,7 @@ function AccountFooter({
   onProfile?: () => void;
   onManage?: () => void;
   onWallet?: () => void;
+  onComputer?: () => void;
   onKeys?: () => void;
   onPlanUsage?: () => void;
   onBilling?: () => void;
@@ -2274,7 +2350,7 @@ function AccountFooter({
     };
 
   const hasUpper =
-    !!(onProfile || onManage || onWallet || onKeys || onPlanUsage || onBilling || onDiscoverAgents);
+    !!(onProfile || onManage || onWallet || onComputer || onKeys || onPlanUsage || onBilling || onDiscoverAgents);
 
   return (
     <div
@@ -2341,6 +2417,17 @@ function AccountFooter({
               {...hoverHandlers}
             >
               <span style={{ flex: 1 }}>{t.accountWallet}</span>
+            </a>
+          ) : null}
+          {onComputer ? (
+            <a
+              href="#computer"
+              role="menuitem"
+              style={menuLinkStyle}
+              onClick={accountLinkClick(onComputer)}
+              {...hoverHandlers}
+            >
+              <span style={{ flex: 1 }}>{t.accountComputer}</span>
             </a>
           ) : null}
           {onBilling ? (
@@ -2596,6 +2683,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [mode, setMode] = useState(modeProp);
   /** Fullscreen only: hide/show the left chat list. */
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  /** While a screen is open, the chat list steps aside so the desktop can be wide. */
+  const [screenHidesList, setScreenHidesList] = useState(false);
   const setOpen = useCallback(
     (next: boolean) => {
       onOpenChange?.(next);
@@ -2610,10 +2699,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
     if (modeProp !== "full") setSidebarCollapsed(false);
   }, [modeProp]);
 
-  const showSidebar = mode !== "full" || !sidebarCollapsed;
   const viewportWidth = useViewportWidth();
   /** <768px in full mode: single-column, list ↔ conversation like side mode. */
   const isNarrowFull = mode === "full" && viewportWidth < 768;
+  const listStepsAside = screenHidesList && mode === "full" && !isNarrowFull;
+  const showSidebar = (mode !== "full" || !sidebarCollapsed) && !listStepsAside;
 
   const client = useMemo(
     () => createGatewayClient(gatewayBaseUrl, getAccessToken),
@@ -2674,6 +2764,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showAccountKeys, setShowAccountKeys] = useState(false);
   const [showAccountPlan, setShowAccountPlan] = useState(false);
   const [showAccountBilling, setShowAccountBilling] = useState(false);
+  const [showComputer, setShowComputer] = useState(false);
+  const [screenComputer, setScreenComputer] = useState<{ id: string; label: string } | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  useEffect(() => {
+    setScreenComputer(null);
+    setScreenHidesList(false);
+    setHistoryOpen(false);
+  }, [active?.chat_id]);
+  useEffect(() => {
+    if (!screenComputer) setScreenHidesList(false);
+  }, [screenComputer]);
 
   const closeAccountSurfaces = () => {
     setShowAccountProfile(false);
@@ -2682,6 +2783,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setShowAccountKeys(false);
     setShowAccountPlan(false);
     setShowAccountBilling(false);
+    setShowComputer(false);
     setShowMyAgents(false);
   };
 
@@ -2816,7 +2918,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   } | null>(null);
   /** Detail panel tab. Group: members. Direct: info | settings? | wallet? | chats. */
   const [infoTab, setInfoTab] = useState<"info" | "settings" | "wallet" | "members" | "chats">("info");
-  const [historyKind, setHistoryKind] = useState<"chats" | "plans" | "tasks">("chats");
+  const [historyKind, setHistoryKind] = useState<"chats" | "plans" | "tasks" | "files">("chats");
   const [planViewer, setPlanViewer] = useState<{
     chatId: string;
     planId: string;
@@ -2944,6 +3046,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const agentIdsRef = useRef<string[]>([]);
   const activeChatIdRef = useRef<string | null>(null);
   activeChatIdRef.current = active?.chat_id ?? null;
+  const pendingMailboxRef = useRef<string | null>(null);
 
   const setDeliveryBroken = useCallback((chatId: string, broken: boolean) => {
     setDeliveryBrokenByChat((prev) => {
@@ -3182,6 +3285,71 @@ export function RanchChatShell(props: RanchChatShellProps) {
       (el as HTMLElement).scrollIntoView({ block: "center", behavior: "smooth" });
     }
   }, []);
+
+  const messageIdForMailbox = useCallback((msgs: ChatMessage[], mailboxId: string) => {
+    for (const m of msgs) {
+      const ids = mailboxIdsFromAttachments(parseMessageAttachments(m.attachments ?? []));
+      if (ids.includes(mailboxId)) return m.message_id;
+    }
+    return null;
+  }, []);
+
+  const scrollToMailbox = useCallback(
+    (mailboxId: string, msgs: ChatMessage[]) => {
+      const mid = messageIdForMailbox(msgs, mailboxId);
+      if (mid) scrollToMessage(mid);
+    },
+    [messageIdForMailbox, scrollToMessage],
+  );
+
+  const loadOlderUntilMailbox = useCallback(
+    async (chatId: string, mailboxId: string, current: ChatMessage[]) => {
+      let msgs = current;
+      for (let i = 0; i < 6; i++) {
+        if (messageIdForMailbox(msgs, mailboxId)) return msgs;
+        const oldest = msgs.find((m) => !String(m.message_id).startsWith(LOCAL_TOPIC_START_PREFIX));
+        if (!oldest) break;
+        const older = await client.listMessages(chatId, { before: oldest.message_id, limit: 50 });
+        if (older.length === 0) break;
+        const seen = new Set(msgs.map((m) => m.message_id));
+        const prepend = older.filter((m) => !seen.has(m.message_id));
+        if (prepend.length === 0) break;
+        msgs = [...prepend, ...msgs];
+      }
+      return msgs;
+    },
+    [client, messageIdForMailbox],
+  );
+
+  useEffect(() => {
+    if (showMembersPanel) return;
+    const mailboxId = pendingMailboxRef.current;
+    if (!mailboxId || !active?.chat_id || messages.length === 0) return;
+    if (messageIdForMailbox(messages, mailboxId)) {
+      pendingMailboxRef.current = null;
+      const timer = window.setTimeout(() => scrollToMailbox(mailboxId, messages), 80);
+      return () => window.clearTimeout(timer);
+    }
+    let cancelled = false;
+    const chatId = active.chat_id;
+    void (async () => {
+      const next = await loadOlderUntilMailbox(chatId, mailboxId, messages);
+      if (cancelled) return;
+      pendingMailboxRef.current = null;
+      setMessages((prev) => mergeServerMessagesWithLocalTopicMarkers(next, prev));
+      window.setTimeout(() => scrollToMailbox(mailboxId, next), 80);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    messages,
+    active?.chat_id,
+    showMembersPanel,
+    loadOlderUntilMailbox,
+    messageIdForMailbox,
+    scrollToMailbox,
+  ]);
 
   const reloadMessages = useCallback(
     async (chatId: string, seq?: number) => {
@@ -5430,6 +5598,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
         />
       ) : null}
 
+      {showComputer ? (
+        <ComputerManagePanel
+          chatId={active?.chat_id ?? null}
+          gatewayBaseUrl={gatewayBaseUrl}
+          getAccessToken={getAccessToken}
+          locale={uiLocale}
+          onClose={() => setShowComputer(false)}
+        />
+      ) : null}
+
       {showAccountBilling ? (
         <AccountBillingPanel
           client={client}
@@ -5852,6 +6030,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
             onProfile={() => openAccountPanel("profile")}
             onManage={() => openAccountPanel("manage")}
             onWallet={() => openAccountPanel("wallet")}
+            onComputer={() => {
+              closeAccountSurfaces();
+              setShowComputer(true);
+            }}
             onKeys={() => openAccountPanel("keys")}
             onPlanUsage={() => openAccountPanel("plan")}
             onBilling={() => openAccountPanel("billing")}
@@ -5869,15 +6051,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
       {(view === "conversation" || mode === "full") && (
         <div
           style={{
-            flex: 1,
             // full: always show right pane (empty state when no selection);
             // narrow full (<768px): single-column, list view hides it.
-            display:
-              (mode === "full" && !isNarrowFull) || view === "conversation"
+            display: screenComputer && (isNarrowFull || mode !== "full")
+              ? "none"
+              : (mode === "full" && !isNarrowFull) || view === "conversation"
                 ? "flex"
                 : "none",
             flexDirection: "column",
-            minWidth: 0,
+            flex: screenComputer && mode === "full" && !isNarrowFull ? "1 1 0%" : 1,
+            minWidth: screenComputer && mode === "full" && !isNarrowFull ? 280 : 0,
             height: "100%",
             background: colors.bg,
             position: "relative",
@@ -5885,7 +6068,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         >
           {!active ? (
             <>
-              {mode === "full" && sidebarCollapsed ? (
+              {mode === "full" && !showSidebar ? (
                 <button
                   type="button"
                   style={{
@@ -5895,7 +6078,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     left: 14,
                     zIndex: 5,
                   }}
-                  onClick={() => setSidebarCollapsed(false)}
+                  onClick={() => {
+                    setSidebarCollapsed(false);
+                    setScreenHidesList(false);
+                  }}
                   aria-label={t.expandSidebar}
                   title={t.expandSidebar}
                 >
@@ -5977,11 +6163,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       ←
                     </button>
                   )}
-                  {mode === "full" && sidebarCollapsed ? (
+                  {mode === "full" && !showSidebar ? (
                     <button
                       type="button"
                       style={btnIcon}
-                      onClick={() => setSidebarCollapsed(false)}
+                      onClick={() => {
+                        setSidebarCollapsed(false);
+                        setScreenHidesList(false);
+                      }}
                       aria-label={t.expandSidebar}
                       title={t.expandSidebar}
                     >
@@ -6126,38 +6315,142 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   </button>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <ChatComputerControl
+                    chatId={active.chat_id}
+                    gatewayBaseUrl={gatewayBaseUrl}
+                    getAccessToken={getAccessToken}
+                    locale={uiLocale}
+                    screenOpenId={screenComputer?.id ?? null}
+                    onOpenScreen={(id, label) => {
+                      if (screenComputer?.id === id) {
+                        setScreenComputer(null);
+                        return;
+                      }
+                      if (mode === "full" && !isNarrowFull) setScreenHidesList(true);
+                      setScreenComputer({ id, label });
+                    }}
+                  />
                   {canOpenTalk ? (
                     <button
                       type="button"
-                      style={{
-                        ...btnGhost,
-                        background: talkOpen ? colors.accentSoft : "transparent",
-                        borderColor: talkOpen ? colors.accent : colors.border,
-                      }}
+                      style={headerIconStyle(talkOpen)}
                       disabled={!!windowBusy}
                       onClick={() => void toggleTalkWindow()}
                       aria-pressed={talkOpen}
-                      title={talkOpen ? t.faceChatOpen : t.faceChat}
+                      aria-label={talkOpen ? t.faceChatOpen : t.faceChat}
+                      title={windowBusy === "talk" ? t.faceChatOpening : talkOpen ? t.faceChatOpen : t.faceChat}
                     >
-                      {windowBusy === "talk" ? t.faceChatOpening : talkOpen ? t.faceChatOpen : t.faceChat}
+                      <IconFace />
                     </button>
                   ) : null}
                   {canOpenBody ? (
                     <button
                       type="button"
-                      style={{
-                        ...btnGhost,
-                        background: bodyOpen ? colors.accentSoft : "transparent",
-                        borderColor: bodyOpen ? colors.accent : colors.border,
-                      }}
+                      style={headerIconStyle(bodyOpen)}
                       disabled={!!windowBusy}
                       onClick={() => void toggleBodyWindow()}
                       aria-pressed={bodyOpen}
-                      title={bodyOpen ? t.bodyChatOpen : t.bodyChat}
+                      aria-label={bodyOpen ? t.bodyChatOpen : t.bodyChat}
+                      title={windowBusy === "body" ? t.bodyChatOpening : bodyOpen ? t.bodyChatOpen : t.bodyChat}
                     >
-                      {windowBusy === "body" ? t.bodyChatOpening : bodyOpen ? t.bodyChatOpen : t.bodyChat}
+                      <IconBody />
                     </button>
                   ) : null}
+                  <div style={{ position: "relative" }}>
+                    <button
+                      type="button"
+                      style={headerIconStyle(historyOpen)}
+                      onClick={() => setHistoryOpen((open) => !open)}
+                      aria-expanded={historyOpen}
+                      aria-label={t.headerHistory}
+                      title={t.headerHistory}
+                    >
+                      <IconHistory />
+                    </button>
+                    {historyOpen ? (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "100%",
+                          right: 0,
+                          marginTop: 6,
+                          width: 280,
+                          maxHeight: 320,
+                          overflow: "auto",
+                          zIndex: 40,
+                          background: colors.panel,
+                          color: colors.text,
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: 10,
+                          boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
+                          padding: 8,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 4,
+                        }}
+                      >
+                        {siblingChats.length === 0 ? (
+                          <p style={{ margin: 0, padding: 8, color: colors.muted, fontSize: 12 }}>{t.noAgentChatsHint}</p>
+                        ) : (
+                          siblingChats.map((c) => (
+                            <button
+                              key={c.chat_id}
+                              type="button"
+                              onClick={() => {
+                                setHistoryOpen(false);
+                                if (active.chat_id !== c.chat_id) void openConversation(c);
+                              }}
+                              style={{
+                                ...listItem,
+                                alignItems: "center",
+                                background: active.chat_id === c.chat_id ? colors.accentSoft : "transparent",
+                                textAlign: "left",
+                              }}
+                            >
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div
+                                  style={{
+                                    fontWeight: 600,
+                                    fontSize: 13,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {conversationLabel(c, t)}
+                                </div>
+                              </div>
+                              <span style={{ fontSize: 10, color: colors.muted, flexShrink: 0 }}>
+                                {formatRelativeTime(c.last_message_at || c.created_at, t)}
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    style={headerIconStyle(showMembersPanel)}
+                    onClick={() => {
+                      setHistoryOpen(false);
+                      if (showMembersPanel) {
+                        setShowMembersPanel(false);
+                        setShowAddMember(false);
+                        setEditingTitle(false);
+                        return;
+                      }
+                      setShowAddMember(false);
+                      setEditingTitle(false);
+                      setInfoTab(isGroupChat(active) ? "members" : "info");
+                      setShowMembersPanel(true);
+                    }}
+                    aria-pressed={showMembersPanel}
+                    aria-label={isGroupChat(active) ? t.groupInfo : t.agentInfo}
+                    title={isGroupChat(active) ? t.groupInfo : t.agentInfo}
+                  >
+                    <IconMore />
+                  </button>
                 {mode === "side" ? (
                   <button
                     type="button"
@@ -6359,6 +6652,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           attachments={m.attachments}
                           gatewayBaseUrl={gatewayBaseUrl}
                           getAccessToken={getAccessToken}
+                          showListedPrice={attachmentListedPriceVisible(m.metadata?.piece)}
+                          chargedMailboxIds={attachmentBilledRefs(m.metadata?.piece)}
                           loadFailedLabel={t.attachmentLoadFailed}
                           retryLabel={t.retry}
                           unavailableLabel={t.attachmentUnavailable}
@@ -6374,7 +6669,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               const status = typeof rec.status === "string" ? rec.status : "";
                               const amount = Number(rec.amount);
                               let line: string | null = null;
-                              if (status === "captured") line = t.pieceCaptured;
+                              if (
+                                attachmentSettledVisible(
+                                  raw,
+                                  mailboxIdsFromAttachments(
+                                    parseMessageAttachments(m.attachments),
+                                  ),
+                                )
+                              ) {
+                                line = t.pieceCaptured;
+                              }
                               else if (status === "held" && Number.isFinite(amount) && amount > 0) {
                                 line = t.pieceHeld(amount);
                               }
@@ -7563,6 +7867,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             ["chats", t.historyChats],
                             ["plans", t.historyPlans],
                             ["tasks", t.historyTasks],
+                            ["files", t.historyFiles],
                           ] as const
                         ).map(([key, label]) => (
                           <button
@@ -7772,6 +8077,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               )}
                             </div>
                           )
+                        ) : historyKind === "files" ? (
+                          <HistoryFilesPanel
+                            chats={siblingChats}
+                            labelFor={(c) => conversationLabel(c, t)}
+                            client={client}
+                            gatewayBaseUrl={gatewayBaseUrl}
+                            getAccessToken={getAccessToken}
+                            emptyLabel={t.historyFilesEmpty}
+                            loadingLabel={t.loading}
+                            onPick={(chat, mailboxId) => {
+                              pendingMailboxRef.current = mailboxId;
+                              setShowMembersPanel(false);
+                              if (active.chat_id !== chat.chat_id) {
+                                void openConversation(chat);
+                              }
+                            }}
+                          />
                         ) : siblingChats.length === 0 ? (
                           <div
                             style={{
@@ -8463,6 +8785,35 @@ export function RanchChatShell(props: RanchChatShellProps) {
           {mode === "full" ? accountPanels : null}
         </div>
       )}
+
+      {screenComputer && active ? (
+        <aside
+          data-computer-screen="open"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: mode === "full" && !isNarrowFull ? "1.65 1 0%" : "1 1 0%",
+            minWidth: 0,
+            width: mode === "full" && !isNarrowFull ? undefined : "100%",
+            height: "100%",
+            minHeight: 0,
+            overflow: "hidden",
+            borderLeft:
+              mode === "full" && !isNarrowFull ? `1px solid ${colors.border}` : undefined,
+            background: colors.bg,
+          }}
+        >
+          <ComputerScreenPanel
+            computerId={screenComputer.id}
+            label={screenComputer.label}
+            gatewayBaseUrl={gatewayBaseUrl}
+            getAccessToken={getAccessToken}
+            locale={uiLocale}
+            chatId={activeChatId}
+            onClose={() => setScreenComputer(null)}
+          />
+        </aside>
+      ) : null}
 
       {active && activeWindow && windowHostOrigin ? (
         <ChatWindowPane

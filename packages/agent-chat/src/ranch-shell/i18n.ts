@@ -152,10 +152,13 @@ export type RanchMessages = {
   decisionAskHuman: string;
   decisionCap: string;
   historyChats: string;
+  headerHistory: string;
   historyPlans: string;
   historyTasks: string;
+  historyFiles: string;
   historyPlansEmpty: string;
   historyTasksEmpty: string;
+  historyFilesEmpty: string;
   historyTaskPending: string;
   historyTaskPosted: string;
   historyTaskOpen: string;
@@ -258,6 +261,7 @@ export type RanchMessages = {
   accountProfile: string;
   accountProfileHint: string;
   accountWallet: string;
+  accountComputer: string;
   accountBilling: string;
   accountWalletHint: string;
   /** Account menu: Store model quota (not API keys, not Wallet Credits). */
@@ -845,10 +849,13 @@ const en: RanchMessages = {
   decisionAskHuman: "Waiting for you",
   decisionCap: "Auto-decide paused — hop limit reached.",
   historyChats: "Chats",
+  headerHistory: "History",
   historyPlans: "Plans",
   historyTasks: "Tasks",
+  historyFiles: "Files",
   historyPlansEmpty: "No plan yet. When the agent writes one from this conversation, it shows up here.",
   historyTasksEmpty: "No task yet. Confirm a job card in chat and it will appear here.",
+  historyFilesEmpty: "No files yet. Images, video, and documents from these chats show up here.",
   historyTaskPending: "Waiting for you",
   historyTaskPosted: "Posted",
   historyTaskOpen: "Open task",
@@ -950,6 +957,7 @@ const en: RanchMessages = {
   accountProfile: "Profile",
   accountProfileHint: "Signed-in account from your identity provider. Edit name and avatar there for now.",
   accountWallet: "Wallet",
+  accountComputer: "Manage computers",
   accountBilling: "Receipts & invoices",
   accountWalletHint: "Your human Credits balance. Agent wallets stay under each agent.",
   accountKeys: "Model quota",
@@ -1593,10 +1601,13 @@ const zh: RanchMessages = {
   decisionAskHuman: "等你来选",
   decisionCap: "自动决策已暂停——达到次数上限。",
   historyChats: "对话",
+  headerHistory: "历史对话",
   historyPlans: "目标",
   historyTasks: "任务",
+  historyFiles: "附件",
   historyPlansEmpty: "还没有计划。智能体根据这场对话写出计划后，会出现在这里。",
   historyTasksEmpty: "还没有任务。在对话里点头确认发单后，会出现在这里。",
+  historyFilesEmpty: "还没有附件。这些对话里的图片、视频和文件会出现在这里。",
   historyTaskPending: "等你确认",
   historyTaskPosted: "已发单",
   historyTaskOpen: "打开任务",
@@ -1691,6 +1702,7 @@ const zh: RanchMessages = {
   accountProfile: "个人资料",
   accountProfileHint: "登录账号来自身份提供方。目前请在那里修改名称与头像。",
   accountWallet: "钱包",
+  accountComputer: "管理电脑",
   accountBilling: "收据与发票",
   accountWalletHint: "你本人的 Credits 余额。智能体钱包在各自智能体详情里。",
   accountKeys: "模型额度",
