@@ -14,7 +14,7 @@ const copy = {
   en: {
     title: "Manage computers",
     close: "Close",
-    hint: "New chats use the default computer. Another computer costs 100 credits and does not take new chats on its own.",
+    hint: "New chats use the default computer. Another computer is charged for the time it runs, and does not take new chats on its own.",
     empty: "No computer yet. One is created when a chat needs a place to work.",
     open: "Open another",
     opening: "Opening…",
@@ -32,7 +32,7 @@ const copy = {
   zh: {
     title: "管理电脑",
     close: "关闭",
-    hint: "新对话进默认电脑。再开一台要 100 积分，也不会自动接新对话。",
+    hint: "新对话进默认电脑。再开一台也按跑动时间收费，不会自动接新对话。",
     empty: "还没有电脑。有对话需要干活时，会有一台。",
     open: "再开一台",
     opening: "正在开…",
