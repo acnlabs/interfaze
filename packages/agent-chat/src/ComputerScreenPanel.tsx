@@ -47,6 +47,7 @@ export function ComputerScreenPanel({
   locale,
   onClose,
   chatId,
+  embedded = false,
 }: {
   computerId: string;
   label: string;
@@ -55,6 +56,7 @@ export function ComputerScreenPanel({
   locale: RanchLocale;
   onClose: () => void;
   chatId?: string | null;
+  embedded?: boolean;
 }) {
   const t = copy[locale] ?? copy.en;
   const frameRef = useRef<HTMLDivElement>(null);
@@ -294,20 +296,22 @@ export function ComputerScreenPanel({
         flexDirection: "column",
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "12px 14px",
-          borderBottom: `1px solid ${colors.border}`,
-        }}
-      >
-        <strong style={{ flex: 1 }}>{label}</strong>
-        <button type="button" onClick={onClose} style={{ background: "transparent", color: colors.muted, border: 0 }}>
-          {t.close}
-        </button>
-      </div>
+      {embedded ? null : (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "12px 14px",
+            borderBottom: `1px solid ${colors.border}`,
+          }}
+        >
+          <strong style={{ flex: 1 }}>{label}</strong>
+          <button type="button" onClick={onClose} style={{ background: "transparent", color: colors.muted, border: 0 }}>
+            {t.close}
+          </button>
+        </div>
+      )}
       <div ref={frameRef} style={{ flex: 1, minHeight: 0, position: "relative", background: "#000" }}>
         {live ? (
           <iframe

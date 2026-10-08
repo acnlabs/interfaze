@@ -1,3 +1,5 @@
+import type { PageOpRecord } from "./pageOpText";
+
 export type AgentChatMode = "side" | "full";
 
 export type AgentChatContext = {
@@ -83,6 +85,8 @@ export type ChatSummary = {
   created_at?: string | null;
   last_message_at?: string | null;
   last_message_content?: string | null;
+  /** Language-free record when the latest message is a Canvas operation. */
+  last_message_canvas_op?: PageOpRecord | null;
   unread_count?: number;
   agent_status?: string | null;
   embed?: ChatEmbed | null;
@@ -264,6 +268,13 @@ export type ChatMessage = {
         reward?: string;
         deadline_hours?: number;
       };
+    };
+    /** This sentence points at one Canvas block. The body stays on the Canvas. */
+    canvas_ref?: {
+      block_key?: string;
+      rev?: number;
+      thread_id?: string | null;
+      title?: string | null;
     };
     piece?: PieceHold | null;
     [key: string]: unknown;

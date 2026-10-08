@@ -8,7 +8,7 @@ export function computerName(
   extraIndex: number,
   locale: "en" | "zh",
 ): string {
-  if (isDefault) return locale === "zh" ? "默认电脑" : "Default computer";
+  if (isDefault) return locale === "zh" ? "电脑" : "Computer";
   const number = extraIndex + 2;
   return locale === "zh" ? `电脑 ${number}` : `Computer ${number}`;
 }

@@ -33,10 +33,15 @@ import {
   attachmentSettledVisible,
 } from "../attachmentListedPrice";
 import { ChatComputerControl } from "../ChatComputerControl";
+import { computerName, extraIndex, type ComputerNameRow } from "../computerLabel";
 import { ComputerManagePanel } from "../ComputerManagePanel";
 import { ComputerScreenPanel } from "../ComputerScreenPanel";
 import { MailboxThumbs } from "../MailboxThumbs";
 import { HistoryFilesPanel } from "../HistoryFilesPanel";
+import { ManuscriptPanel } from "../ManuscriptPanel";
+import { blockLabel, pageOpLine, pageRefLine, type PageOpRecord, type PageRefRecord } from "../pageOpText";
+import { blockKeyFromSearch, chatIdFromSearch } from "../chatLink";
+import { visibleManuscriptBlocks } from "../manuscriptPage";
 import { mailboxIdsFromAttachments, parseMessageAttachments } from "../mailbox";
 import { calleesFromMetadata, decideFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, planFromMetadata, proposeGroupFromMetadata, proposeTaskFromMetadata, type MessageDecide, type MessagePlan, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
 import { settleQueuedDelivery } from "./settleQueuedDelivery";
@@ -86,6 +91,7 @@ import {
 } from "./i18n";
 import { btnGhost, btnIcon, btnPrimary, colors, inputStyle, shellRoot } from "./styles";
 import { ChatWindowPane } from "./chat-window/ChatWindowPane";
+import { WorkDock, type WorkTab } from "./WorkDock";
 import { openEmbodyHost, openStudioTalk } from "./chat-window/studioTalk";
 import { bodyIdFromHostPath, type ChatWindow, type ChatWindowKind } from "./chat-window/types";
 
@@ -511,7 +517,9 @@ function sendFailureCopy(
                   ? t.needOpenRouterKey
                   : e.code === "model_pricing_unavailable"
                     ? t.modelPricingUnavailable
-                    : e.message || t.sendFailed;
+                    : e.code === "canvas_ref"
+      ? t.pageRefRejected
+      : e.message || t.sendFailed;
   return { text, offerStoreKey };
 }
 
@@ -2040,6 +2048,16 @@ function IconClose() {
   );
 }
 
+/** Right-hand pane toggle. The bar sits on the right of the rectangle. */
+function IconRightPanel() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M15 3v18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** Simple left-rail panel (no chevron). Same glyph for collapse/expand. */
 function IconSidebar() {
   return (
@@ -2766,7 +2784,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showAccountBilling, setShowAccountBilling] = useState(false);
   const [showComputer, setShowComputer] = useState(false);
   const [screenComputer, setScreenComputer] = useState<{ id: string; label: string } | null>(null);
+  const [cloudComputers, setCloudComputers] = useState<ComputerNameRow[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [pageTick, setPageTick] = useState(0);
+  const [dockTabs, setDockTabs] = useState<WorkTab[]>([]);
+  const [activeDockId, setActiveDockId] = useState<string | null>(null);
+  const [pointedBlock, setPointedBlock] = useState<PageRefRecord | null>(null);
+  const openManuscriptRef = useRef<(blockKey?: string) => void>(() => {});
+  const dockTabsRef = useRef<WorkTab[]>([]);
+  const topicIdRef = useRef<string | null>(null);
+  const canvasFetchSeq = useRef(0);
+  dockTabsRef.current = dockTabs;
   useEffect(() => {
     setScreenComputer(null);
     setScreenHidesList(false);
@@ -2786,6 +2814,90 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setShowComputer(false);
     setShowMyAgents(false);
   };
+
+  const closeCanvasTabs = () => {
+    const next = dockTabsRef.current.filter((tab) => tab.kind !== "canvas");
+    setDockTabs(next);
+    setActiveDockId((cur) => (cur?.startsWith("canvas:") ? (next[0]?.id ?? null) : cur));
+  };
+
+  const openComputer = () => {
+    closeAccountSurfaces();
+    setShowComputer(true);
+  };
+
+  const openCloudScreen = (id: string, label: string) => {
+    const tabId = `computer:${id}`;
+    if (dockTabsRef.current.some((tab) => tab.id === tabId)) {
+      setActiveDockId(tabId);
+      return;
+    }
+    closeAccountSurfaces();
+    setScreenComputer({ id, label });
+    setDockTabs((prev) => [...prev, { id: tabId, kind: "computer", title: label }]);
+    setActiveDockId(tabId);
+  };
+
+  const openCanvas = (focusKey?: string) => {
+    closeAccountSurfaces();
+    const chatId = activeChatIdRef.current;
+    if (!chatId) return;
+    const seedId = focusKey ? `canvas:${focusKey}` : "canvas:empty";
+    const seedTitle = focusKey ? blockLabel(focusKey) || t.manuscript : t.manuscript;
+    const already = dockTabsRef.current.some((tab) => (focusKey ? tab.id === seedId : tab.kind === "canvas"));
+    if (!already) {
+      setDockTabs((prev) => [...prev, { id: seedId, kind: "canvas", blockKey: focusKey, title: seedTitle }]);
+    }
+    setActiveDockId(() => {
+      if (focusKey) return seedId;
+      return dockTabsRef.current.find((tab) => tab.kind === "canvas")?.id ?? seedId;
+    });
+    const seq = ++canvasFetchSeq.current;
+    void client.getChatPage(chatId).then((page) => {
+      if (seq !== canvasFetchSeq.current || activeChatIdRef.current !== chatId) return;
+      const blocks = visibleManuscriptBlocks(page.blocks ?? [], topicIdRef.current);
+      const canvasTabs: WorkTab[] = blocks.length
+        ? blocks.map((block) => ({
+            id: `canvas:${block.block_key}`,
+            kind: "canvas" as const,
+            blockKey: block.block_key,
+            title: block.title?.trim() || blockLabel(block.block_key) || t.manuscript,
+          }))
+        : [{ id: "canvas:empty", kind: "canvas", title: t.manuscript }];
+      setDockTabs((prev) => [...prev.filter((tab) => tab.kind !== "canvas"), ...canvasTabs]);
+      setActiveDockId((cur) => {
+        if (focusKey && canvasTabs.some((tab) => tab.id === `canvas:${focusKey}`)) return `canvas:${focusKey}`;
+        if (cur && canvasTabs.some((tab) => tab.id === cur)) return cur;
+        return canvasTabs[0]?.id ?? null;
+      });
+    }).catch(() => {});
+  };
+  openManuscriptRef.current = openCanvas;
+
+  useEffect(() => {
+    setDockTabs([]);
+    setActiveDockId(null);
+    setPointedBlock(null);
+  }, [active?.chat_id]);
+
+  useEffect(() => {
+    let gone = false;
+    void (async () => {
+      const token = await getAccessToken();
+      if (!token || gone) return;
+      const res = await fetch(`${gatewayBaseUrl.replace(/\/+$/, "")}/api/computers`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok || gone) return;
+      const body = (await res.json()) as { computers?: ComputerNameRow[] };
+      if (!gone) setCloudComputers(Array.isArray(body.computers) ? body.computers : []);
+    })().catch(() => {
+      if (!gone) setCloudComputers([]);
+    });
+    return () => {
+      gone = true;
+    };
+  }, [active?.chat_id, gatewayBaseUrl, getAccessToken]);
 
   const applyAccountPanel = (panel: AccountDeepLinkPanel | null) => {
     closeAccountSurfaces();
@@ -2993,6 +3105,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [ownedAgentLoading, setOwnedAgentLoading] = useState(false);
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [activeTopic, setActiveTopic] = useState<ThreadSummary | null>(null);
+  topicIdRef.current = activeTopic?.id ?? null;
   /**
    * Product model: topic = segment label on the main timeline; Topics list =
    * directory; filtered view (activeTopic) is secondary (list only).
@@ -3532,6 +3645,46 @@ export function RanchChatShell(props: RanchChatShellProps) {
     [client, clearReplySlot, directoryAgents, resolveAfterDeliveryIssue],
   );
 
+  const openedChatLinkRef = useRef(false);
+  useEffect(() => {
+    if (!open || loadingChats || openedChatLinkRef.current) return;
+    openedChatLinkRef.current = true;
+    if (typeof window === "undefined") return;
+    const id = chatIdFromSearch(window.location.search);
+    const block = blockKeyFromSearch(window.location.search);
+    if (!id) return;
+    const row = chats.find((chat) => chat.chat_id === id);
+    if (!row) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("chat");
+      url.searchParams.delete("block");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      return;
+    }
+    void openConversation(row).then(() => {
+      if (block) openManuscriptRef.current(block);
+    });
+  }, [open, loadingChats, chats, openConversation]);
+
+  const seenActiveChatRef = useRef(false);
+  useEffect(() => {
+    if (active?.chat_id) seenActiveChatRef.current = true;
+    if (!seenActiveChatRef.current || typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const current = url.searchParams.get("chat");
+    if (active?.chat_id) {
+      if (current === active.chat_id) return;
+      url.searchParams.set("chat", active.chat_id);
+      url.searchParams.delete("block");
+    } else if (current) {
+      url.searchParams.delete("chat");
+      url.searchParams.delete("block");
+    } else {
+      return;
+    }
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [active?.chat_id]);
+
   const openedInitialAgentRef = useRef(false);
   useEffect(() => {
     const want = (initialOpenAgentId || "").replace(/^acn:/i, "").trim().toLowerCase();
@@ -3576,6 +3729,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const want = agentIdKey(official.agent_id);
     if (!open || !want || openedOfficialRef.current || openedInitialAgentRef.current) return;
     if (initialOpenAgentId || loadingChats || active) return;
+    if (typeof window !== "undefined" && chatIdFromSearch(window.location.search)) return;
     const others = chats.filter((c) => !isGroupChat(c) && agentIdKey(c.agent_id) !== want);
     if (others.length > 0) return;
     openedOfficialRef.current = true;
@@ -3766,6 +3920,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
         token,
         onEvent: (ev) => {
           if (ev.chat_id && ev.chat_id !== chatId) return;
+          if (ev.type === "canvas.updated") {
+            setPageTick((n) => n + 1);
+            const receipts = Array.isArray(ev.data?.receipts) ? ev.data.receipts : [];
+            const hit = receipts.find(
+              (item) => item && typeof item === "object" && typeof (item as { block_key?: unknown }).block_key === "string",
+            ) as { block_key?: string } | undefined;
+            openManuscriptRef.current(hit?.block_key);
+          }
           if (ev.type === "message.new" && ev.data) {
             const d = ev.data;
             const messageId = d.message_id != null ? String(d.message_id) : "";
@@ -4225,6 +4387,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
         opts?.threadId !== undefined
           ? opts.threadId
           : (activeTopic?.id ?? composerTopic?.id ?? null);
+      const pageRef =
+        pointedBlock?.block_key && pointedBlock.rev
+          ? { block_key: pointedBlock.block_key, rev: pointedBlock.rev }
+          : null;
       await client.sendMessage(chatId, text, mentions, sendThreadId, {
         requested_model: requestedModelForSend(
           selectedModelId,
@@ -4233,6 +4399,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           composerModel?.official_key_geo,
         ),
         decision_choice: opts?.decisionChoice ?? null,
+        canvas_ref: pageRef,
       });
       if (group && mentions) {
         if (mentions.length === 1) {
@@ -4244,6 +4411,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       }
       if (!opts?.decisionChoice && seq === loadSeqRef.current) {
         setDraft((current) => current === draft ? "" : current);
+        setPointedBlock(null);
       }
       await reloadMessages(chatId, seq);
       await refreshChats();
@@ -4691,6 +4859,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
     if (!activeTopic) return true;
     return m.thread_id === activeTopic.id;
   });
+  const nameForAgent = (id: string) =>
+    agentNames[id]?.trim() ||
+    agentNames[id.replace(/^acn:/, "")]?.trim() ||
+    shortAgentId(id) ||
+    id;
   const mineAgents = directoryAgents.filter((a) => a.group === "mine" && a.agent_id.trim());
   const hasMineAgents = mineAgents.length > 0;
   const officialAgent =
@@ -5102,6 +5275,56 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setWindowError(null);
   }, []);
 
+  useEffect(() => {
+    if (!activeWindow) {
+      setDockTabs((prev) => prev.filter((tab) => tab.kind !== "talk" && tab.kind !== "body"));
+      setActiveDockId((cur) => {
+        if (cur !== "talk" && cur !== "body") return cur;
+        const rest = dockTabsRef.current.filter((tab) => tab.kind !== "talk" && tab.kind !== "body");
+        return rest[0]?.id ?? null;
+      });
+      return;
+    }
+    const id = activeWindow.kind === "talk" ? "talk" : "body";
+    const title =
+      activeWindow.title ||
+      (activeWindow.kind === "body-pick"
+        ? t.bodyChatPick
+        : activeWindow.kind === "body"
+          ? activeWindow.payload.name || t.bodyChat
+          : activeWindow.payload.name || t.faceChat);
+    const alreadyOpen = dockTabsRef.current.some((tab) => tab.id === id);
+    setDockTabs((prev) => {
+      const rest = prev.filter((tab) => tab.kind !== "talk" && tab.kind !== "body");
+      const current = rest.find((tab) => tab.id === id) ?? prev.find((tab) => tab.id === id);
+      if (current && current.title === title) return prev;
+      return [...rest, { id, kind: id, title }];
+    });
+    if (!alreadyOpen) setActiveDockId(id);
+  }, [activeWindow, t.bodyChat, t.bodyChatPick, t.faceChat]);
+
+  const closeTab = (id: string) => {
+    if ((id === "talk" || id === "body") && active?.chat_id) {
+      closeChatWindow(active.chat_id);
+      return;
+    }
+    if (id.startsWith("computer:")) setScreenComputer(null);
+    const prev = dockTabsRef.current;
+    const next = prev.filter((tab) => tab.id !== id);
+    const idx = prev.findIndex((tab) => tab.id === id);
+    setDockTabs(next);
+    setActiveDockId((cur) => {
+      if (cur !== id) return cur;
+      return next[idx]?.id ?? next[idx - 1]?.id ?? null;
+    });
+  };
+
+  const dockWide = mode === "full" && !isNarrowFull;
+  const shownDockId = dockTabs.some((tab) => tab.id === activeDockId)
+    ? activeDockId
+    : (dockTabs[0]?.id ?? null);
+  const activeDock = dockTabs.find((tab) => tab.id === shownDockId) ?? null;
+
   const toggleTalkWindow = useCallback(async () => {
     if (!active?.chat_id || !active.agent_id || !studioOrigin) return;
     const current = chatWindows[active.chat_id];
@@ -5353,6 +5576,86 @@ export function RanchChatShell(props: RanchChatShellProps) {
       t.bodyChatFailed,
     ],
   );
+
+  const workDock =
+    active && activeDock ? (
+      <WorkDock
+        tabs={dockTabs}
+        activeId={shownDockId}
+        overlay={!dockWide}
+        closeLabel={t.close}
+        addLabel={t.addWindow}
+        addCanvasLabel={t.manuscript}
+        computers={cloudComputers.map((row) => ({
+          id: row.computer_id,
+          label: computerName(row.is_default, extraIndex(cloudComputers, row.computer_id), uiLocale),
+          open: dockTabs.some((tab) => tab.id === `computer:${row.computer_id}`),
+        }))}
+        onSelect={setActiveDockId}
+        onClose={closeTab}
+        onAddCanvas={() => openCanvas()}
+        onOpenComputer={openCloudScreen}
+        columnCloseLabel={t.windowClose}
+        onCloseColumn={() => {
+          if (active?.chat_id) closeChatWindow(active.chat_id);
+          setScreenComputer(null);
+          setDockTabs([]);
+          setActiveDockId(null);
+        }}
+      >
+        {activeDock.kind === "canvas" ? (
+          <ManuscriptPanel
+            embedded
+            client={client}
+            chatId={active.chat_id}
+            threadId={activeTopic?.id ?? null}
+            blockKey={activeDock.blockKey}
+            locale={uiLocale}
+            reloadToken={pageTick}
+            pointedKey={pointedBlock?.block_key ?? null}
+            onPoint={(block) => {
+              setPointedBlock((current) =>
+                current?.block_key === block.block_key
+                  ? null
+                  : {
+                      block_key: block.block_key,
+                      rev: block.rev,
+                      title: block.title?.trim() || blockLabel(block.block_key),
+                      thread_id: block.thread_id ?? null,
+                    },
+              );
+            }}
+            onClose={() => closeTab(activeDock.id)}
+          />
+        ) : activeDock.kind === "computer" ? (
+          <ComputerScreenPanel
+            key={activeDock.id}
+            computerId={activeDock.id.slice("computer:".length)}
+            label={activeDock.title}
+            gatewayBaseUrl={gatewayBaseUrl}
+            getAccessToken={getAccessToken}
+            locale={uiLocale}
+            chatId={active.chat_id}
+            embedded
+            onClose={() => closeTab(activeDock.id)}
+          />
+        ) : activeWindow && windowHostOrigin ? (
+          <ChatWindowPane
+            embedded
+            window={activeWindow}
+            studioBaseUrl={windowHostOrigin}
+            onClose={() => closeTab(activeDock.id)}
+            onPickBody={openPickedBody}
+            onExpired={() => {
+              const win = activeWindow;
+              if (win && win.kind !== "body-pick") void renewHostTicket(win);
+            }}
+            busy={windowBusy === "body"}
+            t={t}
+          />
+        ) : null}
+      </WorkDock>
+    ) : null;
 
   const hostRefreshKey = Object.values(chatWindows)
     .map((win) =>
@@ -5857,8 +6160,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     agentIdKey(active.agent_id) === agentIdKey(c.agent_id)
                   );
               const title = chatTitle(c);
+              const pageOpPreview = c.last_message_canvas_op
+                ? pageOpLine(
+                    uiLocale,
+                    c.last_message_canvas_op,
+                    nameForAgent(
+                      typeof c.last_message_canvas_op.actor_id === "string"
+                        ? c.last_message_canvas_op.actor_id
+                        : "",
+                    ),
+                  )
+                : "";
               const preview =
-                c.last_message_content || (isGroupChat(c) ? t.groupChat : t.noMessagesYet);
+                pageOpPreview ||
+                c.last_message_content ||
+                (isGroupChat(c) ? t.groupChat : t.noMessagesYet);
               const listBroken = !!deliveryBrokenByChat[c.chat_id];
               const listPresence = presenceForDot(c.agent_status, listBroken);
               const listTitle = presenceTitle(c.agent_status, listBroken, t);
@@ -6053,14 +6369,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
           style={{
             // full: always show right pane (empty state when no selection);
             // narrow full (<768px): single-column, list view hides it.
-            display: screenComputer && (isNarrowFull || mode !== "full")
-              ? "none"
-              : (mode === "full" && !isNarrowFull) || view === "conversation"
-                ? "flex"
-                : "none",
+            display:
+              (mode === "full" && !isNarrowFull) || view === "conversation" ? "flex" : "none",
             flexDirection: "column",
-            flex: screenComputer && mode === "full" && !isNarrowFull ? "1 1 0%" : 1,
-            minWidth: screenComputer && mode === "full" && !isNarrowFull ? 280 : 0,
+            flex: 1,
+            minWidth: 0,
             height: "100%",
             background: colors.bg,
             position: "relative",
@@ -6320,14 +6633,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     gatewayBaseUrl={gatewayBaseUrl}
                     getAccessToken={getAccessToken}
                     locale={uiLocale}
-                    screenOpenId={screenComputer?.id ?? null}
+                    openScreenIds={dockTabs
+                      .filter((tab) => tab.kind === "computer")
+                      .map((tab) => tab.id.slice("computer:".length))}
                     onOpenScreen={(id, label) => {
-                      if (screenComputer?.id === id) {
-                        setScreenComputer(null);
+                      const tabId = `computer:${id}`;
+                      if (dockTabsRef.current.some((tab) => tab.id === tabId)) {
+                        if (activeDockId === tabId || activeDockId == null) closeTab(tabId);
+                        else setActiveDockId(tabId);
                         return;
                       }
-                      if (mode === "full" && !isNarrowFull) setScreenHidesList(true);
-                      setScreenComputer({ id, label });
+                      openCloudScreen(id, label);
                     }}
                   />
                   {canOpenTalk ? (
@@ -6451,6 +6767,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   >
                     <IconMore />
                   </button>
+                  {!activeDock ? (
+                    <button
+                      type="button"
+                      style={headerIconStyle(false)}
+                      onClick={() => openCanvas()}
+                      aria-label={t.openWindow}
+                      title={t.openWindow}
+                    >
+                      <IconRightPanel />
+                    </button>
+                  ) : null}
                 {mode === "side" ? (
                   <button
                     type="button"
@@ -6574,6 +6901,32 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     (prev?.thread_id || null) !== m.thread_id;
                   const dividerTitle = topicLabel || t.topics;
                   const highlight = !!m.thread_id && highlightTopicId === m.thread_id;
+                  const pageOp =
+                    m.sender_type === "system" &&
+                    m.metadata?.kind === "canvas_op" &&
+                    m.metadata.canvas_op &&
+                    typeof m.metadata.canvas_op === "object"
+                      ? (m.metadata.canvas_op as PageOpRecord)
+                      : null;
+                  if (pageOp) {
+                    const actorId =
+                      typeof pageOp.actor_id === "string" ? pageOp.actor_id : m.sender_id;
+                    return (
+                      <div
+                        key={m.message_id}
+                        style={{
+                          alignSelf: "center",
+                          maxWidth: "min(92%, 36rem)",
+                          fontSize: 12,
+                          lineHeight: 1.45,
+                          color: colors.muted,
+                          textAlign: "center",
+                        }}
+                      >
+                        {pageOpLine(uiLocale, pageOp, nameForAgent(actorId))}
+                      </div>
+                    );
+                  }
                   if (topicStart) {
                     // Filter view: skip marker (list already scoped to this topic).
                     if (activeTopic) return null;
@@ -6647,6 +7000,65 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         }}
                       >
                         {m.content}
+                        {m.metadata?.canvas_ref && typeof m.metadata.canvas_ref === "object" ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openCanvas(
+                                typeof m.metadata?.canvas_ref?.block_key === "string"
+                                  ? m.metadata.canvas_ref.block_key
+                                  : undefined,
+                              )
+                            }
+                            style={{
+                              display: "block",
+                              marginTop: 8,
+                              padding: 0,
+                              border: 0,
+                              background: "transparent",
+                              color: colors.muted,
+                              fontSize: 12,
+                              lineHeight: 1.4,
+                              textAlign: "left",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {pageRefLine(uiLocale, m.metadata.canvas_ref)}
+                          </button>
+                        ) : null}
+                        {Array.isArray(m.metadata?.canvas_receipt)
+                          ? m.metadata.canvas_receipt.map((item, receiptIdx) => {
+                              if (!item || typeof item !== "object") return null;
+                              const rec = item as PageOpRecord;
+                              return (
+                                <button
+                                  key={`${rec.block_key || receiptIdx}`}
+                                  type="button"
+                                  onClick={() => openCanvas(typeof rec.block_key === "string" ? rec.block_key : undefined)}
+                                  style={{
+                                    display: "block",
+                                    marginTop: 8,
+                                    padding: "6px 8px",
+                                    maxWidth: "100%",
+                                    textAlign: "left",
+                                    fontSize: 12,
+                                    lineHeight: 1.4,
+                                    color: colors.muted,
+                                    background: "transparent",
+                                    border: `1px solid ${colors.border}`,
+                                    borderRadius: 8,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  {pageOpLine(
+                                    uiLocale,
+                                    { ...rec, outcome: "ok" },
+                                    nameForAgent(m.sender_id),
+                                  )}
+                                </button>
+                              );
+                            })
+                          : null}
                         <MailboxThumbs
                           chatId={m.chat_id || active?.chat_id || ""}
                           attachments={m.attachments}
@@ -7500,6 +7912,30 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </>
                       );
                     })()}
+                  </div>
+                ) : null}
+                {pointedBlock?.block_key ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      marginBottom: 6,
+                      fontSize: 12,
+                      color: colors.muted,
+                    }}
+                  >
+                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {pageRefLine(uiLocale, pointedBlock)}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={t.close}
+                      onClick={() => setPointedBlock(null)}
+                      style={{ border: 0, background: "transparent", color: colors.muted, cursor: "pointer" }}
+                    >
+                      ×
+                    </button>
                   </div>
                 ) : null}
                 <textarea
@@ -8783,52 +9219,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
             </>
           )}
           {mode === "full" ? accountPanels : null}
+          {!dockWide ? workDock : null}
         </div>
       )}
 
-      {screenComputer && active ? (
-        <aside
-          data-computer-screen="open"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            flex: mode === "full" && !isNarrowFull ? "1.65 1 0%" : "1 1 0%",
-            minWidth: 0,
-            width: mode === "full" && !isNarrowFull ? undefined : "100%",
-            height: "100%",
-            minHeight: 0,
-            overflow: "hidden",
-            borderLeft:
-              mode === "full" && !isNarrowFull ? `1px solid ${colors.border}` : undefined,
-            background: colors.bg,
-          }}
-        >
-          <ComputerScreenPanel
-            computerId={screenComputer.id}
-            label={screenComputer.label}
-            gatewayBaseUrl={gatewayBaseUrl}
-            getAccessToken={getAccessToken}
-            locale={uiLocale}
-            chatId={activeChatId}
-            onClose={() => setScreenComputer(null)}
-          />
-        </aside>
-      ) : null}
-
-      {active && activeWindow && windowHostOrigin ? (
-        <ChatWindowPane
-          window={activeWindow}
-          studioBaseUrl={windowHostOrigin}
-          onClose={() => closeChatWindow(active.chat_id)}
-          onPickBody={openPickedBody}
-          onExpired={() => {
-            const win = activeWindow;
-            if (win && win.kind !== "body-pick") void renewHostTicket(win);
-          }}
-          busy={windowBusy === "body"}
-          t={t}
-        />
-      ) : null}
+      {dockWide ? workDock : null}
 
       {pickerMode ? (
         <NewChatPicker
