@@ -516,6 +516,12 @@ export type GatewayClient = {
     status?: string | null;
   }>;
   getChatPlan: (chatId: string, planId: string) => Promise<import("./types").ChatPlanArtifact>;
+  getChatPage: (chatId: string) => Promise<import("./manuscriptPage").ManuscriptPage>;
+  /** Bytes or a short-lived URL for one mailbox file in this chat. Call revoke when done. */
+  openChatFile: (
+    chatId: string,
+    attachmentId: string,
+  ) => Promise<{ url: string; contentType: string; revoke: () => void }>;
   listChatFiles: (chatId: string) => Promise<
     Array<{
       attachment_id: string;
@@ -539,6 +545,7 @@ export type GatewayClient = {
       requested_provider?: string | null;
       decision_goal?: string | null;
       decision_choice?: string | null;
+      canvas_ref?: { block_key: string; rev: number } | null;
     },
   ) => Promise<ChatMessage>;
   patchChatDecision: (chatId: string, auto: boolean) => Promise<ChatSummary>;
@@ -870,6 +877,42 @@ export function createGatewayClient(
       request<import("./types").ChatPlanArtifact>(
         `/api/chats/${encodeURIComponent(chatId)}/plans/${encodeURIComponent(planId)}`,
       ),
+    getChatPage: (chatId) =>
+      request<import("./manuscriptPage").ManuscriptPage>(
+        `/api/chats/${encodeURIComponent(chatId)}/canvas`,
+      ),
+    openChatFile: async (chatId, attachmentId) => {
+      const token = await getAccessToken();
+      if (!token) {
+        throw new ChatGatewayError(401, "not_authenticated", "Not authenticated");
+      }
+      const res = await fetch(
+        joinUrl(
+          gatewayBaseUrl,
+          `/api/chats/${encodeURIComponent(chatId)}/files/${encodeURIComponent(attachmentId)}`,
+        ),
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) throw await parseError(res);
+      const headerType = (res.headers.get("content-type") || "").toLowerCase();
+      if (headerType.includes("application/json")) {
+        const body = (await res.json()) as { url?: unknown; content_type?: unknown };
+        const remoteUrl = typeof body.url === "string" ? body.url : "";
+        if (!remoteUrl) throw new ChatGatewayError(404, "not_found", "File not found");
+        return {
+          url: remoteUrl,
+          contentType: typeof body.content_type === "string" ? body.content_type : "",
+          revoke: () => {},
+        };
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      return {
+        url,
+        contentType: blob.type || res.headers.get("content-type") || "",
+        revoke: () => URL.revokeObjectURL(url),
+      };
+    },
     listChatFiles: async (chatId) => {
       try {
         const data = await request<{
@@ -1356,6 +1399,9 @@ export function createGatewayClient(
             : {}),
           ...(opts?.decision_choice
             ? { decision_choice: opts.decision_choice }
+            : {}),
+          ...(opts?.canvas_ref
+            ? { canvas_ref: opts.canvas_ref }
             : {}),
         }),
       }),

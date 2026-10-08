@@ -262,6 +262,11 @@ export type RanchMessages = {
   accountProfileHint: string;
   accountWallet: string;
   accountComputer: string;
+  /** Open the chat Canvas beside the conversation. */
+  manuscript: string;
+  addWindow: string;
+  openWindow: string;
+  pageRefRejected: string;
   accountBilling: string;
   accountWalletHint: string;
   /** Account menu: Store model quota (not API keys, not Wallet Credits). */
@@ -958,6 +963,10 @@ const en: RanchMessages = {
   accountProfileHint: "Signed-in account from your identity provider. Edit name and avatar there for now.",
   accountWallet: "Wallet",
   accountComputer: "Manage computers",
+  manuscript: "Canvas",
+  addWindow: "Add a window",
+  openWindow: "Open window",
+  pageRefRejected: "That block is not on the Canvas, so the message was not sent.",
   accountBilling: "Receipts & invoices",
   accountWalletHint: "Your human Credits balance. Agent wallets stay under each agent.",
   accountKeys: "Model quota",
@@ -1703,6 +1712,10 @@ const zh: RanchMessages = {
   accountProfileHint: "登录账号来自身份提供方。目前请在那里修改名称与头像。",
   accountWallet: "钱包",
   accountComputer: "管理电脑",
+  manuscript: "Canvas",
+  addWindow: "添加窗口",
+  openWindow: "打开窗口",
+  pageRefRejected: "这块不在 Canvas 上，这句话没有发出去。",
   accountBilling: "收据与发票",
   accountWalletHint: "你本人的 Credits 余额。智能体钱包在各自智能体详情里。",
   accountKeys: "模型额度",
