@@ -18,5 +18,15 @@ const { readAccountPanelFromUrl } = moduleExports;
 test("account=computer opens the computer panel", () => {
   assert.equal(readAccountPanelFromUrl("?account=computer"), "computer");
   assert.equal(readAccountPanelFromUrl("?account=wallet"), "wallet");
+  assert.equal(readAccountPanelFromUrl("?account=billing"), "billing");
   assert.equal(readAccountPanelFromUrl("?account=nope"), null);
+});
+
+test("host uses the shared account parser so computer is not filtered", () => {
+  const host = fs.readFileSync(
+    path.join(__dirname, "../src/components/InterfazeChatHost.tsx"),
+    "utf8",
+  );
+  assert.match(host, /readAccountPanelFromUrl/);
+  assert.doesNotMatch(host, /account === "manage"/);
 });
