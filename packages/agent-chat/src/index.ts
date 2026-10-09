@@ -23,6 +23,12 @@ export {
   joinLandingUrl,
 } from "./ranch-shell/connectPrompt";
 export {
+  readAccountPanelFromUrl,
+  accountPanelHref,
+  writeAccountPanelToUrl,
+  type AccountDeepLinkPanel,
+} from "./ranch-shell/accountDeepLink";
+export {
   CHAT_OPEN_EVENT,
   type AgentChatMode,
   type AgentChatVariant,

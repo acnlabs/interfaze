@@ -1,4 +1,5 @@
 import type { PageOpRecord } from "./pageOpText";
+import type { AccountDeepLinkPanel } from "./ranch-shell/accountDeepLink";
 
 export type AgentChatMode = "side" | "full";
 
@@ -199,7 +200,7 @@ export type RanchChatShellProps = {
    * Open an account surface on mount (e.g. after plan checkout return).
    * Host typically sets this from `?account=plan`.
    */
-  initialAccountPanel?: "plan" | "wallet" | "keys" | "manage" | "profile" | null;
+  initialAccountPanel?: AccountDeepLinkPanel | null;
   /**
    * After first-claim, open or create the 1:1 with this ACN agent id
    * (from Interfaze ``/?agent=``).

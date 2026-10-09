@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
-import { RanchChatShell, type AgentDirectoryItem } from "@acnlabs/agent-chat";
+import {
+  RanchChatShell,
+  readAccountPanelFromUrl,
+  type AccountDeepLinkPanel,
+  type AgentDirectoryItem,
+} from "@acnlabs/agent-chat";
 import {
   AUTH0_AUDIENCE,
   AUTH0_SCOPE,
@@ -94,27 +99,13 @@ export default function InterfazeChatHost() {
 }
 
 function useAccountDeepLink() {
-  const [initialAccountPanel, setInitialAccountPanel] = useState<
-    "plan" | "wallet" | "keys" | "manage" | "profile" | null
-  >(null);
+  const [initialAccountPanel, setInitialAccountPanel] = useState<AccountDeepLinkPanel | null>(
+    null,
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const sp = new URLSearchParams(window.location.search);
-    const account = (sp.get("account") || "").toLowerCase();
-    const panel =
-      account === "quota" || account === "credit" || account === "keys"
-        ? "keys"
-        : account === "plan" ||
-            account === "wallet" ||
-            account === "manage" ||
-            account === "profile"
-          ? account
-          : null;
-    if (!panel) {
-      return;
-    }
-    setInitialAccountPanel(panel);
+    setInitialAccountPanel(readAccountPanelFromUrl(window.location.search));
   }, []);
 
   return initialAccountPanel;
