@@ -1,8 +1,23 @@
 /** Account surfaces that belong in `/?account=`. */
 
-export type AccountDeepLinkPanel = "plan" | "wallet" | "manage" | "profile" | "keys" | "billing";
+export type AccountDeepLinkPanel =
+  | "plan"
+  | "wallet"
+  | "manage"
+  | "profile"
+  | "keys"
+  | "billing"
+  | "computer";
 
-const PANELS = new Set<string>(["plan", "wallet", "manage", "profile", "keys", "billing"]);
+const PANELS = new Set<string>([
+  "plan",
+  "wallet",
+  "manage",
+  "profile",
+  "keys",
+  "billing",
+  "computer",
+]);
 
 export function readAccountPanelFromUrl(
   search: string = typeof window === "undefined" ? "" : window.location.search,

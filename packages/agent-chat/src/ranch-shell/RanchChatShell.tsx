@@ -2907,6 +2907,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     else if (panel === "manage") setShowAccountManage(true);
     else if (panel === "profile") setShowAccountProfile(true);
     else if (panel === "billing") setShowAccountBilling(true);
+    else if (panel === "computer") setShowComputer(true);
   };
 
   const openAccountPanel = (panel: AccountDeepLinkPanel) => {
@@ -5907,7 +5908,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           gatewayBaseUrl={gatewayBaseUrl}
           getAccessToken={getAccessToken}
           locale={uiLocale}
-          onClose={() => setShowComputer(false)}
+          onClose={() => closeAccountPanel()}
         />
       ) : null}
 
@@ -6346,10 +6347,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             onProfile={() => openAccountPanel("profile")}
             onManage={() => openAccountPanel("manage")}
             onWallet={() => openAccountPanel("wallet")}
-            onComputer={() => {
-              closeAccountSurfaces();
-              setShowComputer(true);
-            }}
+            onComputer={() => openAccountPanel("computer")}
             onKeys={() => openAccountPanel("keys")}
             onPlanUsage={() => openAccountPanel("plan")}
             onBilling={() => openAccountPanel("billing")}
