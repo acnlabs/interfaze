@@ -59,3 +59,13 @@ test("a running computer can be paused from the panel", () => {
   assert.match(panel, /\/api\/computers\/\$\{encodeURIComponent\(computerId\)\}\/pause/);
   assert.match(panel, /row\.status === "running"/);
 });
+
+test("an idle computer with a disk can be resumed from the panel", () => {
+  const panel = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ComputerManagePanel.tsx"),
+    "utf8",
+  );
+  assert.match(panel, /resume: "恢复"/);
+  assert.match(panel, /\/api\/computers\/\$\{encodeURIComponent\(computerId\)\}\/resume/);
+  assert.match(panel, /row\.has_disk \? \(/);
+});

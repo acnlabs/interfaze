@@ -34,6 +34,9 @@ const copy = {
     pause: "Pause",
     pausing: "Pausing…",
     pauseFailed: "The computer did not pause.",
+    resume: "Resume",
+    resuming: "Resuming…",
+    resumeFailed: "The computer did not resume.",
   },
   zh: {
     title: "管理电脑",
@@ -57,6 +60,9 @@ const copy = {
     pause: "暂停",
     pausing: "正在暂停…",
     pauseFailed: "没有停下来。",
+    resume: "恢复",
+    resuming: "正在恢复…",
+    resumeFailed: "没有恢复。",
   },
 } as const;
 
@@ -194,6 +200,28 @@ export function ComputerManagePanel({
     }
   };
 
+  const resumeThis = async (computerId: string) => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await authed(
+        gatewayBaseUrl,
+        getAccessToken,
+        `/api/computers/${encodeURIComponent(computerId)}/resume`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        setNote(t.resumeFailed);
+        return;
+      }
+      await loadList();
+    } catch {
+      setNote(t.resumeFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openAnother = async () => {
     setBusy(true);
     setNote(null);
@@ -285,6 +313,10 @@ export function ComputerManagePanel({
                 {row.status === "running" ? (
                   <button type="button" disabled={busy} onClick={() => void pauseThis(row.computer_id)}>
                     {busy ? t.pausing : t.pause}
+                  </button>
+                ) : row.has_disk ? (
+                  <button type="button" disabled={busy} onClick={() => void resumeThis(row.computer_id)}>
+                    {busy ? t.resuming : t.resume}
                   </button>
                 ) : null}
                 {statusLabel(row.status, t)} · {row.has_disk ? t.files : t.emptyDisk}
