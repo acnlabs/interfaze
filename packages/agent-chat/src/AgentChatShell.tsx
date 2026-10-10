@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChatGatewayError, createGatewayClient } from "./gateway";
+import { sendAsksBeforeBoot } from "./computerSendBoot";
+import { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
 import type {
   AgentChatMode,
   AgentChatShellProps,
@@ -65,6 +67,7 @@ const assistantOuterStyle = (open: boolean): CSSProperties => {
 };
 
 const assistantCardStyle: CSSProperties = {
+  position: "relative",
   width: "100%",
   maxWidth: 384,
   height: "70vh",
@@ -142,6 +145,10 @@ export function AgentChatShell(props: AgentChatShellProps) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
   const [wsStatus, setWsStatus] = useState<"connecting" | "open" | "closed" | "error" | "idle">(
     "idle",
   );
@@ -314,9 +321,45 @@ export function AgentChatShell(props: AgentChatShellProps) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [open, messages, busy]);
 
-  const send = async () => {
+  const send = async (opts?: { bootAdmitted?: boolean }) => {
     const text = draft.trim();
     if (!text || !chat) return;
+    if (confirmDialog && !opts?.bootAdmitted) return;
+    if (!opts?.bootAdmitted) {
+      try {
+        const token = await getAccessToken();
+        if (token) {
+          const res = await fetch(
+            `${gatewayBaseUrl.replace(/\/+$/, "")}/api/chats/${encodeURIComponent(chat.chat_id)}/computer`,
+            { headers: { Authorization: `Bearer ${token}` } },
+          );
+          if (res.ok) {
+            const place = (await res.json()) as {
+              place?: string;
+              status?: string | null;
+              computer_id?: string | null;
+              resume_credits_per_hour?: number | null;
+            };
+            if (sendAsksBeforeBoot(place, [])) {
+              const rate = place.resume_credits_per_hour;
+              const message = isAssistant
+                ? "发送后电脑按 {rate} 星币/小时计费。不用的预扣会退回。"
+                : "Sending starts this computer at {rate} credits per hour. Unused prepaid is returned.";
+              setConfirmDialog({
+                message: message.replace("{rate}", rate == null ? "—" : String(rate)),
+                onConfirm: () => {
+                  setConfirmDialog(null);
+                  void send({ bootAdmitted: true });
+                },
+              });
+              return;
+            }
+          }
+        }
+      } catch {
+        /* Chat still sends if the computer cannot be read. */
+      }
+    }
     setBusy(true);
     setError(null);
     try {
@@ -391,6 +434,17 @@ export function AgentChatShell(props: AgentChatShellProps) {
       {title}
     </button>
   );
+
+  const bootDialog = confirmDialog ? (
+    <ConfirmDialog
+      message={confirmDialog.message}
+      confirmLabel={isAssistant ? "发送" : "Send"}
+      cancelLabel={isAssistant ? "取消" : "Cancel"}
+      busy={busy}
+      onConfirm={() => confirmDialog.onConfirm()}
+      onCancel={() => setConfirmDialog(null)}
+    />
+  ) : null;
 
   if (isAssistant) {
     return (
@@ -602,6 +656,7 @@ export function AgentChatShell(props: AgentChatShellProps) {
                 </p>
               )}
             </form>
+            {bootDialog}
           </div>
         </div>
       </>
@@ -875,6 +930,7 @@ export function AgentChatShell(props: AgentChatShellProps) {
             Send
           </button>
         </footer>
+        {bootDialog}
       </div>
     </>
   );

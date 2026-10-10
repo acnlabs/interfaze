@@ -101,3 +101,13 @@ test("an embed send asks before an idle computer starts billing", () => {
   assert.match(embed, /t\.sendConfirm\.replace/);
   assert.match(embed, /bootAdmitted: true/);
 });
+
+test("the Labs assistant asks before an idle send starts billing", () => {
+  const shell = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/AgentChatShell.tsx"),
+    "utf8",
+  );
+  assert.match(shell, /sendAsksBeforeBoot/);
+  assert.match(shell, /bootAdmitted: true/);
+  assert.match(shell, /发送后电脑按 \{rate\} 星币\/小时计费/);
+});
