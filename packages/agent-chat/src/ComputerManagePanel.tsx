@@ -31,6 +31,9 @@ const copy = {
     idle: "Idle",
     running: "On",
     screen: "Open screen",
+    pause: "Pause",
+    pausing: "Pausing…",
+    pauseFailed: "The computer did not pause.",
   },
   zh: {
     title: "管理电脑",
@@ -51,6 +54,9 @@ const copy = {
     idle: "空闲",
     running: "开着",
     screen: "打开屏幕",
+    pause: "暂停",
+    pausing: "正在暂停…",
+    pauseFailed: "没有停下来。",
   },
 } as const;
 
@@ -166,6 +172,28 @@ export function ComputerManagePanel({
     }
   };
 
+  const pauseThis = async (computerId: string) => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await authed(
+        gatewayBaseUrl,
+        getAccessToken,
+        `/api/computers/${encodeURIComponent(computerId)}/pause`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        setNote(t.pauseFailed);
+        return;
+      }
+      await loadList();
+    } catch {
+      setNote(t.pauseFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openAnother = async () => {
     setBusy(true);
     setNote(null);
@@ -254,6 +282,11 @@ export function ComputerManagePanel({
                 >
                   {t.screen}
                 </button>
+                {row.status === "running" ? (
+                  <button type="button" disabled={busy} onClick={() => void pauseThis(row.computer_id)}>
+                    {busy ? t.pausing : t.pause}
+                  </button>
+                ) : null}
                 {statusLabel(row.status, t)} · {row.has_disk ? t.files : t.emptyDisk}
               </span>
             </div>
