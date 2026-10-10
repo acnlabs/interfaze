@@ -1,6 +1,7 @@
 export type ComputerNameRow = {
   computer_id: string;
   is_default: boolean;
+  screen_credits_per_hour?: number;
 };
 
 export function computerName(

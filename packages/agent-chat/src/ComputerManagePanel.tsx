@@ -14,10 +14,8 @@ type ComputerRow = ComputerNameRow & {
   screen_credits_per_hour?: number;
 };
 
-type PendingBoot = {
-  kind: "resume" | "screen";
+type PendingResume = {
   computerId: string;
-  label: string;
   rate: number | undefined;
 };
 
@@ -48,7 +46,6 @@ const copy = {
     resuming: "Resuming…",
     resumeFailed: "The computer did not resume.",
     resumeConfirm: "Resume bills {rate} credits per hour. Unused prepaid is returned.",
-    screenConfirm: "Open screen bills {rate} credits per hour.",
     cancel: "Cancel",
   },
   zh: {
@@ -77,7 +74,6 @@ const copy = {
     resuming: "正在恢复…",
     resumeFailed: "没有恢复。",
     resumeConfirm: "恢复按 {rate} 星币/小时计费。不用的预扣会退回。",
-    screenConfirm: "打开屏幕按 {rate} 星币/小时计费。",
     cancel: "取消",
   },
 } as const;
@@ -125,7 +121,7 @@ export function ComputerManagePanel({
   getAccessToken: () => Promise<string | null>;
   locale: RanchLocale;
   onClose: () => void;
-  onOpenScreen: (computerId: string, label: string) => void;
+  onOpenScreen: (computerId: string, label: string, rate?: number) => void;
 }) {
   const t = copy[locale] ?? copy.en;
   const [computers, setComputers] = useState<ComputerRow[]>([]);
@@ -133,7 +129,7 @@ export function ComputerManagePanel({
   const [listReady, setListReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [pending, setPending] = useState<PendingBoot | null>(null);
+  const [pending, setPending] = useState<PendingResume | null>(null);
 
   const loadList = useCallback(async () => {
     const listRes = await authed(gatewayBaseUrl, getAccessToken, "/api/computers");
@@ -327,14 +323,7 @@ export function ComputerManagePanel({
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() =>
-                    setPending({
-                      kind: "screen",
-                      computerId: row.computer_id,
-                      label,
-                      rate: row.screen_credits_per_hour,
-                    })
-                  }
+                  onClick={() => onOpenScreen(row.computer_id, label, row.screen_credits_per_hour)}
                 >
                   {t.screen}
                 </button>
@@ -348,9 +337,7 @@ export function ComputerManagePanel({
                     disabled={busy}
                     onClick={() =>
                       setPending({
-                        kind: "resume",
                         computerId: row.computer_id,
-                        label,
                         rate: row.resume_credits_per_hour,
                       })
                     }
@@ -372,15 +359,14 @@ export function ComputerManagePanel({
       </div>
       {pending ? (
         <ConfirmDialog
-          message={withRate(pending.kind === "resume" ? t.resumeConfirm : t.screenConfirm, pending.rate)}
-          confirmLabel={pending.kind === "resume" ? t.resume : t.screen}
+          message={withRate(t.resumeConfirm, pending.rate)}
+          confirmLabel={t.resume}
           cancelLabel={t.cancel}
           busy={busy}
           onConfirm={() => {
             const next = pending;
             setPending(null);
-            if (next.kind === "resume") void resumeThis(next.computerId);
-            else onOpenScreen(next.computerId, next.label);
+            void resumeThis(next.computerId);
           }}
           onCancel={() => setPending(null)}
         />

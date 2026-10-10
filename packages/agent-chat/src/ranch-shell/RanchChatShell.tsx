@@ -2785,6 +2785,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showComputer, setShowComputer] = useState(false);
   const [screenComputer, setScreenComputer] = useState<{ id: string; label: string } | null>(null);
   const [cloudComputers, setCloudComputers] = useState<ComputerNameRow[]>([]);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [pageTick, setPageTick] = useState(0);
   const [dockTabs, setDockTabs] = useState<WorkTab[]>([]);
@@ -2826,16 +2831,25 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setShowComputer(true);
   };
 
-  const openCloudScreen = (id: string, label: string) => {
+  const openCloudScreen = (id: string, label: string, rate?: number) => {
     const tabId = `computer:${id}`;
     if (dockTabsRef.current.some((tab) => tab.id === tabId)) {
       setActiveDockId(tabId);
       return;
     }
-    closeAccountSurfaces();
-    setScreenComputer({ id, label });
-    setDockTabs((prev) => [...prev, { id: tabId, kind: "computer", title: label }]);
-    setActiveDockId(tabId);
+    const billed =
+      rate ?? cloudComputers.find((row) => row.computer_id === id)?.screen_credits_per_hour;
+    setConfirmDialog({
+      message: t.screenConfirm.replace("{rate}", billed == null ? "—" : String(billed)),
+      confirmLabel: t.openScreen,
+      onConfirm: () => {
+        setConfirmDialog(null);
+        closeAccountSurfaces();
+        setScreenComputer({ id, label });
+        setDockTabs((prev) => [...prev, { id: tabId, kind: "computer", title: label }]);
+        setActiveDockId(tabId);
+      },
+    });
   };
 
   const openCanvas = (focusKey?: string) => {
@@ -3024,11 +3038,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [decisionBusy, setDecisionBusy] = useState(false);
-  const [confirmDialog, setConfirmDialog] = useState<{
-    message: string;
-    confirmLabel: string;
-    onConfirm: () => void;
-  } | null>(null);
   /** Detail panel tab. Group: members. Direct: info | settings? | wallet? | chats. */
   const [infoTab, setInfoTab] = useState<"info" | "settings" | "wallet" | "members" | "chats">("info");
   const [historyKind, setHistoryKind] = useState<"chats" | "plans" | "tasks" | "files">("chats");
@@ -6635,14 +6644,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     openScreenIds={dockTabs
                       .filter((tab) => tab.kind === "computer")
                       .map((tab) => tab.id.slice("computer:".length))}
-                    onOpenScreen={(id, label) => {
+                    onOpenScreen={(id, label, rate) => {
                       const tabId = `computer:${id}`;
                       if (dockTabsRef.current.some((tab) => tab.id === tabId)) {
                         if (activeDockId === tabId || activeDockId == null) closeTab(tabId);
                         else setActiveDockId(tabId);
                         return;
                       }
-                      openCloudScreen(id, label);
+                      openCloudScreen(id, label, rate);
                     }}
                   />
                   {canOpenTalk ? (

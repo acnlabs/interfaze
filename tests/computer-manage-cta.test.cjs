@@ -45,7 +45,7 @@ test("a listed computer can open its screen without a chat", () => {
     "utf8",
   );
   assert.match(panel, /screen: "打开屏幕"/);
-  assert.match(panel, /onOpenScreen\(next\.computerId, next\.label\)/);
+  assert.match(panel, /onOpenScreen\(row\.computer_id, label, row\.screen_credits_per_hour\)/);
   assert.match(shell, /onOpenScreen=\{openCloudScreen\}/);
   assert.match(shell, /active \|\| activeDock\.kind === "computer"/);
 });
@@ -70,19 +70,42 @@ test("an idle computer with a disk can be resumed from the panel", () => {
   assert.match(panel, /row\.has_disk \? \(/);
 });
 
-test("opening a screen or resuming asks before it starts billing", () => {
+test("resuming asks on the panel before it starts billing", () => {
   const panel = fs.readFileSync(
     path.join(__dirname, "../packages/agent-chat/src/ComputerManagePanel.tsx"),
     "utf8",
   );
   assert.match(panel, /ConfirmDialog/);
   assert.match(panel, /resumeConfirm: "恢复按 \{rate\} 星币\/小时计费/);
-  assert.match(panel, /screenConfirm: "打开屏幕按 \{rate\} 星币\/小时计费/);
-  assert.match(panel, /kind: "screen"/);
-  assert.match(panel, /kind: "resume"/);
-  assert.doesNotMatch(panel, /onClick=\{\(\) => onOpenScreen\(row\.computer_id, label\)\}/);
+  assert.doesNotMatch(panel, /kind: "screen"/);
   assert.doesNotMatch(
     panel,
     /onClick=\{\(\) => void resumeThis\(row\.computer_id\)\}/,
   );
+});
+
+test("every screen path asks in the shell before the hourly bill starts", () => {
+  const panel = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ComputerManagePanel.tsx"),
+    "utf8",
+  );
+  const shell = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ranch-shell/RanchChatShell.tsx"),
+    "utf8",
+  );
+  const i18n = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ranch-shell/i18n.ts"),
+    "utf8",
+  );
+  assert.match(shell, /setConfirmDialog\(\{/);
+  assert.match(shell, /t\.screenConfirm\.replace/);
+  assert.match(shell, /onOpenComputer=\{openCloudScreen\}/);
+  assert.match(shell, /onOpenScreen=\{openCloudScreen\}/);
+  assert.match(shell, /openCloudScreen\(id, label, rate\)/);
+  assert.match(i18n, /screenConfirm: "打开屏幕按 \{rate\} 星币\/小时计费/);
+  assert.match(
+    panel,
+    /onClick=\{\(\) => onOpenScreen\(row\.computer_id, label, row\.screen_credits_per_hour\)\}/,
+  );
+  assert.doesNotMatch(panel, /kind: "screen"/);
 });
