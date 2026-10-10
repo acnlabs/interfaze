@@ -18,6 +18,8 @@ export {
   type MyAgentSummary,
 } from "./gateway";
 export { connectChatSocket, type ChatSocket, type ChatWsEvent } from "./ws";
+export { sendAsksBeforeBoot } from "./computerSendBoot";
+export { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
 export {
   connectPromptForInvite,
   joinLandingUrl,

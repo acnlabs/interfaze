@@ -91,3 +91,13 @@ test("opening a proposed group asks before the digest can boot an idle computer"
   assert.match(shell, /confirmProposeGroup[\s\S]*sendAsksBeforeBoot/);
   assert.match(shell, /bootAdmitted: true/);
 });
+
+test("an embed send asks before an idle computer starts billing", () => {
+  const embed = fs.readFileSync(
+    path.join(__dirname, "../src/components/InterfazeEmbedHost.tsx"),
+    "utf8",
+  );
+  assert.match(embed, /sendAsksBeforeBoot/);
+  assert.match(embed, /t\.sendConfirm\.replace/);
+  assert.match(embed, /bootAdmitted: true/);
+});

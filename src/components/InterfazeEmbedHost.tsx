@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChatGatewayError,
+  ConfirmDialog,
   connectChatSocket,
   createGatewayClient,
+  sendAsksBeforeBoot,
   type ChatMessage,
 } from "@acnlabs/agent-chat";
 import { getGatewayBaseUrl } from "@/lib/gateway";
@@ -38,6 +40,9 @@ const copy = {
     missing: "This chat couldn't be opened. Please reload it from the host page.",
     loadFailed: "Could not open this chat.",
     retry: "Retry",
+    cancel: "Cancel",
+    sendConfirm:
+      "Sending starts this computer at {rate} credits per hour. Unused prepaid is returned.",
   },
   zh: {
     placeholder: "输入消息…",
@@ -47,6 +52,8 @@ const copy = {
     missing: "这个对话暂时打不开，请从原页面重新进入。",
     loadFailed: "打不开这场对话。",
     retry: "重试",
+    cancel: "取消",
+    sendConfirm: "发送后电脑按 {rate} 星币/小时计费。不用的预扣会退回。",
   },
 };
 
@@ -63,6 +70,10 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const parentOriginRef = useRef<string>("");
   const allowedOriginsRef = useRef<string[]>([]);
@@ -229,9 +240,39 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
     postToParent({ type: EMBED_RESIZE, height }, parentOriginRef.current);
   }, [messages, error]);
 
-  const send = async () => {
+  const send = async (opts?: { bootAdmitted?: boolean }) => {
     const text = draft.trim();
     if (!text || !session || busy) return;
+    if (confirmDialog && !opts?.bootAdmitted) return;
+    if (!opts?.bootAdmitted && token) {
+      try {
+        const res = await fetch(
+          `${gatewayBaseUrl.replace(/\/+$/, "")}/api/chats/${encodeURIComponent(session.chat_id)}/computer`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (res.ok) {
+          const place = (await res.json()) as {
+            place?: string;
+            status?: string | null;
+            computer_id?: string | null;
+            resume_credits_per_hour?: number | null;
+          };
+          if (sendAsksBeforeBoot(place, [])) {
+            const rate = place.resume_credits_per_hour;
+            setConfirmDialog({
+              message: t.sendConfirm.replace("{rate}", rate == null ? "—" : String(rate)),
+              onConfirm: () => {
+                setConfirmDialog(null);
+                void send({ bootAdmitted: true });
+              },
+            });
+            return;
+          }
+        }
+      } catch {
+        /* Embed still sends if the computer cannot be read. */
+      }
+    }
     setBusy(true);
     setError(null);
     try {
@@ -253,6 +294,7 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
     <div
       data-theme={dark ? "dark" : "light"}
       style={{
+        position: "relative",
         display: "flex",
         flexDirection: "column",
         height: "100%",
@@ -383,6 +425,16 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
           {t.send}
         </button>
       </form>
+      {confirmDialog ? (
+        <ConfirmDialog
+          message={confirmDialog.message}
+          confirmLabel={t.send}
+          cancelLabel={t.cancel}
+          busy={busy}
+          onConfirm={() => confirmDialog.onConfirm()}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      ) : null}
     </div>
   );
 }
