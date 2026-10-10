@@ -34,6 +34,7 @@ import {
 } from "../attachmentListedPrice";
 import { ChatComputerControl } from "../ChatComputerControl";
 import { computerName, extraIndex, type ComputerNameRow } from "../computerLabel";
+import { sendAsksBeforeBoot } from "../computerSendBoot";
 import { ComputerManagePanel } from "../ComputerManagePanel";
 import { ComputerScreenPanel } from "../ComputerScreenPanel";
 import { MailboxThumbs } from "../MailboxThumbs";
@@ -4341,12 +4342,52 @@ export function RanchChatShell(props: RanchChatShellProps) {
     threadId?: string | null;
     /** Pick a listed decide option (same send path as typing the label). */
     decisionChoice?: string;
+    /** Set after the idle-computer bill dialog so send does not ask twice. */
+    bootAdmitted?: boolean;
   };
 
   const send = async (opts?: SendOpts) => {
     const text = (opts?.text ?? draft).trim();
     if (!text || !active) return;
+    if (confirmDialog && !opts?.bootAdmitted) return;
     const chatId = active.chat_id;
+    if (!opts?.bootAdmitted) {
+      try {
+        const token = await getAccessToken();
+        if (token) {
+          const res = await fetch(
+            `${gatewayBaseUrl.replace(/\/+$/, "")}/api/chats/${encodeURIComponent(chatId)}/computer`,
+            { headers: { Authorization: `Bearer ${token}` } },
+          );
+          if (res.ok) {
+            const place = (await res.json()) as {
+              place?: string;
+              status?: string | null;
+              computer_id?: string | null;
+              resume_credits_per_hour?: number | null;
+            };
+            const openScreenIds = dockTabsRef.current
+              .filter((tab) => tab.kind === "computer")
+              .map((tab) => tab.id.slice("computer:".length));
+            if (screenComputer?.id) openScreenIds.push(screenComputer.id);
+            if (sendAsksBeforeBoot(place, openScreenIds)) {
+              const rate = place.resume_credits_per_hour;
+              setConfirmDialog({
+                message: t.sendConfirm.replace("{rate}", rate == null ? "—" : String(rate)),
+                confirmLabel: t.send,
+                onConfirm: () => {
+                  setConfirmDialog(null);
+                  void send({ ...opts, bootAdmitted: true });
+                },
+              });
+              return;
+            }
+          }
+        }
+      } catch {
+        /* Chat still sends if the computer list cannot be read. */
+      }
+    }
     const group = isGroupChat(active);
     const seq = loadSeqRef.current;
     const pollGen = ++replyPollGenRef.current;
@@ -4549,141 +4590,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const lastUser = [...messages].reverse().find((m) => m.sender_type === "user");
     const text = (lastUser?.content || "").trim();
     if (!text) return;
-    setDraft(text);
-    // Re-send on next tick so draft is set; call send path directly.
-    void (async () => {
-      const chatId = active.chat_id;
-      const group = isGroupChat(active);
-      const seq = loadSeqRef.current;
-      const pollGen = ++replyPollGenRef.current;
-      setBusy(true);
-      setError(null);
-      try {
-        let mentions: string[] | undefined;
-        if (group) {
-          const resolved = resolveStickyMentions(
-            text,
-            agentIdsRef.current,
-            agentNames,
-            stickyMention,
-          );
-          if (resolved.mentions.length === 0) {
-            setRecipientPickerOpen(true);
-            setMentionIndex(0);
-            setBusy(false);
-            return;
-          }
-          mentions = resolved.mentions;
-        }
-        setRecipientPickerOpen(false);
-        beginAwaitingReply(chatId);
-        // Same thread rule as normal send — do not fall back to lastUser.thread_id
-        // or Retry after closing the topic chip would re-enter the old topic.
-        await client.sendMessage(
-          chatId,
-          text,
-          mentions,
-          activeTopic?.id ?? composerTopic?.id ?? null,
-          {
-            requested_model: requestedModelForSend(
-              selectedModelId,
-              composerModel?.listed_model_id ?? null,
-              Boolean(composerModel?.official_channel),
-              composerModel?.official_key_geo,
-            ),
-          },
-        );
-        if (group && mentions) {
-          if (mentions.length === 1) {
-            const id = mentions[0]!;
-            setStickyForAgent(chatId, id, agentNames[id] || stickyMention?.name || shortAgentId(id));
-          } else {
-            clearStickyMention(chatId);
-          }
-        }
-        setDraft("");
-        await reloadMessages(chatId, seq);
-        await refreshChats();
-        void (async () => {
-          const baseline = awaitingSinceRef.current;
-          for (let i = 0; i < REPLY_POLL_ATTEMPTS; i++) {
-            await new Promise((r) => setTimeout(r, REPLY_POLL_MS));
-            if (replyPollGenRef.current !== pollGen) return;
-            if (activeChatIdRef.current !== chatId) return;
-            if (seq !== loadSeqRef.current) return;
-            try {
-              const msgs = await client.listMessages(chatId);
-              if (replyPollGenRef.current !== pollGen) return;
-              if (activeChatIdRef.current !== chatId) return;
-              setMessages((prev) => mergeServerMessagesWithLocalTopicMarkers(msgs, prev));
-              const hasNewAgent = msgs.some(
-                (m) =>
-                  m.sender_type === "agent" &&
-                  Date.parse(m.created_at) >= baseline - 2000,
-              );
-              if (hasNewAgent) {
-                setDeliveryBroken(chatId, false);
-                clearReplySlot(chatId);
-                void refreshChats();
-                return;
-              }
-              noteAgentActivity(chatId, msgs);
-            } catch {
-              /* ignore */
-            }
-          }
-          let latestMsgs: ChatMessage[] | undefined;
-          try {
-            latestMsgs = await client.listMessages(chatId);
-          } catch {
-            /* ignore */
-          }
-          if (replyPollGenRef.current !== pollGen) return;
-          if (activeChatIdRef.current !== chatId) return;
-          if (seq !== loadSeqRef.current) return;
-          if (latestMsgs) {
-            setMessages((prev) => mergeServerMessagesWithLocalTopicMarkers(latestMsgs, prev));
-            const hasLateAgent = latestMsgs.some(
-              (m) =>
-                m.sender_type === "agent" &&
-                Date.parse(m.created_at) >= baseline - 2000,
-            );
-            if (hasLateAgent) {
-              setDeliveryBroken(chatId, false);
-              clearReplySlot(chatId);
-              void refreshChats();
-              return;
-            }
-          }
-          const reason = await resolveAfterDeliveryIssue(chatId, latestMsgs);
-          if (replyPollGenRef.current !== pollGen) return;
-          if (activeChatIdRef.current !== chatId) return;
-          markReplyTimeout(
-            chatId,
-            reason === "offline"
-              ? "offline"
-              : reason === "no_reply"
-                ? "no_reply"
-                : reason === "undeliverable"
-                  ? "undeliverable"
-                  : "timeout",
-          );
-        })();
-      } catch (e) {
-        clearReplySlot(chatId);
-        if (e instanceof ChatGatewayError && e.code === "agent_unreachable") {
-          void resolveAfterDeliveryIssue(chatId).then((reason) => {
-            if (reason === "offline") markReplyTimeout(chatId, "offline");
-            else setDeliveryBroken(chatId, true);
-          });
-        }
-        const fail = sendFailureCopy(e, t);
-        setError(fail.text);
-        setStoreKeyPrompt(fail.offerStoreKey);
-      } finally {
-        setBusy(false);
-      }
-    })();
+    void send({ text });
   };
 
   if (!open) return null;
