@@ -64,7 +64,7 @@ export function ChatComputerControl({
   getAccessToken: () => Promise<string | null>;
   locale: RanchLocale;
   openScreenIds: string[];
-  onOpenScreen: (computerId: string, label: string) => void;
+  onOpenScreen: (computerId: string, label: string, rate?: number) => void;
 }) {
   const [place, setPlace] = useState<ChatPlace | null>(null);
   const [computers, setComputers] = useState<ComputerNameRow[]>([]);
@@ -111,7 +111,10 @@ export function ChatComputerControl({
       aria-label={label}
       title={label}
       onClick={() => {
-        if (openable && place.computer_id) onOpenScreen(place.computer_id, label);
+        if (openable && place.computer_id) {
+          const row = computers.find((item) => item.computer_id === place.computer_id);
+          onOpenScreen(place.computer_id, label, row?.screen_credits_per_hour);
+        }
       }}
     >
       <IconMonitor />

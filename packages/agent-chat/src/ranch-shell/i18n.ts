@@ -262,6 +262,8 @@ export type RanchMessages = {
   accountProfileHint: string;
   accountWallet: string;
   accountComputer: string;
+  openScreen: string;
+  screenConfirm: string;
   /** Open the chat Canvas beside the conversation. */
   manuscript: string;
   addWindow: string;
@@ -963,6 +965,8 @@ const en: RanchMessages = {
   accountProfileHint: "Signed-in account from your identity provider. Edit name and avatar there for now.",
   accountWallet: "Wallet",
   accountComputer: "Manage computers",
+  openScreen: "Open screen",
+  screenConfirm: "Open screen bills {rate} credits per hour.",
   manuscript: "Canvas",
   addWindow: "Add a window",
   openWindow: "Open window",
@@ -1712,6 +1716,8 @@ const zh: RanchMessages = {
   accountProfileHint: "登录账号来自身份提供方。目前请在那里修改名称与头像。",
   accountWallet: "钱包",
   accountComputer: "管理电脑",
+  openScreen: "打开屏幕",
+  screenConfirm: "打开屏幕按 {rate} 星币/小时计费。",
   manuscript: "Canvas",
   addWindow: "添加窗口",
   openWindow: "打开窗口",
