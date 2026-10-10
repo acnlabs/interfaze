@@ -32,4 +32,5 @@ test("the empty panel does not call the extra button 再开一台", () => {
   assert.match(panel, /computerManageCta/);
   assert.match(panel, /create: "创建云电脑"/);
   assert.match(panel, /hasComputer \? t\.open : t\.create/);
+  assert.match(panel, /listReady/);
 });

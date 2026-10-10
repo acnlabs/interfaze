@@ -94,6 +94,7 @@ export function ComputerManagePanel({
   const t = copy[locale] ?? copy.en;
   const [computers, setComputers] = useState<ComputerRow[]>([]);
   const [place, setPlace] = useState<ChatPlace | null>(null);
+  const [listReady, setListReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
@@ -121,9 +122,13 @@ export function ComputerManagePanel({
 
   useEffect(() => {
     let gone = false;
-    loadList().catch(() => {
-      if (!gone) setNote(t.failed);
-    });
+    loadList()
+      .then(() => {
+        if (!gone) setListReady(true);
+      })
+      .catch(() => {
+        if (!gone) setNote(t.failed);
+      });
     return () => {
       gone = true;
     };
@@ -206,7 +211,7 @@ export function ComputerManagePanel({
         </button>
       </div>
       <div style={{ padding: 14, overflow: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-        {hasComputer ? (
+        {!listReady ? null : hasComputer ? (
           <p style={{ margin: 0, color: colors.muted, fontSize: 13 }}>{t.hint}</p>
         ) : (
           <p style={{ margin: 0 }}>{t.empty}</p>
@@ -242,9 +247,11 @@ export function ComputerManagePanel({
             </div>
           );
         })}
-        <button type="button" disabled={busy} onClick={() => void openAnother()}>
-          {busy ? t.opening : hasComputer ? t.open : t.create}
-        </button>
+        {listReady ? (
+          <button type="button" disabled={busy} onClick={() => void openAnother()}>
+            {busy ? t.opening : hasComputer ? t.open : t.create}
+          </button>
+        ) : null}
         {note ? <p style={{ margin: 0, color: colors.danger, fontSize: 13 }}>{note}</p> : null}
       </div>
     </div>
