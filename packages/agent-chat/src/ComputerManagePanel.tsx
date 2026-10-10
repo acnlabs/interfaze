@@ -30,6 +30,7 @@ const copy = {
     emptyDisk: "No files yet",
     idle: "Idle",
     running: "On",
+    screen: "Open screen",
   },
   zh: {
     title: "管理电脑",
@@ -49,6 +50,7 @@ const copy = {
     emptyDisk: "还没有文件",
     idle: "空闲",
     running: "开着",
+    screen: "打开屏幕",
   },
 } as const;
 
@@ -84,12 +86,14 @@ export function ComputerManagePanel({
   getAccessToken,
   locale,
   onClose,
+  onOpenScreen,
 }: {
   chatId: string | null;
   gatewayBaseUrl: string;
   getAccessToken: () => Promise<string | null>;
   locale: RanchLocale;
   onClose: () => void;
+  onOpenScreen: (computerId: string, label: string) => void;
 }) {
   const t = copy[locale] ?? copy.en;
   const [computers, setComputers] = useState<ComputerRow[]>([]);
@@ -218,6 +222,7 @@ export function ComputerManagePanel({
         )}
         {computers.map((row) => {
           const nth = row.is_default ? 0 : extraCount++;
+          const label = computerName(row.is_default, nth, locale);
           return (
             <div
               key={row.computer_id}
@@ -231,7 +236,7 @@ export function ComputerManagePanel({
               }}
             >
               <strong>
-                {computerName(row.is_default, nth, locale)}
+                {label}
                 {place?.computer_id === row.computer_id ? (
                   <span style={{ color: colors.muted, fontWeight: 400, fontSize: 12 }}> · {t.current}</span>
                 ) : null}
@@ -242,6 +247,13 @@ export function ComputerManagePanel({
                     {t.use}
                   </button>
                 ) : null}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onOpenScreen(row.computer_id, label)}
+                >
+                  {t.screen}
+                </button>
                 {statusLabel(row.status, t)} · {row.has_disk ? t.files : t.emptyDisk}
               </span>
             </div>

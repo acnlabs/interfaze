@@ -34,3 +34,18 @@ test("the empty panel does not call the extra button 再开一台", () => {
   assert.match(panel, /hasComputer \? t\.open : t\.create/);
   assert.match(panel, /listReady/);
 });
+
+test("a listed computer can open its screen without a chat", () => {
+  const panel = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ComputerManagePanel.tsx"),
+    "utf8",
+  );
+  const shell = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ranch-shell/RanchChatShell.tsx"),
+    "utf8",
+  );
+  assert.match(panel, /screen: "打开屏幕"/);
+  assert.match(panel, /onOpenScreen\(row\.computer_id, label\)/);
+  assert.match(shell, /onOpenScreen=\{openCloudScreen\}/);
+  assert.match(shell, /active \|\| activeDock\.kind === "computer"/);
+});
