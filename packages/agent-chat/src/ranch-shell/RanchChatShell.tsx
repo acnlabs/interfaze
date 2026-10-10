@@ -34,7 +34,7 @@ import {
 } from "../attachmentListedPrice";
 import { ChatComputerControl } from "../ChatComputerControl";
 import { computerName, extraIndex, type ComputerNameRow } from "../computerLabel";
-import { sendAsksBeforeBoot } from "../computerSendBoot";
+import { placeForDefaultComputer, sendAsksBeforeBoot } from "../computerSendBoot";
 import { ComputerManagePanel } from "../ComputerManagePanel";
 import { ComputerScreenPanel } from "../ComputerScreenPanel";
 import { MailboxThumbs } from "../MailboxThumbs";
@@ -4125,12 +4125,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
     }
   };
 
+  const bootScreenIds = () => {
+    const ids = dockTabsRef.current
+      .filter((tab) => tab.kind === "computer")
+      .map((tab) => tab.id.slice("computer:".length));
+    if (screenComputer?.id) ids.push(screenComputer.id);
+    return ids;
+  };
+
   const confirmProposeGroup = async (
     propose: OrchestrationProposeGroup,
     messageId: string,
-    opts?: { preferExisting?: boolean },
+    opts?: { preferExisting?: boolean; bootAdmitted?: boolean },
   ) => {
     if (!active || isGroupChat(active)) return;
+    if (confirmDialog && !opts?.bootAdmitted) return;
     const peer = (active.agent_id || "").trim();
     const ids: string[] = [];
     const seen = new Set<string>();
@@ -4161,6 +4170,64 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setError(t.sendFailed);
       return;
     }
+    const summary = propose.summary?.trim();
+    if (summary && !opts?.bootAdmitted) {
+      try {
+        const token = await getAccessToken();
+        if (token) {
+          const headers = { Authorization: `Bearer ${token}` };
+          const base = gatewayBaseUrl.replace(/\/+$/, "");
+          let place: {
+            place?: string;
+            status?: string | null;
+            computer_id?: string | null;
+            resume_credits_per_hour?: number | null;
+          } | null = null;
+          if (existing) {
+            const res = await fetch(
+              `${base}/api/chats/${encodeURIComponent(existing.chat_id)}/computer`,
+              { headers },
+            );
+            if (res.ok) {
+              place = (await res.json()) as typeof place;
+            }
+          } else {
+            const res = await fetch(`${base}/api/computers`, { headers });
+            if (res.ok) {
+              const body = (await res.json()) as { computers?: unknown };
+              const rows = Array.isArray(body.computers) ? body.computers : [];
+              place = placeForDefaultComputer(
+                rows as Array<{
+                  computer_id?: string | null;
+                  is_default?: boolean;
+                  status?: string | null;
+                  resume_credits_per_hour?: number | null;
+                }>,
+              );
+            }
+          }
+          if (place && sendAsksBeforeBoot(place, bootScreenIds())) {
+            const rate = place.resume_credits_per_hour;
+            setConfirmDialog({
+              message: t.sendConfirm.replace("{rate}", rate == null ? "—" : String(rate)),
+              confirmLabel: opts?.preferExisting
+                ? t.orchProposeOpenExisting
+                : t.orchProposeCreate,
+              onConfirm: () => {
+                setConfirmDialog(null);
+                void confirmProposeGroup(propose, messageId, {
+                  ...opts,
+                  bootAdmitted: true,
+                });
+              },
+            });
+            return;
+          }
+        }
+      } catch {
+        /* Group still opens if the computer list cannot be read. */
+      }
+    }
     setBusy(true);
     setError(null);
     try {
@@ -4183,7 +4250,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
         target = await client.createGroupChat(title, ids);
       }
       if (!target) throw new Error(t.sendFailed);
-      const summary = propose.summary?.trim();
       if (summary) {
         try {
           await client.sendMessage(target.chat_id, summary, ids);
@@ -4366,11 +4432,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               computer_id?: string | null;
               resume_credits_per_hour?: number | null;
             };
-            const openScreenIds = dockTabsRef.current
-              .filter((tab) => tab.kind === "computer")
-              .map((tab) => tab.id.slice("computer:".length));
-            if (screenComputer?.id) openScreenIds.push(screenComputer.id);
-            if (sendAsksBeforeBoot(place, openScreenIds)) {
+            if (sendAsksBeforeBoot(place, bootScreenIds())) {
               const rate = place.resume_credits_per_hour;
               setConfirmDialog({
                 message: t.sendConfirm.replace("{rate}", rate == null ? "—" : String(rate)),
