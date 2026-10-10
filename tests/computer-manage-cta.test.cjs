@@ -49,3 +49,13 @@ test("a listed computer can open its screen without a chat", () => {
   assert.match(shell, /onOpenScreen=\{openCloudScreen\}/);
   assert.match(shell, /active \|\| activeDock\.kind === "computer"/);
 });
+
+test("a running computer can be paused from the panel", () => {
+  const panel = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ComputerManagePanel.tsx"),
+    "utf8",
+  );
+  assert.match(panel, /pause: "暂停"/);
+  assert.match(panel, /\/api\/computers\/\$\{encodeURIComponent\(computerId\)\}\/pause/);
+  assert.match(panel, /row\.status === "running"/);
+});
