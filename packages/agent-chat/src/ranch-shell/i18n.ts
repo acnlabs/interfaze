@@ -264,6 +264,7 @@ export type RanchMessages = {
   accountComputer: string;
   openScreen: string;
   screenConfirm: string;
+  sendConfirm: string;
   /** Open the chat Canvas beside the conversation. */
   manuscript: string;
   addWindow: string;
@@ -967,6 +968,7 @@ const en: RanchMessages = {
   accountComputer: "Manage computers",
   openScreen: "Open screen",
   screenConfirm: "Open screen bills {rate} credits per hour.",
+  sendConfirm: "Sending starts this computer at {rate} credits per hour. Unused prepaid is returned.",
   manuscript: "Canvas",
   addWindow: "Add a window",
   openWindow: "Open window",
@@ -1718,6 +1720,7 @@ const zh: RanchMessages = {
   accountComputer: "管理电脑",
   openScreen: "打开屏幕",
   screenConfirm: "打开屏幕按 {rate} 星币/小时计费。",
+  sendConfirm: "发送后电脑按 {rate} 星币/小时计费。不用的预扣会退回。",
   manuscript: "Canvas",
   addWindow: "添加窗口",
   openWindow: "打开窗口",
