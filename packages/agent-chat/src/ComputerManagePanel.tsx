@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
 import { computerName, type ComputerNameRow } from "./computerLabel";
+import { computerManageCta } from "./computerManageCta";
 
 type ComputerRow = ComputerNameRow & {
   status: string;
@@ -15,10 +16,11 @@ const copy = {
     title: "Manage computers",
     close: "Close",
     hint: "New chats use the default computer. Another computer is charged for the time it runs, and does not take new chats on its own.",
-    empty: "No computer yet. One is created when a chat needs a place to work.",
+    empty: "No computer yet. Creating the record is free. New chats still use the default.",
+    create: "Create computer",
     open: "Open another",
     opening: "Opening…",
-    short: "Not enough credits. No computer was opened.",
+    short: "The computer was not opened.",
     failed: "The computer list could not be loaded.",
     current: "This chat",
     use: "Use for this chat",
@@ -33,10 +35,11 @@ const copy = {
     title: "管理电脑",
     close: "关闭",
     hint: "新对话进默认电脑。再开一台也按跑动时间收费，不会自动接新对话。",
-    empty: "还没有电脑。有对话需要干活时，会有一台。",
+    empty: "还没有电脑。创建档案免费。新对话仍落在默认电脑上。",
+    create: "创建云电脑",
     open: "再开一台",
     opening: "正在开…",
-    short: "积分不够，没有新开电脑。",
+    short: "没有新开电脑。",
     failed: "电脑列表暂时读不出来。",
     current: "这场聊天",
     use: "这场聊天用这台",
@@ -173,6 +176,8 @@ export function ComputerManagePanel({
   };
 
   let extraCount = 0;
+  const cta = computerManageCta(computers.length);
+  const hasComputer = cta === "extra";
 
   return (
     <div
@@ -201,8 +206,11 @@ export function ComputerManagePanel({
         </button>
       </div>
       <div style={{ padding: 14, overflow: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-        <p style={{ margin: 0, color: colors.muted, fontSize: 13 }}>{t.hint}</p>
-        {computers.length === 0 ? <p style={{ margin: 0 }}>{t.empty}</p> : null}
+        {hasComputer ? (
+          <p style={{ margin: 0, color: colors.muted, fontSize: 13 }}>{t.hint}</p>
+        ) : (
+          <p style={{ margin: 0 }}>{t.empty}</p>
+        )}
         {computers.map((row) => {
           const nth = row.is_default ? 0 : extraCount++;
           return (
@@ -235,7 +243,7 @@ export function ComputerManagePanel({
           );
         })}
         <button type="button" disabled={busy} onClick={() => void openAnother()}>
-          {busy ? t.opening : t.open}
+          {busy ? t.opening : hasComputer ? t.open : t.create}
         </button>
         {note ? <p style={{ margin: 0, color: colors.danger, fontSize: 13 }}>{note}</p> : null}
       </div>
