@@ -5579,7 +5579,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   );
 
   const workDock =
-    active && activeDock ? (
+    activeDock && (active || activeDock.kind === "computer") ? (
       <WorkDock
         tabs={dockTabs}
         activeId={shownDockId}
@@ -5604,7 +5604,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           setActiveDockId(null);
         }}
       >
-        {activeDock.kind === "canvas" ? (
+        {activeDock.kind === "canvas" && active ? (
           <ManuscriptPanel
             embedded
             client={client}
@@ -5636,7 +5636,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             gatewayBaseUrl={gatewayBaseUrl}
             getAccessToken={getAccessToken}
             locale={uiLocale}
-            chatId={active.chat_id}
+            chatId={active?.chat_id ?? null}
             embedded
             onClose={() => closeTab(activeDock.id)}
           />
@@ -5909,6 +5909,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           getAccessToken={getAccessToken}
           locale={uiLocale}
           onClose={() => closeAccountPanel()}
+          onOpenScreen={openCloudScreen}
         />
       ) : null}
 
