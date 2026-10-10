@@ -5,10 +5,20 @@ import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
 import { computerName, type ComputerNameRow } from "./computerLabel";
 import { computerManageCta } from "./computerManageCta";
+import { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
 
 type ComputerRow = ComputerNameRow & {
   status: string;
   has_disk: boolean;
+  resume_credits_per_hour?: number;
+  screen_credits_per_hour?: number;
+};
+
+type PendingBoot = {
+  kind: "resume" | "screen";
+  computerId: string;
+  label: string;
+  rate: number | undefined;
 };
 
 const copy = {
@@ -37,6 +47,9 @@ const copy = {
     resume: "Resume",
     resuming: "Resuming…",
     resumeFailed: "The computer did not resume.",
+    resumeConfirm: "Resume bills {rate} credits per hour. Unused prepaid is returned.",
+    screenConfirm: "Open screen bills {rate} credits per hour.",
+    cancel: "Cancel",
   },
   zh: {
     title: "管理电脑",
@@ -63,6 +76,9 @@ const copy = {
     resume: "恢复",
     resuming: "正在恢复…",
     resumeFailed: "没有恢复。",
+    resumeConfirm: "恢复按 {rate} 星币/小时计费。不用的预扣会退回。",
+    screenConfirm: "打开屏幕按 {rate} 星币/小时计费。",
+    cancel: "取消",
   },
 } as const;
 
@@ -85,6 +101,10 @@ function statusLabel(status: string, t: (typeof copy)[RanchLocale]): string {
   if (status === "idle") return t.idle;
   if (status === "running") return t.running;
   return status;
+}
+
+function withRate(template: string, rate: number | undefined): string {
+  return template.replace("{rate}", rate == null ? "—" : String(rate));
 }
 
 type ChatPlace = {
@@ -113,6 +133,7 @@ export function ComputerManagePanel({
   const [listReady, setListReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [pending, setPending] = useState<PendingBoot | null>(null);
 
   const loadList = useCallback(async () => {
     const listRes = await authed(gatewayBaseUrl, getAccessToken, "/api/computers");
@@ -306,7 +327,14 @@ export function ComputerManagePanel({
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => onOpenScreen(row.computer_id, label)}
+                  onClick={() =>
+                    setPending({
+                      kind: "screen",
+                      computerId: row.computer_id,
+                      label,
+                      rate: row.screen_credits_per_hour,
+                    })
+                  }
                 >
                   {t.screen}
                 </button>
@@ -315,7 +343,18 @@ export function ComputerManagePanel({
                     {busy ? t.pausing : t.pause}
                   </button>
                 ) : row.has_disk ? (
-                  <button type="button" disabled={busy} onClick={() => void resumeThis(row.computer_id)}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      setPending({
+                        kind: "resume",
+                        computerId: row.computer_id,
+                        label,
+                        rate: row.resume_credits_per_hour,
+                      })
+                    }
+                  >
                     {busy ? t.resuming : t.resume}
                   </button>
                 ) : null}
@@ -331,6 +370,21 @@ export function ComputerManagePanel({
         ) : null}
         {note ? <p style={{ margin: 0, color: colors.danger, fontSize: 13 }}>{note}</p> : null}
       </div>
+      {pending ? (
+        <ConfirmDialog
+          message={withRate(pending.kind === "resume" ? t.resumeConfirm : t.screenConfirm, pending.rate)}
+          confirmLabel={pending.kind === "resume" ? t.resume : t.screen}
+          cancelLabel={t.cancel}
+          busy={busy}
+          onConfirm={() => {
+            const next = pending;
+            setPending(null);
+            if (next.kind === "resume") void resumeThis(next.computerId);
+            else onOpenScreen(next.computerId, next.label);
+          }}
+          onCancel={() => setPending(null)}
+        />
+      ) : null}
     </div>
   );
 }
