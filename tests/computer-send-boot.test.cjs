@@ -13,7 +13,7 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const moduleExports = {};
 new Function("exports", js)(moduleExports);
-const { sendAsksBeforeBoot } = moduleExports;
+const { sendAsksBeforeBoot, placeForDefaultComputer } = moduleExports;
 
 test("an idle cloud computer asks before a send starts the hourly bill", () => {
   assert.equal(
@@ -53,4 +53,41 @@ test("the composer asks in the shell before an idle send starts billing", () => 
   assert.match(shell, /t\.sendConfirm\.replace/);
   assert.match(shell, /retryLastUserMessage[\s\S]*void send\(\{ text \}\)/);
   assert.match(i18n, /sendConfirm: "发送后电脑按 \{rate\} 星币\/小时计费/);
+});
+
+test("a new group lands on the idle default computer, so the digest asks first", () => {
+  const place = placeForDefaultComputer([
+    {
+      computer_id: "extra",
+      is_default: false,
+      status: "running",
+      resume_credits_per_hour: 18,
+    },
+    {
+      computer_id: "home",
+      is_default: true,
+      status: "idle",
+      resume_credits_per_hour: 18,
+    },
+  ]);
+  assert.equal(place.computer_id, "home");
+  assert.equal(sendAsksBeforeBoot(place, []), true);
+  assert.equal(sendAsksBeforeBoot(place, ["home"]), false);
+});
+
+test("no computer yet still asks, because the first group digest would boot one", () => {
+  const place = placeForDefaultComputer([]);
+  assert.equal(place.place, "cloud");
+  assert.equal(place.status, "idle");
+  assert.equal(sendAsksBeforeBoot(place, []), true);
+});
+
+test("opening a proposed group asks before the digest can boot an idle computer", () => {
+  const shell = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ranch-shell/RanchChatShell.tsx"),
+    "utf8",
+  );
+  assert.match(shell, /placeForDefaultComputer/);
+  assert.match(shell, /confirmProposeGroup[\s\S]*sendAsksBeforeBoot/);
+  assert.match(shell, /bootAdmitted: true/);
 });
