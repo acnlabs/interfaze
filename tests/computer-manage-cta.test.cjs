@@ -45,7 +45,7 @@ test("a listed computer can open its screen without a chat", () => {
     "utf8",
   );
   assert.match(panel, /screen: "打开屏幕"/);
-  assert.match(panel, /onOpenScreen\(row\.computer_id, label\)/);
+  assert.match(panel, /onOpenScreen\(next\.computerId, next\.label\)/);
   assert.match(shell, /onOpenScreen=\{openCloudScreen\}/);
   assert.match(shell, /active \|\| activeDock\.kind === "computer"/);
 });
@@ -68,4 +68,21 @@ test("an idle computer with a disk can be resumed from the panel", () => {
   assert.match(panel, /resume: "恢复"/);
   assert.match(panel, /\/api\/computers\/\$\{encodeURIComponent\(computerId\)\}\/resume/);
   assert.match(panel, /row\.has_disk \? \(/);
+});
+
+test("opening a screen or resuming asks before it starts billing", () => {
+  const panel = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ComputerManagePanel.tsx"),
+    "utf8",
+  );
+  assert.match(panel, /ConfirmDialog/);
+  assert.match(panel, /resumeConfirm: "恢复按 \{rate\} 星币\/小时计费/);
+  assert.match(panel, /screenConfirm: "打开屏幕按 \{rate\} 星币\/小时计费/);
+  assert.match(panel, /kind: "screen"/);
+  assert.match(panel, /kind: "resume"/);
+  assert.doesNotMatch(panel, /onClick=\{\(\) => onOpenScreen\(row\.computer_id, label\)\}/);
+  assert.doesNotMatch(
+    panel,
+    /onClick=\{\(\) => void resumeThis\(row\.computer_id\)\}/,
+  );
 });
