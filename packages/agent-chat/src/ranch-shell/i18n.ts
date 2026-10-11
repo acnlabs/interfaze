@@ -489,6 +489,7 @@ export type RanchMessages = {
   myAgentsPricingSourceTokenHub: string;
   myAgentsPricingSourceHint: string;
   myAgentsPricingListingLine: string;
+  myAgentsPricingKeepLine: string;
   myAgentsPricingExampleLine: string;
   myAgentsPricingCatalogMissing: string;
   myAgentsPricingUnlisted: string;
@@ -1161,7 +1162,7 @@ const en: RanchMessages = {
   myAgentsProfileFailed: "Couldn’t save profile.",
   myAgentsSectionPricing: "Agent pricing",
   myAgentsPricingHint:
-    "This agent’s call fee for others: hop baseline × (1+markup%). Official baseline is Catalog × 1.15; BYO stays Catalog/pack.",
+    "The preview is what the other person pays. With their own key: baseline × (1+markup%) ÷ 0.9, and you keep baseline × (1+markup%). Official: the platform keeps list × 1.15, you keep only the markup, and the 10% sits outside that markup.",
   myAgentsPricingInputLabel: "Settle preview · input USD / 1M",
   myAgentsPricingOutputLabel: "Settle preview · output USD / 1M",
   myAgentsPricingModelLabel: "Default model · USD / 1M tokens",
@@ -1212,19 +1213,20 @@ const en: RanchMessages = {
   myAgentsProvidersFailed: "Couldn’t save providers.",
   myAgentsPricingMarkupLabel: "Markup",
   myAgentsPricingMarkupHint:
-    "Settle = hop baseline × (1 + markup%). Official uses Catalog × 1.15; BYO uses Catalog/pack. Changing model keeps this %.",
+    "Markup is only the slice you keep. Changing model keeps this %.",
   myAgentsPricingCatalogLine: "Host ${in} / ${out}",
   myAgentsPricingSourceOpenRouter: "Reference · OpenRouter",
   myAgentsPricingSourceTokenHub: "Reference · TokenHub",
   myAgentsPricingSourceHint:
     "Public list the Host Catalog row was taken from. Official settle uses published Catalog (sync × 1.15), not the list price. TokenHub still includes FX.",
-  myAgentsPricingListingLine: "In ${in} · out ${out} / 1M",
+  myAgentsPricingListingLine: "They pay in ${in} · out ${out} / 1M",
+  myAgentsPricingKeepLine: "You keep in ${in} · out ${out} / 1M",
   myAgentsPricingExampleLine:
     "Example: 1M input tokens → they pay you ~$${pay}; Host baseline ~$${cost}",
   myAgentsPricingCatalogMissing:
     "No Host Catalog/pack row for this model — pick another id or wait for Host pack coverage.",
   myAgentsPricingUnlisted:
-    "Not configured yet — choose a default model and markup (preview uses Catalog × markup). Save to publish.",
+    "Not configured yet — choose a default model and markup. Save to publish.",
   myAgentsSavePricing: "Save default model & markup",
   myAgentsPricingSaved: "Pricing saved",
   myAgentsPricingFailed: "Couldn’t save pricing.",
@@ -1907,7 +1909,7 @@ const zh: RanchMessages = {
   myAgentsProfileFailed: "保存失败。",
   myAgentsSectionPricing: "智能体定价",
   myAgentsPricingHint:
-    "这是智能体对外的调用费：该跳底价 ×（1+上浮%）。官方底价 = 同步价 × 1.15；自持钥仍是 Catalog/价包。",
+    "预览是对方实付的价。自带钥匙：底价 ×（1+上浮%）÷ 0.9，你到手底价 ×（1+上浮%）。官方：平台留下原价 × 1.15，你只拿上浮，10% 加在上浮外面。",
   myAgentsPricingInputLabel: "结算预览 · 输入 USD / 百万",
   myAgentsPricingOutputLabel: "结算预览 · 输出 USD / 百万",
   myAgentsPricingModelLabel: "默认模型 · USD / 百万 token",
@@ -1956,19 +1958,19 @@ const zh: RanchMessages = {
   myAgentsProvidersSaved: "供应商已保存",
   myAgentsProvidersFailed: "保存供应商失败。",
   myAgentsPricingMarkupLabel: "上浮",
-  myAgentsPricingMarkupHint:
-    "结算 = 该跳底价 ×（1+上浮%）。官方用对外 Catalog（同步价 × 1.15），自持钥用 Catalog/价包。换模型保留该比例。",
+  myAgentsPricingMarkupHint: "上浮只决定你到手的那一截。换模型保留这个比例。",
   myAgentsPricingCatalogLine: "底价 ${in} / ${out}",
   myAgentsPricingSourceOpenRouter: "参考底价 · OpenRouter",
   myAgentsPricingSourceTokenHub: "参考底价 · TokenHub",
   myAgentsPricingSourceHint:
     "Host Catalog 取自该公示价目。官方结算用对外 Catalog（同步价 × 1.15），不是公示牌价。TokenHub 仍含汇率。",
-  myAgentsPricingListingLine: "入 ${in} · 出 ${out} / 百万",
+  myAgentsPricingListingLine: "对方实付 入 ${in} · 出 ${out} / 百万",
+  myAgentsPricingKeepLine: "你到手 入 ${in} · 出 ${out} / 百万",
   myAgentsPricingExampleLine:
     "例：100 万 input → 对方约付你 $${pay}；Host 底价约 $${cost}",
   myAgentsPricingCatalogMissing:
     "Catalog/价包没有这个模型——请换 id，或等 Host 价包录入后再试。",
-  myAgentsPricingUnlisted: "尚未配置——选择默认模型与上浮（预览按底价×上浮）。保存后生效。",
+  myAgentsPricingUnlisted: "尚未配置——选择默认模型与上浮。保存后生效。",
   myAgentsSavePricing: "保存默认模型与上浮",
   myAgentsPricingSaved: "定价已保存",
   myAgentsPricingFailed: "保存定价失败。",

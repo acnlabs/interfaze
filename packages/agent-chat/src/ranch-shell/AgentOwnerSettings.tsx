@@ -23,6 +23,7 @@ import {
 import { copyText } from "./connectPrompt";
 import type { RanchMessages } from "./i18n";
 import { officialShelfAllows } from "./officialV0";
+import { chatSettleQuote, DEFAULT_CHAT_FEE_RATE } from "./settleQuote";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 import { useModalA11y } from "./useModalA11y";
 
@@ -96,10 +97,6 @@ const DEFAULT_MARKUP_PERCENT = 50;
 function roundUsdPerMillion(n: number): number {
   // Keep enough precision for cheap models without noisy floats.
   return Math.round(n * 1e6) / 1e6;
-}
-
-function applyMarkup(catalog: number, markupPercent: number): number {
-  return roundUsdPerMillion(catalog * (1 + markupPercent / 100));
 }
 
 function sameModelId(left: string, right: string): boolean {
@@ -932,6 +929,7 @@ export function AgentOwnerSettings({
   const [supportedModels, setSupportedModels] = useState<string[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [hostReady, setHostReady] = useState(Boolean(detail.host_inference_ready));
+  const [feeRate, setFeeRate] = useState(DEFAULT_CHAT_FEE_RATE);
   const [officialSaved, setOfficialSaved] = useState<string[]>(
     () => detail.official_models ?? [],
   );
@@ -1101,6 +1099,12 @@ export function AgentOwnerSettings({
         setSupportedModels(ids);
         if (typeof status.host_inference_ready === "boolean") {
           setHostReady(status.host_inference_ready);
+        }
+        if (
+          typeof status.network_usage_fee_rate === "number" &&
+          Number.isFinite(status.network_usage_fee_rate)
+        ) {
+          setFeeRate(status.network_usage_fee_rate);
         }
         const official = Array.isArray(status.official_models)
           ? status.official_models
@@ -1423,14 +1427,18 @@ export function AgentOwnerSettings({
         : supportedModels.length > 0)
       ? t.myAgentsPricingCatalogMissing
       : null;
-  const inputParsed =
-    !catalogLoading && catalogIn != null && !catalogError && markupParsed != null
-      ? applyMarkup(catalogIn, markupParsed)
+  const settleQuote =
+    !catalogLoading &&
+    catalogIn != null &&
+    catalogOut != null &&
+    !catalogError &&
+    markupParsed != null
+      ? chatSettleQuote(catalogIn, catalogOut, markupParsed, officialSelected, feeRate)
       : null;
-  const outputParsed =
-    !catalogLoading && catalogOut != null && !catalogError && markupParsed != null
-      ? applyMarkup(catalogOut, markupParsed)
-      : null;
+  const inputParsed = settleQuote?.hunterIn ?? null;
+  const outputParsed = settleQuote?.hunterOut ?? null;
+  const ownerInParsed = settleQuote?.ownerIn ?? null;
+  const ownerOutParsed = settleQuote?.ownerOut ?? null;
   const previewReady = inputParsed != null && outputParsed != null;
   const modelDirty = Boolean(
     displayedModelId &&
@@ -1865,6 +1873,12 @@ export function AgentOwnerSettings({
         setSupportedModels(ids);
         if (typeof status.host_inference_ready === "boolean") {
           setHostReady(status.host_inference_ready);
+        }
+        if (
+          typeof status.network_usage_fee_rate === "number" &&
+          Number.isFinite(status.network_usage_fee_rate)
+        ) {
+          setFeeRate(status.network_usage_fee_rate);
         }
         const official = Array.isArray(status.official_models)
           ? status.official_models
@@ -2579,6 +2593,14 @@ export function AgentOwnerSettings({
                 out: fmtUsd(outputParsed),
               })}
             </div>
+            {ownerInParsed != null && ownerOutParsed != null ? (
+              <div style={{ color: colors.muted, marginTop: 2 }}>
+                {fillTemplate(t.myAgentsPricingKeepLine, {
+                  in: fmtUsd(ownerInParsed),
+                  out: fmtUsd(ownerOutParsed),
+                })}
+              </div>
+            ) : null}
             <div
               style={{
                 color: colors.muted,
