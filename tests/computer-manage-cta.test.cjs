@@ -44,8 +44,8 @@ test("a listed computer can open its screen without a chat", () => {
     path.join(__dirname, "../packages/agent-chat/src/ranch-shell/RanchChatShell.tsx"),
     "utf8",
   );
-  assert.match(panel, /screen: "打开屏幕"/);
-  assert.match(panel, /onOpenScreen\(row\.computer_id, label, row\.screen_credits_per_hour\)/);
+  assert.match(panel, /screen: "打开电脑屏幕"/);
+  assert.match(panel, /onOpenScreen\(row\.computer_id, label, row\.screen_credits_per_hour/);
   assert.match(shell, /onOpenScreen=\{openCloudScreen\}/);
   assert.match(shell, /active \|\| activeDock\.kind === "computer"/);
 });
@@ -128,13 +128,12 @@ test("every screen path asks in the shell before the hourly bill starts", () => 
   );
   assert.match(shell, /setConfirmDialog\(\{/);
   assert.match(shell, /t\.screenConfirm\.replace/);
+  assert.match(shell, /screenAsksBeforeCharge/);
   assert.match(shell, /onOpenComputer=\{openCloudScreen\}/);
   assert.match(shell, /onOpenScreen=\{openCloudScreen\}/);
-  assert.match(shell, /openCloudScreen\(id, label, rate\)/);
-  assert.match(i18n, /screenConfirm: "打开屏幕按 \{rate\} 星币\/小时计费/);
-  assert.match(
-    panel,
-    /onClick=\{\(\) => onOpenScreen\(row\.computer_id, label, row\.screen_credits_per_hour\)\}/,
-  );
+  assert.match(shell, /openCloudScreen\(id, label, rate, hint\)/);
+  assert.match(i18n, /screenConfirm: "打开电脑屏幕按 \{rate\} 星币\/小时计费/);
+  assert.match(i18n, /openScreen: "打开电脑屏幕"/);
+  assert.match(panel, /onOpenScreen\(row\.computer_id, label, row\.screen_credits_per_hour/);
   assert.doesNotMatch(panel, /kind: "screen"/);
 });

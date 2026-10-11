@@ -27,6 +27,7 @@ function headerIconStyle(on: boolean): CSSProperties {
   };
 }
 import { chatComputerLabel, extraIndex, type ComputerNameRow } from "./computerLabel";
+import type { ScreenChargeHint } from "./computerSendBoot";
 
 type ChatPlace = {
   place: "agent" | "cloud";
@@ -64,7 +65,7 @@ export function ChatComputerControl({
   getAccessToken: () => Promise<string | null>;
   locale: RanchLocale;
   openScreenIds: string[];
-  onOpenScreen: (computerId: string, label: string, rate?: number) => void;
+  onOpenScreen: (computerId: string, label: string, rate?: number, hint?: ScreenChargeHint) => void;
 }) {
   const [place, setPlace] = useState<ChatPlace | null>(null);
   const [computers, setComputers] = useState<ComputerNameRow[]>([]);
@@ -113,7 +114,11 @@ export function ChatComputerControl({
       onClick={() => {
         if (openable && place.computer_id) {
           const row = computers.find((item) => item.computer_id === place.computer_id);
-          onOpenScreen(place.computer_id, label, row?.screen_credits_per_hour);
+          onOpenScreen(place.computer_id, label, row?.screen_credits_per_hour, {
+            status: row?.status,
+            resumeCreditsPerHour: row?.resume_credits_per_hour,
+            screenCreditsPerHour: row?.screen_credits_per_hour,
+          });
         }
       }}
     >

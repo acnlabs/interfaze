@@ -34,7 +34,12 @@ import {
 } from "../attachmentListedPrice";
 import { ChatComputerControl } from "../ChatComputerControl";
 import { computerName, extraIndex, type ComputerNameRow } from "../computerLabel";
-import { placeForDefaultComputer, sendAsksBeforeBoot } from "../computerSendBoot";
+import {
+  placeForDefaultComputer,
+  screenAsksBeforeCharge,
+  sendAsksBeforeBoot,
+  type ScreenChargeHint,
+} from "../computerSendBoot";
 import { ComputerManagePanel } from "../ComputerManagePanel";
 import { ComputerScreenPanel } from "../ComputerScreenPanel";
 import { MailboxThumbs } from "../MailboxThumbs";
@@ -2826,24 +2831,35 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setShowComputer(true);
   };
 
-  const openCloudScreen = (id: string, label: string, rate?: number) => {
+  const openCloudScreen = (id: string, label: string, rate?: number, hint?: ScreenChargeHint) => {
     const tabId = `computer:${id}`;
     if (dockTabsRef.current.some((tab) => tab.id === tabId)) {
       setActiveDockId(tabId);
       return;
     }
-    const billed =
-      rate ?? cloudComputers.find((row) => row.computer_id === id)?.screen_credits_per_hour;
+    const row = cloudComputers.find((item) => item.computer_id === id);
+    const billed = rate ?? hint?.screenCreditsPerHour ?? row?.screen_credits_per_hour;
+    const openNow = () => {
+      setConfirmDialog(null);
+      closeAccountSurfaces();
+      setScreenComputer({ id, label });
+      setDockTabs((prev) => [...prev, { id: tabId, kind: "computer", title: label }]);
+      setActiveDockId(tabId);
+    };
+    if (
+      !screenAsksBeforeCharge({
+        status: hint?.status ?? row?.status,
+        resumeCreditsPerHour: hint?.resumeCreditsPerHour ?? row?.resume_credits_per_hour,
+        screenCreditsPerHour: billed,
+      })
+    ) {
+      openNow();
+      return;
+    }
     setConfirmDialog({
       message: t.screenConfirm.replace("{rate}", billed == null ? "—" : String(billed)),
       confirmLabel: t.openScreen,
-      onConfirm: () => {
-        setConfirmDialog(null);
-        closeAccountSurfaces();
-        setScreenComputer({ id, label });
-        setDockTabs((prev) => [...prev, { id: tabId, kind: "computer", title: label }]);
-        setActiveDockId(tabId);
-      },
+      onConfirm: openNow,
     });
   };
 
@@ -6605,14 +6621,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     openScreenIds={dockTabs
                       .filter((tab) => tab.kind === "computer")
                       .map((tab) => tab.id.slice("computer:".length))}
-                    onOpenScreen={(id, label, rate) => {
+                    onOpenScreen={(id, label, rate, hint) => {
                       const tabId = `computer:${id}`;
                       if (dockTabsRef.current.some((tab) => tab.id === tabId)) {
                         if (activeDockId === tabId || activeDockId == null) closeTab(tabId);
                         else setActiveDockId(tabId);
                         return;
                       }
-                      openCloudScreen(id, label, rate);
+                      openCloudScreen(id, label, rate, hint);
                     }}
                   />
                   {canOpenTalk ? (
