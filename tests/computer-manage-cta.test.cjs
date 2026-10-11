@@ -13,7 +13,7 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const moduleExports = {};
 new Function("exports", js)(moduleExports);
-const { computerManageCta } = moduleExports;
+const { computerManageCta, pauseAsksBeforeCharge } = moduleExports;
 
 test("an empty list creates the default computer", () => {
   assert.equal(computerManageCta(0), "create");
@@ -58,6 +58,19 @@ test("a running computer can be paused from the panel", () => {
   assert.match(panel, /pause: "暂停"/);
   assert.match(panel, /\/api\/computers\/\$\{encodeURIComponent\(computerId\)\}\/pause/);
   assert.match(panel, /row\.status === "running"/);
+});
+
+test("pause asks before a charged pause and skips a free one", () => {
+  assert.equal(pauseAsksBeforeCharge(5), true);
+  assert.equal(pauseAsksBeforeCharge(0), false);
+  assert.equal(pauseAsksBeforeCharge(undefined), false);
+  const panel = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ComputerManagePanel.tsx"),
+    "utf8",
+  );
+  assert.match(panel, /pauseAsksBeforeCharge\(row\.paused_credits_per_hour\)/);
+  assert.match(panel, /pauseConfirm: "暂停后按 \{rate\} 星币\/小时计费/);
+  assert.match(panel, /kind: "pause"/);
 });
 
 test("an idle computer with a disk can be resumed from the panel", () => {
