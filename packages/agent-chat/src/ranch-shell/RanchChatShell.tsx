@@ -7640,16 +7640,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         "";
                       const priceFor = (id: string) => {
                         const cat = composerCatalog.find((row) => sameModelId(row.id, id));
-                        if (official && cat) {
-                          return t.composerModelPrice(
-                            formatUsdPerMillion(
-                              applyMarkupUsd(cat.in, composerModel.markup_percent),
-                            ),
-                            formatUsdPerMillion(
-                              applyMarkupUsd(cat.out, composerModel.markup_percent),
-                            ),
-                          );
-                        }
                         const priced = composerModel.model_options.find((o) =>
                           sameModelId(o.model_id, id),
                         );
