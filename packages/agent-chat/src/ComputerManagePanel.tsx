@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
 import { computerName, type ComputerNameRow } from "./computerLabel";
-import { computerManageCta } from "./computerManageCta";
+import { computerManageCta, pauseAsksBeforeCharge } from "./computerManageCta";
 import { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
 
 type ComputerRow = ComputerNameRow & {
@@ -12,9 +12,11 @@ type ComputerRow = ComputerNameRow & {
   has_disk: boolean;
   resume_credits_per_hour?: number;
   screen_credits_per_hour?: number;
+  paused_credits_per_hour?: number;
 };
 
-type PendingResume = {
+type PendingAction = {
+  kind: "resume" | "pause";
   computerId: string;
   rate: number | undefined;
 };
@@ -46,6 +48,7 @@ const copy = {
     resuming: "Resuming…",
     resumeFailed: "The computer did not resume.",
     resumeConfirm: "Resume bills {rate} credits per hour. Unused prepaid is returned.",
+    pauseConfirm: "Pause bills {rate} credits per hour.",
     cancel: "Cancel",
   },
   zh: {
@@ -74,6 +77,7 @@ const copy = {
     resuming: "正在恢复…",
     resumeFailed: "没有恢复。",
     resumeConfirm: "恢复按 {rate} 星币/小时计费。不用的预扣会退回。",
+    pauseConfirm: "暂停后按 {rate} 星币/小时计费。",
     cancel: "取消",
   },
 } as const;
@@ -129,7 +133,7 @@ export function ComputerManagePanel({
   const [listReady, setListReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [pending, setPending] = useState<PendingResume | null>(null);
+  const [pending, setPending] = useState<PendingAction | null>(null);
 
   const loadList = useCallback(async () => {
     const listRes = await authed(gatewayBaseUrl, getAccessToken, "/api/computers");
@@ -328,7 +332,21 @@ export function ComputerManagePanel({
                   {t.screen}
                 </button>
                 {row.status === "running" ? (
-                  <button type="button" disabled={busy} onClick={() => void pauseThis(row.computer_id)}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      if (pauseAsksBeforeCharge(row.paused_credits_per_hour)) {
+                        setPending({
+                          kind: "pause",
+                          computerId: row.computer_id,
+                          rate: row.paused_credits_per_hour,
+                        });
+                        return;
+                      }
+                      void pauseThis(row.computer_id);
+                    }}
+                  >
                     {busy ? t.pausing : t.pause}
                   </button>
                 ) : row.has_disk ? (
@@ -337,6 +355,7 @@ export function ComputerManagePanel({
                     disabled={busy}
                     onClick={() =>
                       setPending({
+                        kind: "resume",
                         computerId: row.computer_id,
                         rate: row.resume_credits_per_hour,
                       })
@@ -359,13 +378,17 @@ export function ComputerManagePanel({
       </div>
       {pending ? (
         <ConfirmDialog
-          message={withRate(t.resumeConfirm, pending.rate)}
-          confirmLabel={t.resume}
+          message={withRate(pending.kind === "pause" ? t.pauseConfirm : t.resumeConfirm, pending.rate)}
+          confirmLabel={pending.kind === "pause" ? t.pause : t.resume}
           cancelLabel={t.cancel}
           busy={busy}
           onConfirm={() => {
             const next = pending;
             setPending(null);
+            if (next.kind === "pause") {
+              void pauseThis(next.computerId);
+              return;
+            }
             void resumeThis(next.computerId);
           }}
           onCancel={() => setPending(null)}
