@@ -13,7 +13,7 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const moduleExports = {};
 new Function("exports", js)(moduleExports);
-const { computerManageCta, pauseAsksBeforeCharge } = moduleExports;
+const { computerManageCta, extraAsksBeforeCreate, pauseAsksBeforeCharge } = moduleExports;
 
 test("an empty list creates the default computer", () => {
   assert.equal(computerManageCta(0), "create");
@@ -94,6 +94,22 @@ test("resuming asks on the panel before it starts billing", () => {
   assert.doesNotMatch(
     panel,
     /onClick=\{\(\) => void resumeThis\(row\.computer_id\)\}/,
+  );
+});
+
+test("opening another computer asks on the panel first", () => {
+  assert.equal(extraAsksBeforeCreate(0), false);
+  assert.equal(extraAsksBeforeCreate(1), true);
+  const panel = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ComputerManagePanel.tsx"),
+    "utf8",
+  );
+  assert.match(panel, /extraAsksBeforeCreate\(computers\.length\)/);
+  assert.match(panel, /kind: "extra"/);
+  assert.match(panel, /extraConfirm: "再开一台免费/);
+  assert.doesNotMatch(
+    panel,
+    /<button type="button" disabled=\{busy\} onClick=\{\(\) => void openAnother\(\)\}>/,
   );
 });
 

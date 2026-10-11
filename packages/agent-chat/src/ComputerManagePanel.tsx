@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
 import { computerName, type ComputerNameRow } from "./computerLabel";
-import { computerManageCta, pauseAsksBeforeCharge } from "./computerManageCta";
+import { computerManageCta, extraAsksBeforeCreate, pauseAsksBeforeCharge } from "./computerManageCta";
 import { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
 
 type ComputerRow = ComputerNameRow & {
@@ -15,11 +15,9 @@ type ComputerRow = ComputerNameRow & {
   paused_credits_per_hour?: number;
 };
 
-type PendingAction = {
-  kind: "resume" | "pause";
-  computerId: string;
-  rate: number | undefined;
-};
+type PendingAction =
+  | { kind: "resume" | "pause"; computerId: string; rate: number | undefined }
+  | { kind: "extra" };
 
 const copy = {
   en: {
@@ -49,6 +47,8 @@ const copy = {
     resumeFailed: "The computer did not resume.",
     resumeConfirm: "Resume bills {rate} credits per hour. Unused prepaid is returned.",
     pauseConfirm: "Pause bills {rate} credits per hour.",
+    extraConfirm:
+      "Opening another is free. New chats still use the default; this one does not take new chats on its own.",
     cancel: "Cancel",
   },
   zh: {
@@ -78,6 +78,7 @@ const copy = {
     resumeFailed: "没有恢复。",
     resumeConfirm: "恢复按 {rate} 星币/小时计费。不用的预扣会退回。",
     pauseConfirm: "暂停后按 {rate} 星币/小时计费。",
+    extraConfirm: "再开一台免费。新对话仍进默认电脑，这台不会自动接新对话。",
     cancel: "取消",
   },
 } as const;
@@ -370,7 +371,17 @@ export function ComputerManagePanel({
           );
         })}
         {listReady ? (
-          <button type="button" disabled={busy} onClick={() => void openAnother()}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              if (extraAsksBeforeCreate(computers.length)) {
+                setPending({ kind: "extra" });
+                return;
+              }
+              void openAnother();
+            }}
+          >
             {busy ? t.opening : hasComputer ? t.open : t.create}
           </button>
         ) : null}
@@ -378,13 +389,21 @@ export function ComputerManagePanel({
       </div>
       {pending ? (
         <ConfirmDialog
-          message={withRate(pending.kind === "pause" ? t.pauseConfirm : t.resumeConfirm, pending.rate)}
-          confirmLabel={pending.kind === "pause" ? t.pause : t.resume}
+          message={
+            pending.kind === "extra"
+              ? t.extraConfirm
+              : withRate(pending.kind === "pause" ? t.pauseConfirm : t.resumeConfirm, pending.rate)
+          }
+          confirmLabel={pending.kind === "extra" ? t.open : pending.kind === "pause" ? t.pause : t.resume}
           cancelLabel={t.cancel}
           busy={busy}
           onConfirm={() => {
             const next = pending;
             setPending(null);
+            if (next.kind === "extra") {
+              void openAnother();
+              return;
+            }
             if (next.kind === "pause") {
               void pauseThis(next.computerId);
               return;
