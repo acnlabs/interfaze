@@ -627,16 +627,10 @@ function modelFitsComposerPath(
     );
   }
   if (args.openRouterByo) {
-    return (
-      args.fallback.some((item) => sameModelId(item, mid)) ||
-      sameModelId(mid, args.listed)
-    );
+    return args.fallback.some((item) => sameModelId(item, mid));
   }
   if (vendor && !isByoVendor(vendor, args.byoVendor)) return false;
-  return (
-    args.fallback.some((item) => sameModelId(item, mid)) ||
-    sameModelId(mid, args.listed)
-  );
+  return args.fallback.some((item) => sameModelId(item, mid));
 }
 
 function pickComposerModelForPath(args: {
@@ -4930,9 +4924,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             supported_models: supported,
             model_options: options,
           });
-          const fallback = supported.length
-            ? supported
-            : [listed].filter((m): m is string => !!m && !!m.trim());
+          const fallback = supported;
           const stored = readComposerModelPick(active.chat_id);
           const storedListed = readComposerListed(active.chat_id);
           const prevFromRef =
@@ -7624,15 +7616,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         composerModel.supported_models,
                       );
                       const options = (() => {
-                        const fromApi = composerModel.supported_models.length
-                          ? composerModel.supported_models
-                          : [listed].filter(Boolean);
+                        const fromApi = composerModel.supported_models.filter((id) =>
+                          id.trim(),
+                        );
                         const fromShelf = composerCatalog.map((row) => row.id);
                         const seen = new Set<string>();
                         const out: string[] = [];
-                        const source = official
-                          ? [listed, ...fromShelf]
-                          : [listed, ...fromApi];
+                        const source = official ? [listed, ...fromShelf] : fromApi;
                         for (const id of source) {
                           if (!id || !id.trim()) continue;
                           const k = id.toLowerCase();
