@@ -9,7 +9,7 @@ const copy = {
   en: {
     close: "Close",
     loadFailed: "Couldn’t load this computer.",
-    open: "Open screen",
+    open: "Open computer screen",
     opening: "Opening…",
     screen: "Screen",
     noScreen: "This computer has no screen yet.",
@@ -17,7 +17,7 @@ const copy = {
   zh: {
     close: "关闭",
     loadFailed: "这台电脑暂时读不出来。",
-    open: "打开屏幕",
+    open: "打开电脑屏幕",
     opening: "正在打开…",
     screen: "画面",
     noScreen: "这台电脑还没有屏幕。",

@@ -13,7 +13,7 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const moduleExports = {};
 new Function("exports", js)(moduleExports);
-const { sendAsksBeforeBoot, placeForDefaultComputer } = moduleExports;
+const { sendAsksBeforeBoot, placeForDefaultComputer, screenAsksBeforeCharge } = moduleExports;
 
 test("an idle cloud computer asks before a send starts the hourly bill", () => {
   assert.equal(
@@ -100,6 +100,39 @@ test("an embed send asks before an idle computer starts billing", () => {
   assert.match(embed, /sendAsksBeforeBoot/);
   assert.match(embed, /t\.sendConfirm\.replace/);
   assert.match(embed, /bootAdmitted: true/);
+});
+
+test("opening a screen asks when the machine is idle or paused", () => {
+  assert.equal(
+    screenAsksBeforeCharge({ status: "idle", resumeCreditsPerHour: 58, screenCreditsPerHour: 58 }),
+    true,
+  );
+  assert.equal(
+    screenAsksBeforeCharge({ status: "paused", resumeCreditsPerHour: 5, screenCreditsPerHour: 58 }),
+    true,
+  );
+});
+
+test("a running China computer does not ask again at the same hourly rate", () => {
+  assert.equal(
+    screenAsksBeforeCharge({
+      status: "running",
+      resumeCreditsPerHour: 58,
+      screenCreditsPerHour: 58,
+    }),
+    false,
+  );
+});
+
+test("opening a screen asks when it would raise the hourly rate", () => {
+  assert.equal(
+    screenAsksBeforeCharge({
+      status: "running",
+      resumeCreditsPerHour: 18,
+      screenCreditsPerHour: 85,
+    }),
+    true,
+  );
 });
 
 test("the Labs assistant asks before an idle send starts billing", () => {

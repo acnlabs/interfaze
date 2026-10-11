@@ -1,6 +1,8 @@
 export type ComputerNameRow = {
   computer_id: string;
   is_default: boolean;
+  status?: string | null;
+  resume_credits_per_hour?: number;
   screen_credits_per_hour?: number;
 };
 

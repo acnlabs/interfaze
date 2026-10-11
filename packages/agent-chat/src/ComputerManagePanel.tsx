@@ -5,6 +5,7 @@ import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
 import { computerName, type ComputerNameRow } from "./computerLabel";
 import { computerManageCta, extraAsksBeforeCreate, pauseAsksBeforeCharge } from "./computerManageCta";
+import type { ScreenChargeHint } from "./computerSendBoot";
 import { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
 
 type ComputerRow = ComputerNameRow & {
@@ -38,7 +39,7 @@ const copy = {
     emptyDisk: "No files yet",
     idle: "Idle",
     running: "On",
-    screen: "Open screen",
+    screen: "Open computer screen",
     pause: "Pause",
     pausing: "Pausing…",
     pauseFailed: "The computer did not pause.",
@@ -69,7 +70,7 @@ const copy = {
     emptyDisk: "还没有文件",
     idle: "空闲",
     running: "开着",
-    screen: "打开屏幕",
+    screen: "打开电脑屏幕",
     pause: "暂停",
     pausing: "正在暂停…",
     pauseFailed: "没有停下来。",
@@ -126,7 +127,7 @@ export function ComputerManagePanel({
   getAccessToken: () => Promise<string | null>;
   locale: RanchLocale;
   onClose: () => void;
-  onOpenScreen: (computerId: string, label: string, rate?: number) => void;
+  onOpenScreen: (computerId: string, label: string, rate?: number, hint?: ScreenChargeHint) => void;
 }) {
   const t = copy[locale] ?? copy.en;
   const [computers, setComputers] = useState<ComputerRow[]>([]);
@@ -328,7 +329,13 @@ export function ComputerManagePanel({
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => onOpenScreen(row.computer_id, label, row.screen_credits_per_hour)}
+                  onClick={() =>
+                    onOpenScreen(row.computer_id, label, row.screen_credits_per_hour, {
+                      status: row.status,
+                      resumeCreditsPerHour: row.resume_credits_per_hour,
+                      screenCreditsPerHour: row.screen_credits_per_hour,
+                    })
+                  }
                 >
                   {t.screen}
                 </button>

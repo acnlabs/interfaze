@@ -25,6 +25,21 @@ export function sendAsksBeforeBoot(
   return true;
 }
 
+export type ScreenChargeHint = {
+  status?: string | null;
+  resumeCreditsPerHour?: number | null;
+  screenCreditsPerHour?: number | null;
+};
+
+/** Ask when opening the screen would start the meter or raise the hourly rate. */
+export function screenAsksBeforeCharge(hint: ScreenChargeHint): boolean {
+  if (hint.status !== "running") return true;
+  const resume = hint.resumeCreditsPerHour;
+  const screen = hint.screenCreditsPerHour;
+  if (resume == null || screen == null) return true;
+  return screen > resume;
+}
+
 /** New group chats land on the default computer, not an extra one. */
 export function placeForDefaultComputer(computers: ListedComputer[]): ChatComputerPlace {
   const row = computers.find((item) => item.is_default) ?? computers[0];
