@@ -577,6 +577,7 @@ export type GatewayClient = {
     }>;
     mismatched: boolean;
     markup_percent?: number | null;
+    network_usage_fee_rate?: number | null;
     supported_models?: string[];
     self_reported_models?: string[];
     model_options?: Array<{
@@ -971,6 +972,7 @@ export function createGatewayClient(
         official_default_model_id?: string | null;
         mismatched: boolean;
         markup_percent?: number | null;
+        network_usage_fee_rate?: number | null;
         supported_models?: string[];
         self_reported_models?: string[];
         model_options?: Array<{
