@@ -2,7 +2,7 @@
 
 export type ManuscriptBlock = {
   block_key: string;
-  type: "text" | "html" | "table" | "image" | "video";
+  type: "text" | "html" | "table" | "image" | "video" | "code";
   title?: string | null;
   body: string;
   rev: number;

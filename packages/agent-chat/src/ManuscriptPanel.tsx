@@ -107,6 +107,27 @@ function MediaBlock({
   return <img src={url} alt="" style={{ maxWidth: "100%", display: "block" }} />;
 }
 
+function CodeBlock({ body }: { body: string }) {
+  return (
+    <pre
+      style={{
+        margin: 0,
+        flex: 1,
+        minHeight: 0,
+        overflow: "auto",
+        padding: 14,
+        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+        fontSize: 13,
+        lineHeight: 1.5,
+        whiteSpace: "pre",
+        tabSize: 2,
+      }}
+    >
+      <code>{body}</code>
+    </pre>
+  );
+}
+
 function TableBlock({ body, failedLabel }: { body: string; failedLabel: string }) {
   const table = parseTableBody(body);
   if (!table) {
@@ -407,6 +428,8 @@ export function ManuscriptPanel({
               />
             ) : block.type === "table" ? (
               <TableBlock body={block.body} failedLabel={t.tableFailed} />
+            ) : block.type === "code" ? (
+              <CodeBlock body={block.body} />
             ) : block.type === "image" || block.type === "video" ? (
               mailboxIdFromBody(block.body) ? (
                 <MediaBlock
