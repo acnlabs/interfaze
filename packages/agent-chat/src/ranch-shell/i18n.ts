@@ -54,7 +54,6 @@ export type RanchMessages = {
   officialNotAuthorized: string;
   officialModelUnsupported: string;
   modelPricingUnavailable: string;
-  priceMoved: string;
   priceUnconfirmed: string;
   needOpenRouterKey: string;
   buyOpenRouterCredits: string;
@@ -770,7 +769,6 @@ const en: RanchMessages = {
   officialModelUnsupported:
     "Official hosted inference cannot run thinking/reasoning models. Pick a chat model from the list.",
   modelPricingUnavailable: "No platform price for that model yet. Pick another or ask the owner to wait for Host pack coverage.",
-  priceMoved: "This model's price changed. The menu now shows the new price. Look, then send again.",
   priceUnconfirmed: "The current price could not be read, so nothing was sent.",
   pricingMismatch: (listed, observed) =>
     `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
@@ -1534,7 +1532,6 @@ const zh: RanchMessages = {
   officialModelUnsupported:
     "官方通道跑不了思考/推理模，请换一个列表里的对话模型。",
   modelPricingUnavailable: "平台暂无该模型报价，请换一个；或等 Host 价包录入后再试。",
-  priceMoved: "这个模型的价格变了，菜单已经换成现价。看一眼再发送。",
   priceUnconfirmed: "暂时读不到这个模型的现价，没有发送。",
   pricingMismatch: (listed, observed) =>
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
