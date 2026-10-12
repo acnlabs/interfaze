@@ -3145,6 +3145,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   } | null>(null);
   /** User pick for this hop (S1). Sticky per chat until changed. */
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  /** Models the live price page no longer lists. Hidden for this session. */
+  const [droppedModelIds, setDroppedModelIds] = useState<string[]>([]);
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
   const [composerMenuQuery, setComposerMenuQuery] = useState("");
   const [composerCatalog, setComposerCatalog] = useState<Array<{ id: string; in: number; out: number }>>(
@@ -4558,7 +4560,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         composerModel,
         composerCatalogRef.current,
       );
-      await client.sendMessage(chatId, text, mentions, sendThreadId, {
+      const sent = await client.sendMessage(chatId, text, mentions, sendThreadId, {
         requested_model: quotedModel,
         ...(seen
           ? {
@@ -4569,6 +4571,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
         decision_choice: opts?.decisionChoice ?? null,
         canvas_ref: pageRef,
       });
+      const used = sent.metadata?.requested_model;
+      if (typeof used === "string" && used.trim() && !sameModelId(used, quotedModel)) {
+        setSelectedModelId(used);
+        writeComposerModelPick(chatId, used);
+        if (quotedModel) {
+          setDroppedModelIds((prev) =>
+            prev.some((id) => sameModelId(id, quotedModel)) ? prev : [...prev, quotedModel],
+          );
+        }
+      }
       const priceAgent = active && !isGroupChat(active) ? active.agent_id : null;
       const priceBare = priceAgent?.replace(/^acn:/i, "").trim();
       if (priceBare) {
@@ -4577,7 +4589,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
           .then((row) => {
             const options = Array.isArray(row.model_options) ? row.model_options : null;
             if (!options) return;
-            setComposerModel((prev) => (prev ? { ...prev, model_options: options } : prev));
+            setComposerModel((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    model_options: options,
+                    ...(Array.isArray(row.supported_models)
+                      ? { supported_models: row.supported_models }
+                      : {}),
+                  }
+                : prev,
+            );
           })
           .catch(() => {
             /* the next menu refresh will pick up the price */
@@ -7700,10 +7722,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         const source = official ? [listed, ...fromShelf] : fromApi;
                         for (const id of source) {
                           if (!id || !id.trim()) continue;
+                          if (droppedModelIds.some((row) => sameModelId(row, id))) continue;
                           const k = id.toLowerCase();
                           if (seen.has(k)) continue;
                           seen.add(k);
                           out.push(id);
+                        }
+                        if (
+                          selectedModelId &&
+                          !droppedModelIds.some((row) => sameModelId(row, selectedModelId)) &&
+                          !out.some((id) => sameModelId(id, selectedModelId))
+                        ) {
+                          out.unshift(selectedModelId);
                         }
                         return out;
                       })();
