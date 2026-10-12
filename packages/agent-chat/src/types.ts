@@ -239,6 +239,7 @@ export type ChatMessage = {
       model_id?: string;
       meter_source?: string;
     };
+    requested_model?: string;
     /** Downstream agents this hop invoked (writeback contract). */
     orchestration?: {
       callees?: Array<{
