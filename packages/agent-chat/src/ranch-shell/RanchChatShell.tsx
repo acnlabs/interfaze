@@ -465,6 +465,37 @@ function applyMarkupUsd(base: number, markupPercent: number | null | undefined):
   return base * (1 + markup / 100);
 }
 
+/** Hunter prices the menu is showing for this model. Null when the menu has no quote. */
+function seenMenuPrices(
+  modelId: string | null,
+  model: {
+    markup_percent?: number | null;
+    model_options: Array<{
+      model_id: string;
+      input_price_per_million?: number;
+      output_price_per_million?: number;
+      free?: boolean;
+      priceable?: boolean;
+    }>;
+  } | null,
+  catalog: Array<{ id: string; in: number; out: number }>,
+): { input: number; output: number } | null {
+  if (!modelId || !model) return null;
+  const priced = model.model_options.find((row) => sameModelId(row.model_id, modelId));
+  if (priced) {
+    if (priced.priceable === false || priced.free) return null;
+    const inn = priced.input_price_per_million;
+    const out = priced.output_price_per_million;
+    if (typeof inn === "number" && typeof out === "number") return { input: inn, output: out };
+  }
+  const cat = catalog.find((row) => sameModelId(row.id, modelId));
+  if (!cat) return null;
+  return {
+    input: applyMarkupUsd(cat.in, model.markup_percent),
+    output: applyMarkupUsd(cat.out, model.markup_percent),
+  };
+}
+
 function storeOpenRouterUrl(base?: string): string {
   return `${(base || "https://agentplanet.org").replace(/\/+$/, "")}/store/openrouter`;
 }
@@ -521,9 +552,13 @@ function sendFailureCopy(
                 ? t.officialModelUnsupported
                 : offerStoreKey
                   ? t.needOpenRouterKey
-                  : e.code === "model_pricing_unavailable"
+                    : e.code === "model_pricing_unavailable"
                     ? t.modelPricingUnavailable
-                    : e.code === "canvas_ref"
+                    : e.code === "price_moved"
+                      ? t.priceMoved
+                      : e.code === "price_unconfirmed"
+                        ? t.priceUnconfirmed
+                        : e.code === "canvas_ref"
       ? t.pageRefRejected
       : e.message || t.sendFailed;
   return { text, offerStoreKey };
@@ -4514,13 +4549,25 @@ export function RanchChatShell(props: RanchChatShellProps) {
         pointedBlock?.block_key && pointedBlock.rev
           ? { block_key: pointedBlock.block_key, rev: pointedBlock.rev }
           : null;
+      const quotedModel = requestedModelForSend(
+        selectedModelId,
+        composerModel?.listed_model_id ?? null,
+        Boolean(composerModel?.official_channel),
+        composerModel?.official_key_geo,
+      );
+      const seen = seenMenuPrices(
+        quotedModel || selectedModelId,
+        composerModel,
+        composerCatalogRef.current,
+      );
       await client.sendMessage(chatId, text, mentions, sendThreadId, {
-        requested_model: requestedModelForSend(
-          selectedModelId,
-          composerModel?.listed_model_id ?? null,
-          Boolean(composerModel?.official_channel),
-          composerModel?.official_key_geo,
-        ),
+        requested_model: quotedModel,
+        ...(seen
+          ? {
+              seen_input_price_per_million: seen.input,
+              seen_output_price_per_million: seen.output,
+            }
+          : {}),
         decision_choice: opts?.decisionChoice ?? null,
         canvas_ref: pageRef,
       });
@@ -4619,6 +4666,43 @@ export function RanchChatShell(props: RanchChatShellProps) {
           if (reason === "offline") markReplyTimeout(chatId, "offline");
           else setDeliveryBroken(chatId, true);
         });
+      }
+      if (
+        e instanceof ChatGatewayError &&
+        e.code === "price_moved" &&
+        typeof e.inputPricePerMillion === "number" &&
+        typeof e.outputPricePerMillion === "number"
+      ) {
+        const movedId = e.modelId || selectedModelId;
+        const inn = e.inputPricePerMillion;
+        const out = e.outputPricePerMillion;
+        if (movedId) {
+          setComposerModel((prev) => {
+            if (!prev) return prev;
+            let found = false;
+            const options = prev.model_options.map((row) => {
+              if (!sameModelId(row.model_id, movedId)) return row;
+              found = true;
+              return {
+                ...row,
+                input_price_per_million: inn,
+                output_price_per_million: out,
+                priceable: true,
+                free: false,
+              };
+            });
+            if (!found) {
+              options.push({
+                model_id: movedId,
+                input_price_per_million: inn,
+                output_price_per_million: out,
+                priceable: true,
+                free: false,
+              });
+            }
+            return { ...prev, model_options: options };
+          });
+        }
       }
       const fail = sendFailureCopy(e, t);
       setError(fail.text);

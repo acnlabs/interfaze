@@ -2,6 +2,10 @@ import type { ChatMessage, ChatParticipant, ChatSummary, ThreadSummary } from ".
 import { filesFromMessages, normalizeChatMessage } from "./mailbox";
 
 export class ChatGatewayError extends Error {
+  inputPricePerMillion: number | null = null;
+  outputPricePerMillion: number | null = null;
+  modelId: string | null = null;
+
   constructor(
     public status: number,
     public code: string | null,
@@ -23,6 +27,9 @@ async function parseError(res: Response): Promise<ChatGatewayError> {
   let code: string | null = null;
   let message = res.statusText || `HTTP ${res.status}`;
   let jobId: string | null = null;
+  let inputPrice: number | null = null;
+  let outputPrice: number | null = null;
+  let modelId: string | null = null;
   try {
     const body = await res.json();
     const detail = body?.detail;
@@ -30,6 +37,9 @@ async function parseError(res: Response): Promise<ChatGatewayError> {
       code = typeof detail.code === "string" ? detail.code : null;
       message = typeof detail.message === "string" ? detail.message : message;
       jobId = typeof detail.job_id === "string" ? detail.job_id : null;
+      inputPrice = typeof detail.input_price_per_million === "number" ? detail.input_price_per_million : null;
+      outputPrice = typeof detail.output_price_per_million === "number" ? detail.output_price_per_million : null;
+      modelId = typeof detail.model_id === "string" ? detail.model_id : null;
     } else if (typeof detail === "string") {
       message = detail;
     } else if (Array.isArray(detail) && detail.length > 0) {
@@ -48,7 +58,11 @@ async function parseError(res: Response): Promise<ChatGatewayError> {
   } catch {
     /* ignore */
   }
-  return new ChatGatewayError(res.status, code, message, jobId);
+  const error = new ChatGatewayError(res.status, code, message, jobId);
+  error.inputPricePerMillion = inputPrice;
+  error.outputPricePerMillion = outputPrice;
+  error.modelId = modelId;
+  return error;
 }
 
 export type ChatAgentSearchHit = {
@@ -546,6 +560,8 @@ export type GatewayClient = {
       decision_goal?: string | null;
       decision_choice?: string | null;
       canvas_ref?: { block_key: string; rev: number } | null;
+      seen_input_price_per_million?: number | null;
+      seen_output_price_per_million?: number | null;
     },
   ) => Promise<ChatMessage>;
   patchChatDecision: (chatId: string, auto: boolean) => Promise<ChatSummary>;
@@ -1404,6 +1420,13 @@ export function createGatewayClient(
             : {}),
           ...(opts?.canvas_ref
             ? { canvas_ref: opts.canvas_ref }
+            : {}),
+          ...(typeof opts?.seen_input_price_per_million === "number" &&
+          typeof opts?.seen_output_price_per_million === "number"
+            ? {
+                seen_input_price_per_million: opts.seen_input_price_per_million,
+                seen_output_price_per_million: opts.seen_output_price_per_million,
+              }
             : {}),
         }),
       }),
