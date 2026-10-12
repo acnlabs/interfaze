@@ -554,11 +554,9 @@ function sendFailureCopy(
                   ? t.needOpenRouterKey
                     : e.code === "model_pricing_unavailable"
                     ? t.modelPricingUnavailable
-                    : e.code === "price_moved"
-                      ? t.priceMoved
-                      : e.code === "price_unconfirmed"
-                        ? t.priceUnconfirmed
-                        : e.code === "canvas_ref"
+                    : e.code === "price_unconfirmed"
+                      ? t.priceUnconfirmed
+                      : e.code === "canvas_ref"
       ? t.pageRefRejected
       : e.message || t.sendFailed;
   return { text, offerStoreKey };
@@ -4571,6 +4569,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
         decision_choice: opts?.decisionChoice ?? null,
         canvas_ref: pageRef,
       });
+      const priceAgent = active && !isGroupChat(active) ? active.agent_id : null;
+      const priceBare = priceAgent?.replace(/^acn:/i, "").trim();
+      if (priceBare) {
+        void client
+          .getAgentModelStatus(priceBare)
+          .then((row) => {
+            const options = Array.isArray(row.model_options) ? row.model_options : null;
+            if (!options) return;
+            setComposerModel((prev) => (prev ? { ...prev, model_options: options } : prev));
+          })
+          .catch(() => {
+            /* the next menu refresh will pick up the price */
+          });
+      }
       if (group && mentions) {
         if (mentions.length === 1) {
           const id = mentions[0]!;
@@ -4666,43 +4678,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
           if (reason === "offline") markReplyTimeout(chatId, "offline");
           else setDeliveryBroken(chatId, true);
         });
-      }
-      if (
-        e instanceof ChatGatewayError &&
-        e.code === "price_moved" &&
-        typeof e.inputPricePerMillion === "number" &&
-        typeof e.outputPricePerMillion === "number"
-      ) {
-        const movedId = e.modelId || selectedModelId;
-        const inn = e.inputPricePerMillion;
-        const out = e.outputPricePerMillion;
-        if (movedId) {
-          setComposerModel((prev) => {
-            if (!prev) return prev;
-            let found = false;
-            const options = prev.model_options.map((row) => {
-              if (!sameModelId(row.model_id, movedId)) return row;
-              found = true;
-              return {
-                ...row,
-                input_price_per_million: inn,
-                output_price_per_million: out,
-                priceable: true,
-                free: false,
-              };
-            });
-            if (!found) {
-              options.push({
-                model_id: movedId,
-                input_price_per_million: inn,
-                output_price_per_million: out,
-                priceable: true,
-                free: false,
-              });
-            }
-            return { ...prev, model_options: options };
-          });
-        }
       }
       const fail = sendFailureCopy(e, t);
       setError(fail.text);
