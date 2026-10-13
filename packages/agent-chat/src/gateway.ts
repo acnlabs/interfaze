@@ -604,6 +604,8 @@ export type GatewayClient = {
       inference_path?: "byo" | "official" | string | null;
       input_price_per_million?: number;
       output_price_per_million?: number;
+      input_price_cny_per_million?: number;
+      output_price_cny_per_million?: number;
       pricing_source?: string;
       free?: boolean;
       priceable?: boolean;
@@ -1000,6 +1002,8 @@ export function createGatewayClient(
           inference_path?: "byo" | "official" | string | null;
           input_price_per_million?: number;
           output_price_per_million?: number;
+          input_price_cny_per_million?: number;
+          output_price_cny_per_million?: number;
           pricing_source?: string;
           free?: boolean;
           priceable?: boolean;
