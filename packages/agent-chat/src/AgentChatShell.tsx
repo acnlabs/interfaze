@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChatGatewayError, createGatewayClient } from "./gateway";
-import { sendAsksBeforeBoot } from "./computerSendBoot";
+import { sendAsksBeforeBoot, sendNeedsDesk } from "./computerSendBoot";
 import { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
 import type {
   AgentChatMode,
@@ -340,7 +340,7 @@ export function AgentChatShell(props: AgentChatShellProps) {
               computer_id?: string | null;
               resume_credits_per_hour?: number | null;
             };
-            if (sendAsksBeforeBoot(place, [])) {
+            if (sendAsksBeforeBoot(place, [], sendNeedsDesk(text))) {
               const rate = place.resume_credits_per_hour;
               const message = isAssistant
                 ? "发送后电脑按 {rate} 星币/小时计费。不用的预扣会退回。"

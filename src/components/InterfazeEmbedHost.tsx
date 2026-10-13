@@ -7,6 +7,7 @@ import {
   connectChatSocket,
   createGatewayClient,
   sendAsksBeforeBoot,
+  sendNeedsDesk,
   type ChatMessage,
 } from "@acnlabs/agent-chat";
 import { getGatewayBaseUrl } from "@/lib/gateway";
@@ -257,7 +258,7 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
             computer_id?: string | null;
             resume_credits_per_hour?: number | null;
           };
-          if (sendAsksBeforeBoot(place, [])) {
+          if (sendAsksBeforeBoot(place, [], sendNeedsDesk(text))) {
             const rate = place.resume_credits_per_hour;
             setConfirmDialog({
               message: t.sendConfirm.replace("{rate}", rate == null ? "—" : String(rate)),

@@ -13,34 +13,48 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const moduleExports = {};
 new Function("exports", js)(moduleExports);
-const { sendAsksBeforeBoot, placeForDefaultComputer, screenAsksBeforeCharge } = moduleExports;
+const {
+  sendAsksBeforeBoot,
+  sendNeedsDesk,
+  placeForDefaultComputer,
+  screenAsksBeforeCharge,
+} = moduleExports;
 
-test("an idle cloud computer asks before a send starts the hourly bill", () => {
+test("a plain chat send does not ask just because the computer is idle", () => {
+  assert.equal(sendNeedsDesk("hi"), false);
   assert.equal(
     sendAsksBeforeBoot({ place: "cloud", status: "idle", computer_id: "pc" }, []),
+    false,
+  );
+});
+
+test("copying a mailbox file onto an idle computer still asks before the hourly bill", () => {
+  assert.equal(sendNeedsDesk("see mbx:abc"), true);
+  assert.equal(
+    sendAsksBeforeBoot({ place: "cloud", status: "idle", computer_id: "pc" }, [], true),
     true,
   );
 });
 
 test("a running computer or an agent machine does not ask again", () => {
   assert.equal(
-    sendAsksBeforeBoot({ place: "cloud", status: "running", computer_id: "pc" }, []),
+    sendAsksBeforeBoot({ place: "cloud", status: "running", computer_id: "pc" }, [], true),
     false,
   );
   assert.equal(
-    sendAsksBeforeBoot({ place: "agent", status: null, computer_id: null }, []),
+    sendAsksBeforeBoot({ place: "agent", status: null, computer_id: null }, [], true),
     false,
   );
 });
 
 test("an open screen already asked, so send does not stack a second dialog", () => {
   assert.equal(
-    sendAsksBeforeBoot({ place: "cloud", status: "idle", computer_id: "pc" }, ["pc"]),
+    sendAsksBeforeBoot({ place: "cloud", status: "idle", computer_id: "pc" }, ["pc"], true),
     false,
   );
 });
 
-test("the composer asks in the shell before an idle send starts billing", () => {
+test("the composer asks only when this send copies a file onto the desk", () => {
   const shell = fs.readFileSync(
     path.join(__dirname, "../packages/agent-chat/src/ranch-shell/RanchChatShell.tsx"),
     "utf8",
@@ -49,13 +63,13 @@ test("the composer asks in the shell before an idle send starts billing", () => 
     path.join(__dirname, "../packages/agent-chat/src/ranch-shell/i18n.ts"),
     "utf8",
   );
-  assert.match(shell, /sendAsksBeforeBoot/);
+  assert.match(shell, /sendAsksBeforeBoot\(place, bootScreenIds\(\), sendNeedsDesk\(text\)\)/);
   assert.match(shell, /t\.sendConfirm\.replace/);
   assert.match(shell, /retryLastUserMessage[\s\S]*void send\(\{ text \}\)/);
   assert.match(i18n, /sendConfirm: "发送后电脑按 \{rate\} 星币\/小时计费/);
 });
 
-test("a new group lands on the idle default computer, so the digest asks first", () => {
+test("a new group lands on the idle default computer, but a text digest does not ask", () => {
   const place = placeForDefaultComputer([
     {
       computer_id: "extra",
@@ -71,33 +85,34 @@ test("a new group lands on the idle default computer, so the digest asks first",
     },
   ]);
   assert.equal(place.computer_id, "home");
-  assert.equal(sendAsksBeforeBoot(place, []), true);
-  assert.equal(sendAsksBeforeBoot(place, ["home"]), false);
+  assert.equal(sendAsksBeforeBoot(place, []), false);
+  assert.equal(sendAsksBeforeBoot(place, [], true), true);
+  assert.equal(sendAsksBeforeBoot(place, ["home"], true), false);
 });
 
-test("no computer yet still asks, because the first group digest would boot one", () => {
+test("no computer yet does not ask for a text send", () => {
   const place = placeForDefaultComputer([]);
   assert.equal(place.place, "cloud");
   assert.equal(place.status, "idle");
-  assert.equal(sendAsksBeforeBoot(place, []), true);
+  assert.equal(sendAsksBeforeBoot(place, []), false);
 });
 
-test("opening a proposed group asks before the digest can boot an idle computer", () => {
+test("opening a proposed group asks only when that digest copies onto the desk", () => {
   const shell = fs.readFileSync(
     path.join(__dirname, "../packages/agent-chat/src/ranch-shell/RanchChatShell.tsx"),
     "utf8",
   );
   assert.match(shell, /placeForDefaultComputer/);
-  assert.match(shell, /confirmProposeGroup[\s\S]*sendAsksBeforeBoot/);
+  assert.match(shell, /confirmProposeGroup[\s\S]*sendNeedsDesk\(summary\)/);
   assert.match(shell, /bootAdmitted: true/);
 });
 
-test("an embed send asks before an idle computer starts billing", () => {
+test("an embed send asks only when this bubble copies a file onto the desk", () => {
   const embed = fs.readFileSync(
     path.join(__dirname, "../src/components/InterfazeEmbedHost.tsx"),
     "utf8",
   );
-  assert.match(embed, /sendAsksBeforeBoot/);
+  assert.match(embed, /sendAsksBeforeBoot\(place, \[\], sendNeedsDesk\(text\)\)/);
   assert.match(embed, /t\.sendConfirm\.replace/);
   assert.match(embed, /bootAdmitted: true/);
 });
@@ -135,12 +150,12 @@ test("opening a screen asks when it would raise the hourly rate", () => {
   );
 });
 
-test("the Labs assistant asks before an idle send starts billing", () => {
+test("the Labs assistant asks only when this send copies a file onto the desk", () => {
   const shell = fs.readFileSync(
     path.join(__dirname, "../packages/agent-chat/src/AgentChatShell.tsx"),
     "utf8",
   );
-  assert.match(shell, /sendAsksBeforeBoot/);
+  assert.match(shell, /sendAsksBeforeBoot\(place, \[\], sendNeedsDesk\(text\)\)/);
   assert.match(shell, /bootAdmitted: true/);
   assert.match(shell, /发送后电脑按 \{rate\} 星币\/小时计费/);
 });

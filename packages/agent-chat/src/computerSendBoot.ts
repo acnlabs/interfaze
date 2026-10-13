@@ -1,4 +1,4 @@
-/** Sending starts the chat computer only when this chat is on an idle cloud machine. */
+/** Sending starts the chat computer only when this bubble copies a file onto an idle cloud machine. */
 
 export type ChatComputerPlace = {
   place?: string;
@@ -14,10 +14,17 @@ export type ListedComputer = {
   resume_credits_per_hour?: number | null;
 };
 
+/** A send copies onto the desk only when this bubble cites a mailbox file. */
+export function sendNeedsDesk(text: string): boolean {
+  return /(^|\s)mbx:[^\s]+/.test(text);
+}
+
 export function sendAsksBeforeBoot(
   place: ChatComputerPlace,
   openScreenIds: string[],
+  needsDesk = false,
 ): boolean {
+  if (!needsDesk) return false;
   if (place.place !== "cloud") return false;
   if (place.status !== "idle") return false;
   const id = place.computer_id;
