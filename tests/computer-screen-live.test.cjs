@@ -13,7 +13,12 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const moduleExports = {};
 new Function("exports", js)(moduleExports);
-const { screenLiveTicketExp, screenLiveNeedsRefresh, screenFitRemounts } = moduleExports;
+const {
+  screenLiveTicketExp,
+  screenLiveNeedsRefresh,
+  screenFitRemounts,
+  screenStreamRetries,
+} = moduleExports;
 
 function liveUrl(exp) {
   return `https://api.acnlabs.cn/api/computers/pc/screen/live/view?ticket=${exp}.abc&password=x`;
@@ -51,4 +56,17 @@ test("a china no-op fit does not remount the live iframe", () => {
     "utf8",
   );
   assert.match(panel, /screenFitRemounts\(body\)/);
+});
+
+test("a stream 503 retries once and a screen POST does not", () => {
+  assert.equal(screenStreamRetries(503, 0), true);
+  assert.equal(screenStreamRetries(503, 1), false);
+  assert.equal(screenStreamRetries(409, 0), false);
+  const panel = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ComputerScreenPanel.tsx"),
+    "utf8",
+  );
+  assert.match(panel, /streamScreen\(/);
+  assert.match(panel, /screenStreamRetries\(first\.status, 0\)/);
+  assert.match(panel, /method: "POST"/);
 });
