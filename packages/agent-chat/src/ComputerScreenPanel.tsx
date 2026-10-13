@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
-import { screenFitRemounts, screenLiveNeedsRefresh } from "./computerScreenLive";
+import { screenFitRemounts, screenLiveNeedsRefresh, screenStreamRetries } from "./computerScreenLive";
 import { screenPoint } from "./computerScreenPoint";
 
 const copy = {
@@ -38,6 +38,18 @@ async function authed(
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const base = gatewayBaseUrl.replace(/\/+$/, "");
   return fetch(`${base}${path}`, { ...init, headers });
+}
+
+async function streamScreen(
+  gatewayBaseUrl: string,
+  getAccessToken: () => Promise<string | null>,
+  computerId: string,
+  query: string,
+): Promise<Response> {
+  const path = `/api/computers/${computerId}/screen/stream${query}`;
+  const first = await authed(gatewayBaseUrl, getAccessToken, path);
+  if (!screenStreamRetries(first.status, 0)) return first;
+  return authed(gatewayBaseUrl, getAccessToken, path);
 }
 
 export function ComputerScreenPanel({
@@ -105,11 +117,7 @@ export function ComputerScreenPanel({
         const rect = frameRef.current?.getBoundingClientRect();
         const sized = paneSize(rect);
         const query = sized ? `?width=${sized.width}&height=${sized.height}` : "";
-        const res = await authed(
-          gatewayBaseUrl,
-          getAccessToken,
-          `/api/computers/${computerId}/screen/stream${query}`,
-        );
+        const res = await streamScreen(gatewayBaseUrl, getAccessToken, computerId, query);
         if (stopped) return;
         if (!res.ok) {
           setLive(null);
@@ -177,7 +185,7 @@ export function ComputerScreenPanel({
       const rect = frameRef.current?.getBoundingClientRect();
       const sized = paneSize(rect);
       const query = sized ? `?width=${sized.width}&height=${sized.height}` : "";
-      const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/stream${query}`);
+      const res = await streamScreen(gatewayBaseUrl, getAccessToken, computerId, query);
       if (res.ok) {
         const body = (await res.json()) as { url?: string };
         const url = typeof body.url === "string" ? body.url : "";
@@ -223,7 +231,7 @@ export function ComputerScreenPanel({
         const rect = frameRef.current?.getBoundingClientRect();
         const sized = paneSize(rect);
         const query = sized ? `?width=${sized.width}&height=${sized.height}` : "";
-        const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/stream${query}`);
+        const res = await streamScreen(gatewayBaseUrl, getAccessToken, computerId, query);
         if (!res.ok) {
           setLive(null);
           setNote(t.loadFailed);

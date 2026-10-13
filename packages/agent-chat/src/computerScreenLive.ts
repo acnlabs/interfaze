@@ -27,3 +27,8 @@ export function screenLiveNeedsRefresh(
 export function screenFitRemounts(body: { fitted?: unknown } | null | undefined): boolean {
   return body?.fitted === true;
 }
+
+/** GET /screen/stream may 503 when the supplier blips. Do not retry POST /screen. */
+export function screenStreamRetries(status: number, attempt: number): boolean {
+  return status === 503 && attempt === 0;
+}
