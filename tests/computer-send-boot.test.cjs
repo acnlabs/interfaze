@@ -148,6 +148,14 @@ test("opening a screen asks when it would raise the hourly rate", () => {
     }),
     true,
   );
+  assert.equal(
+    screenAsksBeforeCharge({
+      status: "running",
+      resumeCreditsPerHour: 58,
+      screenCreditsPerHour: 115,
+    }),
+    true,
+  );
 });
 
 test("the Labs assistant asks only when this send copies a file onto the desk", () => {
