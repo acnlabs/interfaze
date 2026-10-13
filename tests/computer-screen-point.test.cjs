@@ -43,3 +43,14 @@ test("china keeps the live iframe contained; overseas fills after a real fit", (
   assert.equal(screenLiveBox({ width: 1600, height: 900 }, true), null);
   assert.equal(screenLiveBox(null, false), null);
 });
+
+test("a fallback picture uses the same 1024×768 box so a click maps onto the desktop", () => {
+  const box = screenLiveBox({ width: 1600, height: 900 }, false);
+  assert.deepEqual(screenPoint(0, 0, box.width, box.height), { x: 0, y: 0 });
+  assert.deepEqual(screenPoint(box.width, box.height, box.width, box.height), { x: 1023, y: 767 });
+  const panel = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ComputerScreenPanel.tsx"),
+    "utf8",
+  );
+  assert.match(panel, /deskBox\(false\)/);
+});

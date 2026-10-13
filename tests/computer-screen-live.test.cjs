@@ -63,7 +63,8 @@ test("a china no-op fit keeps the live iframe at 1024×768 inside the pane", () 
     path.join(__dirname, "../packages/agent-chat/src/ComputerScreenPanel.tsx"),
     "utf8",
   );
-  assert.match(panel, /screenLiveBox\(pane, fillPane\)/);
+  assert.match(panel, /screenLiveBox\(pane, fill\)/);
+  assert.match(panel, /deskBox\(fillPane\)/);
   assert.match(panel, /setFillPane\(fitted\)/);
   assert.match(panel, /const fitted = screenFitRemounts\(body\)/);
 });
