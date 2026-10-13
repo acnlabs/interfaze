@@ -34,6 +34,7 @@ import {
 } from "../attachmentListedPrice";
 import { ChatComputerControl } from "../ChatComputerControl";
 import { computerName, extraIndex, type ComputerNameRow } from "../computerLabel";
+import { formatMenuSide, formatUsdPerMillion } from "../composerPrice";
 import {
   placeForDefaultComputer,
   screenAsksBeforeCharge,
@@ -443,10 +444,6 @@ function shortModelLabel(modelId: string | null | undefined): string {
   if (!s) return "";
   const slash = s.lastIndexOf("/");
   return slash >= 0 ? s.slice(slash + 1) : s;
-}
-
-function formatUsdPerMillion(n: number): string {
-  return `$${Number(n.toPrecision(6))}`;
 }
 
 function filterComposerModels(ids: string[], query: string): string[] {
@@ -3141,6 +3138,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
       inference_path?: "byo" | "official" | string | null;
       input_price_per_million?: number;
       output_price_per_million?: number;
+      input_price_cny_per_million?: number;
+      output_price_cny_per_million?: number;
       free?: boolean;
       priceable?: boolean;
     }>;
@@ -7760,17 +7759,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         if (priced) {
                           if (priced.priceable === false) return t.composerModelNoPrice;
                           if (priced.free) return "free";
-                          const inn = priced.input_price_per_million;
-                          const out = priced.output_price_per_million;
-                          if (typeof inn === "number" && typeof out === "number") {
-                            return t.composerModelPrice(
-                              formatUsdPerMillion(inn),
-                              formatUsdPerMillion(out),
-                            );
-                          }
-                          if (typeof inn === "number") {
-                            return `${formatUsdPerMillion(inn)} in`;
-                          }
+                          const inn = formatMenuSide(priced, "input");
+                          const out = formatMenuSide(priced, "output");
+                          if (inn && out) return t.composerModelPrice(inn, out);
+                          if (inn) return `${inn} in`;
                         }
                         if (cat) {
                           return t.composerModelPrice(
