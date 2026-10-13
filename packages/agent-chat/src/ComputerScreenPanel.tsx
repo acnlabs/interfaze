@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
+import { screenLiveNeedsRefresh } from "./computerScreenLive";
 import { screenPoint } from "./computerScreenPoint";
 
 const copy = {
@@ -99,7 +100,8 @@ export function ComputerScreenPanel({
         });
         if (!kept.ok || stopped) return;
         const keptBody = (await kept.json()) as { screen?: boolean };
-        if (keptBody.screen !== false || stopped) return;
+        if (stopped) return;
+        if (keptBody.screen !== false && !screenLiveNeedsRefresh(live)) return;
         const rect = frameRef.current?.getBoundingClientRect();
         const sized = paneSize(rect);
         const query = sized ? `?width=${sized.width}&height=${sized.height}` : "";
