@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
 import { screenFitRemounts, screenLiveNeedsRefresh, screenStreamRetries } from "./computerScreenLive";
-import { screenPoint } from "./computerScreenPoint";
+import { screenLiveBox, screenPoint } from "./computerScreenPoint";
 
 const copy = {
   en: {
@@ -81,6 +81,8 @@ export function ComputerScreenPanel({
   const [frameKey, setFrameKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [pane, setPane] = useState<{ width: number; height: number } | null>(null);
+  const [fillPane, setFillPane] = useState(false);
 
   const paneSize = (rect: DOMRect | undefined) => {
     const width = Math.round(rect?.width ?? 0);
@@ -97,6 +99,7 @@ export function ComputerScreenPanel({
 
   useEffect(() => {
     setLive(null);
+    setFillPane(false);
   }, [computerId]);
 
   useEffect(() => {
@@ -215,6 +218,23 @@ export function ComputerScreenPanel({
   }, [openScreen]);
 
   useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const applyPane = () => {
+      const rect = frame.getBoundingClientRect();
+      const width = Math.round(rect.width);
+      const height = Math.round(rect.height);
+      if (width > 0 && height > 0) {
+        setPane((prev) => (prev && prev.width === width && prev.height === height ? prev : { width, height }));
+      }
+    };
+    applyPane();
+    const paneWatch = new ResizeObserver(applyPane);
+    paneWatch.observe(frame);
+    return () => paneWatch.disconnect();
+  }, []);
+
+  useEffect(() => {
     if (!live) return;
     const frame = frameRef.current;
     if (!frame) return;
@@ -256,7 +276,9 @@ export function ComputerScreenPanel({
           if (!res.ok) return recover();
           const body = (await res.json()) as { fitted?: unknown };
           fittedRef.current = next;
-          if (screenFitRemounts(body)) setFrameKey((key) => key + 1);
+          const fitted = screenFitRemounts(body);
+          setFillPane(fitted);
+          if (fitted) setFrameKey((key) => key + 1);
         })
         .catch(() => recover())
         .finally(() => {
@@ -296,6 +318,19 @@ export function ComputerScreenPanel({
     }
   };
 
+  const liveBox = screenLiveBox(pane, fillPane);
+  const liveStyle = liveBox
+    ? {
+        position: "absolute" as const,
+        left: liveBox.left,
+        top: liveBox.top,
+        width: liveBox.width,
+        height: liveBox.height,
+        border: 0,
+        background: "#000",
+      }
+    : { position: "absolute" as const, inset: 0, width: "100%", height: "100%", border: 0, background: "#000" };
+
   return (
     <div
       style={{
@@ -330,7 +365,7 @@ export function ComputerScreenPanel({
             src={live}
             title={t.screen}
             referrerPolicy="no-referrer"
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0, background: "#000" }}
+            style={liveStyle}
           />
         ) : picture ? (
           <img
