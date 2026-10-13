@@ -38,6 +38,7 @@ import {
   placeForDefaultComputer,
   screenAsksBeforeCharge,
   sendAsksBeforeBoot,
+  sendNeedsDesk,
   type ScreenChargeHint,
 } from "../computerSendBoot";
 import { ComputerManagePanel } from "../ComputerManagePanel";
@@ -4252,7 +4253,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               );
             }
           }
-          if (place && sendAsksBeforeBoot(place, bootScreenIds())) {
+          if (place && sendAsksBeforeBoot(place, bootScreenIds(), sendNeedsDesk(summary))) {
             const rate = place.resume_credits_per_hour;
             setConfirmDialog({
               message: t.sendConfirm.replace("{rate}", rate == null ? "—" : String(rate)),
@@ -4478,7 +4479,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               computer_id?: string | null;
               resume_credits_per_hour?: number | null;
             };
-            if (sendAsksBeforeBoot(place, bootScreenIds())) {
+            if (sendAsksBeforeBoot(place, bootScreenIds(), sendNeedsDesk(text))) {
               const rate = place.resume_credits_per_hour;
               setConfirmDialog({
                 message: t.sendConfirm.replace("{rate}", rate == null ? "—" : String(rate)),
