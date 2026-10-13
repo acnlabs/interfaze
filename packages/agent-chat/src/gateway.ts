@@ -586,6 +586,7 @@ export type GatewayClient = {
     official_key_geo?: string;
     official_region?: string;
     official_default_model_id?: string | null;
+    price_book_source?: string | null;
     providers?: Array<{
       id: string;
       kind: "byo" | "official" | string;
@@ -986,6 +987,7 @@ export function createGatewayClient(
         official_key_geo?: string;
         official_region?: string;
         official_default_model_id?: string | null;
+        price_book_source?: string | null;
         mismatched: boolean;
         markup_percent?: number | null;
         network_usage_fee_rate?: number | null;

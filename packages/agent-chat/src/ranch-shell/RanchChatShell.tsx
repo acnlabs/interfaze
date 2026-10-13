@@ -3130,6 +3130,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     official_channel: boolean;
     official_models: string[];
     official_key_geo?: string;
+    price_book_source?: string;
     markup_percent?: number | null;
     supported_models: string[];
     model_options: Array<{
@@ -4597,6 +4598,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     ...(Array.isArray(row.supported_models)
                       ? { supported_models: row.supported_models }
                       : {}),
+                    ...(typeof row.price_book_source === "string"
+                      ? { price_book_source: row.price_book_source }
+                      : {}),
                   }
                 : prev,
             );
@@ -5016,6 +5020,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
             official_models: officialIds,
             official_key_geo:
               typeof row.official_key_geo === "string" ? row.official_key_geo : "",
+            price_book_source:
+              typeof row.price_book_source === "string" ? row.price_book_source : "",
             markup_percent:
               typeof row.markup_percent === "number" ? row.markup_percent : null,
             supported_models: supported,
@@ -5110,6 +5116,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       return;
     }
     const keyGeo = (composerModel?.official_key_geo || "").trim();
+    const book = (composerModel?.price_book_source || "openrouter").trim().toLowerCase();
     if (official && !keyGeo) {
       setComposerCatalog([]);
       setComposerCatalogLoading(false);
@@ -5125,7 +5132,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       try {
         while (!cancelled && offset < total && offset < 8000) {
           const data = await client.listModelCatalog({
-            source: "openrouter",
+            source: book,
             active_only: true,
             official_shelf: official,
             limit: page,
@@ -5133,8 +5140,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
           });
           total = Number.isFinite(data.total) ? data.total : offset + data.items.length;
           for (const row of data.items) {
-            const src = (row.source || "openrouter").toLowerCase();
-            if (src && src !== "openrouter") continue;
+            const src = (row.source || book).toLowerCase();
+            if (src && src !== book) continue;
             const id = (row.model_id || "").trim();
             if (!id) continue;
             if (official && !officialShelfAllows(id, keyGeo)) continue;
@@ -5161,6 +5168,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     client,
     composerModel?.official_channel,
     composerModel?.official_key_geo,
+    composerModel?.price_book_source,
     composerModel?.listed_model_id,
     composerModel?.runtime_model_id,
   ]);

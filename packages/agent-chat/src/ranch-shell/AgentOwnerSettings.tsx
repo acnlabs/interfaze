@@ -934,6 +934,7 @@ export function AgentOwnerSettings({
     () => detail.official_models ?? [],
   );
   const [officialKeyGeo, setOfficialKeyGeo] = useState<string>("");
+  const [priceBookSource, setPriceBookSource] = useState("");
   const [officialDefaultModelId, setOfficialDefaultModelId] = useState<string>("");
   const [savingOfficial, setSavingOfficial] = useState(false);
   const [officialMsg, setOfficialMsg] = useState<string | null>(null);
@@ -1113,6 +1114,9 @@ export function AgentOwnerSettings({
         if (officialRow?.official_key_geo) {
           setOfficialKeyGeo(officialRow.official_key_geo);
         }
+        if (typeof status.price_book_source === "string" && status.price_book_source.trim()) {
+          setPriceBookSource(status.price_book_source);
+        }
         if (officialRow?.official_default_model_id) {
           setOfficialDefaultModelId(officialRow.official_default_model_id);
         }
@@ -1192,13 +1196,14 @@ export function AgentOwnerSettings({
     let cancelled = false;
     const page = 500;
 
+    const book = (priceBookSource || "openrouter").trim().toLowerCase();
     const loadCatalog = async (official: boolean) => {
       const acc: Array<{ id: string } & CatalogPair> = [];
       let offset = 0;
       let total = Number.POSITIVE_INFINITY;
       while (!cancelled && offset < total && offset < 8000) {
         const data = await client.listModelCatalog({
-          source: "openrouter",
+          source: book,
           active_only: true,
           official_shelf: official || undefined,
           limit: page,
@@ -1206,8 +1211,8 @@ export function AgentOwnerSettings({
         });
         total = Number.isFinite(data.total) ? data.total : offset + data.items.length;
         for (const row of data.items) {
-          const src = (row.source || "openrouter").toLowerCase();
-          if (src && src !== "openrouter") continue;
+          const src = (row.source || book).toLowerCase();
+          if (src && src !== book) continue;
           const id = (row.model_id || "").trim();
           if (!id) continue;
           const quote = official ? officialCatalogRates(row) : syncCatalogRates(row);
@@ -1218,7 +1223,7 @@ export function AgentOwnerSettings({
             id,
             in: quote.input,
             out: quote.output,
-            source: "openrouter",
+            source: src || book,
           });
         }
         if (!data.items.length) break;
@@ -1256,7 +1261,7 @@ export function AgentOwnerSettings({
     return () => {
       cancelled = true;
     };
-  }, [client, hostReady, officialKeyGeo]);
+  }, [client, hostReady, officialKeyGeo, priceBookSource]);
 
   useEffect(() => {
     setDeliveryDraft(deliveryFromDetail(detail.delivery));
