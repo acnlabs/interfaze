@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
-import { screenLiveNeedsRefresh } from "./computerScreenLive";
+import { screenFitRemounts, screenLiveNeedsRefresh } from "./computerScreenLive";
 import { screenPoint } from "./computerScreenPoint";
 
 const copy = {
@@ -244,10 +244,11 @@ export function ComputerScreenPanel({
         method: "POST",
         body: JSON.stringify(next),
       })
-        .then((res) => {
+        .then(async (res) => {
           if (!res.ok) return recover();
+          const body = (await res.json()) as { fitted?: unknown };
           fittedRef.current = next;
-          setFrameKey((key) => key + 1);
+          if (screenFitRemounts(body)) setFrameKey((key) => key + 1);
         })
         .catch(() => recover())
         .finally(() => {
