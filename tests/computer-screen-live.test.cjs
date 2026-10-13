@@ -58,6 +58,16 @@ test("a china no-op fit does not remount the live iframe", () => {
   assert.match(panel, /screenFitRemounts\(body\)/);
 });
 
+test("a china no-op fit keeps the live iframe at 1024×768 inside the pane", () => {
+  const panel = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ComputerScreenPanel.tsx"),
+    "utf8",
+  );
+  assert.match(panel, /screenLiveBox\(pane, fillPane\)/);
+  assert.match(panel, /setFillPane\(fitted\)/);
+  assert.match(panel, /const fitted = screenFitRemounts\(body\)/);
+});
+
 test("a stream 503 retries once and a screen POST does not", () => {
   assert.equal(screenStreamRetries(503, 0), true);
   assert.equal(screenStreamRetries(503, 1), false);

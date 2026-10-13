@@ -13,7 +13,7 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const moduleExports = {};
 new Function("exports", js)(moduleExports);
-const { screenPoint } = moduleExports;
+const { screenPoint, screenFrameSize, screenLiveBox } = moduleExports;
 
 test("a click maps onto the desktop", () => {
   assert.deepEqual(screenPoint(0, 0, 200, 150), { x: 0, y: 0 });
@@ -24,4 +24,22 @@ test("a click maps onto the desktop", () => {
 test("a click outside the picture stays on the desktop", () => {
   assert.deepEqual(screenPoint(-10, 999, 200, 150), { x: 0, y: 767 });
   assert.equal(screenPoint(1, 1, 0, 150), null);
+});
+
+test("a 16:9 pane contains a 1024×768 live iframe", () => {
+  assert.deepEqual(screenFrameSize(1600, 900), { width: 1200, height: 900, left: 200, top: 0 });
+  assert.deepEqual(screenFrameSize(1920, 1080), { width: 1440, height: 1080, left: 240, top: 0 });
+  assert.deepEqual(screenFrameSize(900, 900), { width: 900, height: 675, left: 0, top: 112 });
+  assert.equal(screenFrameSize(0, 900), null);
+});
+
+test("china keeps the live iframe contained; overseas fills after a real fit", () => {
+  assert.deepEqual(screenLiveBox({ width: 1600, height: 900 }, false), {
+    left: 200,
+    top: 0,
+    width: 1200,
+    height: 900,
+  });
+  assert.equal(screenLiveBox({ width: 1600, height: 900 }, true), null);
+  assert.equal(screenLiveBox(null, false), null);
 });
