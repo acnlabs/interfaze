@@ -318,18 +318,19 @@ export function ComputerScreenPanel({
     }
   };
 
-  const liveBox = screenLiveBox(pane, fillPane);
-  const liveStyle = liveBox
-    ? {
-        position: "absolute" as const,
-        left: liveBox.left,
-        top: liveBox.top,
-        width: liveBox.width,
-        height: liveBox.height,
-        border: 0,
-        background: "#000",
-      }
-    : { position: "absolute" as const, inset: 0, width: "100%", height: "100%", border: 0, background: "#000" };
+  const deskBox = (fill: boolean) => {
+    const box = screenLiveBox(pane, fill);
+    return box
+      ? {
+          position: "absolute" as const,
+          left: box.left,
+          top: box.top,
+          width: box.width,
+          height: box.height,
+          background: "#000",
+        }
+      : { position: "absolute" as const, inset: 0, width: "100%", height: "100%", background: "#000" };
+  };
 
   return (
     <div
@@ -365,7 +366,7 @@ export function ComputerScreenPanel({
             src={live}
             title={t.screen}
             referrerPolicy="no-referrer"
-            style={liveStyle}
+            style={{ ...deskBox(fillPane), border: 0 }}
           />
         ) : picture ? (
           <img
@@ -376,7 +377,7 @@ export function ComputerScreenPanel({
               const next = screenPoint(event.clientX - rect.left, event.clientY - rect.top, rect.width, rect.height);
               if (next) void sendPointer(next);
             }}
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000", cursor: "crosshair" }}
+            style={{ ...deskBox(false), objectFit: "contain", cursor: "crosshair" }}
           />
         ) : (
           <div
