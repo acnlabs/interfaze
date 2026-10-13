@@ -22,3 +22,8 @@ export function screenLiveNeedsRefresh(
   if (exp == null) return true;
   return exp - nowSeconds <= leadSeconds;
 }
+
+/** Remount only when the desktop actually resized. A China no-op fit must not flash the iframe. */
+export function screenFitRemounts(body: { fitted?: unknown } | null | undefined): boolean {
+  return body?.fitted === true;
+}

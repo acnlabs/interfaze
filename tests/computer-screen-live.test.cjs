@@ -13,7 +13,7 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const moduleExports = {};
 new Function("exports", js)(moduleExports);
-const { screenLiveTicketExp, screenLiveNeedsRefresh } = moduleExports;
+const { screenLiveTicketExp, screenLiveNeedsRefresh, screenFitRemounts } = moduleExports;
 
 function liveUrl(exp) {
   return `https://api.acnlabs.cn/api/computers/pc/screen/live/view?ticket=${exp}.abc&password=x`;
@@ -41,4 +41,14 @@ test("the screen panel refreshes the live url before the ticket dies", () => {
   assert.match(panel, /screenLiveNeedsRefresh/);
   assert.match(panel, /screen\/keep/);
   assert.match(panel, /keptBody\.screen !== false && !screenLiveNeedsRefresh\(live\)/);
+});
+
+test("a china no-op fit does not remount the live iframe", () => {
+  assert.equal(screenFitRemounts({ fitted: true }), true);
+  assert.equal(screenFitRemounts({ fitted: false }), false);
+  const panel = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ComputerScreenPanel.tsx"),
+    "utf8",
+  );
+  assert.match(panel, /screenFitRemounts\(body\)/);
 });
