@@ -5750,6 +5750,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             names={agentNames}
             memberIds={active?.agent_id ? [active.agent_id, ...Object.keys(agentNames)] : Object.keys(agentNames)}
             copy={{
+              view: t.interactionView,
               empty: t.interactionEmpty,
               waiting: t.interactionWaiting,
               returned: t.interactionReturned,
