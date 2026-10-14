@@ -45,9 +45,11 @@ const copy = {
     screen: "Open computer screen",
     screenAt: "Open computer screen · {rate}/hr",
     pause: "Pause",
+    pauseAt: "Pause · {rate}/hr",
     pausing: "Pausing…",
     pauseFailed: "The computer did not pause.",
     resume: "Resume",
+    resumeAt: "Resume · {rate}/hr",
     resuming: "Resuming…",
     resumeFailed: "The computer did not resume.",
     resumeConfirm: "Resume bills {rate} credits per hour. Unused prepaid is returned.",
@@ -80,9 +82,11 @@ const copy = {
     screen: "打开电脑屏幕",
     screenAt: "打开电脑屏幕 · {rate} 星币/小时",
     pause: "暂停",
+    pauseAt: "暂停 · {rate} 星币/小时",
     pausing: "正在暂停…",
     pauseFailed: "没有停下来。",
     resume: "恢复",
+    resumeAt: "恢复 · {rate} 星币/小时",
     resuming: "正在恢复…",
     resumeFailed: "没有恢复。",
     resumeConfirm: "恢复按 {rate} 星币/小时计费。不用的预扣会退回。",
@@ -363,7 +367,12 @@ export function ComputerManagePanel({
                       void pauseThis(row.computer_id);
                     }}
                   >
-                    {busy ? t.pausing : t.pause}
+                    {busy
+                      ? t.pausing
+                      : pauseAsksBeforeCharge(row.paused_credits_per_hour) &&
+                          row.paused_credits_per_hour != null
+                        ? withRate(t.pauseAt, row.paused_credits_per_hour)
+                        : t.pause}
                   </button>
                 ) : row.has_disk ? (
                   <button
@@ -377,7 +386,11 @@ export function ComputerManagePanel({
                       })
                     }
                   >
-                    {busy ? t.resuming : t.resume}
+                    {busy
+                      ? t.resuming
+                      : row.resume_credits_per_hour != null
+                        ? withRate(t.resumeAt, row.resume_credits_per_hour)
+                        : t.resume}
                   </button>
                 ) : null}
                 {computerStatusLine(row, t)}

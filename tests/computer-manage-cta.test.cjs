@@ -96,8 +96,11 @@ test("a running computer can be paused from the panel", () => {
     "utf8",
   );
   assert.match(panel, /pause: "暂停"/);
+  assert.match(panel, /pauseAt: "暂停 · \{rate\} 星币\/小时"/);
   assert.match(panel, /\/api\/computers\/\$\{encodeURIComponent\(computerId\)\}\/pause/);
   assert.match(panel, /row\.status === "running"/);
+  assert.match(panel, /pauseAsksBeforeCharge\(row\.paused_credits_per_hour\) &&/);
+  assert.match(panel, /withRate\(t\.pauseAt, row\.paused_credits_per_hour\)/);
 });
 
 test("pause asks before a charged pause and skips a free one", () => {
@@ -119,8 +122,10 @@ test("an idle computer with a disk can be resumed from the panel", () => {
     "utf8",
   );
   assert.match(panel, /resume: "恢复"/);
+  assert.match(panel, /resumeAt: "恢复 · \{rate\} 星币\/小时"/);
   assert.match(panel, /\/api\/computers\/\$\{encodeURIComponent\(computerId\)\}\/resume/);
   assert.match(panel, /row\.has_disk \? \(/);
+  assert.match(panel, /withRate\(t\.resumeAt, row\.resume_credits_per_hour\)/);
 });
 
 test("resuming asks on the panel before it starts billing", () => {
