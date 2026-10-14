@@ -13,12 +13,15 @@ function IconMonitor() {
   );
 }
 
-function headerIconStyle(on: boolean): CSSProperties {
+function headerIconStyle(on: boolean, wide = false): CSSProperties {
   return {
     ...btnGhost,
-    width: 28,
+    width: wide ? "auto" : 28,
     height: 28,
-    padding: 0,
+    padding: wide ? "0 8px" : 0,
+    gap: wide ? 6 : 0,
+    fontSize: 12,
+    whiteSpace: "nowrap",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -27,7 +30,12 @@ function headerIconStyle(on: boolean): CSSProperties {
   };
 }
 import { chatComputerLabel, extraIndex, type ComputerNameRow } from "./computerLabel";
-import type { ScreenChargeHint } from "./computerSendBoot";
+import { screenAsksBeforeCharge, type ScreenChargeHint } from "./computerSendBoot";
+
+const copy = {
+  en: { screenAt: "Open computer screen · {rate}/hr" },
+  zh: { screenAt: "打开电脑屏幕 · {rate} 星币/小时" },
+} as const;
 
 type ChatPlace = {
   place: "agent" | "cloud";
@@ -106,27 +114,34 @@ export function ChatComputerControl({
   const label = chatComputerLabel(place.place, place.is_default, nth, locale);
   const openable = place.place === "cloud" && !!place.computer_id;
   const on = openable && !!place.computer_id && openScreenIds.includes(place.computer_id);
+  const row = place.computer_id
+    ? computers.find((item) => item.computer_id === place.computer_id)
+    : undefined;
+  const screen = row?.screen_credits_per_hour ?? place.screen_credits_per_hour ?? undefined;
+  const hint: ScreenChargeHint = {
+    status: row?.status ?? place.status,
+    resumeCreditsPerHour: row?.resume_credits_per_hour ?? place.resume_credits_per_hour,
+    screenCreditsPerHour: screen,
+  };
+  const t = copy[locale] ?? copy.en;
+  const asks = openable && !on && screenAsksBeforeCharge(hint) && screen != null;
+  const caption = asks ? t.screenAt.replace("{rate}", String(screen)) : label;
 
   return (
     <button
       type="button"
-      style={headerIconStyle(on)}
+      style={headerIconStyle(on, asks)}
       aria-pressed={openable ? on : undefined}
-      aria-label={label}
-      title={label}
+      aria-label={caption}
+      title={caption}
       onClick={() => {
         if (openable && place.computer_id) {
-          const row = computers.find((item) => item.computer_id === place.computer_id);
-          const screen = row?.screen_credits_per_hour ?? place.screen_credits_per_hour ?? undefined;
-          onOpenScreen(place.computer_id, label, screen, {
-            status: row?.status ?? place.status,
-            resumeCreditsPerHour: row?.resume_credits_per_hour ?? place.resume_credits_per_hour,
-            screenCreditsPerHour: screen,
-          });
+          onOpenScreen(place.computer_id, label, screen, hint);
         }
       }}
     >
       <IconMonitor />
+      {asks ? caption : null}
     </button>
   );
 }
