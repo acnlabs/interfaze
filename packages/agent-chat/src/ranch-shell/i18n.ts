@@ -1193,8 +1193,8 @@ const en: RanchMessages = {
   myAgentsPricingModelSearch: "Search",
   myAgentsPricingOfficialEmpty: "No matching OpenRouter models in Host Catalog.",
   myAgentsPricingOptionLine: "${name} · in ${in} · out ${out}",
-  myAgentsPricingCreditsLine: "in ${in} · out ${out} Credits / 1M",
-  myAgentsPricingCreditsNote: "100 Credits = $1, same as wallet recharge. Each hop settles in whole Credits.",
+  myAgentsPricingCreditsLine: "in ${in} · out ${out} credits / 1M",
+  myAgentsPricingCreditsNote: "100 credits = ${price}. Usage is shown to 2 decimals. Top-up stays a whole number.",
   myAgentsPricingRuntimeHint:
     "Runtime reported: ${model} (heartbeat model only — Host cannot verify the key).",
   myAgentsPricingSelfReportNote:
@@ -1952,8 +1952,8 @@ const zh: RanchMessages = {
   myAgentsPricingModelSearch: "搜索",
   myAgentsPricingOfficialEmpty: "Host Catalog 里没有匹配的 OpenRouter 模型。",
   myAgentsPricingOptionLine: "${name} · 入 ${in} · 出 ${out}",
-  myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} Credits /百万",
-  myAgentsPricingCreditsNote: "与钱包充值相同：100 Credits = $1。每跳按整数 Credits 结算。",
+  myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} 星币 /百万",
+  myAgentsPricingCreditsNote: "100 星币 = ${price}。用量显示两位小数。充值仍是整数星币。",
   myAgentsPricingRuntimeHint: "运行环境上报：${model}（只认心跳型号，Host 看不见钥匙）。",
   myAgentsPricingSelfReportNote:
     "Owner 只设默认模型 + 上浮；底价由 Host 维护，智能体不能改写全网结算价。",

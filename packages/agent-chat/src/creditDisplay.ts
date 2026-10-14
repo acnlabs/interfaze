@@ -28,6 +28,20 @@ export function formatWholeCredits(amount: number): string {
   return `${sign}${grouped(String(Math.abs(n)))}`;
 }
 
+/** Local currency per some quantity → credit text at 2 decimals.
+
+One credit is ``rate`` of that currency (0.01 in production: one fen or one cent).
+A short amount stays a fraction. It is not rounded up to 1 credit.
+*/
+export function formatCreditsFromLocal(localAmount: number, rate = 0.01): string {
+  if (!Number.isFinite(localAmount) || localAmount <= 0 || !(rate > 0)) {
+    return formatFromMicros(0);
+  }
+  const millionths = Math.round(localAmount * 1_000_000);
+  const microsPerMillionth = Math.round(MICROS_PER_CREDIT / (rate * 1_000_000));
+  return formatFromMicros(millionths * microsPerMillionth);
+}
+
 /** Chat hops are stored in micros. Top-ups and withdrawals stay whole credits. */
 export function formatLedgerAmount(amount: number, unit?: string | null): string {
   if (unit === "micros") return formatFromMicros(Math.trunc(amount));

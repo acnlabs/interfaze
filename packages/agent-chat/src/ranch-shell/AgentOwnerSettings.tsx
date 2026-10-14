@@ -24,6 +24,7 @@ import { copyText } from "./connectPrompt";
 import type { RanchMessages } from "./i18n";
 import { officialShelfAllows } from "./officialV0";
 import { formatLocalPerMillion } from "../composerPrice";
+import { formatCreditsFromLocal } from "../creditDisplay";
 import { chatSettleQuote, DEFAULT_CHAT_FEE_RATE } from "./settleQuote";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 import { useModalA11y } from "./useModalA11y";
@@ -94,11 +95,6 @@ function skuFromRow(row: PieceSku): Omit<PieceSku, "agent_id"> {
 
 const FALLBACK_MODEL_ID = "openai/gpt-4o-mini";
 const DEFAULT_MARKUP_PERCENT = 50;
-
-function roundUsdPerMillion(n: number): number {
-  // Keep enough precision for cheap models without noisy floats.
-  return Math.round(n * 1e6) / 1e6;
-}
 
 function sameModelId(left: string, right: string): boolean {
   return left.trim().toLowerCase() === right.trim().toLowerCase();
@@ -213,14 +209,6 @@ function resolvePricingModelId(
     return listed;
   }
   return FALLBACK_MODEL_ID;
-}
-
-/** 1 Credit = $0.01 — $1 = 100 Credits, same as wallet recharge. */
-const CREDIT_TO_USD = 0.01;
-
-function usdToCredits(usd: number): number {
-  if (!Number.isFinite(usd) || usd <= 0) return 0;
-  return Math.max(0, Math.ceil(roundUsdPerMillion(usd) / CREDIT_TO_USD - 1e-12));
 }
 
 function uniqModelIds(...groups: Array<Array<string | null | undefined> | undefined>): string[] {
@@ -2622,10 +2610,15 @@ export function AgentOwnerSettings({
               }}
             >
               {fillTemplate(t.myAgentsPricingCreditsLine, {
-                in: String(usdToCredits(inputParsed)),
-                out: String(usdToCredits(outputParsed)),
+                in: formatCreditsFromLocal(inputParsed),
+                out: formatCreditsFromLocal(outputParsed),
               })}
-              <FieldHint label={t.fieldHintLabel} text={t.myAgentsPricingCreditsNote} />
+              <FieldHint
+                label={t.fieldHintLabel}
+                text={fillTemplate(t.myAgentsPricingCreditsNote, {
+                  price: (selectedCatalog?.currency || "").toUpperCase() === "CNY" ? "¥1" : "$1",
+                })}
+              />
             </div>
           </div>
         ) : null}
