@@ -35,6 +35,9 @@ type ChatPlace = {
   is_default: boolean | null;
   has_disk: boolean;
   can_bind: boolean;
+  status?: string | null;
+  resume_credits_per_hour?: number | null;
+  screen_credits_per_hour?: number | null;
 };
 
 async function authed(
@@ -114,10 +117,11 @@ export function ChatComputerControl({
       onClick={() => {
         if (openable && place.computer_id) {
           const row = computers.find((item) => item.computer_id === place.computer_id);
-          onOpenScreen(place.computer_id, label, row?.screen_credits_per_hour, {
-            status: row?.status,
-            resumeCreditsPerHour: row?.resume_credits_per_hour,
-            screenCreditsPerHour: row?.screen_credits_per_hour,
+          const screen = row?.screen_credits_per_hour ?? place.screen_credits_per_hour ?? undefined;
+          onOpenScreen(place.computer_id, label, screen, {
+            status: row?.status ?? place.status,
+            resumeCreditsPerHour: row?.resume_credits_per_hour ?? place.resume_credits_per_hour,
+            screenCreditsPerHour: screen,
           });
         }
       }}

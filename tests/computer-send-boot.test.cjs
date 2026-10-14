@@ -139,6 +139,16 @@ test("a running China computer does not ask again at the same hourly rate", () =
   );
 });
 
+test("the header screen button uses the chat place rates when the list has not loaded", () => {
+  const panel = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ChatComputerControl.tsx"),
+    "utf8",
+  );
+  assert.match(panel, /row\?\.screen_credits_per_hour \?\? place\.screen_credits_per_hour/);
+  assert.match(panel, /row\?\.status \?\? place\.status/);
+  assert.match(panel, /row\?\.resume_credits_per_hour \?\? place\.resume_credits_per_hour/);
+});
+
 test("opening a screen asks when it would raise the hourly rate", () => {
   assert.equal(
     screenAsksBeforeCharge({
