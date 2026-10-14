@@ -44,11 +44,11 @@ function layout(ids: string[]): Record<string, { x: number; y: number }> {
   const count = ids.length;
   ids.forEach((id, index) => {
     if (count === 1) {
-      out[id] = { x: 320, y: 150 };
+      out[id] = { x: 180, y: 340 };
       return;
     }
     const angle = -Math.PI / 2 + (2 * Math.PI * index) / count;
-    out[id] = { x: 320 + Math.cos(angle) * 190, y: 150 + Math.sin(angle) * 100 };
+    out[id] = { x: 180 + Math.cos(angle) * 120, y: 340 + Math.sin(angle) * 150 };
   });
   return out;
 }
@@ -57,7 +57,7 @@ function curve(from: { x: number; y: number }, to: { x: number; y: number }, ben
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const len = Math.hypot(dx, dy) || 1;
-  const pad = 28;
+  const pad = 36;
   const sx = from.x + (dx / len) * pad;
   const sy = from.y + (dy / len) * pad;
   const ex = to.x - (dx / len) * pad;
@@ -81,12 +81,36 @@ export function InteractionPanel({
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const members = new Set(memberIds.map((id) => bare(id).toLowerCase()));
   const ids: string[] = [];
+  const addId = (id: string) => {
+    const trimmed = id.trim();
+    const key = bare(trimmed).toLowerCase();
+    if (!key || key.startsWith("system:") || key.startsWith("local:")) return;
+    if (ids.some((have) => bare(have).toLowerCase() === key)) return;
+    ids.push(trimmed);
+  };
+  for (const id of memberIds) addId(id);
   for (const hop of hops) {
-    if (!ids.includes(hop.fromId)) ids.push(hop.fromId);
-    if (!ids.includes(hop.toId)) ids.push(hop.toId);
+    addId(hop.fromId);
+    addId(hop.toId);
   }
   const pos = layout(ids);
   const selected = hops.find((hop) => hop.key === selectedKey) ?? null;
+  const present = ids.filter((id) => members.has(bare(id).toLowerCase()));
+  const quietPairs: Array<[string, string]> = [];
+  for (let i = 0; i < present.length; i++) {
+    for (let j = i + 1; j < present.length; j++) {
+      const from = present[i];
+      const to = present[j];
+      const called = hops.some((hop) => {
+        const a = bare(hop.fromId).toLowerCase();
+        const b = bare(hop.toId).toLowerCase();
+        const left = bare(from).toLowerCase();
+        const right = bare(to).toLowerCase();
+        return (a === left && b === right) || (a === right && b === left);
+      });
+      if (!called) quietPairs.push([from, to]);
+    }
+  }
 
   const viewLabel = (
     <p data-interaction-view="" style={{ margin: "12px 16px 0", color: colors.muted, fontSize: 12 }}>
@@ -94,7 +118,7 @@ export function InteractionPanel({
     </p>
   );
 
-  if (!hops.length) {
+  if (!ids.length) {
     return (
       <div data-interaction-panel="" style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
         {viewLabel}
@@ -106,9 +130,25 @@ export function InteractionPanel({
   }
 
   return (
-    <div data-interaction-panel="" style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+    <div data-interaction-panel="" data-interaction-agents={ids.length} style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
       {viewLabel}
-      <svg viewBox="0 0 640 300" style={{ width: "100%", height: "auto", flex: "1 1 auto" }}>
+      <svg viewBox="0 0 360 720" preserveAspectRatio="xMidYMid meet" style={{ width: "100%", flex: "1 1 auto", minHeight: 0 }}>
+        {quietPairs.map(([fromId, toId]) => {
+          const from = pos[fromId];
+          const to = pos[toId];
+          if (!from || !to) return null;
+          return (
+            <path
+              key={`${fromId}->${toId}`}
+              data-relation=""
+              d={curve(from, to, 0)}
+              fill="none"
+              stroke={colors.muted}
+              strokeOpacity={0.45}
+              strokeWidth="1.4"
+            />
+          );
+        })}
         {hops.map((hop, index) => {
           const from = pos[hop.fromId];
           const to = pos[hop.toId];
@@ -146,6 +186,10 @@ export function InteractionPanel({
           );
         })}
         <defs>
+          <linearGradient id="agent-avatar-fill" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={colors.avatarFrom} />
+            <stop offset="100%" stopColor={colors.avatarTo} />
+          </linearGradient>
           {(["in_flight", "completed", "failed"] as const).map((phase) => (
             <marker key={phase} id={`hop-arrow-${phase}`} markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
               <path d="M0,0 L8,4 L0,8 Z" fill={phaseColor(phase)} />
@@ -157,22 +201,34 @@ export function InteractionPanel({
           const inside = members.has(bare(id).toLowerCase());
           const hop = hops.find((item) => item.toId === id);
           const label = displayName(id, names, hop?.name);
+          const initial = label.trim().slice(0, 1).toUpperCase() || "?";
           return (
             <g key={id}>
               <circle
                 cx={point.x}
                 cy={point.y}
-                r="16"
-                fill={colors.panelAlt}
+                r="32"
+                fill="url(#agent-avatar-fill)"
                 stroke={inside ? colors.accentBright : colors.muted}
-                strokeWidth="2"
+                strokeWidth="2.4"
                 strokeDasharray={inside ? undefined : "4 3"}
               />
-              <text x={point.x} y={point.y + 32} textAnchor="middle" fill={colors.text} fontSize="12">
+              <text
+                x={point.x}
+                y={point.y}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill={colors.text}
+                fontSize="22"
+                fontWeight="700"
+              >
+                {initial}
+              </text>
+              <text x={point.x} y={point.y + 52} textAnchor="middle" fill={colors.text} fontSize="15">
                 {label}
               </text>
               {inside ? null : (
-                <text x={point.x} y={point.y + 46} textAnchor="middle" fill={colors.muted} fontSize="10">
+                <text x={point.x} y={point.y + 66} textAnchor="middle" fill={colors.muted} fontSize="12">
                   {copy.outside}
                 </text>
               )}
