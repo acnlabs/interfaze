@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
 import { computerName, type ComputerNameRow } from "./computerLabel";
-import { computerManageCta, extraAsksBeforeCreate, pauseAsksBeforeCharge } from "./computerManageCta";
+import { computerManageCta, computerStatusLine, extraAsksBeforeCreate, pauseAsksBeforeCharge } from "./computerManageCta";
 import type { ScreenChargeHint } from "./computerSendBoot";
 import { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
 
@@ -39,6 +39,7 @@ const copy = {
     emptyDisk: "No files yet",
     idle: "Idle",
     paused: "Paused",
+    pausedAt: "Paused · {rate}/hr",
     running: "On",
     screen: "Open computer screen",
     pause: "Pause",
@@ -71,6 +72,7 @@ const copy = {
     emptyDisk: "还没有文件",
     idle: "空闲",
     paused: "暂停",
+    pausedAt: "暂停 {rate} 星币/小时",
     running: "开着",
     screen: "打开电脑屏幕",
     pause: "暂停",
@@ -99,13 +101,6 @@ async function authed(
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const base = gatewayBaseUrl.replace(/\/+$/, "");
   return fetch(`${base}${path}`, { ...init, headers });
-}
-
-function statusLabel(status: string, t: (typeof copy)[RanchLocale]): string {
-  if (status === "idle") return t.idle;
-  if (status === "paused") return t.paused;
-  if (status === "running") return t.running;
-  return status;
 }
 
 function withRate(template: string, rate: number | undefined): string {
@@ -375,7 +370,7 @@ export function ComputerManagePanel({
                     {busy ? t.resuming : t.resume}
                   </button>
                 ) : null}
-                {statusLabel(row.status, t)} · {row.has_disk ? t.files : t.emptyDisk}
+                {computerStatusLine(row, t)}
               </span>
             </div>
           );
