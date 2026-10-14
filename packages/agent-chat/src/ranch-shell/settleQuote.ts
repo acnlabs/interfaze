@@ -23,8 +23,8 @@ export function chatSettleQuote(
     return {
       ownerIn: roundUsd(ownerIn),
       ownerOut: roundUsd(ownerOut),
-      hunterIn: roundUsd(baseIn + gross(ownerIn)),
-      hunterOut: roundUsd(baseOut + gross(ownerOut)),
+      hunterIn: roundUsd(gross(baseIn + ownerIn)),
+      hunterOut: roundUsd(gross(baseOut + ownerOut)),
     };
   }
   const ownerIn = baseIn * (1 + markupPercent / 100);

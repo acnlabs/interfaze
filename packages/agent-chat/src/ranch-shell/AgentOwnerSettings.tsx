@@ -23,6 +23,7 @@ import {
 import { copyText } from "./connectPrompt";
 import type { RanchMessages } from "./i18n";
 import { officialShelfAllows } from "./officialV0";
+import { formatLocalPerMillion } from "../composerPrice";
 import { chatSettleQuote, DEFAULT_CHAT_FEE_RATE } from "./settleQuote";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 import { useModalA11y } from "./useModalA11y";
@@ -238,9 +239,9 @@ function uniqModelIds(...groups: Array<Array<string | null | undefined> | undefi
   return out;
 }
 
-function fmtUsd(n: number): string {
+function fmtLocal(n: number, currency?: string): string {
   if (!Number.isFinite(n)) return "—";
-  return roundUsdPerMillion(n).toFixed(6);
+  return formatLocalPerMillion(n, currency);
 }
 
 function shortModelLabel(modelId: string): string {
@@ -249,7 +250,7 @@ function shortModelLabel(modelId: string): string {
   return slash >= 0 ? s.slice(slash + 1) : s;
 }
 
-type CatalogPair = { in: number; out: number; source?: string };
+type CatalogPair = { in: number; out: number; source?: string; currency?: string };
 
 const TOKENHUB_PRICE_URL = "https://cloud.tencent.com/document/product/1823/130055";
 
@@ -560,12 +561,16 @@ function OfficialModelPicker({
 
 function catalogOptionLabel(
   id: string,
-  pair: { in: number; out: number } | undefined,
+  pair: { in: number; out: number; currency?: string } | undefined,
   tmpl: string,
 ): string {
   const name = shortModelLabel(id) || id;
   if (!pair) return name;
-  return fillTemplate(tmpl, { name, in: fmtUsd(pair.in), out: fmtUsd(pair.out) });
+  return fillTemplate(tmpl, {
+    name,
+    in: fmtLocal(pair.in, pair.currency),
+    out: fmtLocal(pair.out, pair.currency),
+  });
 }
 
 function fillTemplate(
@@ -1167,11 +1172,10 @@ export function AgentOwnerSettings({
       supportedModels.map((id) =>
         client.getModelCatalogItem(id).then(
           (row) => {
-            const cin = Number(row.input_price_per_million);
-            const cout = Number(row.output_price_per_million);
-            if (!Number.isFinite(cin) || !Number.isFinite(cout)) return [id, null] as const;
+            const quote = syncCatalogRates(row);
+            if (!quote) return [id, null] as const;
             const source = (row.source || "").trim() || undefined;
-            return [id, { in: cin, out: cout, source }] as const;
+            return [id, { in: quote.input, out: quote.output, source, currency: quote.currency }] as const;
           },
           () => [id, null] as const,
         ),
@@ -1224,6 +1228,7 @@ export function AgentOwnerSettings({
             in: quote.input,
             out: quote.output,
             source: src || book,
+            currency: quote.currency,
           });
         }
         if (!data.items.length) break;
@@ -1385,11 +1390,12 @@ export function AgentOwnerSettings({
     sameModelId(row.id, displayedModelId),
   );
   const selectedCatalog = officialSelected
-    ? officialRow
+      ? officialRow
       ? {
           in: officialRow.in,
           out: officialRow.out,
           source: officialRow.source || "openrouter",
+          currency: officialRow.currency,
         }
       : null
     : openRouterByoSelected
@@ -1398,6 +1404,7 @@ export function AgentOwnerSettings({
             in: byoOpenRouterRow.in,
             out: byoOpenRouterRow.out,
             source: byoOpenRouterRow.source || "openrouter",
+            currency: byoOpenRouterRow.currency,
           }
         : null
       : catalogById[displayedModelId] ??
@@ -2594,15 +2601,15 @@ export function AgentOwnerSettings({
           <div style={{ margin: "0 0 10px", fontSize: 12, lineHeight: 1.45 }}>
             <div style={{ color: colors.text }}>
               {fillTemplate(t.myAgentsPricingListingLine, {
-                in: fmtUsd(inputParsed),
-                out: fmtUsd(outputParsed),
+                in: fmtLocal(inputParsed, selectedCatalog?.currency),
+                out: fmtLocal(outputParsed, selectedCatalog?.currency),
               })}
             </div>
             {ownerInParsed != null && ownerOutParsed != null ? (
               <div style={{ color: colors.muted, marginTop: 2 }}>
                 {fillTemplate(t.myAgentsPricingKeepLine, {
-                  in: fmtUsd(ownerInParsed),
-                  out: fmtUsd(ownerOutParsed),
+                  in: fmtLocal(ownerInParsed, selectedCatalog?.currency),
+                  out: fmtLocal(ownerOutParsed, selectedCatalog?.currency),
                 })}
               </div>
             ) : null}

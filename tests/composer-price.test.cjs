@@ -13,7 +13,12 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const moduleExports = {};
 new Function("exports", js)(moduleExports);
-const { formatCnyPerMillion, formatMenuSide, formatUsdPerMillion } = moduleExports;
+const { formatCnyPerMillion, formatLocalPerMillion, formatMenuSide, formatUsdPerMillion } = moduleExports;
+
+test("a local rate prints yuan only when the book says CNY", () => {
+  assert.equal(formatLocalPerMillion(0.69, "CNY"), "¥0.69");
+  assert.equal(formatLocalPerMillion(0.1725, "USD"), formatUsdPerMillion(0.1725));
+});
 
 test("yuan labels keep the stored list rate", () => {
   assert.equal(formatCnyPerMillion(0.6), "¥0.6");

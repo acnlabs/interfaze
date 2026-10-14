@@ -8,6 +8,10 @@ export function formatCnyPerMillion(n: number): string {
   return `¥${Number(n.toPrecision(6))}`;
 }
 
+export function formatLocalPerMillion(n: number, currency?: string | null): string {
+  return (currency || "").toUpperCase() === "CNY" ? formatCnyPerMillion(n) : formatUsdPerMillion(n);
+}
+
 export type MenuRate = {
   input_price_per_million?: number;
   output_price_per_million?: number;
