@@ -27,7 +27,7 @@ import {
   prefersInPanelCheckout,
   resolveInterfazeOrigin,
 } from "./interfazeHost";
-import { cleanTxDescription, fmtTxTimeShort, txTypeLabel } from "./txDisplay";
+import { fmtTxTimeShort, txTypeLabel } from "./txDisplay";
 
 /** Shared card container for all account panel sections. */
 const card: CSSProperties = {
@@ -2218,7 +2218,6 @@ export function AccountWalletPanel({
                 {txs.map((tx) => {
                   const inbound = tx.direction === "in" || (tx.direction !== "out" && tx.amount > 0);
                   const outbound = tx.direction === "out" || (tx.direction !== "in" && tx.amount < 0);
-                  const desc = cleanTxDescription(tx.description);
                   return (
                     <div
                       key={tx.transaction_id}
@@ -2255,7 +2254,6 @@ export function AccountWalletPanel({
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {desc ? `${desc} · ` : ""}
                           {fmtTxTimeShort(tx.created_at)}
                         </span>
                       </span>

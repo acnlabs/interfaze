@@ -14,7 +14,7 @@ import { formatCreditBalance, formatSignedCreditAmount } from "../creditDisplay"
 import { FieldHint } from "./AgentOwnerSettings";
 import type { RanchMessages } from "./i18n";
 import { buildWalletCheckoutUrl } from "./interfazeHost";
-import { cleanTxDescription, fmtTxTimeShort, txTypeLabel } from "./txDisplay";
+import { fmtTxTimeShort, txTypeLabel } from "./txDisplay";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 import { useModalA11y } from "./useModalA11y";
 
@@ -582,7 +582,7 @@ export function AgentOwnerWallet({
             }}
           >
             {txs.map((tx) => {
-              const desc = cleanTxDescription(tx.description);
+              const when = fmtTxTimeShort(tx.created_at);
               return (
                 <li
                   key={tx.transaction_id}
@@ -610,10 +610,9 @@ export function AgentOwnerWallet({
                       {formatSignedCreditAmount(tx.amount, tx.amount_unit, tx.direction)}
                     </span>
                   </div>
-                  <div style={{ marginTop: 4, color: colors.muted }}>
-                    {desc || "—"}
-                    {tx.created_at ? ` · ${fmtTxTimeShort(tx.created_at)}` : ""}
-                  </div>
+                  {when ? (
+                    <div style={{ marginTop: 4, color: colors.muted }}>{when}</div>
+                  ) : null}
                 </li>
               );
             })}
