@@ -13,7 +13,7 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const moduleExports = {};
 new Function("exports", js)(moduleExports);
-const { formatCreditBalance, formatLedgerAmount, formatWholeCredits } = moduleExports;
+const { formatCreditBalance, formatCreditsFromLocal, formatLedgerAmount, formatWholeCredits } = moduleExports;
 
 test("a balance keeps the micro remainder to two decimals", () => {
   assert.equal(formatCreditBalance(10, 14000), "10.01");
@@ -28,6 +28,14 @@ test("a chat hop in micros is shown in credits", () => {
   assert.equal(formatLedgerAmount(145000, "micros"), "0.15");
   assert.equal(formatCreditBalance(0, 5000), "0.01");
   assert.equal(formatCreditBalance(1, 4999), "1.00");
+});
+
+test("a local price becomes credits at two decimals", () => {
+  assert.equal(formatCreditsFromLocal(1.15), "115.00");
+  assert.equal(formatCreditsFromLocal(2.3), "230.00");
+  assert.equal(formatCreditsFromLocal(0.766667), "76.67");
+  assert.equal(formatCreditsFromLocal(0.004), "0.40");
+  assert.equal(formatCreditsFromLocal(0), "0.00");
 });
 
 test("a top-up stays a whole number", () => {
