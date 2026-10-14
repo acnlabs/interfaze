@@ -1,4 +1,4 @@
-/** Sending starts the chat computer only when this bubble copies a file onto an idle cloud machine. */
+/** Sending starts the chat computer only when this bubble copies a file onto an idle or paused cloud machine. */
 
 export type ChatComputerPlace = {
   place?: string;
@@ -27,7 +27,7 @@ export function sendAsksBeforeBoot(
 ): boolean {
   if (!needsDesk) return false;
   if (place.place !== "cloud") return false;
-  if (place.status !== "idle") return false;
+  if (place.status !== "idle" && place.status !== "paused") return false;
   const id = place.computer_id;
   if (id && openScreenIds.includes(id)) return false;
   return true;

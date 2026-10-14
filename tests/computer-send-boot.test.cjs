@@ -36,6 +36,21 @@ test("copying a mailbox file onto an idle computer still asks before the hourly 
   );
 });
 
+test("copying a mailbox file onto a paused computer asks before the hourly bill", () => {
+  assert.equal(
+    sendAsksBeforeBoot({ place: "cloud", status: "paused", computer_id: "pc" }, [], true),
+    true,
+  );
+  assert.equal(
+    sendAsksBeforeBoot({ place: "cloud", status: "paused", computer_id: "pc" }, []),
+    false,
+  );
+  assert.equal(
+    sendAsksBeforeBoot({ place: "cloud", status: "paused", computer_id: "pc" }, ["pc"], true),
+    false,
+  );
+});
+
 test("a running computer or an agent machine does not ask again", () => {
   assert.equal(
     sendAsksBeforeBoot({ place: "cloud", status: "running", computer_id: "pc" }, [], true),
