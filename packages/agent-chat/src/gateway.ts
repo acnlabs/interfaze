@@ -303,6 +303,8 @@ export type MyAgentWalletTx = {
   amount: number;
   /** Chat hops are micros. Missing means whole credits. */
   amount_unit?: string | null;
+  /** ``out`` left this wallet. ``in`` arrived. Amount itself stays positive. */
+  direction?: string | null;
   balance_after: number;
   status: string;
   description?: string | null;

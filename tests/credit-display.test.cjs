@@ -35,3 +35,11 @@ test("a top-up stays a whole number", () => {
   assert.equal(formatLedgerAmount(100), "100");
   assert.equal(formatWholeCredits(2000), "2,000");
 });
+
+test("a charge shows a minus even when the stored amount is positive", () => {
+  const { formatSignedCreditAmount } = moduleExports;
+  assert.equal(formatSignedCreditAmount(115_000_000, "micros", "out"), "-115.00");
+  assert.equal(formatSignedCreditAmount(14000, "micros", "out"), "-0.01");
+  assert.equal(formatSignedCreditAmount(100, "credits", "in"), "+100");
+  assert.equal(formatSignedCreditAmount(50, null, "out"), "-50");
+});

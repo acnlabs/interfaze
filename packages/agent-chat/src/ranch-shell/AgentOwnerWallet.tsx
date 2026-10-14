@@ -10,7 +10,7 @@ import {
   type MyAgentWalletTx,
   type SpendAutonomy,
 } from "../gateway";
-import { formatCreditBalance, formatLedgerAmount } from "../creditDisplay";
+import { formatCreditBalance, formatSignedCreditAmount } from "../creditDisplay";
 import { FieldHint } from "./AgentOwnerSettings";
 import type { RanchMessages } from "./i18n";
 import { buildWalletCheckoutUrl } from "./interfazeHost";
@@ -595,9 +595,20 @@ export function AgentOwnerWallet({
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                     <span style={{ color: colors.text, fontWeight: 600 }}>
-                      {txTypeLabel(tx.type, t)}
+                      {txTypeLabel(tx.type, t, tx.description)}
                     </span>
-                    <span style={{ color: colors.text }}>{formatLedgerAmount(tx.amount, tx.amount_unit)}</span>
+                    <span
+                      style={{
+                        color:
+                          tx.direction === "out"
+                            ? colors.danger
+                            : tx.direction === "in"
+                              ? colors.success
+                              : colors.text,
+                      }}
+                    >
+                      {formatSignedCreditAmount(tx.amount, tx.amount_unit, tx.direction)}
+                    </span>
                   </div>
                   <div style={{ marginTop: 4, color: colors.muted }}>
                     {desc || "—"}

@@ -1,11 +1,18 @@
 import type { RanchMessages } from "./i18n";
 
 /** Human-readable label for a ledger transaction type. */
-export function txTypeLabel(type: string, t: RanchMessages): string {
+export function txTypeLabel(
+  type: string,
+  t: RanchMessages,
+  description?: string | null,
+): string {
+  const text = description || "";
   switch (type) {
     case "reward_grant":
       return t.walletTxTypeRewardGrant;
     case "wallet_transfer":
+      if (/Withdraw from agent\b/i.test(text)) return t.walletTxTypeWithdraw;
+      if (/Topup agent\b/i.test(text)) return t.walletTxTypeToAgent;
       return t.walletTxTypeWalletTransfer;
     case "refund":
       return t.walletTxTypeRefund;
@@ -15,6 +22,11 @@ export function txTypeLabel(type: string, t: RanchMessages): string {
       return t.walletTxTypePlanPurchase;
     case "recharge":
       return t.walletTxTypeRecharge;
+    case "service_usage":
+    case "agent_receive":
+      return t.walletTxTypeChat;
+    case "computer_usage":
+      return t.walletTxTypeComputer;
     default:
       return type.replace(/_/g, " ");
   }

@@ -658,6 +658,10 @@ export type RanchMessages = {
   walletTxTypeStorePurchase: string;
   walletTxTypePlanPurchase: string;
   walletTxTypeRecharge: string;
+  walletTxTypeChat: string;
+  walletTxTypeToAgent: string;
+  walletTxTypeWithdraw: string;
+  walletTxTypeComputer: string;
   walletBillingDocs: string;
   walletBillingDocsHint: string;
   walletBillingDocsEmpty: string;
@@ -1416,8 +1420,12 @@ const en: RanchMessages = {
   walletTxTypeWalletTransfer: "Transfer",
   walletTxTypeRefund: "Refund",
   walletTxTypeStorePurchase: "Store purchase",
-  walletTxTypePlanPurchase: "Plan purchase",
+  walletTxTypePlanPurchase: "Plan",
   walletTxTypeRecharge: "Top-up",
+  walletTxTypeChat: "Chat",
+  walletTxTypeToAgent: "To the agent",
+  walletTxTypeWithdraw: "Withdraw",
+  walletTxTypeComputer: "Computer",
   walletBillingDocs: "Receipts & invoices",
   walletBillingDocsHint:
     "Download a receipt for any payment. On the CN site you can also request a fapiao — issued manually to your email within 1-3 business days.",
@@ -2156,8 +2164,12 @@ const zh: RanchMessages = {
   walletTxTypeWalletTransfer: "转账",
   walletTxTypeRefund: "退款",
   walletTxTypeStorePurchase: "商店购买",
-  walletTxTypePlanPurchase: "方案购买",
+  walletTxTypePlanPurchase: "买方案",
   walletTxTypeRecharge: "充值",
+  walletTxTypeChat: "对话",
+  walletTxTypeToAgent: "充给智能体",
+  walletTxTypeWithdraw: "提现",
+  walletTxTypeComputer: "电脑",
   walletBillingDocs: "收据与发票",
   walletBillingDocsHint:
     "每笔收款均可下载英文收据；中国站用户可申请增值税电子普通发票（人工开具，1-3 个工作日内发送到邮箱）。",
