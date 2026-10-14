@@ -1186,7 +1186,7 @@ const en: RanchMessages = {
     "The preview is what the other person pays. With their own key: baseline × (1+markup%) ÷ 0.9, and you keep baseline × (1+markup%). Official: the platform keeps list × 1.15, you keep only the markup, and the 10% sits outside that markup.",
   myAgentsPricingInputLabel: "Settle preview · input USD / 1M",
   myAgentsPricingOutputLabel: "Settle preview · output USD / 1M",
-  myAgentsPricingModelLabel: "Default model · USD / 1M tokens",
+  myAgentsPricingModelLabel: "Default model · per 1M tokens",
   myAgentsPricingModelHint:
     "Pick the default from models this agent already reports. You cannot add or remove models here.",
   myAgentsPricingModelsEmpty: "This agent has not reported any models yet.",
@@ -1945,7 +1945,7 @@ const zh: RanchMessages = {
     "预览是对方实付的价。自带钥匙：底价 ×（1+上浮%）÷ 0.9，你到手底价 ×（1+上浮%）。官方：平台留下原价 × 1.15，你只拿上浮，10% 加在上浮外面。",
   myAgentsPricingInputLabel: "结算预览 · 输入 USD / 百万",
   myAgentsPricingOutputLabel: "结算预览 · 输出 USD / 百万",
-  myAgentsPricingModelLabel: "默认模型 · USD / 百万 token",
+  myAgentsPricingModelLabel: "默认模型 · 每百万 token",
   myAgentsPricingModelHint:
     "从这只智能体已自报的模型里选默认。这里不能增删模型。",
   myAgentsPricingModelsEmpty: "这只智能体还没有自报任何模型。",
