@@ -100,6 +100,8 @@ import {
 import { btnGhost, btnIcon, btnPrimary, colors, inputStyle, shellRoot } from "./styles";
 import { ChatWindowPane } from "./chat-window/ChatWindowPane";
 import { WorkDock, type WorkTab } from "./WorkDock";
+import { InteractionPanel } from "./InteractionPanel";
+import { foldLiveHops, parseHopUpdate, type HopUpdate } from "../liveHops";
 import { openEmbodyHost, openStudioTalk } from "./chat-window/studioTalk";
 import { bodyIdFromHostPath, type ChatWindow, type ChatWindowKind } from "./chat-window/types";
 
@@ -2825,8 +2827,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [pageTick, setPageTick] = useState(0);
   const [dockTabs, setDockTabs] = useState<WorkTab[]>([]);
   const [activeDockId, setActiveDockId] = useState<string | null>(null);
+  const [hopEvents, setHopEvents] = useState<HopUpdate[]>([]);
+  const liveHops = useMemo(() => foldLiveHops(messages, hopEvents), [messages, hopEvents]);
   const [pointedBlock, setPointedBlock] = useState<PageRefRecord | null>(null);
   const openManuscriptRef = useRef<(blockKey?: string) => void>(() => {});
+  const revealInteractionRef = useRef<() => void>(() => {});
   const dockTabsRef = useRef<WorkTab[]>([]);
   const topicIdRef = useRef<string | null>(null);
   const canvasFetchSeq = useRef(0);
@@ -2929,11 +2934,34 @@ export function RanchChatShell(props: RanchChatShellProps) {
     }).catch(() => {});
   };
   openManuscriptRef.current = openCanvas;
+  revealInteractionRef.current = () => {
+    const title = t.interaction;
+    const tabs = dockTabsRef.current;
+    if (!tabs.some((tab) => tab.id === "interaction")) {
+      setDockTabs((prev) =>
+        prev.some((tab) => tab.id === "interaction")
+          ? prev
+          : [...prev, { id: "interaction", kind: "interaction", title }],
+      );
+    }
+    if (tabs.length === 0) setActiveDockId("interaction");
+  };
+  const openInteraction = () => {
+    closeAccountSurfaces();
+    const title = t.interaction;
+    setDockTabs((prev) =>
+      prev.some((tab) => tab.id === "interaction")
+        ? prev
+        : [...prev, { id: "interaction", kind: "interaction", title }],
+    );
+    setActiveDockId("interaction");
+  };
 
   useEffect(() => {
     setDockTabs([]);
     setActiveDockId(null);
     setPointedBlock(null);
+    setHopEvents([]);
   }, [active?.chat_id]);
 
   useEffect(() => {
@@ -3977,6 +4005,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
         token,
         onEvent: (ev) => {
           if (ev.chat_id && ev.chat_id !== chatId) return;
+          if (ev.type === "hop.updated") {
+            if (ev.chat_id !== chatId) return;
+            const update = parseHopUpdate(ev.data);
+            if (!update) return;
+            setHopEvents((prev) => [...prev, update]);
+            if (update.phase === "in_flight") revealInteractionRef.current();
+          }
           if (ev.type === "canvas.updated") {
             setPageTick((n) => n + 1);
             const receipts = Array.isArray(ev.data?.receipts) ? ev.data.receipts : [];
@@ -4011,6 +4046,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
               }
               return next;
             });
+            if (foldLiveHops([m], []).some((hop) => hop.phase === "in_flight")) {
+              revealInteractionRef.current();
+            }
             void refreshChats();
           }
           // Streaming chunks may omit final content on message.new; resync on end.
@@ -5662,6 +5700,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
         closeLabel={t.close}
         addLabel={t.addWindow}
         addCanvasLabel={t.manuscript}
+        addInteractionLabel={t.interaction}
+        interactionOpen={dockTabs.some((tab) => tab.kind === "interaction")}
         computers={cloudComputers.map((row) => ({
           id: row.computer_id,
           label: computerName(row.is_default, extraIndex(cloudComputers, row.computer_id), uiLocale),
@@ -5670,6 +5710,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         onSelect={setActiveDockId}
         onClose={closeTab}
         onAddCanvas={() => openCanvas()}
+        onAddInteraction={openInteraction}
         onOpenComputer={openCloudScreen}
         columnCloseLabel={t.windowClose}
         onCloseColumn={() => {
@@ -5702,6 +5743,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
               );
             }}
             onClose={() => closeTab(activeDock.id)}
+          />
+        ) : activeDock.kind === "interaction" ? (
+          <InteractionPanel
+            hops={liveHops}
+            names={agentNames}
+            memberIds={active?.agent_id ? [active.agent_id, ...Object.keys(agentNames)] : Object.keys(agentNames)}
+            copy={{
+              empty: t.interactionEmpty,
+              waiting: t.interactionWaiting,
+              returned: t.interactionReturned,
+              failed: t.interactionFailed,
+              outside: t.interactionOutside,
+            }}
           />
         ) : activeDock.kind === "computer" ? (
           <ComputerScreenPanel
