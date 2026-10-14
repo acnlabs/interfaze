@@ -144,6 +144,7 @@ export type AgentCreateJob = {
 export type HumanWallet = {
   wallet_id: string;
   balance: number;
+  balance_micros?: number;
   status?: string | null;
   owner_id?: string | null;
 };
@@ -285,11 +286,13 @@ export type MyAgentWallet = {
   agent_id: string;
   wallet_id: string;
   balance: number;
+  balance_micros?: number;
   ap_points: number;
   owner_id?: string | null;
   status?: string | null;
   /** Human (owner) Credits available for top-up. */
   owner_balance: number;
+  owner_balance_micros?: number;
 };
 
 export type MyAgentWalletTx = {
@@ -298,6 +301,8 @@ export type MyAgentWalletTx = {
   user_id: string;
   type: string;
   amount: number;
+  /** Chat hops are micros. Missing means whole credits. */
+  amount_unit?: string | null;
   balance_after: number;
   status: string;
   description?: string | null;
@@ -325,6 +330,7 @@ export type MyAgentSpendPolicy = {
   window_spent: number;
   window_remaining: number | null;
   balance: number;
+  balance_micros?: number;
 };
 
 export type MyAgentSpendPolicyUpdate = {
