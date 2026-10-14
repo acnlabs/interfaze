@@ -5,6 +5,7 @@ export type ChatComputerPlace = {
   status?: string | null;
   computer_id?: string | null;
   resume_credits_per_hour?: number | null;
+  screen_credits_per_hour?: number | null;
 };
 
 export type ListedComputer = {
