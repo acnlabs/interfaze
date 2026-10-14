@@ -2155,6 +2155,23 @@ function IconBody() {
   );
 }
 
+/** Three agents linked. Opens the Interaction window. */
+function IconInteraction() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M8.4 9.1h7.2M7.5 10.4 10.8 15M16.5 10.4 13.2 15"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <circle cx="6" cy="8" r="2.25" stroke="currentColor" strokeWidth="2" />
+      <circle cx="18" cy="8" r="2.25" stroke="currentColor" strokeWidth="2" />
+      <circle cx="12" cy="17" r="2.25" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
 function IconHistory() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -5749,7 +5766,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
         ) : activeDock.kind === "interaction" ? (
           <InteractionPanel
             hops={liveHops}
-            names={agentNames}
+            names={(() => {
+              const chat = active;
+              const id = chat?.agent_id;
+              if (!chat || !id) return agentNames;
+              const known = Object.entries(agentNames).find(([key]) => agentIdKey(key) === agentIdKey(id))?.[1]?.trim();
+              return { ...agentNames, [id]: known || chatTitle(chat) };
+            })()}
             memberIds={active?.agent_id ? [active.agent_id, ...Object.keys(agentNames)] : Object.keys(agentNames)}
             copy={{
               view: t.interactionView,
@@ -6803,6 +6826,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       <IconBody />
                     </button>
                   ) : null}
+                  <button
+                    type="button"
+                    style={headerIconStyle(activeDock?.kind === "interaction")}
+                    onClick={() => {
+                      setHistoryOpen(false);
+                      if (activeDock?.kind === "interaction") {
+                        closeTab("interaction");
+                        return;
+                      }
+                      openInteraction();
+                    }}
+                    aria-pressed={activeDock?.kind === "interaction"}
+                    aria-label={t.interaction}
+                    title={t.interaction}
+                  >
+                    <IconInteraction />
+                  </button>
                   <div style={{ position: "relative" }}>
                     <button
                       type="button"
