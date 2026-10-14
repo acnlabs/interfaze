@@ -34,7 +34,7 @@ import {
 } from "../attachmentListedPrice";
 import { ChatComputerControl } from "../ChatComputerControl";
 import { computerName, extraIndex, type ComputerNameRow } from "../computerLabel";
-import { formatMenuSide, formatUsdPerMillion } from "../composerPrice";
+import { formatLocalPerMillion, formatMenuSide } from "../composerPrice";
 import {
   placeForDefaultComputer,
   screenAsksBeforeCharge,
@@ -3178,7 +3178,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [droppedModelIds, setDroppedModelIds] = useState<string[]>([]);
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
   const [composerMenuQuery, setComposerMenuQuery] = useState("");
-  const [composerCatalog, setComposerCatalog] = useState<Array<{ id: string; in: number; out: number }>>(
+  const [composerCatalog, setComposerCatalog] = useState<
+    Array<{ id: string; in: number; out: number; currency?: string }>
+  >(
     [],
   );
   const [composerCatalogLoading, setComposerCatalogLoading] = useState(false);
@@ -5164,7 +5166,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setComposerCatalogLoading(true);
     void (async () => {
       const page = 500;
-      const acc: Array<{ id: string; in: number; out: number }> = [];
+      const acc: Array<{ id: string; in: number; out: number; currency?: string }> = [];
       let offset = 0;
       let total = Number.POSITIVE_INFINITY;
       try {
@@ -5187,7 +5189,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             if (!quote) continue;
             if (quote.input < 0 || quote.output < 0) continue;
             if (acc.some((item) => sameModelId(item.id, id))) continue;
-            acc.push({ id, in: quote.input, out: quote.output });
+            acc.push({ id, in: quote.input, out: quote.output, currency: quote.currency });
           }
           if (!cancelled) setComposerCatalog([...acc]);
           if (!data.items.length) break;
@@ -7821,11 +7823,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         }
                         if (cat) {
                           return t.composerModelPrice(
-                            formatUsdPerMillion(
+                            formatLocalPerMillion(
                               applyMarkupUsd(cat.in, composerModel.markup_percent),
+                              cat.currency,
                             ),
-                            formatUsdPerMillion(
+                            formatLocalPerMillion(
                               applyMarkupUsd(cat.out, composerModel.markup_percent),
+                              cat.currency,
                             ),
                           );
                         }

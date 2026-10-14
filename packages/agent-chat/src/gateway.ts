@@ -467,9 +467,12 @@ export type ModelCatalogItem = {
   display_name?: string | null;
   input_price_per_million: number;
   output_price_per_million: number;
-  /** Official Catalog = Host sync × 1.15. Absent on older Hosts. */
+  /** Official list in `currency`: book × 1.15. Absent on older Hosts. */
   published_input_price_per_million?: number | null;
   published_output_price_per_million?: number | null;
+  /** Yuan sync when `currency` is CNY. Dollars otherwise. Not × 1.15. */
+  local_input_price_per_million?: number | null;
+  local_output_price_per_million?: number | null;
   currency?: string;
   source?: string | null;
   modality?: string | null;
@@ -480,38 +483,51 @@ export type ModelCatalogItem = {
 
 export const OFFICIAL_PUBLISH_FACTOR = 1.15;
 
+function catalogCurrency(row: { currency?: string | null }): "CNY" | "USD" {
+  return (row.currency || "").toUpperCase() === "CNY" ? "CNY" : "USD";
+}
+
 export function officialCatalogRates(row: {
   input_price_per_million: number;
   output_price_per_million: number;
   published_input_price_per_million?: number | null;
   published_output_price_per_million?: number | null;
-}): { input: number; output: number } | null {
-  const syncIn = Number(row.input_price_per_million);
-  const syncOut = Number(row.output_price_per_million);
-  if (!Number.isFinite(syncIn) || !Number.isFinite(syncOut)) return null;
+  currency?: string | null;
+}): { input: number; output: number; currency: "CNY" | "USD" } | null {
   const publishedIn = Number(row.published_input_price_per_million);
   const publishedOut = Number(row.published_output_price_per_million);
   const round = (n: number) => Math.round(n * 1e6) / 1e6;
-  return {
-    input: Number.isFinite(publishedIn)
-      ? publishedIn
-      : round(syncIn * OFFICIAL_PUBLISH_FACTOR),
-    output: Number.isFinite(publishedOut)
-      ? publishedOut
-      : round(syncOut * OFFICIAL_PUBLISH_FACTOR),
-  };
-}
-
-/** BYO / Store OpenRouter listing uses Host sync, not official Catalog × 1.15. */
-export function syncCatalogRates(row: {
-  input_price_per_million: number;
-  output_price_per_million: number;
-}): { input: number; output: number } | null {
+  if (Number.isFinite(publishedIn) && Number.isFinite(publishedOut)) {
+    return { input: publishedIn, output: publishedOut, currency: catalogCurrency(row) };
+  }
   const syncIn = Number(row.input_price_per_million);
   const syncOut = Number(row.output_price_per_million);
   if (!Number.isFinite(syncIn) || !Number.isFinite(syncOut)) return null;
+  return {
+    input: round(syncIn * OFFICIAL_PUBLISH_FACTOR),
+    output: round(syncOut * OFFICIAL_PUBLISH_FACTOR),
+    currency: "USD",
+  };
+}
+
+/** BYO listing uses the book rate in the market currency, not official × 1.15. */
+export function syncCatalogRates(row: {
+  input_price_per_million: number;
+  output_price_per_million: number;
+  local_input_price_per_million?: number | null;
+  local_output_price_per_million?: number | null;
+  currency?: string | null;
+}): { input: number; output: number; currency: "CNY" | "USD" } | null {
   const round = (n: number) => Math.round(n * 1e6) / 1e6;
-  return { input: round(syncIn), output: round(syncOut) };
+  const localIn = Number(row.local_input_price_per_million);
+  const localOut = Number(row.local_output_price_per_million);
+  if (Number.isFinite(localIn) && Number.isFinite(localOut)) {
+    return { input: round(localIn), output: round(localOut), currency: catalogCurrency(row) };
+  }
+  const syncIn = Number(row.input_price_per_million);
+  const syncOut = Number(row.output_price_per_million);
+  if (!Number.isFinite(syncIn) || !Number.isFinite(syncOut)) return null;
+  return { input: round(syncIn), output: round(syncOut), currency: "USD" };
 }
 
 export type ModelCatalogList = {
