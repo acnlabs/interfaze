@@ -5,7 +5,7 @@ import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
 import { computerName, type ComputerNameRow } from "./computerLabel";
 import { computerManageCta, computerStatusLine, extraAsksBeforeCreate, pauseAsksBeforeCharge } from "./computerManageCta";
-import type { ScreenChargeHint } from "./computerSendBoot";
+import { screenAsksBeforeCharge, type ScreenChargeHint } from "./computerSendBoot";
 import { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
 
 type ComputerRow = ComputerNameRow & {
@@ -43,6 +43,7 @@ const copy = {
     running: "On",
     runningAt: "On · {rate}/hr",
     screen: "Open computer screen",
+    screenAt: "Open computer screen · {rate}/hr",
     pause: "Pause",
     pausing: "Pausing…",
     pauseFailed: "The computer did not pause.",
@@ -77,6 +78,7 @@ const copy = {
     running: "开着",
     runningAt: "开着 {rate} 星币/小时",
     screen: "打开电脑屏幕",
+    screenAt: "打开电脑屏幕 · {rate} 星币/小时",
     pause: "暂停",
     pausing: "正在暂停…",
     pauseFailed: "没有停下来。",
@@ -337,7 +339,13 @@ export function ComputerManagePanel({
                     })
                   }
                 >
-                  {t.screen}
+                  {screenAsksBeforeCharge({
+                    status: row.status,
+                    resumeCreditsPerHour: row.resume_credits_per_hour,
+                    screenCreditsPerHour: row.screen_credits_per_hour,
+                  }) && row.screen_credits_per_hour != null
+                    ? withRate(t.screenAt, row.screen_credits_per_hour)
+                    : t.screen}
                 </button>
                 {row.status === "running" ? (
                   <button

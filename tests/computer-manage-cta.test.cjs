@@ -45,6 +45,8 @@ test("a listed computer can open its screen without a chat", () => {
     "utf8",
   );
   assert.match(panel, /screen: "打开电脑屏幕"/);
+  assert.match(panel, /screenAt: "打开电脑屏幕 · \{rate\} 星币\/小时"/);
+  assert.match(panel, /screenAsksBeforeCharge/);
   assert.match(panel, /onOpenScreen\(row\.computer_id, label, row\.screen_credits_per_hour/);
   assert.match(shell, /onOpenScreen=\{openCloudScreen\}/);
   assert.match(shell, /active \|\| activeDock\.kind === "computer"/);
