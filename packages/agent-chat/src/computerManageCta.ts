@@ -13,9 +13,14 @@ export function pauseAsksBeforeCharge(pausedCreditsPerHour: number | undefined):
   return (pausedCreditsPerHour ?? 0) > 0;
 }
 
-/** Status line. A billed pause prints the hourly disk price. */
+/** Status line. A billed stretch prints the hourly price. */
 export function computerStatusLine(
-  row: { status: string; has_disk: boolean; paused_credits_per_hour?: number },
+  row: {
+    status: string;
+    has_disk: boolean;
+    resume_credits_per_hour?: number;
+    paused_credits_per_hour?: number;
+  },
   labels: {
     idle: string;
     paused: string;
@@ -23,6 +28,7 @@ export function computerStatusLine(
     files: string;
     emptyDisk: string;
     pausedAt: string;
+    runningAt: string;
   },
 ): string {
   const status =
@@ -34,9 +40,13 @@ export function computerStatusLine(
           ? labels.running
           : row.status;
   const disk = row.has_disk ? labels.files : labels.emptyDisk;
-  const rate = row.paused_credits_per_hour ?? 0;
-  if (row.status === "paused" && rate > 0) {
-    return `${labels.pausedAt.replace("{rate}", String(rate))} · ${disk}`;
+  const pauseRate = row.paused_credits_per_hour ?? 0;
+  const runRate = row.resume_credits_per_hour ?? 0;
+  if (row.status === "paused" && pauseRate > 0) {
+    return `${labels.pausedAt.replace("{rate}", String(pauseRate))} · ${disk}`;
+  }
+  if (row.status === "running" && runRate > 0) {
+    return `${labels.runningAt.replace("{rate}", String(runRate))} · ${disk}`;
   }
   return `${status} · ${disk}`;
 }
