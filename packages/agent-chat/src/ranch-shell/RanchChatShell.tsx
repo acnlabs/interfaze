@@ -5766,16 +5766,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
         ) : activeDock.kind === "interaction" ? (
           <InteractionPanel
             hops={liveHops}
-            names={{
-              ...agentNames,
-              ...(active.agent_id
-                ? {
-                    [active.agent_id]:
-                      Object.entries(agentNames).find(([id]) => agentIdKey(id) === agentIdKey(active.agent_id))?.[1]?.trim() ||
-                      chatTitle(active),
-                  }
-                : {}),
-            }}
+            names={(() => {
+              const chat = active;
+              const id = chat?.agent_id;
+              if (!chat || !id) return agentNames;
+              const known = Object.entries(agentNames).find(([key]) => agentIdKey(key) === agentIdKey(id))?.[1]?.trim();
+              return { ...agentNames, [id]: known || chatTitle(chat) };
+            })()}
             memberIds={active?.agent_id ? [active.agent_id, ...Object.keys(agentNames)] : Object.keys(agentNames)}
             copy={{
               view: t.interactionView,
