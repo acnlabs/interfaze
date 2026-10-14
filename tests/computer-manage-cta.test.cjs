@@ -50,6 +50,15 @@ test("a listed computer can open its screen without a chat", () => {
   assert.match(shell, /active \|\| activeDock\.kind === "computer"/);
 });
 
+test("a charged pause shows as 暂停 instead of 空闲", () => {
+  const panel = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ComputerManagePanel.tsx"),
+    "utf8",
+  );
+  assert.match(panel, /paused: "暂停"/);
+  assert.match(panel, /status === "paused"/);
+});
+
 test("a running computer can be paused from the panel", () => {
   const panel = fs.readFileSync(
     path.join(__dirname, "../packages/agent-chat/src/ComputerManagePanel.tsx"),

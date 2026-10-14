@@ -38,6 +38,7 @@ const copy = {
     files: "Has files",
     emptyDisk: "No files yet",
     idle: "Idle",
+    paused: "Paused",
     running: "On",
     screen: "Open computer screen",
     pause: "Pause",
@@ -69,6 +70,7 @@ const copy = {
     files: "已有文件",
     emptyDisk: "还没有文件",
     idle: "空闲",
+    paused: "暂停",
     running: "开着",
     screen: "打开电脑屏幕",
     pause: "暂停",
@@ -101,6 +103,7 @@ async function authed(
 
 function statusLabel(status: string, t: (typeof copy)[RanchLocale]): string {
   if (status === "idle") return t.idle;
+  if (status === "paused") return t.paused;
   if (status === "running") return t.running;
   return status;
 }
