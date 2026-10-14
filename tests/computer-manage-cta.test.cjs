@@ -13,7 +13,7 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const moduleExports = {};
 new Function("exports", js)(moduleExports);
-const { computerManageCta, extraAsksBeforeCreate, pauseAsksBeforeCharge } = moduleExports;
+const { computerManageCta, extraAsksBeforeCreate, pauseAsksBeforeCharge, computerStatusLine } = moduleExports;
 
 test("an empty list creates the default computer", () => {
   assert.equal(computerManageCta(0), "create");
@@ -56,7 +56,31 @@ test("a charged pause shows as 暂停 instead of 空闲", () => {
     "utf8",
   );
   assert.match(panel, /paused: "暂停"/);
-  assert.match(panel, /status === "paused"/);
+  assert.match(panel, /pausedAt: "暂停 \{rate\} 星币\/小时"/);
+  assert.match(panel, /computerStatusLine\(row, t\)/);
+});
+
+test("a billed pause prints the hourly disk price on the status line", () => {
+  const labels = {
+    idle: "空闲",
+    paused: "暂停",
+    running: "开着",
+    files: "已有文件",
+    emptyDisk: "还没有文件",
+    pausedAt: "暂停 {rate} 星币/小时",
+  };
+  assert.equal(
+    computerStatusLine({ status: "paused", has_disk: true, paused_credits_per_hour: 11 }, labels),
+    "暂停 11 星币/小时 · 已有文件",
+  );
+  assert.equal(
+    computerStatusLine({ status: "idle", has_disk: true, paused_credits_per_hour: 0 }, labels),
+    "空闲 · 已有文件",
+  );
+  assert.equal(
+    computerStatusLine({ status: "running", has_disk: true, paused_credits_per_hour: 11 }, labels),
+    "开着 · 已有文件",
+  );
 });
 
 test("a running computer can be paused from the panel", () => {

@@ -12,3 +12,31 @@ export function extraAsksBeforeCreate(count: number): boolean {
 export function pauseAsksBeforeCharge(pausedCreditsPerHour: number | undefined): boolean {
   return (pausedCreditsPerHour ?? 0) > 0;
 }
+
+/** Status line. A billed pause prints the hourly disk price. */
+export function computerStatusLine(
+  row: { status: string; has_disk: boolean; paused_credits_per_hour?: number },
+  labels: {
+    idle: string;
+    paused: string;
+    running: string;
+    files: string;
+    emptyDisk: string;
+    pausedAt: string;
+  },
+): string {
+  const status =
+    row.status === "idle"
+      ? labels.idle
+      : row.status === "paused"
+        ? labels.paused
+        : row.status === "running"
+          ? labels.running
+          : row.status;
+  const disk = row.has_disk ? labels.files : labels.emptyDisk;
+  const rate = row.paused_credits_per_hour ?? 0;
+  if (row.status === "paused" && rate > 0) {
+    return `${labels.pausedAt.replace("{rate}", String(rate))} · ${disk}`;
+  }
+  return `${status} · ${disk}`;
+}
