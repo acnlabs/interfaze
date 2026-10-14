@@ -14,6 +14,7 @@ import type {
   PlanCatalogEntry,
   PlanUsage,
 } from "../gateway";
+import { formatCreditBalance, formatLedgerAmount } from "../creditDisplay";
 import type { RanchChatAccount } from "../types";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import type { RanchLocale, RanchMessages } from "./i18n";
@@ -928,10 +929,10 @@ export function AccountPlanUsagePanel({
                   >
                     {odLimit != null
                       ? fmtTpl(t.accountPlanUsedOfLimit, {
-                          used: fmtCredits(odSpent),
+                          used: formatCreditBalance(odSpent),
                           limit: fmtCredits(odLimit),
                         })
-                      : `${fmtCredits(odSpent)} ${t.walletBalance}`}
+                      : `${formatCreditBalance(odSpent)} ${t.walletBalance}`}
                   </span>
                 </div>
                 <UsageBar ratio={onDemandRatio} tone="neutral" />
@@ -1039,7 +1040,7 @@ export function AccountPlanUsagePanel({
                                 n: Math.round(share * 100),
                               })}
                               {" · "}
-                              {fmtCredits(row.credits)}
+                              {formatCreditBalance(row.credits)}
                             </span>
                           </div>
                           <UsageBar ratio={share} tone="accent" />
@@ -1951,7 +1952,9 @@ export function AccountWalletPanel({
   const [checkoutEmbedUrl, setCheckoutEmbedUrl] = useState<string | null>(null);
   const [rechargeCloseArmed, setRechargeCloseArmed] = useState(false);
   const baselineBalanceRef = useRef<number | null>(null);
-  const [agentRows, setAgentRows] = useState<{ agent: MyAgentSummary; balance: number | null }[]>([]);
+  const [agentRows, setAgentRows] = useState<
+    { agent: MyAgentSummary; balance: number | null; balanceMicros: number }[]
+  >([]);
   const [agentWalletsLoading, setAgentWalletsLoading] = useState(true);
   const [agentWalletId, setAgentWalletId] = useState<string | null>(null);
 
@@ -1988,9 +1991,9 @@ export function AccountWalletPanel({
       agents.map(async (agent) => {
         try {
           const w = await client.getMyAgentWallet(agent.agent_id);
-          return { agent, balance: w.balance };
+          return { agent, balance: w.balance, balanceMicros: w.balance_micros ?? 0 };
         } catch {
-          return { agent, balance: null };
+          return { agent, balance: null, balanceMicros: 0 };
         }
       }),
     );
@@ -2124,7 +2127,7 @@ export function AccountWalletPanel({
                 fontVariantNumeric: "tabular-nums",
               }}
             >
-              {fmtCredits(wallet?.balance ?? 0)}
+              {formatCreditBalance(wallet?.balance ?? 0, wallet?.balance_micros)}
             </p>
             <button
               type="button"
@@ -2165,7 +2168,7 @@ export function AccountWalletPanel({
               <EmptyText>{t.accountWalletNoAgents}</EmptyText>
             ) : (
               <div style={{ ...card, padding: 6 }}>
-                {agentRows.map(({ agent, balance }) => {
+                {agentRows.map(({ agent, balance, balanceMicros }) => {
                   const name = (agent.name || "").trim() || agent.agent_id;
                   return (
                     <RowButton
@@ -2194,7 +2197,7 @@ export function AccountWalletPanel({
                           flexShrink: 0,
                         }}
                       >
-                        {balance == null ? "—" : fmtCredits(balance)}
+                        {balance == null ? "—" : formatCreditBalance(balance, balanceMicros)}
                       </span>
                       <span aria-hidden style={{ color: colors.muted, fontSize: 15 }}>
                         ›
@@ -2266,7 +2269,7 @@ export function AccountWalletPanel({
                         }}
                       >
                         {positive ? "+" : ""}
-                        {fmtCredits(tx.amount)}
+                        {formatLedgerAmount(tx.amount, tx.amount_unit)}
                       </span>
                     </div>
                   );

@@ -10,6 +10,7 @@ import {
   type MyAgentWalletTx,
   type SpendAutonomy,
 } from "../gateway";
+import { formatCreditBalance, formatLedgerAmount } from "../creditDisplay";
 import { FieldHint } from "./AgentOwnerSettings";
 import type { RanchMessages } from "./i18n";
 import { buildWalletCheckoutUrl } from "./interfazeHost";
@@ -420,7 +421,7 @@ export function AgentOwnerWallet({
               <FieldHint label={t.fieldHintLabel} text={t.walletCreditsHint} />
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, color: colors.text }}>
-              {fmtCredits(wallet.balance)}
+              {formatCreditBalance(wallet.balance, wallet.balance_micros)}
             </div>
             <div
               style={{
@@ -596,7 +597,7 @@ export function AgentOwnerWallet({
                     <span style={{ color: colors.text, fontWeight: 600 }}>
                       {txTypeLabel(tx.type, t)}
                     </span>
-                    <span style={{ color: colors.text }}>{fmtCredits(tx.amount)}</span>
+                    <span style={{ color: colors.text }}>{formatLedgerAmount(tx.amount, tx.amount_unit)}</span>
                   </div>
                   <div style={{ marginTop: 4, color: colors.muted }}>
                     {desc || "—"}
@@ -645,14 +646,14 @@ export function AgentOwnerWallet({
               <p style={{ margin: "0 0 12px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
                 {t.walletOwnerBalance}:{" "}
                 <span style={{ color: colors.text, fontWeight: 600 }}>
-                  {fmtCredits(wallet.owner_balance)}
+                  {formatCreditBalance(wallet.owner_balance, wallet.owner_balance_micros)}
                 </span>
               </p>
             ) : (
               <p style={{ margin: "0 0 12px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
                 {t.walletBalance}:{" "}
                 <span style={{ color: colors.text, fontWeight: 600 }}>
-                  {fmtCredits(wallet.balance)}
+                  {formatCreditBalance(wallet.balance, wallet.balance_micros)}
                 </span>
               </p>
             )}
@@ -779,7 +780,7 @@ export function AgentOwnerWallet({
                     <div>
                       <div style={{ color: colors.muted }}>{t.walletBalance}</div>
                       <div style={{ color: colors.text, fontWeight: 600 }}>
-                        {fmtCredits(policy.balance)}
+                        {formatCreditBalance(policy.balance, policy.balance_micros)}
                       </div>
                     </div>
                     <div>
