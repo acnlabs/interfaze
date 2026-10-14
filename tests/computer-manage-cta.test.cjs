@@ -57,6 +57,7 @@ test("a charged pause shows as 暂停 instead of 空闲", () => {
   );
   assert.match(panel, /paused: "暂停"/);
   assert.match(panel, /pausedAt: "暂停 \{rate\} 星币\/小时"/);
+  assert.match(panel, /runningAt: "开着 \{rate\} 星币\/小时"/);
   assert.match(panel, /computerStatusLine\(row, t\)/);
 });
 
@@ -68,6 +69,7 @@ test("a billed pause prints the hourly disk price on the status line", () => {
     files: "已有文件",
     emptyDisk: "还没有文件",
     pausedAt: "暂停 {rate} 星币/小时",
+    runningAt: "开着 {rate} 星币/小时",
   };
   assert.equal(
     computerStatusLine({ status: "paused", has_disk: true, paused_credits_per_hour: 11 }, labels),
@@ -78,8 +80,11 @@ test("a billed pause prints the hourly disk price on the status line", () => {
     "空闲 · 已有文件",
   );
   assert.equal(
-    computerStatusLine({ status: "running", has_disk: true, paused_credits_per_hour: 11 }, labels),
-    "开着 · 已有文件",
+    computerStatusLine(
+      { status: "running", has_disk: true, resume_credits_per_hour: 58, paused_credits_per_hour: 11 },
+      labels,
+    ),
+    "开着 58 星币/小时 · 已有文件",
   );
 });
 
