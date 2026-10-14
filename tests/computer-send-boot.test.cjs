@@ -162,6 +162,9 @@ test("the header screen button uses the chat place rates when the list has not l
   assert.match(panel, /row\?\.screen_credits_per_hour \?\? place\.screen_credits_per_hour/);
   assert.match(panel, /row\?\.status \?\? place\.status/);
   assert.match(panel, /row\?\.resume_credits_per_hour \?\? place\.resume_credits_per_hour/);
+  assert.match(panel, /screenAsksBeforeCharge/);
+  assert.match(panel, /screenAt: "打开电脑屏幕 · \{rate\} 星币\/小时"/);
+  assert.match(panel, /asks \? caption : null/);
 });
 
 test("opening a screen asks when it would raise the hourly rate", () => {
