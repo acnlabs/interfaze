@@ -33,3 +33,15 @@ export function formatLedgerAmount(amount: number, unit?: string | null): string
   if (unit === "micros") return formatFromMicros(Math.trunc(amount));
   return formatWholeCredits(amount);
 }
+
+/** A charge is stored as a positive number. ``direction`` says whether it left. */
+export function formatSignedCreditAmount(
+  amount: number,
+  unit?: string | null,
+  direction?: string | null,
+): string {
+  const text = formatLedgerAmount(Math.abs(amount), unit);
+  if (direction === "out" || (direction !== "in" && amount < 0)) return `-${text}`;
+  if (direction === "in" || amount > 0) return `+${text}`;
+  return text;
+}

@@ -14,7 +14,7 @@ import type {
   PlanCatalogEntry,
   PlanUsage,
 } from "../gateway";
-import { formatCreditBalance, formatLedgerAmount } from "../creditDisplay";
+import { formatCreditBalance, formatSignedCreditAmount } from "../creditDisplay";
 import type { RanchChatAccount } from "../types";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import type { RanchLocale, RanchMessages } from "./i18n";
@@ -2216,8 +2216,8 @@ export function AccountWalletPanel({
             ) : (
               <div style={{ ...card, padding: 6 }}>
                 {txs.map((tx) => {
-                  const positive = tx.amount > 0;
-                  const negative = tx.amount < 0;
+                  const inbound = tx.direction === "in" || (tx.direction !== "out" && tx.amount > 0);
+                  const outbound = tx.direction === "out" || (tx.direction !== "in" && tx.amount < 0);
                   const desc = cleanTxDescription(tx.description);
                   return (
                     <div
@@ -2237,12 +2237,12 @@ export function AccountWalletPanel({
                           height: 8,
                           borderRadius: 999,
                           flexShrink: 0,
-                          background: positive ? colors.success : negative ? colors.danger : colors.muted,
+                          background: inbound ? colors.success : outbound ? colors.danger : colors.muted,
                         }}
                       />
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>
-                          {txTypeLabel(tx.type, t)}
+                          {txTypeLabel(tx.type, t, tx.description)}
                         </span>
                         <span
                           style={{
@@ -2264,12 +2264,11 @@ export function AccountWalletPanel({
                           fontSize: 13,
                           fontWeight: 700,
                           fontVariantNumeric: "tabular-nums",
-                          color: positive ? colors.success : negative ? colors.danger : colors.text,
+                          color: inbound ? colors.success : outbound ? colors.danger : colors.text,
                           flexShrink: 0,
                         }}
                       >
-                        {positive ? "+" : ""}
-                        {formatLedgerAmount(tx.amount, tx.amount_unit)}
+                        {formatSignedCreditAmount(tx.amount, tx.amount_unit, tx.direction)}
                       </span>
                     </div>
                   );
