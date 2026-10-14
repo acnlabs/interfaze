@@ -1,4 +1,12 @@
+import { computerName } from "../computerLabel";
 import type { RanchMessages } from "./i18n";
+
+export type TxSubject = {
+  kind?: string | null;
+  title?: string | null;
+  is_default?: boolean;
+  extra_index?: number;
+};
 
 /** Human-readable label for a ledger transaction type. */
 export function txTypeLabel(
@@ -30,6 +38,34 @@ export function txTypeLabel(
     default:
       return type.replace(/_/g, " ");
   }
+}
+
+/** Chat title, or the computer's own name. Empty when the row has neither. */
+export function txSubjectLabel(
+  subject: TxSubject | null | undefined,
+  t: RanchMessages,
+  locale: "en" | "zh",
+): string {
+  if (!subject) return "";
+  if (subject.kind === "chat") {
+    const title = (subject.title || "").trim();
+    return title || t.untitledChat;
+  }
+  if (subject.kind === "computer") {
+    return computerName(!!subject.is_default, subject.extra_index ?? 0, locale);
+  }
+  return "";
+}
+
+export function txDetailLine(
+  subject: TxSubject | null | undefined,
+  createdAt: string | null | undefined,
+  t: RanchMessages,
+  locale: "en" | "zh",
+): string {
+  const name = txSubjectLabel(subject, t, locale);
+  const when = fmtTxTimeShort(createdAt);
+  return [name, when].filter(Boolean).join(" · ");
 }
 
 /** Compact timestamp for ledger rows, e.g. "8/27, 11:12 PM" / "8/27 23:12". */

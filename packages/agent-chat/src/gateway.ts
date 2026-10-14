@@ -309,6 +309,13 @@ export type MyAgentWalletTx = {
   status: string;
   description?: string | null;
   created_at?: string | null;
+  /** Which chat or computer this charge belongs to, when we know. */
+  subject?: {
+    kind?: string | null;
+    title?: string | null;
+    is_default?: boolean;
+    extra_index?: number;
+  } | null;
 };
 
 export type MyAgentWalletTxList = {

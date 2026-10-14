@@ -27,7 +27,7 @@ import {
   prefersInPanelCheckout,
   resolveInterfazeOrigin,
 } from "./interfazeHost";
-import { fmtTxTimeShort, txTypeLabel } from "./txDisplay";
+import { fmtTxTimeShort, txDetailLine, txTypeLabel } from "./txDisplay";
 
 /** Shared card container for all account panel sections. */
 const card: CSSProperties = {
@@ -2092,6 +2092,7 @@ export function AccountWalletPanel({
           client={client}
           agentId={agentWalletId}
           messages={t}
+          locale={locale}
           interfazeBaseUrl={interfazeBaseUrl}
         />
       </PanelChrome>
@@ -2254,7 +2255,7 @@ export function AccountWalletPanel({
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {fmtTxTimeShort(tx.created_at)}
+                          {txDetailLine(tx.subject, tx.created_at, t, locale)}
                         </span>
                       </span>
                       <span

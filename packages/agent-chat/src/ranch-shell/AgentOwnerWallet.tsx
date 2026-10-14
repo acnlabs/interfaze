@@ -12,9 +12,9 @@ import {
 } from "../gateway";
 import { formatCreditBalance, formatSignedCreditAmount } from "../creditDisplay";
 import { FieldHint } from "./AgentOwnerSettings";
-import type { RanchMessages } from "./i18n";
+import type { RanchLocale, RanchMessages } from "./i18n";
 import { buildWalletCheckoutUrl } from "./interfazeHost";
-import { fmtTxTimeShort, txTypeLabel } from "./txDisplay";
+import { txDetailLine, txTypeLabel } from "./txDisplay";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 import { useModalA11y } from "./useModalA11y";
 
@@ -25,6 +25,7 @@ type Props = {
   client: GatewayClient;
   agentId: string;
   messages: RanchMessages;
+  locale?: RanchLocale;
   agentPlanetBaseUrl?: string;
   interfazeBaseUrl?: string;
   busy?: boolean;
@@ -106,6 +107,7 @@ export function AgentOwnerWallet({
   client,
   agentId,
   messages: t,
+  locale = "en",
   agentPlanetBaseUrl: _agentPlanetBaseUrl = "https://agentplanet.org",
   interfazeBaseUrl,
   busy,
@@ -582,7 +584,7 @@ export function AgentOwnerWallet({
             }}
           >
             {txs.map((tx) => {
-              const when = fmtTxTimeShort(tx.created_at);
+              const detail = txDetailLine(tx.subject, tx.created_at, t, locale);
               return (
                 <li
                   key={tx.transaction_id}
@@ -610,8 +612,8 @@ export function AgentOwnerWallet({
                       {formatSignedCreditAmount(tx.amount, tx.amount_unit, tx.direction)}
                     </span>
                   </div>
-                  {when ? (
-                    <div style={{ marginTop: 4, color: colors.muted }}>{when}</div>
+                  {detail ? (
+                    <div style={{ marginTop: 4, color: colors.muted }}>{detail}</div>
                   ) : null}
                 </li>
               );
