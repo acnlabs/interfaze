@@ -5,6 +5,7 @@ import type { HopPhase, LiveHop } from "../liveHops";
 import { colors } from "./styles";
 
 export type InteractionCopy = {
+  view: string;
   empty: string;
   waiting: string;
   returned: string;
@@ -87,16 +88,26 @@ export function InteractionPanel({
   const pos = layout(ids);
   const selected = hops.find((hop) => hop.key === selectedKey) ?? null;
 
+  const viewLabel = (
+    <p data-interaction-view="" style={{ margin: "12px 16px 0", color: colors.muted, fontSize: 12 }}>
+      {copy.view}
+    </p>
+  );
+
   if (!hops.length) {
     return (
-      <p data-interaction-empty="" style={{ margin: 16, color: colors.muted, fontSize: 13 }}>
-        {copy.empty}
-      </p>
+      <div data-interaction-panel="" style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+        {viewLabel}
+        <p data-interaction-empty="" style={{ margin: 16, color: colors.muted, fontSize: 13 }}>
+          {copy.empty}
+        </p>
+      </div>
     );
   }
 
   return (
     <div data-interaction-panel="" style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+      {viewLabel}
       <svg viewBox="0 0 640 300" style={{ width: "100%", height: "auto", flex: "1 1 auto" }}>
         {hops.map((hop, index) => {
           const from = pos[hop.fromId];

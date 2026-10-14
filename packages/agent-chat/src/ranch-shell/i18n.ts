@@ -268,8 +268,9 @@ export type RanchMessages = {
   sendConfirm: string;
   /** Open the chat Canvas beside the conversation. */
   manuscript: string;
-  /** Live agent-to-agent calls in this chat. */
+  /** Right-hand window for agent interaction. The current view is the collaboration graph. */
   interaction: string;
+  interactionView: string;
   interactionEmpty: string;
   interactionWaiting: string;
   interactionReturned: string;
@@ -984,8 +985,9 @@ const en: RanchMessages = {
   screenConfirm: "Open computer screen bills {rate} credits per hour.",
   sendConfirm: "Sending starts this computer at {rate} credits per hour. Unused prepaid is returned.",
   manuscript: "Canvas",
-  interaction: "Calls",
-  interactionEmpty: "No agent calls in this chat yet.",
+  interaction: "Interaction",
+  interactionView: "Graph",
+  interactionEmpty: "No agent interactions in this chat yet.",
   interactionWaiting: "Waiting",
   interactionReturned: "Returned",
   interactionFailed: "Failed",
@@ -1749,6 +1751,7 @@ const zh: RanchMessages = {
   sendConfirm: "发送后电脑按 {rate} 星币/小时计费。不用的预扣会退回。",
   manuscript: "Canvas",
   interaction: "交互",
+  interactionView: "协作图",
   interactionEmpty: "这场还没有智能体互调。",
   interactionWaiting: "还在等",
   interactionReturned: "已返回",

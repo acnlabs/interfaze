@@ -116,7 +116,7 @@ export function WorkDock({
                 type="button"
                 role="tab"
                 aria-selected={selected}
-                title={tab.title}
+                title={tab.kind === "interaction" ? addInteractionLabel : tab.title}
                 onClick={() => onSelect(tab.id)}
                 style={{
                   border: 0,
@@ -131,7 +131,7 @@ export function WorkDock({
                   cursor: "pointer",
                 }}
               >
-                {tab.title}
+                {tab.kind === "interaction" ? addInteractionLabel : tab.title}
               </button>
               <button
                 type="button"
