@@ -6,7 +6,7 @@ import { colors } from "./styles";
 export type WorkTab = {
   id: string;
   title: string;
-  kind: "canvas" | "computer" | "talk" | "body";
+  kind: "canvas" | "computer" | "talk" | "body" | "interaction";
   blockKey?: string;
 };
 
@@ -18,10 +18,13 @@ export function WorkDock({
   closeLabel,
   addLabel,
   addCanvasLabel,
+  addInteractionLabel,
+  interactionOpen,
   computers,
   onSelect,
   onClose,
   onAddCanvas,
+  onAddInteraction,
   onOpenComputer,
   columnCloseLabel,
   onCloseColumn,
@@ -33,10 +36,13 @@ export function WorkDock({
   closeLabel: string;
   addLabel: string;
   addCanvasLabel: string;
+  addInteractionLabel: string;
+  interactionOpen: boolean;
   computers: { id: string; label: string; open: boolean }[];
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
   onAddCanvas: () => void;
+  onAddInteraction: () => void;
   onOpenComputer: (id: string, label: string) => void;
   columnCloseLabel: string;
   onCloseColumn: () => void;
@@ -192,6 +198,23 @@ export function WorkDock({
               style={menuItem}
             >
               {addCanvasLabel}
+            </button>
+            <button
+              type="button"
+              disabled={interactionOpen}
+              aria-disabled={interactionOpen}
+              onClick={() => {
+                if (interactionOpen) return;
+                setMenu(false);
+                onAddInteraction();
+              }}
+              style={{
+                ...menuItem,
+                opacity: interactionOpen ? 0.4 : 1,
+                cursor: interactionOpen ? "default" : "pointer",
+              }}
+            >
+              {addInteractionLabel}
             </button>
             {computers.map((computer) => (
               <button

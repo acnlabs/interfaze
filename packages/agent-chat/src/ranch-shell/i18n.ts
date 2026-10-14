@@ -268,6 +268,13 @@ export type RanchMessages = {
   sendConfirm: string;
   /** Open the chat Canvas beside the conversation. */
   manuscript: string;
+  /** Live agent-to-agent calls in this chat. */
+  interaction: string;
+  interactionEmpty: string;
+  interactionWaiting: string;
+  interactionReturned: string;
+  interactionFailed: string;
+  interactionOutside: string;
   addWindow: string;
   openWindow: string;
   pageRefRejected: string;
@@ -977,6 +984,12 @@ const en: RanchMessages = {
   screenConfirm: "Open computer screen bills {rate} credits per hour.",
   sendConfirm: "Sending starts this computer at {rate} credits per hour. Unused prepaid is returned.",
   manuscript: "Canvas",
+  interaction: "Calls",
+  interactionEmpty: "No agent calls in this chat yet.",
+  interactionWaiting: "Waiting",
+  interactionReturned: "Returned",
+  interactionFailed: "Failed",
+  interactionOutside: "Not in this chat",
   addWindow: "Add a window",
   openWindow: "Open window",
   pageRefRejected: "That block is not on the Canvas, so the message was not sent.",
@@ -1735,6 +1748,12 @@ const zh: RanchMessages = {
   screenConfirm: "打开电脑屏幕按 {rate} 星币/小时计费。",
   sendConfirm: "发送后电脑按 {rate} 星币/小时计费。不用的预扣会退回。",
   manuscript: "Canvas",
+  interaction: "交互",
+  interactionEmpty: "这场还没有智能体互调。",
+  interactionWaiting: "还在等",
+  interactionReturned: "已返回",
+  interactionFailed: "失败",
+  interactionOutside: "不在本会话",
   addWindow: "添加窗口",
   openWindow: "打开窗口",
   pageRefRejected: "这块不在 Canvas 上，这句话没有发出去。",
