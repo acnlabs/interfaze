@@ -572,6 +572,14 @@ function fillTemplate(
   return out;
 }
 
+function officialHostHint(book: string, keyGeo: string, t: RanchMessages): string {
+  const cn = keyGeo.trim().toLowerCase() === "cn";
+  return fillTemplate(t.myAgentsOfficialHostHint, {
+    official: officialProviderLabel(book, t),
+    cnLimit: cn ? t.myAgentsOfficialHostCnLimit : "",
+  });
+}
+
 function officialProviderLabel(book: string, t: RanchMessages): string {
   const key = book.trim().toLowerCase();
   const vendor =
@@ -2363,7 +2371,7 @@ export function AgentOwnerSettings({
                 lineHeight: 1.45,
               }}
             >
-              {t.myAgentsOfficialHostHint}
+              {officialHostHint(priceBookSource, officialKeyGeo, t)}
             </p>
           ) : openRouterByoSelected ? (
             <p

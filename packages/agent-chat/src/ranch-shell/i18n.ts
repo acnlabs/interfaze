@@ -484,6 +484,7 @@ export type RanchMessages = {
   myAgentsProviderOfficialNamed: string;
   myAgentsProviderOpenRouter: string;
   myAgentsOfficialHostHint: string;
+  myAgentsOfficialHostCnLimit: string;
   myAgentsNeedStoreKey: string;
   myAgentsOpenRouterRuntimeRequired: string;
   myAgentsBuyStoreKey: string;
@@ -1222,7 +1223,9 @@ const en: RanchMessages = {
   myAgentsProviderOfficialNamed: "Official · ${name}",
   myAgentsProviderOpenRouter: "OpenRouter",
   myAgentsOfficialHostHint:
-    "Official hops use Interfaze’s Host OpenRouter key. Quotes are published Catalog, not Store sync. This Host’s CN-billed key cannot complete GPT, Claude, or Gemini. The machine default stays on the agent’s own key.",
+    "${official} uses Interfaze’s key. ${cnLimit}The machine default stays on the agent’s own key.",
+  myAgentsOfficialHostCnLimit:
+    "This China card cannot run GPT, Claude, or Gemini. ",
   myAgentsNeedStoreKey:
     "OpenRouter needs a key on this agent. Host cannot see the key — we only read the heartbeat model. If it doesn’t have one yet, buy Store credits, write the key into the runtime, then Refresh status.",
   myAgentsOpenRouterRuntimeRequired:
@@ -1983,7 +1986,8 @@ const zh: RanchMessages = {
   myAgentsProviderOfficialNamed: "官方 · ${name}",
   myAgentsProviderOpenRouter: "OpenRouter",
   myAgentsOfficialHostHint:
-    "官方跳走 Interfaze 持钥，报价是对外 Catalog，不是 Store 同步价。本 Host 国内卡账户打不了 GPT / Claude / Gemini。机器默认型号仍在智能体自持钥上。",
+    "「${official}」用的是 Interfaze 的钥匙。${cnLimit}机器上的默认型号仍用智能体自己的钥匙。",
+  myAgentsOfficialHostCnLimit: "这张国内卡打不了 GPT、Claude、Gemini。",
   myAgentsNeedStoreKey:
     "OpenRouter 需要这只智能体自己的钥匙。Host 看不见钥匙，只认心跳型号。还没有的话，去 Store 买额度、写入运行环境，再点「刷新状态」。",
   myAgentsOpenRouterRuntimeRequired:
