@@ -572,6 +572,20 @@ function fillTemplate(
   return out;
 }
 
+function officialProviderLabel(book: string, t: RanchMessages): string {
+  const key = book.trim().toLowerCase();
+  const vendor =
+    key === "tokenplus"
+      ? "TokenPlus"
+      : key === "siliconflow"
+        ? "SiliconFlow"
+        : key === "openrouter"
+          ? "OpenRouter"
+          : "";
+  if (!vendor) return t.myAgentsProviderOfficialPlain;
+  return fillTemplate(t.myAgentsProviderOfficialNamed, { name: vendor });
+}
+
 export function deliveryLabel(
   delivery: string | null | undefined,
   t: RanchMessages,
@@ -1329,7 +1343,7 @@ export function AgentOwnerSettings({
   const hasBareModels = supportedModels.some((id) => !modelVendorId(id));
   const providerOptions: Array<{ id: string; label: string }> = [
     ...(hostReady
-      ? [{ id: OFFICIAL_OPENROUTER, label: t.myAgentsProviderOfficialOpenRouter }]
+      ? [{ id: OFFICIAL_OPENROUTER, label: officialProviderLabel(priceBookSource, t) }]
       : []),
     ...byoVendors.map((id) => ({ id, label: id })),
     ...(hasBareModels ? [{ id: OTHER_VENDOR, label: t.myAgentsProviderOther }] : []),
@@ -2268,7 +2282,12 @@ export function AgentOwnerSettings({
             }}
           >
             {t.myAgentsProviderLabel}
-            <FieldHint label={t.fieldHintLabel} text={t.myAgentsProviderHint} />
+            <FieldHint
+              label={t.fieldHintLabel}
+              text={fillTemplate(t.myAgentsProviderHint, {
+                official: officialProviderLabel(priceBookSource, t),
+              })}
+            />
             <button
               type="button"
               onClick={refreshRuntimeStatus}
