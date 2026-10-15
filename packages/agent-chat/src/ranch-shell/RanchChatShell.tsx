@@ -2896,7 +2896,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setConfirmDialog(null);
       closeAccountSurfaces();
       setScreenComputer({ id, label });
-      setDockTabs((prev) => [...prev, { id: tabId, kind: "computer", title: label }]);
+      const title =
+        billed == null
+          ? label
+          : t.screenDock.replace("{label}", label).replace("{rate}", String(billed));
+      setDockTabs((prev) => [...prev, { id: tabId, kind: "computer", title }]);
       setActiveDockId(tabId);
     };
     if (
