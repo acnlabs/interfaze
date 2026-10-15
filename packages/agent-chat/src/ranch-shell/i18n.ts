@@ -505,7 +505,12 @@ export type RanchMessages = {
   myAgentsPricingCatalogLine: string;
   myAgentsPricingSourceOpenRouter: string;
   myAgentsPricingSourceTokenHub: string;
+  myAgentsPricingSourceTokenHubHint: string;
   myAgentsPricingSourceHint: string;
+  myAgentsPricingSourceSupplier: string;
+  myAgentsPricingSourceSupplierHint: string;
+  myAgentsPricingSourceMenu: string;
+  myAgentsPricingSourceMenuHint: string;
   myAgentsPricingListingLine: string;
   myAgentsPricingKeepLine: string;
   myAgentsPricingExampleLine: string;
@@ -1253,9 +1258,15 @@ const en: RanchMessages = {
     "Markup is only the slice you keep. Changing model keeps this %.",
   myAgentsPricingCatalogLine: "Host ${in} / ${out}",
   myAgentsPricingSourceOpenRouter: "Reference · OpenRouter",
-  myAgentsPricingSourceTokenHub: "Reference · TokenHub",
+  myAgentsPricingSourceTokenHub: "Menu · TokenHub",
+  myAgentsPricingSourceTokenHubHint: "This is TokenHub’s published price list.",
   myAgentsPricingSourceHint:
     "Public list the Host Catalog row was taken from. Official settle uses published Catalog (sync × 1.15), not the list price. TokenHub still includes FX.",
+  myAgentsPricingSourceSupplier: "Supplier price · ${name}",
+  myAgentsPricingSourceSupplierHint:
+    "This is the supplier price. The list price is the supplier price × 1.15.",
+  myAgentsPricingSourceMenu: "Menu price · OpenRouter",
+  myAgentsPricingSourceMenuHint: "This is the menu price.",
   myAgentsPricingListingLine: "They pay in ${in} · out ${out} / 1M",
   myAgentsPricingKeepLine: "You keep in ${in} · out ${out} / 1M",
   myAgentsPricingExampleLine:
@@ -2016,9 +2027,14 @@ const zh: RanchMessages = {
   myAgentsPricingMarkupHint: "上浮只决定你到手的那一截。换模型保留这个比例。",
   myAgentsPricingCatalogLine: "底价 ${in} / ${out}",
   myAgentsPricingSourceOpenRouter: "参考底价 · OpenRouter",
-  myAgentsPricingSourceTokenHub: "参考底价 · TokenHub",
+  myAgentsPricingSourceTokenHub: "价目 · TokenHub",
+  myAgentsPricingSourceTokenHubHint: "这是 TokenHub 的公示价目。",
   myAgentsPricingSourceHint:
     "Host Catalog 取自该公示价目。官方结算用对外 Catalog（同步价 × 1.15），不是公示牌价。TokenHub 仍含汇率。",
+  myAgentsPricingSourceSupplier: "进货价 · ${name}",
+  myAgentsPricingSourceSupplierHint: "这是进货价。标价是进货价 × 1.15。",
+  myAgentsPricingSourceMenu: "价目价 · OpenRouter",
+  myAgentsPricingSourceMenuHint: "这是价目价。",
   myAgentsPricingListingLine: "对方实付 入 ${in} · 出 ${out} / 百万",
   myAgentsPricingKeepLine: "你到手 入 ${in} · 出 ${out} / 百万",
   myAgentsPricingExampleLine:
