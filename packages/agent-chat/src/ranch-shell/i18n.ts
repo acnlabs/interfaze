@@ -478,6 +478,8 @@ export type RanchMessages = {
   myAgentsProviderAgent: string;
   myAgentsProviderOther: string;
   myAgentsProviderOfficialOpenRouter: string;
+  myAgentsProviderOfficialPlain: string;
+  myAgentsProviderOfficialNamed: string;
   myAgentsProviderOpenRouter: string;
   myAgentsOfficialHostHint: string;
   myAgentsNeedStoreKey: string;
@@ -1206,13 +1208,15 @@ const en: RanchMessages = {
     "Chat picks a model. Official · OpenRouter is Interfaze’s key. OpenRouter here is a Store key on the agent.",
   myAgentsProviderLabel: "Provider",
   myAgentsProviderHint:
-    "Official · OpenRouter is Interfaze’s Host-held key (this Host’s shelf). OpenRouter is a Store/BYO key on the agent. Chat still picks a model only — path is inferred. BYO vendors follow the heartbeat.",
+    "${official} is Interfaze’s Host-held key (this Host’s shelf). OpenRouter is a Store/BYO key on the agent. Chat still picks a model only — path is inferred. BYO vendors follow the heartbeat.",
   myAgentsProviderByo: "Mine",
   myAgentsProviderOfficial: "Official · OpenRouter",
   myAgentsProviderMine: "Mine",
   myAgentsProviderAgent: "This agent",
   myAgentsProviderOther: "Other",
   myAgentsProviderOfficialOpenRouter: "Official · OpenRouter",
+  myAgentsProviderOfficialPlain: "Official",
+  myAgentsProviderOfficialNamed: "Official · ${name}",
   myAgentsProviderOpenRouter: "OpenRouter",
   myAgentsOfficialHostHint:
     "Official hops use Interfaze’s Host OpenRouter key. Quotes are published Catalog, not Store sync. This Host’s CN-billed key cannot complete GPT, Claude, or Gemini. The machine default stays on the agent’s own key.",
@@ -1964,13 +1968,15 @@ const zh: RanchMessages = {
     "聊天只选模型。「官方 · OpenRouter」是 Interfaze 持钥。这里的 OpenRouter 是写在智能体上的 Store 钥匙。",
   myAgentsProviderLabel: "供应商",
   myAgentsProviderHint:
-    "「官方 · OpenRouter」是 Interfaze 持钥、本 Host 货架。「OpenRouter」是写在智能体上的 Store/自持钥匙。聊天只选模型，路径由挂牌推断。自持厂家跟心跳走。",
+    "「${official}」是 Interfaze 持钥、本 Host 货架。「OpenRouter」是写在智能体上的 Store/自持钥匙。聊天只选模型，路径由挂牌推断。自持厂家跟心跳走。",
   myAgentsProviderByo: "我的",
   myAgentsProviderOfficial: "官方 · OpenRouter",
   myAgentsProviderMine: "我的",
   myAgentsProviderAgent: "本智能体",
   myAgentsProviderOther: "其他",
   myAgentsProviderOfficialOpenRouter: "官方 · OpenRouter",
+  myAgentsProviderOfficialPlain: "官方",
+  myAgentsProviderOfficialNamed: "官方 · ${name}",
   myAgentsProviderOpenRouter: "OpenRouter",
   myAgentsOfficialHostHint:
     "官方跳走 Interfaze 持钥，报价是对外 Catalog，不是 Store 同步价。本 Host 国内卡账户打不了 GPT / Claude / Gemini。机器默认型号仍在智能体自持钥上。",
