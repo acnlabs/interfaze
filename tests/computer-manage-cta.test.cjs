@@ -182,3 +182,21 @@ test("every screen path asks in the shell before the hourly bill starts", () => 
   assert.match(panel, /onOpenScreen\(row\.computer_id, label, row\.screen_credits_per_hour/);
   assert.doesNotMatch(panel, /kind: "screen"/);
 });
+
+test("an open billed screen prints the hourly rate on the dock tab", () => {
+  const shell = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ranch-shell/RanchChatShell.tsx"),
+    "utf8",
+  );
+  const i18n = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ranch-shell/i18n.ts"),
+    "utf8",
+  );
+  assert.match(i18n, /screenDock: "\{label\} · \{rate\} 星币\/小时"/);
+  assert.match(i18n, /screenDock: "\{label\} · \{rate\}\/hr"/);
+  assert.match(
+    shell,
+    /t\.screenDock\.replace\("\{label\}", label\)\.replace\("\{rate\}", String\(billed\)\)/,
+  );
+  assert.match(shell, /kind: "computer", title \}/);
+});
