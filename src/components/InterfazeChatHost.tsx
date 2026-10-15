@@ -250,6 +250,7 @@ function CnChatHost() {
       mode="full"
       open
       gatewayBaseUrl={gatewayBaseUrl}
+      attachmentDownloadProxy="/api/attachments/download"
       getAccessToken={tokenGetter}
       directoryAgents={directoryAgents}
       allowGroupChat
@@ -439,6 +440,7 @@ function GlobalChatHost() {
       mode="full"
       open
       gatewayBaseUrl={gatewayBaseUrl}
+      attachmentDownloadProxy="/api/attachments/download"
       getAccessToken={tokenGetter}
       directoryAgents={directoryAgents}
       allowGroupChat

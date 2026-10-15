@@ -36,6 +36,7 @@ import { ChatComputerControl } from "../ChatComputerControl";
 import { ComputerManagePanel } from "../ComputerManagePanel";
 import { ComputerScreenPanel } from "../ComputerScreenPanel";
 import { MailboxThumbs } from "../MailboxThumbs";
+import { anchorAttachment } from "../anchorAttachment";
 import { HistoryFilesPanel } from "../HistoryFilesPanel";
 import { mailboxIdsFromAttachments, parseMessageAttachments } from "../mailbox";
 import { calleesFromMetadata, decideFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, planFromMetadata, proposeGroupFromMetadata, proposeTaskFromMetadata, type MessageDecide, type MessagePlan, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
@@ -3294,22 +3295,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
     return null;
   }, []);
 
-  const scrollToMailbox = useCallback(
-    (mailboxId: string, msgs: ChatMessage[]) => {
-      const mid = messageIdForMailbox(msgs, mailboxId);
-      if (mid) scrollToMessage(mid);
-    },
-    [messageIdForMailbox, scrollToMessage],
-  );
-
   const loadOlderUntilMailbox = useCallback(
-    async (chatId: string, mailboxId: string, current: ChatMessage[]) => {
+    async (chatId: string, mailboxId: string, current: ChatMessage[], signal: AbortSignal) => {
       let msgs = current;
       for (let i = 0; i < 6; i++) {
+        if (signal.aborted) return msgs;
         if (messageIdForMailbox(msgs, mailboxId)) return msgs;
         const oldest = msgs.find((m) => !String(m.message_id).startsWith(LOCAL_TOPIC_START_PREFIX));
         if (!oldest) break;
-        const older = await client.listMessages(chatId, { before: oldest.message_id, limit: 50 });
+        const older = await client.listMessages(chatId, { before: oldest.message_id, limit: 50, signal, diagnosticPage: i + 1 });
+        if (signal.aborted) return msgs;
         if (older.length === 0) break;
         const seen = new Set(msgs.map((m) => m.message_id));
         const prepend = older.filter((m) => !seen.has(m.message_id));
@@ -3326,21 +3321,39 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const mailboxId = pendingMailboxRef.current;
     if (!mailboxId || !active?.chat_id || messages.length === 0) return;
     if (messageIdForMailbox(messages, mailboxId)) {
-      pendingMailboxRef.current = null;
-      const timer = window.setTimeout(() => scrollToMailbox(mailboxId, messages), 80);
-      return () => window.clearTimeout(timer);
+      const chatId = active.chat_id;
+      const list = listRef.current;
+      if (!list) return;
+      return anchorAttachment(list, mailboxId, result => {
+        if (activeChatIdRef.current !== chatId || pendingMailboxRef.current !== mailboxId) return;
+        pendingMailboxRef.current = null;
+        if (result === "timeout") setError(t.messagesLoadFailed);
+      });
     }
     let cancelled = false;
     const chatId = active.chat_id;
+    const controller = new AbortController();
     void (async () => {
-      const next = await loadOlderUntilMailbox(chatId, mailboxId, messages);
-      if (cancelled) return;
-      pendingMailboxRef.current = null;
-      setMessages((prev) => mergeServerMessagesWithLocalTopicMarkers(next, prev));
-      window.setTimeout(() => scrollToMailbox(mailboxId, next), 80);
+      try {
+        const next = await loadOlderUntilMailbox(chatId, mailboxId, messages, controller.signal);
+        if (cancelled || activeChatIdRef.current !== chatId) return;
+        if (!messageIdForMailbox(next, mailboxId)) {
+          pendingMailboxRef.current = null;
+          setError(t.attachmentUnavailable);
+          return;
+        }
+        setMessages((prev) => mergeServerMessagesWithLocalTopicMarkers(next, prev));
+        // Keep the target pending. The next effect runs after these messages
+        // commit to the DOM and owns scrolling and clearing the target.
+      } catch {
+        if (cancelled || activeChatIdRef.current !== chatId) return;
+        pendingMailboxRef.current = null;
+        setError(t.messagesLoadFailed);
+      }
     })();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [
     messages,
@@ -3348,7 +3361,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     showMembersPanel,
     loadOlderUntilMailbox,
     messageIdForMailbox,
-    scrollToMailbox,
+    t.attachmentUnavailable,
+    t.messagesLoadFailed,
   ]);
 
   const reloadMessages = useCallback(
@@ -3827,6 +3841,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   ]);
 
   useEffect(() => {
+    if (pendingMailboxRef.current) return;
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [messages, view, replySlot]);
 
@@ -6612,6 +6627,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     <div
                       data-message-id={m.message_id}
                       style={{
+                        minWidth: 0,
                         alignSelf: isUser ? "flex-end" : "flex-start",
                         maxWidth: "min(85%, 36rem)",
                         display: "flex",
@@ -6639,6 +6655,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       <div
                         style={{
                           background: isUser ? colors.userBubble : colors.agentBubble,
+                          minWidth: 0,
+                          maxWidth: "100%",
+                          boxSizing: "border-box",
+                          overflowWrap: "anywhere",
                           borderRadius: isUser ? "12px 12px 4px 12px" : "12px 12px 12px 4px",
                           padding: "8px 12px",
                           fontSize: 14,
@@ -6655,6 +6675,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           showListedPrice={attachmentListedPriceVisible(m.metadata?.piece)}
                           chargedMailboxIds={attachmentBilledRefs(m.metadata?.piece)}
                           loadFailedLabel={t.attachmentLoadFailed}
+                          loadingLabel={t.attachmentLoading}
+                          preparingDownloadLabel={t.attachmentPreparingDownload}
+                          downloadLabel={t.attachmentDownload}
+                          downloadFailedLabel={t.attachmentDownloadFailed}
+                          attachmentDownloadProxy={props.attachmentDownloadProxy}
+                          availableUntilLabel={t.attachmentAvailableUntil}
                           retryLabel={t.retry}
                           unavailableLabel={t.attachmentUnavailable}
                           accessDeniedLabel={t.attachmentAccessDenied}
@@ -8085,8 +8111,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             gatewayBaseUrl={gatewayBaseUrl}
                             getAccessToken={getAccessToken}
                             emptyLabel={t.historyFilesEmpty}
+                            failedLabel={t.historyFilesLoadFailed}
+                            retryLabel={t.retry}
                             loadingLabel={t.loading}
                             onPick={(chat, mailboxId) => {
+                              setError(null);
                               pendingMailboxRef.current = mailboxId;
                               setShowMembersPanel(false);
                               if (active.chat_id !== chat.chat_id) {

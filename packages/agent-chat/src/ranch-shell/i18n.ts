@@ -628,6 +628,12 @@ export type RanchMessages = {
   walletAmountInvalid: string;
   walletAmountExceeds: string;
   attachmentLoadFailed: string;
+  attachmentLoading: string;
+  historyFilesLoadFailed: string;
+  attachmentPreparingDownload: string;
+  attachmentDownload: string;
+  attachmentDownloadFailed: string;
+  attachmentAvailableUntil: string;
   attachmentUnavailable: string;
   attachmentAccessDenied: string;
   walletTopupDialogTitle: string;
@@ -1379,6 +1385,12 @@ const en: RanchMessages = {
   walletAmountInvalid: "Enter a whole number between 1 and 100,000,000.",
   walletAmountExceeds: "Exceeds available balance.",
   attachmentLoadFailed: "Attachment failed to load",
+  attachmentLoading: "Loading attachment…",
+  historyFilesLoadFailed: "Could not load attachments. Please retry.",
+  attachmentPreparingDownload: "Preparing download…",
+  attachmentDownload: "Download",
+  attachmentDownloadFailed: "Download failed. Please retry.",
+  attachmentAvailableUntil: "Available until",
   attachmentUnavailable: "Attachment not found or no longer available",
   attachmentAccessDenied: "Cannot access attachment. Check your login and chat access.",
   walletTopupDialogTitle: "Top up Credits",
@@ -2111,6 +2123,12 @@ const zh: RanchMessages = {
   walletAmountInvalid: "请输入 1–100,000,000 之间的整数。",
   walletAmountExceeds: "超出可用余额。",
   attachmentLoadFailed: "附件加载失败",
+  attachmentLoading: "正在加载附件…",
+  historyFilesLoadFailed: "附件列表加载失败，请重试。",
+  attachmentPreparingDownload: "正在准备下载…",
+  attachmentDownload: "下载",
+  attachmentDownloadFailed: "下载失败，请重试。",
+  attachmentAvailableUntil: "保留至",
   attachmentUnavailable: "附件不存在或已不可用",
   attachmentAccessDenied: "无法访问附件，请检查登录状态与会话权限",
   walletTopupDialogTitle: "充值星币",

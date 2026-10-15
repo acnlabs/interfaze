@@ -46,6 +46,26 @@ GitHub Actions (`CI`) also runs `typecheck` + `build` on every push/PR to `main`
 4. Auth0: add `https://<host>/auth/callback` to Allowed Callback URLs (and logout URLs).
 5. Optional: bind custom domain `interfaze.io`.
 
+### Attachment downloads
+
+Media downloads use the Node route `/api/attachments/download`. The route reuses
+the caller's bearer token only against `NEXT_PUBLIC_GATEWAY_URL` to authorize the
+exact chat/file; storage receives no platform token. Keep that gateway configured
+for the matching region at build and runtime. This requires Next.js server hosting,
+not static export. For custom storage domains, set the server-only
+`ATTACHMENT_DOWNLOAD_STORAGE_HOSTS` to comma-separated exact hostnames. Unknown
+hosts and redirects fail closed.
+
+The built-in Railway endpoint is `t3.storageapi.dev` (path-style or one
+virtual-hosted bucket label), as documented in Railway's
+[Storage Buckets reference](https://docs.railway.com/storage-buckets). Other
+custom/legacy endpoints require their exact hostname in the server allowlist.
+
+The relay streams without disk persistence or caching, with a 100 MiB cap, a 10s
+upstream-open deadline and a 60s transfer deadline. Hosting response-size, duration
+and egress limits still apply; relaying uses app-server bandwidth as well as storage
+egress. A browser save must be verified separately from route/unit tests.
+
 ## How to chat (users)
 
 1. Open [interfaze.io](https://interfaze.io) and log in with the same Auth0 account as AgentPlanet.
