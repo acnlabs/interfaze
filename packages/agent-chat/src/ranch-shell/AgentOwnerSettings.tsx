@@ -241,6 +241,8 @@ function shortModelLabel(modelId: string): string {
 type CatalogPair = { in: number; out: number; source?: string; currency?: string };
 
 const TOKENHUB_PRICE_URL = "https://cloud.tencent.com/document/product/1823/130055";
+const TOKENPLUS_PRICE_URL = "https://www.tokenplus.cn/models";
+const SILICONFLOW_PRICE_URL = "https://www.siliconflow.cn/pricing";
 
 function catalogSourceHref(
   source: string | null | undefined,
@@ -252,6 +254,8 @@ function catalogSourceHref(
     if (parts.length === 0) return null;
     return `https://openrouter.ai/${parts.map(encodeURIComponent).join("/")}`;
   }
+  if (src === "tokenplus") return TOKENPLUS_PRICE_URL;
+  if (src === "siliconflow") return SILICONFLOW_PRICE_URL;
   if (src === "host_pack") return TOKENHUB_PRICE_URL;
   return null;
 }
@@ -580,18 +584,45 @@ function officialHostHint(book: string, keyGeo: string, t: RanchMessages): strin
   });
 }
 
-function officialProviderLabel(book: string, t: RanchMessages): string {
+function priceBookVendor(book: string): string {
   const key = book.trim().toLowerCase();
-  const vendor =
-    key === "tokenplus"
-      ? "TokenPlus"
-      : key === "siliconflow"
-        ? "SiliconFlow"
-        : key === "openrouter"
-          ? "OpenRouter"
-          : "";
+  if (key === "tokenplus") return "TokenPlus";
+  if (key === "siliconflow") return "SiliconFlow";
+  if (key === "openrouter") return "OpenRouter";
+  return "";
+}
+
+function officialProviderLabel(book: string, t: RanchMessages): string {
+  const vendor = priceBookVendor(book);
   if (!vendor) return t.myAgentsProviderOfficialPlain;
   return fillTemplate(t.myAgentsProviderOfficialNamed, { name: vendor });
+}
+
+function pricingSourcePresentation(
+  source: string,
+  official: boolean,
+  t: RanchMessages,
+): { label: string; hint: string } | null {
+  const src = source.trim().toLowerCase();
+  if (src === "host_pack") {
+    return {
+      label: t.myAgentsPricingSourceTokenHub,
+      hint: t.myAgentsPricingSourceTokenHubHint,
+    };
+  }
+  if (!official) {
+    if (src !== "openrouter") return null;
+    return {
+      label: t.myAgentsPricingSourceMenu,
+      hint: t.myAgentsPricingSourceMenuHint,
+    };
+  }
+  const vendor = priceBookVendor(src);
+  if (!vendor) return null;
+  return {
+    label: fillTemplate(t.myAgentsPricingSourceSupplier, { name: vendor }),
+    hint: t.myAgentsPricingSourceSupplierHint,
+  };
 }
 
 export function deliveryLabel(
@@ -1404,7 +1435,7 @@ export function AgentOwnerSettings({
       ? {
           in: officialRow.in,
           out: officialRow.out,
-          source: officialRow.source || "openrouter",
+          source: officialRow.source || priceBookSource.trim().toLowerCase(),
           currency: officialRow.currency,
         }
       : null
@@ -1423,15 +1454,25 @@ export function AgentOwnerSettings({
   const catalogIn = selectedCatalog?.in ?? null;
   const catalogOut = selectedCatalog?.out ?? null;
   const catalogSource = (() => {
+    if (openRouterByoSelected) return "openrouter";
     const fromRow = (selectedCatalog?.source || "").trim().toLowerCase();
     if (fromRow) return fromRow;
-    if (officialSelected || openRouterByoSelected) return "openrouter";
+    if (officialSelected) return priceBookSource.trim().toLowerCase();
     if (modelVendorId(displayedModelId).toLowerCase() === "tencenttokenplan") {
       return "host_pack";
     }
     return "";
   })();
-  const catalogSourceUrl = catalogSourceHref(catalogSource, displayedModelId);
+  const priceLinkSource = officialSelected
+    ? priceBookSource.trim().toLowerCase() || catalogSource
+    : catalogSource;
+  const priceSource =
+    officialSelected && !priceBookSource.trim()
+      ? null
+      : pricingSourcePresentation(priceLinkSource, officialSelected, t);
+  const catalogSourceUrl = priceSource
+    ? catalogSourceHref(priceLinkSource, displayedModelId)
+    : null;
   const catalogLoading =
     officialSelected
       ? officialCatalogLoading
@@ -2505,11 +2546,13 @@ export function AgentOwnerSettings({
                     textDecoration: "underline",
                   }}
                 >
-                  {catalogSource === "openrouter"
-                    ? t.myAgentsPricingSourceOpenRouter
-                    : t.myAgentsPricingSourceTokenHub}
+                  {priceSource?.label}
                 </a>
-                <FieldHint label={t.fieldHintLabel} text={t.myAgentsPricingSourceHint} align="right" />
+                <FieldHint
+                  label={t.fieldHintLabel}
+                  text={priceSource?.hint || ""}
+                  align="right"
+                />
               </span>
             ) : null}
           </div>
