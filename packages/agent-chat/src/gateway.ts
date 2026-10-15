@@ -577,7 +577,7 @@ export type GatewayClient = {
   >;
   listMessages: (
     chatId: string,
-    opts?: { before?: string; limit?: number },
+    opts?: { before?: string; limit?: number; signal?: AbortSignal; diagnosticPage?: number },
   ) => Promise<ChatMessage[]>;
   listParticipants: (chatId: string) => Promise<ChatParticipant[]>;
   sendMessage: (
@@ -855,8 +855,20 @@ export function createGatewayClient(
   gatewayBaseUrl: string,
   getAccessToken: () => Promise<string | null>,
 ): GatewayClient {
-  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  let historyRequestNumber = 0;
+  async function request<T>(path: string, init: RequestInit = {}, page?: number): Promise<T> {
+    const match = (!init.method || init.method.toUpperCase() === "GET")
+      ? /^\/api\/chats\/[^/?]+\/(messages|files)(?:\?|$)/.exec(path) : null;
+    const kind = match?.[1];
+    const number = kind ? ++historyRequestNumber : 0;
+    const params = new URLSearchParams(path.split("?")[1] || "");
+    const started = Date.now();
+    let phase = "token";
+    let httpStatus: number | null = null;
+    try {
+    if (init.signal?.aborted) throw new DOMException("Request cancelled", "AbortError");
     const token = await getAccessToken();
+    if (init.signal?.aborted) throw new DOMException("Request cancelled", "AbortError");
     if (!token) {
       throw new ChatGatewayError(401, "not_authenticated", "Not authenticated");
     }
@@ -866,10 +878,43 @@ export function createGatewayClient(
       Authorization: `Bearer ${token}`,
     };
 
+    phase = "request";
     const res = await fetch(joinUrl(gatewayBaseUrl, path), { ...init, headers });
+    httpStatus = res.status ?? null;
+    phase = "response";
     if (!res.ok) throw await parseError(res);
-    if (res.status === 204) return undefined as T;
-    return (await res.json()) as T;
+    if (res.status === 204) {
+      if (kind) { phase = "response_parse"; throw new SyntaxError("Missing list response"); }
+      return undefined as T;
+    }
+    phase = "response_parse";
+    const body = await res.json();
+    if (kind === "messages" && !Array.isArray(body)) throw new SyntaxError("Invalid message list response");
+    if (kind === "files" && (!body || typeof body !== "object" || !Array.isArray(body.files))) {
+      throw new SyntaxError("Invalid attachment list response");
+    }
+    return body as T;
+    } catch (error) {
+      if (kind && process.env.NODE_ENV === "development" && !init.signal?.aborted) {
+        const name = error instanceof Error ? error.name : "UnknownError";
+        const errorType = ["Error", "TypeError", "SyntaxError", "AbortError", "ChatGatewayError"].includes(name) ? name : "OtherError";
+        // Only fixed classifications and numeric/boolean request metadata.
+        // Never include paths, cursors, tokens, response bodies or exception messages.
+        const limit = Number(params.get("limit") || 50);
+        console.warn("[history-request] " + JSON.stringify({
+          kind, requestNumber: number, phase, httpStatus, errorType,
+          page: Number.isInteger(page) && page! > 0 && page! <= 6 ? page : null,
+          hasCursor: params.has("before"),
+          limit: Number.isFinite(limit) && limit >= 1 && limit <= 100 ? limit : null,
+          durationMs: Date.now() - started,
+          reason: phase === "token" ? "token_unavailable"
+            : httpStatus != null && phase === "response" ? "http_error"
+            : phase === "response_parse" ? errorType === "SyntaxError" ? "invalid_response" : "body_read_failed"
+            : "transport_or_policy",
+        }));
+      }
+      throw error;
+    }
   }
 
   const createDirect = (agentId: string, opts?: { context?: string | null }) =>
@@ -1431,6 +1476,8 @@ export function createGatewayClient(
       if (opts?.before) params.set("before", opts.before);
       const rows = await request<ChatMessage[]>(
         `/api/chats/${encodeURIComponent(chatId)}/messages?${params.toString()}`,
+        { signal: opts?.signal },
+        opts?.diagnosticPage,
       );
       return rows.map((row) => normalizeChatMessage(row));
     },

@@ -40,6 +40,7 @@ type FileBlob = {
   listedCredits: number;
   retainUntil?: string | null;
   remote?: boolean;
+  byteSize?: number;
 };
 
 function retainLabel(iso: string | null | undefined): string | null {
@@ -54,10 +55,7 @@ function ListedTag({ n }: { n: number }) {
   return (
     <div
       style={{
-        position: "absolute",
-        top: 8,
-        left: 8,
-        zIndex: 1,
+        flexShrink: 0,
         padding: "2px 8px",
         borderRadius: 999,
         background: "rgba(0,0,0,0.72)",
@@ -79,6 +77,12 @@ export function MailboxThumbs({
   getAccessToken,
   showListedPrice = false,
   chargedMailboxIds = null,
+  loadingLabel = "Loading attachment…",
+  preparingDownloadLabel = "Preparing download…",
+  downloadLabel = "Download",
+  downloadFailedLabel = "Download failed. Please retry.",
+  attachmentDownloadProxy,
+  availableUntilLabel = "Available until",
   loadFailedLabel = "Attachment failed to load",
   retryLabel = "Retry",
   unavailableLabel = "Attachment not found or no longer available",
@@ -92,6 +96,12 @@ export function MailboxThumbs({
   showListedPrice?: boolean;
   /** Files this settled charge covered. Null keeps the older all-files behavior. */
   chargedMailboxIds?: string[] | null;
+  loadingLabel?: string;
+  preparingDownloadLabel?: string;
+  downloadLabel?: string;
+  downloadFailedLabel?: string;
+  attachmentDownloadProxy?: string;
+  availableUntilLabel?: string;
   loadFailedLabel?: string;
   retryLabel?: string;
   unavailableLabel?: string;
@@ -156,6 +166,7 @@ export function MailboxThumbs({
               filename?: unknown;
               listed_credits?: unknown;
               retain_until?: unknown;
+              byte_size?: unknown;
             };
             if (cancelled) return;
             const remoteUrl = typeof body.url === "string" ? body.url : "";
@@ -174,6 +185,7 @@ export function MailboxThumbs({
                   ? Math.min(100_000, Math.max(0, Math.floor(body.listed_credits)))
                   : listedFromHeader(String(body.listed_credits ?? "")),
               retainUntil: typeof body.retain_until === "string" ? body.retain_until : null,
+              byteSize: typeof body.byte_size === "number" && Number.isFinite(body.byte_size) && body.byte_size >= 0 ? body.byte_size : undefined,
             });
             continue;
           }
@@ -185,6 +197,7 @@ export function MailboxThumbs({
           next.push({
             url,
             contentType,
+            byteSize: blob.size,
             mailboxId: id,
             name: filenameFromDisposition(
               res.headers.get("content-disposition"),
@@ -221,7 +234,8 @@ export function MailboxThumbs({
   });
   const mediaFailed = (id: string) => setFailedIds((previous) =>
     previous.includes(id) ? previous : [...previous, id]);
-  if (visible.length === 0 && failedIds.length === 0) return null;
+  const pendingIds = chatId ? ids.filter((id) => !files.some((f) => f.mailboxId === id) && !failedIds.includes(id)) : [];
+  if (visible.length === 0 && failedIds.length === 0 && pendingIds.length === 0) return null;
   return (
     <div
       style={{
@@ -232,7 +246,14 @@ export function MailboxThumbs({
         maxWidth: "100%",
       }}
     >
+      {pendingIds.map((id) => (
+        <div key={`loading-${id}`} role="status" data-mailbox-id={id} data-attachment-loading="true"
+          style={{ padding: 14, border: `1px solid ${colors.border}`, borderRadius: 12, color: colors.muted, fontSize: 13 }}>
+          <span aria-hidden="true">◌ </span>{loadingLabel}
+        </div>
+      ))}
       {visible.map((f) => {
+        if (failedIds.includes(f.mailboxId)) return null;
         const playable =
           f.contentType.startsWith("video/") ||
           f.contentType.startsWith("audio/") ||
@@ -244,13 +265,19 @@ export function MailboxThumbs({
               onError={() => mediaFailed(f.mailboxId)}
               controls
               playsInline
-              style={{ maxWidth: "100%", borderRadius: 8, display: "block" }}
+              controlsList="nodownload"
+              preload="metadata"
+              aria-label={f.name}
+              style={{ width: "100%", minHeight: 160, maxHeight: 320, objectFit: "contain", background: "#0b0d12", display: "block" }}
             />
           ) : f.contentType.startsWith("audio/") ? (
             <audio
               src={f.url}
               onError={() => mediaFailed(f.mailboxId)}
               controls
+              controlsList="nodownload"
+              preload="metadata"
+              aria-label={f.name}
               style={{ width: "100%", display: "block" }}
             />
           ) : (
@@ -258,19 +285,34 @@ export function MailboxThumbs({
               src={f.url}
               onError={() => mediaFailed(f.mailboxId)}
               alt={f.name}
-              style={{ maxWidth: "100%", borderRadius: 8, display: "block" }}
+              style={{ width: "100%", minHeight: 96, maxHeight: 320, objectFit: "contain", background: "rgba(127,127,127,0.08)", display: "block" }}
             />
           );
           return (
-            <div key={f.url} style={{ position: "relative", maxWidth: "100%" }}>
+            <div key={f.url} data-mailbox-id={f.mailboxId} style={{ width: "100%", maxWidth: 480, overflow: "hidden", border: `1px solid ${colors.border}`, borderRadius: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px" }}>
+                <span title={f.name} style={{ flex: 1, minWidth: 0, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
+                {f.byteSize != null ? <span style={{ fontSize: 11, color: colors.muted, flexShrink: 0 }}>
+                  {f.byteSize < 1024 ? `${f.byteSize} B` : `${(f.byteSize / 1024).toFixed(1)} KB`}
+                </span> : null}
               {showListedPrice &&
               (chargedMailboxIds == null || chargedMailboxIds.includes(f.mailboxId)) ? (
                 <ListedTag n={f.listedCredits} />
               ) : null}
+              </div>
               {media}
+              <div style={{ padding: "0 12px" }}>
+                {f.remote ? <SignedAttachmentLink
+                  endpoint={joinUrl(gatewayBaseUrl, `/api/chats/${encodeURIComponent(chatId)}/files/${encodeURIComponent(f.mailboxId)}`)}
+                  getAccessToken={getAccessToken} name={f.name} label={downloadLabel} saveAsBlob
+                  downloadEndpoint={attachmentDownloadProxy ? `${attachmentDownloadProxy}?chat=${encodeURIComponent(chatId)}&attachment=${encodeURIComponent(f.mailboxId)}` : undefined}
+                  preparingLabel={preparingDownloadLabel} failedLabel={downloadFailedLabel}
+                  onError={() => { /* Keep a playable preview when only downloading failed. */ }}
+                /> : <a href={f.url} download={f.name} style={{ display: "inline-block", padding: "12px 0", fontSize: 13 }}>{downloadLabel}</a>}
+              </div>
               {retainLabel(f.retainUntil) ? (
-                <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
-                  {retainLabel(f.retainUntil)}
+                <div style={{ fontSize: 11, color: colors.muted, padding: "8px 12px" }}>
+                  {availableUntilLabel} {retainLabel(f.retainUntil)}
                 </div>
               ) : null}
             </div>
@@ -278,11 +320,12 @@ export function MailboxThumbs({
         }
         if (!isReadableAttachmentName(f.name, f.mailboxId)) return null;
         return (
-          <div key={f.url}>
+          <div key={f.url} data-mailbox-id={f.mailboxId} style={{ padding: "12px 14px", border: `1px solid ${colors.border}`, borderRadius: 12, overflowWrap: "anywhere" }}>
             {f.remote ? <SignedAttachmentLink
               endpoint={joinUrl(gatewayBaseUrl,
                 `/api/chats/${encodeURIComponent(chatId)}/files/${encodeURIComponent(f.mailboxId)}`)}
               getAccessToken={getAccessToken} name={f.name}
+              preparingLabel={preparingDownloadLabel}
               onError={() => mediaFailed(f.mailboxId)} /> : (
             <a
               href={f.url}
@@ -297,12 +340,19 @@ export function MailboxThumbs({
               {f.name}
             </a>
             )}
+            {f.byteSize != null ? <div style={{ marginTop: 6, fontSize: 11, color: colors.muted }}>
+              {f.byteSize < 1024 ? `${f.byteSize} B` : `${(f.byteSize / 1024).toFixed(1)} KB`}
+            </div> : null}
+            {retainLabel(f.retainUntil) ? <div style={{ marginTop: 6, fontSize: 11, color: colors.muted }}>
+              {availableUntilLabel} {retainLabel(f.retainUntil)}
+            </div> : null}
           </div>
         );
       })}
       {failedIds.map((id) => (
         <div
           key={`failed-${id}`}
+          data-mailbox-id={id}
           data-http-status={failedStatus[id] || undefined}
           style={{
             fontSize: 12,
@@ -312,6 +362,9 @@ export function MailboxThumbs({
             borderRadius: 8,
           }}
         >
+          <div style={{ marginBottom: 4, color: "inherit", overflowWrap: "anywhere" }}>
+            {files.find((f) => f.mailboxId === id)?.name || `#${ids.indexOf(id) + 1}`}
+          </div>
           {failedStatus[id] === 404 || failedStatus[id] === 410
             ? unavailableLabel
             : failedStatus[id] === 401 || failedStatus[id] === 403
@@ -321,7 +374,7 @@ export function MailboxThumbs({
       ))}
       {failedIds.length > 0 ? (
         <button type="button" onClick={() => setRetryCount((n) => n + 1)}
-          style={{ alignSelf: "flex-start", color: "inherit", cursor: "pointer" }}>
+          style={{ alignSelf: "flex-start", color: "inherit", cursor: "pointer", minHeight: 44, padding: "8px 14px", borderRadius: 8, border: `1px solid ${colors.border}`, background: "transparent" }}>
           {retryLabel}
         </button>
       ) : null}
