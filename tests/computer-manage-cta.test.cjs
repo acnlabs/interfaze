@@ -183,6 +183,27 @@ test("every screen path asks in the shell before the hourly bill starts", () => 
   assert.doesNotMatch(panel, /kind: "screen"/);
 });
 
+test("a billed confirm button prints the hourly rate", () => {
+  const panel = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ComputerManagePanel.tsx"),
+    "utf8",
+  );
+  const shell = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ranch-shell/RanchChatShell.tsx"),
+    "utf8",
+  );
+  const i18n = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ranch-shell/i18n.ts"),
+    "utf8",
+  );
+  assert.match(panel, /withRate\(t\.pauseAt, pending\.rate\)/);
+  assert.match(panel, /withRate\(t\.resumeAt, pending\.rate\)/);
+  assert.match(i18n, /openScreenAt: "打开电脑屏幕 · \{rate\} 星币\/小时"/);
+  assert.match(i18n, /sendAt: "发送 · \{rate\} 星币\/小时"/);
+  assert.match(shell, /t\.openScreenAt\.replace\("\{rate\}", String\(billed\)\)/);
+  assert.match(shell, /t\.sendAt\.replace\("\{rate\}", String\(rate\)\)/);
+});
+
 test("an open billed screen prints the hourly rate on the dock tab", () => {
   const shell = fs.readFileSync(
     path.join(__dirname, "../packages/agent-chat/src/ranch-shell/RanchChatShell.tsx"),

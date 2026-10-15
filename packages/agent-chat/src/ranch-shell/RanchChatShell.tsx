@@ -2915,7 +2915,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     }
     setConfirmDialog({
       message: t.screenConfirm.replace("{rate}", billed == null ? "—" : String(billed)),
-      confirmLabel: t.openScreen,
+      confirmLabel:
+        billed == null ? t.openScreen : t.openScreenAt.replace("{rate}", String(billed)),
       onConfirm: openNow,
     });
   };
@@ -4543,7 +4544,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               const rate = place.resume_credits_per_hour;
               setConfirmDialog({
                 message: t.sendConfirm.replace("{rate}", rate == null ? "—" : String(rate)),
-                confirmLabel: t.send,
+                confirmLabel: rate == null ? t.send : t.sendAt.replace("{rate}", String(rate)),
                 onConfirm: () => {
                   setConfirmDialog(null);
                   void send({ ...opts, bootAdmitted: true });

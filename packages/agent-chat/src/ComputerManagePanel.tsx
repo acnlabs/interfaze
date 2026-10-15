@@ -422,7 +422,13 @@ export function ComputerManagePanel({
               ? t.extraConfirm
               : withRate(pending.kind === "pause" ? t.pauseConfirm : t.resumeConfirm, pending.rate)
           }
-          confirmLabel={pending.kind === "extra" ? t.open : pending.kind === "pause" ? t.pause : t.resume}
+          confirmLabel={
+            pending.kind === "extra"
+              ? t.open
+              : pending.kind === "pause"
+                ? withRate(t.pauseAt, pending.rate)
+                : withRate(t.resumeAt, pending.rate)
+          }
           cancelLabel={t.cancel}
           busy={busy}
           onConfirm={() => {
