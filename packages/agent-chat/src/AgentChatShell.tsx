@@ -147,6 +147,7 @@ export function AgentChatShell(props: AgentChatShellProps) {
   const [error, setError] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     message: string;
+    confirmLabel: string;
     onConfirm: () => void;
   } | null>(null);
   const [wsStatus, setWsStatus] = useState<"connecting" | "open" | "closed" | "error" | "idle">(
@@ -345,8 +346,15 @@ export function AgentChatShell(props: AgentChatShellProps) {
               const message = isAssistant
                 ? "发送后电脑按 {rate} 星币/小时计费。不用的预扣会退回。"
                 : "Sending starts this computer at {rate} credits per hour. Unused prepaid is returned.";
+              const sendAt = isAssistant ? "发送 · {rate} 星币/小时" : "Send · {rate}/hr";
               setConfirmDialog({
                 message: message.replace("{rate}", rate == null ? "—" : String(rate)),
+                confirmLabel:
+                  rate == null
+                    ? isAssistant
+                      ? "发送"
+                      : "Send"
+                    : sendAt.replace("{rate}", String(rate)),
                 onConfirm: () => {
                   setConfirmDialog(null);
                   void send({ bootAdmitted: true });
@@ -438,7 +446,7 @@ export function AgentChatShell(props: AgentChatShellProps) {
   const bootDialog = confirmDialog ? (
     <ConfirmDialog
       message={confirmDialog.message}
-      confirmLabel={isAssistant ? "发送" : "Send"}
+      confirmLabel={confirmDialog.confirmLabel}
       cancelLabel={isAssistant ? "取消" : "Cancel"}
       busy={busy}
       onConfirm={() => confirmDialog.onConfirm()}

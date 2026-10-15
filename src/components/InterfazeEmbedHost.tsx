@@ -36,6 +36,7 @@ const copy = {
   en: {
     placeholder: "Message…",
     send: "Send",
+    sendAt: "Send · {rate}/hr",
     empty: "Say something to start.",
     connecting: "Connecting…",
     missing: "This chat couldn't be opened. Please reload it from the host page.",
@@ -48,6 +49,7 @@ const copy = {
   zh: {
     placeholder: "输入消息…",
     send: "发送",
+    sendAt: "发送 · {rate} 星币/小时",
     empty: "说一句，开始这一站。",
     connecting: "正在连接…",
     missing: "这个对话暂时打不开，请从原页面重新进入。",
@@ -73,6 +75,7 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
   const [retryNonce, setRetryNonce] = useState(0);
   const [confirmDialog, setConfirmDialog] = useState<{
     message: string;
+    confirmLabel: string;
     onConfirm: () => void;
   } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -262,6 +265,8 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
             const rate = place.resume_credits_per_hour;
             setConfirmDialog({
               message: t.sendConfirm.replace("{rate}", rate == null ? "—" : String(rate)),
+              confirmLabel:
+                rate == null ? t.send : t.sendAt.replace("{rate}", String(rate)),
               onConfirm: () => {
                 setConfirmDialog(null);
                 void send({ bootAdmitted: true });
@@ -429,7 +434,7 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
       {confirmDialog ? (
         <ConfirmDialog
           message={confirmDialog.message}
-          confirmLabel={t.send}
+          confirmLabel={confirmDialog.confirmLabel}
           cancelLabel={t.cancel}
           busy={busy}
           onConfirm={() => confirmDialog.onConfirm()}

@@ -130,6 +130,8 @@ test("an embed send asks only when this bubble copies a file onto the desk", () 
   assert.match(embed, /sendAsksBeforeBoot\(place, \[\], sendNeedsDesk\(text\)\)/);
   assert.match(embed, /t\.sendConfirm\.replace/);
   assert.match(embed, /bootAdmitted: true/);
+  assert.match(embed, /sendAt: "发送 · \{rate\} 星币\/小时"/);
+  assert.match(embed, /confirmLabel:[\s\S]*t\.sendAt\.replace/);
 });
 
 test("opening a screen asks when the machine is idle or paused", () => {
@@ -194,4 +196,6 @@ test("the Labs assistant asks only when this send copies a file onto the desk", 
   assert.match(shell, /sendAsksBeforeBoot\(place, \[\], sendNeedsDesk\(text\)\)/);
   assert.match(shell, /bootAdmitted: true/);
   assert.match(shell, /发送后电脑按 \{rate\} 星币\/小时计费/);
+  assert.match(shell, /发送 · \{rate\} 星币\/小时/);
+  assert.match(shell, /confirmLabel=\{confirmDialog\.confirmLabel\}/);
 });

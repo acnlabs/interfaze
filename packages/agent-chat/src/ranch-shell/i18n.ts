@@ -168,6 +168,8 @@ export type RanchMessages = {
   planViewerLoading: string;
   planViewerEmpty: string;
   send: string;
+  /** Confirm button when send would start the hourly computer bill. */
+  sendAt: string;
   justNow: string;
   minsAgo: (n: number) => string;
   hoursAgo: (n: number) => string;
@@ -264,6 +266,8 @@ export type RanchMessages = {
   accountWallet: string;
   accountComputer: string;
   openScreen: string;
+  /** Confirm button when opening a screen would start or raise the hourly bill. */
+  openScreenAt: string;
   screenConfirm: string;
   /** Dock tab while a billed screen is open. */
   screenDock: string;
@@ -892,6 +896,7 @@ const en: RanchMessages = {
   planViewerLoading: "Loading plan…",
   planViewerEmpty: "No plan body yet.",
   send: "Send",
+  sendAt: "Send · {rate}/hr",
   justNow: "Just now",
   minsAgo: (n) => `${n}m ago`,
   hoursAgo: (n) => `${n}h ago`,
@@ -987,6 +992,7 @@ const en: RanchMessages = {
   accountWallet: "Wallet",
   accountComputer: "Manage computers",
   openScreen: "Open computer screen",
+  openScreenAt: "Open computer screen · {rate}/hr",
   screenConfirm: "Open computer screen bills {rate} credits per hour.",
   screenDock: "{label} · {rate}/hr",
   sendConfirm: "Sending starts this computer at {rate} credits per hour. Unused prepaid is returned.",
@@ -1669,6 +1675,7 @@ const zh: RanchMessages = {
   planViewerLoading: "加载计划中…",
   planViewerEmpty: "暂无计划正文。",
   send: "发送",
+  sendAt: "发送 · {rate} 星币/小时",
   justNow: "刚刚",
   minsAgo: (n) => `${n} 分钟前`,
   hoursAgo: (n) => `${n} 小时前`,
@@ -1757,6 +1764,7 @@ const zh: RanchMessages = {
   accountWallet: "钱包",
   accountComputer: "管理电脑",
   openScreen: "打开电脑屏幕",
+  openScreenAt: "打开电脑屏幕 · {rate} 星币/小时",
   screenConfirm: "打开电脑屏幕按 {rate} 星币/小时计费。",
   screenDock: "{label} · {rate} 星币/小时",
   sendConfirm: "发送后电脑按 {rate} 星币/小时计费。不用的预扣会退回。",
