@@ -88,6 +88,7 @@ import { ConnectAgentModal } from "./ConnectAgentModal";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { copyConnectPromptWithInvite } from "./connectPrompt";
 import { officialShelfAllows, officialV0SupportsModel } from "./officialV0";
+import { isCnInterfazeOrigin, resolveInterfazeOrigin } from "./interfazeHost";
 import {
   RANCH_LOCALE_OPTIONS,
   ranchMessages,
@@ -2709,7 +2710,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   } = props;
 
   const [uiLocale, setUiLocale] = useState<RanchLocale>(() => resolveRanchLocale(localeProp));
-  const t = useMemo(() => ranchMessages(uiLocale), [uiLocale]);
+  const cnSite = isCnInterfazeOrigin(resolveInterfazeOrigin(interfazeBaseUrl));
+  const t = useMemo(() => ranchMessages(uiLocale, cnSite), [uiLocale, cnSite]);
 
   useEffect(() => {
     const stored = readStoredRanchLocale();
