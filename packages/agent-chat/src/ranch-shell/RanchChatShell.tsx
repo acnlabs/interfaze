@@ -39,6 +39,7 @@ import {
   placeForDefaultComputer,
   screenAsksBeforeCharge,
   sendAsksBeforeBoot,
+  sendButtonLabel,
   sendNeedsDesk,
   type ChatComputerPlace,
   type ScreenChargeHint,
@@ -8295,11 +8296,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   disabled={busy || !draft.trim() || healthOk === false}
                   style={{ ...btnPrimary, alignSelf: "flex-end" }}
                 >
-                  {chatPlace &&
-                  sendAsksBeforeBoot(chatPlace, bootScreenIds(), sendNeedsDesk(draft)) &&
-                  chatPlace.resume_credits_per_hour != null
-                    ? t.sendAt.replace("{rate}", String(chatPlace.resume_credits_per_hour))
-                    : t.send}
+                  {sendButtonLabel(chatPlace, draft, bootScreenIds(), {
+                    send: t.send,
+                    sendAt: t.sendAt,
+                  })}
                 </button>
                 </div>
               </form>

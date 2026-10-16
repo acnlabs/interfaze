@@ -8,6 +8,7 @@ import {
   createGatewayClient,
   hourlyCreditCopy,
   sendAsksBeforeBoot,
+  sendButtonLabel,
   sendNeedsDesk,
   type ChatMessage,
 } from "@acnlabs/agent-chat";
@@ -75,6 +76,12 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
     message: string;
     confirmLabel: string;
     onConfirm: () => void;
+  } | null>(null);
+  const [chatPlace, setChatPlace] = useState<{
+    place?: string;
+    status?: string | null;
+    computer_id?: string | null;
+    resume_credits_per_hour?: number | null;
   } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const parentOriginRef = useRef<string>("");
@@ -241,6 +248,35 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
     const height = document.documentElement.scrollHeight || 480;
     postToParent({ type: EMBED_RESIZE, height }, parentOriginRef.current);
   }, [messages, error]);
+
+  useEffect(() => {
+    if (!session?.chat_id || !token) {
+      setChatPlace(null);
+      return;
+    }
+    const chatId = session.chat_id;
+    let gone = false;
+    void (async () => {
+      const res = await fetch(
+        `${gatewayBaseUrl.replace(/\/+$/, "")}/api/chats/${encodeURIComponent(chatId)}/computer`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok || gone) return;
+      setChatPlace(
+        (await res.json()) as {
+          place?: string;
+          status?: string | null;
+          computer_id?: string | null;
+          resume_credits_per_hour?: number | null;
+        },
+      );
+    })().catch(() => {
+      if (!gone) setChatPlace(null);
+    });
+    return () => {
+      gone = true;
+    };
+  }, [session?.chat_id, token, gatewayBaseUrl]);
 
   const send = async (opts?: { bootAdmitted?: boolean }) => {
     const text = draft.trim();
@@ -426,7 +462,7 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
             opacity: !session || busy || !draft.trim() ? 0.5 : 1,
           }}
         >
-          {t.send}
+          {sendButtonLabel(chatPlace, draft, [], { send: t.send, sendAt: rates.sendAt })}
         </button>
       </form>
       {confirmDialog ? (
