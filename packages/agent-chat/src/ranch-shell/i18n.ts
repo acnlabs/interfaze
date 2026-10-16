@@ -95,6 +95,7 @@ export type RanchMessages = {
   orchTaskRecruitFailed: string;
   orchTaskNeedReward: string;
   pieceHeld: (amount: number) => string;
+  pieceListed: (amount: number) => string;
   pieceCaptured: string;
   /** Composer chip: current runtime / listing model (M1). */
   composerProviderLabel: string;
@@ -839,6 +840,7 @@ const en: RanchMessages = {
   orchTaskRecruitFailed: "The job is posted and the reward is locked. Recruiting failed — you can try again.",
   orchTaskNeedReward: "This suggestion has no reward, so it can't be posted.",
   pieceHeld: (amount) => `${amount} Credits settling`,
+  pieceListed: (amount) => `${amount} Credits`,
   pieceCaptured: "Settled",
   composerProviderLabel: "Provider",
   composerModelLabel: "Model",
@@ -1636,7 +1638,8 @@ const zh: RanchMessages = {
   orchTaskAck: "知道了",
   orchTaskRecruitFailed: "单已经发出，积分已锁定。招人没成功，可以再试一次。",
   orchTaskNeedReward: "这条提议没有赏金，不能发单。",
-  pieceHeld: (amount) => `按件结算中 ${amount} Credits`,
+  pieceHeld: (amount) => `按件结算中 ${amount} 星币`,
+  pieceListed: (amount) => `${amount} 星币`,
   pieceCaptured: "已入账",
   composerProviderLabel: "供应商",
   composerModelLabel: "模型",
@@ -1817,7 +1820,7 @@ const zh: RanchMessages = {
   openWindow: "打开窗口",
   pageRefRejected: "这块不在 Canvas 上，这句话没有发出去。",
   accountBilling: "收据与发票",
-  accountWalletHint: "你本人的 Credits 余额。智能体钱包在各自智能体详情里。",
+  accountWalletHint: "你本人的星币余额。智能体钱包在各自智能体详情里。",
   accountKeys: "模型额度",
   accountKeysHint: "Store 买的模型额度。自己买 = 拿到哪都能用，不会自动写进已有机。不是智能体的 API key。",
   accountKeysLoadFailed: "无法加载模型额度。",
@@ -2073,11 +2076,11 @@ const zh: RanchMessages = {
   myAgentsSectionPieceSku: "按件",
   myAgentsPieceSkuHint:
     "每个文件进邮箱时贴猎人价签。这里只设封顶：占位按 min(价签, 封顶)。0 = 全不占。对话 token 仍另结。",
-  myAgentsPieceSkuLabel: "单文件封顶 Credits",
-  myAgentsPieceSkuLabelImage: "每张图 Credits（猎人一口价）",
-  myAgentsPieceSkuLabelVideo: "每秒 Credits（猎人一口价）",
-  myAgentsPieceSkuLabelAudio: "每条音频 Credits",
-  myAgentsPieceSkuLabelFile: "每份其他文件 Credits",
+  myAgentsPieceSkuLabel: "单文件封顶（星币）",
+  myAgentsPieceSkuLabelImage: "每张图星币（猎人一口价）",
+  myAgentsPieceSkuLabelVideo: "每秒星币（猎人一口价）",
+  myAgentsPieceSkuLabelAudio: "每条音频星币",
+  myAgentsPieceSkuLabelFile: "每份其他文件星币",
   myAgentsPieceSkuOff: "默认 100000。0 = 附件永不占钱包。货仍可进。",
   myAgentsPieceSkuNumeric: "填数字（绘图软件 / 目录没价）",
   myAgentsPieceSkuModel: "生图模型",
@@ -2095,11 +2098,11 @@ const zh: RanchMessages = {
   myAgentsPieceSkuKindVideo: "视频",
   myAgentsPieceSkuKindAudio: "音频",
   myAgentsPieceSkuKindFile: "其他文件",
-  myAgentsPieceSkuFillCredits: "填 Credits",
+  myAgentsPieceSkuFillCredits: "填星币",
   myAgentsPieceSkuMeterLabel: "计价方式",
   myAgentsPieceSkuMeterFile: "按件",
   myAgentsPieceSkuMeterSecond: "按秒",
-  myAgentsPieceSkuMeterNumeric: "你自己填每件 Credits",
+  myAgentsPieceSkuMeterNumeric: "你自己填每件星币",
   myAgentsPieceSkuMarketFile: "目录 ${usd} / 张",
   myAgentsPieceSkuMarketSecond: "目录 ${usd} / 秒",
   myAgentsSavePieceSku: "保存封顶",
@@ -2156,7 +2159,7 @@ const zh: RanchMessages = {
   myAgentsPolicyOpenHelp: "网络上能发现你的人都可以开聊。",
   myAgentsPolicyAllowlist: "仅白名单",
   myAgentsPolicyAllowlistHelp:
-    "信任的智能体直达收件箱，其他人进队列。仅限智能体，不含人类用户；也不等于免费对话或免扣 Credits。",
+    "信任的智能体直达收件箱，其他人进队列。仅限智能体，不含人类用户；也不等于免费对话或免扣星币。",
   myAgentsPolicyClosed: "已关闭",
   myAgentsPolicyClosedHelp: "拒绝入站网络消息。你作为主人仍可在 Interfaze 开聊，但别人不能随意找这个智能体。",
   myAgentsPolicyManifest: "收件箱 / 排队",
@@ -2169,7 +2172,7 @@ const zh: RanchMessages = {
   myAgentsPolicyClosedConfirmLabel: "关闭入站",
   myAgentsAllowlistTitle: "白名单",
   myAgentsAllowlistHint:
-    "ACN 上其他智能体的信任名单：在名单内→直达收件箱；不在→进队列。不管人类用户，也不代表免费对话或免扣 Credits。",
+    "ACN 上其他智能体的信任名单：在名单内→直达收件箱；不在→进队列。不管人类用户，也不代表免费对话或免扣星币。",
   myAgentsAllowlistEmpty: "白名单还是空的。",
   myAgentsAllowlistAdd: "添加",
   myAgentsAllowlistRemove: "移除",
@@ -2247,7 +2250,7 @@ const zh: RanchMessages = {
   walletTopupOk: "已充值",
   walletWithdrawOk: "已提取",
   walletFailed: "钱包操作失败。",
-  walletInsufficient: "Credits 不足，无法完成本次转账。",
+  walletInsufficient: "星币不足，无法完成本次转账。",
   walletRechargeExternal: "充值",
   walletRechargeExternalHint: "在界面内完成支付，星币直接进入这个钱包。通道费在结账时另列。",
   walletTxTitle: "最近流水",
@@ -2285,13 +2288,13 @@ const zh: RanchMessages = {
   walletLoadFailed: "无法加载此智能体的钱包。",
   spendPolicyTitle: "消费授权",
   spendPolicyHint:
-    "此智能体可在不询问你的情况下，自主花掉多少 Credits。适用于所有自主 Credits 流出。",
+    "此智能体可在不询问你的情况下，自主花掉多少星币。适用于所有自主星币流出。",
   spendPolicyEdit: "编辑",
   spendPolicySave: "保存授权",
   spendPolicySaved: "消费授权已更新",
   spendPolicyFailed: "无法更新消费授权。",
   spendPolicyLoadFailed: "无法加载消费授权。",
-  spendPolicyInvalidLimits: "请填写非负整数 Credits，某项留空表示不限。",
+  spendPolicyInvalidLimits: "请填写非负整数星币，某项留空表示不限。",
   spendAutonomyDisabled: "仅主人",
   spendAutonomyDisabledHelp: "智能体不能自主消费。",
   spendAutonomyLimited: "有限额",
@@ -2299,12 +2302,12 @@ const zh: RanchMessages = {
   spendAutonomyUnlimited: "不限额",
   spendAutonomyUnlimitedHelp: "自主消费无上限。",
   spendAutonomyUnlimitedWarn:
-    "不限额意味着智能体可不经询问花光其 Credits。除非你信任运行环境，建议用「有限额」。",
+    "不限额意味着智能体可不经询问花光其星币。除非你信任运行环境，建议用「有限额」。",
   spendPerTxLimit: "单笔上限",
   spendWindowLimit: "窗口累计上限",
   spendWindowHours: "窗口（小时）",
   spendReserveFloor: "保留余额",
-  spendReserveFloorHint: "自主消费不得使 Credits 低于此值。",
+  spendReserveFloorHint: "自主消费不得使星币低于此值。",
   spendNoCap: "不限",
   spendWindowSpent: (hours) => `近 ${hours} 小时已花`,
   spendWindowRemaining: "剩余",
@@ -2314,7 +2317,7 @@ const zh: RanchMessages = {
   spendApprovals: "审批",
   spendApprovalsTitle: "消费审批",
   spendApprovalsHint:
-    "超过消费授权额度的支出申请。批准后会立即从 Credits 扣款。",
+    "超过消费授权额度的支出申请。批准后会立即从星币扣款。",
   spendApprovalsEmpty: "暂无待审批的支出申请。",
   spendApprovalsLoadFailed: "无法加载消费审批。",
   spendApprovalsApprove: "批准",
@@ -2390,6 +2393,26 @@ const OVERSEAS_ZH: Partial<Record<keyof RanchMessages, string>> = {
   walletWithdrawDialogTitle: "提取 credit",
   walletRechargeExternalHint:
     "在界面内完成支付，credit 直接进入这个钱包。通道费在结账时另列。",
+  accountWalletHint: "你本人的 credit 余额。智能体钱包在各自智能体详情里。",
+  myAgentsPieceSkuLabel: "单文件封顶（credit）",
+  myAgentsPieceSkuLabelImage: "每张图 credits（猎人一口价）",
+  myAgentsPieceSkuLabelVideo: "每秒 credits（猎人一口价）",
+  myAgentsPieceSkuLabelAudio: "每条音频 credits",
+  myAgentsPieceSkuLabelFile: "每份其他文件 credits",
+  myAgentsPieceSkuFillCredits: "填 credit",
+  myAgentsPieceSkuMeterNumeric: "你自己填每件 credit",
+  myAgentsPolicyAllowlistHelp:
+    "信任的智能体直达收件箱，其他人进队列。仅限智能体，不含人类用户；也不等于免费对话或免扣 credit。",
+  myAgentsAllowlistHint:
+    "ACN 上其他智能体的信任名单：在名单内→直达收件箱；不在→进队列。不管人类用户，也不代表免费对话或免扣 credit。",
+  walletInsufficient: "credit 不足，无法完成本次转账。",
+  spendPolicyHint:
+    "此智能体可在不询问你的情况下，自主花掉多少 credit。适用于所有自主 credit 流出。",
+  spendPolicyInvalidLimits: "请填写非负整数 credit，某项留空表示不限。",
+  spendAutonomyUnlimitedWarn:
+    "不限额意味着智能体可不经询问花光其 credit。除非你信任运行环境，建议用「有限额」。",
+  spendReserveFloorHint: "自主消费不得使 credit 低于此值。",
+  spendApprovalsHint: "超过消费授权额度的支出申请。批准后会立即从 credit 扣款。",
 };
 
 function rewriteOverseasCredit(text: string): string {
@@ -2420,6 +2443,8 @@ function overseasCreditMessages(messages: RanchMessages): RanchMessages {
       }) as typeof value;
     }
   }
+  out.pieceHeld = (amount) => `按件结算中 ${amount} credits`;
+  out.pieceListed = (amount) => `${amount} credits`;
   return out;
 }
 

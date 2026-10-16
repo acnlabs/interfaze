@@ -7282,6 +7282,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           retryLabel={t.retry}
                           unavailableLabel={t.attachmentUnavailable}
                           accessDeniedLabel={t.attachmentAccessDenied}
+                          listedPriceLabel={t.pieceListed}
                         />
                         {!isUser
                           ? (() => {

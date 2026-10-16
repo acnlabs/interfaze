@@ -9,6 +9,7 @@ import {
   type ChatComputerPlace,
 } from "./computerSendBoot";
 import { hourlyCreditCopy } from "./hourlyCreditCopy";
+import { ranchMessages } from "./ranch-shell/i18n";
 import { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
 import { isCnInterfazeOrigin, resolveInterfazeOrigin } from "./ranch-shell/interfazeHost";
 import type {
@@ -116,6 +117,10 @@ export function AgentChatShell(props: AgentChatShellProps) {
   } = props;
 
   const isAssistant = variant === "assistant";
+  const listedPriceLabel = ranchMessages(
+    isAssistant ? "zh" : "en",
+    isCnInterfazeOrigin(resolveInterfazeOrigin()),
+  ).pieceListed;
   const allowAgentPicker = isAssistant ? false : (allowAgentPickerProp ?? true);
   const allowGroupChat = isAssistant ? false : (allowGroupChatProp ?? true);
   const showGatewayStatus = isAssistant ? false : (showGatewayStatusProp ?? true);
@@ -622,6 +627,7 @@ export function AgentChatShell(props: AgentChatShellProps) {
                         getAccessToken={getAccessToken}
                         showListedPrice={attachmentListedPriceVisible(m.metadata?.piece)}
                         chargedMailboxIds={attachmentBilledRefs(m.metadata?.piece)}
+                        listedPriceLabel={listedPriceLabel}
                       />
                     </div>
                   </div>
@@ -942,6 +948,7 @@ export function AgentChatShell(props: AgentChatShellProps) {
                 getAccessToken={getAccessToken}
                 showListedPrice={attachmentListedPriceVisible(m.metadata?.piece)}
                 chargedMailboxIds={attachmentBilledRefs(m.metadata?.piece)}
+                listedPriceLabel={listedPriceLabel}
               />
             </div>
           ))}
