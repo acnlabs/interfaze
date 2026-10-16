@@ -13,7 +13,7 @@ import {
 import { formatCreditBalance, formatSignedCreditAmount } from "../creditDisplay";
 import { FieldHint } from "./AgentOwnerSettings";
 import type { RanchLocale, RanchMessages } from "./i18n";
-import { buildWalletCheckoutUrl } from "./interfazeHost";
+import { buildWalletCheckoutUrl, isCnInterfazeOrigin, resolveInterfazeOrigin } from "./interfazeHost";
 import { txDetailLine, txTypeLabel } from "./txDisplay";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 import { useModalA11y } from "./useModalA11y";
@@ -112,6 +112,7 @@ export function AgentOwnerWallet({
   interfazeBaseUrl,
   busy,
 }: Props) {
+  const cnSite = isCnInterfazeOrigin(resolveInterfazeOrigin(interfazeBaseUrl));
   const [wallet, setWallet] = useState<MyAgentWallet | null>(null);
   const [policy, setPolicy] = useState<MyAgentSpendPolicy | null>(null);
   const [txs, setTxs] = useState<MyAgentWalletTx[]>([]);
@@ -686,7 +687,7 @@ export function AgentOwnerWallet({
               style={{ ...inputStyle, width: "100%", marginBottom: 6 }}
             />
             <p style={{ margin: "0 0 12px", fontSize: 11, color: colors.muted, lineHeight: 1.4 }}>
-              {t.walletAmountHint}
+              {cnSite ? t.walletAmountHintCn : t.walletAmountHint}
             </p>
 
             {amountDraft.trim() !== "" && amount == null ? (

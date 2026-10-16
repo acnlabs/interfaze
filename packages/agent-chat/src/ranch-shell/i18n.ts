@@ -661,6 +661,7 @@ export type RanchMessages = {
   walletWithdraw: string;
   walletAmount: string;
   walletAmountHint: string;
+  walletAmountHintCn: string;
   walletAmountInvalid: string;
   walletAmountExceeds: string;
   attachmentLoadFailed: string;
@@ -1207,35 +1208,35 @@ const en: RanchMessages = {
   myAgentsSectionPricing: "Agent pricing",
   myAgentsPricingHint:
     "The preview is what the other person pays. With their own key: they pay the menu price × (1+markup) ÷ 0.9, and you keep that marked-up menu price. Official: the list price is the supplier price × 1.15. They pay (list price + your markup) ÷ 0.9, and you keep only the markup.",
-  myAgentsPricingInputLabel: "Settle preview · input USD / 1M",
-  myAgentsPricingOutputLabel: "Settle preview · output USD / 1M",
+  myAgentsPricingInputLabel: "Settle preview · input / 1M",
+  myAgentsPricingOutputLabel: "Settle preview · output / 1M",
   myAgentsPricingModelLabel: "Default model · per 1M tokens",
   myAgentsPricingModelHint:
     "Pick the default from models this agent already reports. You cannot add or remove models here.",
   myAgentsPricingModelsEmpty: "This agent has not reported any models yet.",
   myAgentsPricingModelSearch: "Search",
-  myAgentsPricingOfficialEmpty: "No matching OpenRouter models in Host Catalog.",
+  myAgentsPricingOfficialEmpty: "No matching models on this price list.",
   myAgentsPricingOptionLine: "${name} · in ${in} · out ${out}",
   myAgentsPricingCreditsLine: "in ${in} · out ${out} credits / 1M",
   myAgentsPricingCreditsNote: "100 credits = ${price}. Usage is shown to 2 decimals. Top-up stays a whole number.",
   myAgentsPricingRuntimeHint:
     "Runtime reported: ${model} (heartbeat model only — Host cannot verify the key).",
   myAgentsPricingSelfReportNote:
-    "You only set default model + markup. Host owns baseline prices; agents cannot rewrite the global settle book.",
+    "You only set the default model and the markup. The list price and the menu price are set here. The agent cannot change them.",
   myAgentsInferencePathByo: "BYO",
   myAgentsInferencePathByoHint:
-    "This agent calls models with its own key. Usage is self-reported — Host cannot verify. Official hosted inference is not available yet.",
+    "This agent calls models with its own key. Usage is self-reported and is not checked here.",
   myAgentsInferencePathByoHintReady:
-    "Chat picks a model. Official · OpenRouter is Interfaze’s key. OpenRouter here is a Store key on the agent.",
+    "Chat picks a model. Official is Interfaze’s key. OpenRouter here is the agent’s own key.",
   myAgentsProviderLabel: "Provider",
   myAgentsProviderHint:
     "${official} is Interfaze’s Host-held key (this Host’s shelf). OpenRouter is a Store/BYO key on the agent. Chat still picks a model only — path is inferred. BYO vendors follow the heartbeat.",
   myAgentsProviderByo: "Mine",
-  myAgentsProviderOfficial: "Official · OpenRouter",
+  myAgentsProviderOfficial: "Official",
   myAgentsProviderMine: "Mine",
   myAgentsProviderAgent: "This agent",
   myAgentsProviderOther: "Other",
-  myAgentsProviderOfficialOpenRouter: "Official · OpenRouter",
+  myAgentsProviderOfficialOpenRouter: "Official",
   myAgentsProviderOfficialPlain: "Official",
   myAgentsProviderOfficialNamed: "Official · ${name}",
   myAgentsProviderOpenRouter: "OpenRouter",
@@ -1252,7 +1253,7 @@ const en: RanchMessages = {
   myAgentsListingStaleHint:
     "The published listing still says OpenRouter, but this agent is running its own key. That’s leftover — not a real OpenRouter setup. OpenRouter can be saved only after the agent reports an OpenRouter model.",
   myAgentsOfficialSectionHint:
-    "Official · OpenRouter uses Interfaze’s Host-held key and this Host’s shelf. OpenRouter is Store/BYO on the agent.",
+    "Official uses Interfaze’s key and this host’s price list. OpenRouter is the agent’s own key.",
   myAgentsMineSectionHint:
     "These models stay on this agent’s own key. Provider follows the live runtime.",
   myAgentsProviderUnlisted: "Authorized, not in this agent’s self-report yet — won’t appear in chat until it reports the model.",
@@ -1262,12 +1263,12 @@ const en: RanchMessages = {
   myAgentsPricingMarkupLabel: "Markup",
   myAgentsPricingMarkupHint:
     "Markup is only the slice you keep. Changing model keeps this %.",
-  myAgentsPricingCatalogLine: "Host ${in} / ${out}",
-  myAgentsPricingSourceOpenRouter: "Reference · OpenRouter",
+  myAgentsPricingCatalogLine: "${in} / ${out}",
+  myAgentsPricingSourceOpenRouter: "Supplier price · OpenRouter",
   myAgentsPricingSourceTokenHub: "Menu · TokenHub",
   myAgentsPricingSourceTokenHubHint: "This is TokenHub’s published price list.",
   myAgentsPricingSourceHint:
-    "Public list the Host Catalog row was taken from. Official settle uses published Catalog (sync × 1.15), not the list price. TokenHub still includes FX.",
+    "This is the supplier price. The list price is the supplier price × 1.15.",
   myAgentsPricingSourceSupplier: "Supplier price · ${name}",
   myAgentsPricingSourceSupplierHint:
     "This is the supplier price. The list price is the supplier price × 1.15.",
@@ -1276,9 +1277,9 @@ const en: RanchMessages = {
   myAgentsPricingListingLine: "They pay in ${in} · out ${out} / 1M",
   myAgentsPricingKeepLine: "You keep in ${in} · out ${out} / 1M",
   myAgentsPricingExampleLine:
-    "Example: 1M input tokens → they pay you ~$${pay}; Host baseline ~$${cost}",
+    "Example: 1M input tokens, they pay about ${pay}. The list price is about ${cost}.",
   myAgentsPricingCatalogMissing:
-    "No Host Catalog/pack row for this model — pick another id or wait for Host pack coverage.",
+    "This model is not on the price list. Pick another.",
   myAgentsPricingUnlisted:
     "Not configured yet — choose a default model and markup. Save to publish.",
   myAgentsSavePricing: "Save default model & markup",
@@ -1446,7 +1447,8 @@ const en: RanchMessages = {
   walletTopup: "Top up",
   walletWithdraw: "Withdraw",
   walletAmount: "Amount (Credits)",
-  walletAmountHint: "Integer Credits. 100 Credits = 1 USD.",
+  walletAmountHint: "Integer credits. 100 credits = 1 USD.",
+  walletAmountHintCn: "Integer credits. 100 credits = ¥1.",
   walletAmountInvalid: "Enter a whole number between 1 and 100,000,000.",
   walletAmountExceeds: "Exceeds available balance.",
   attachmentLoadFailed: "Attachment failed to load",
@@ -1981,34 +1983,34 @@ const zh: RanchMessages = {
   myAgentsSectionPricing: "智能体定价",
   myAgentsPricingHint:
     "预览是对方实付的价。自带钥匙：对方付价目价 ×（1+加价）÷ 0.9，你拿到加价后的价目价。官方：标价是进货价 × 1.15，对方付（标价 + 加价）÷ 0.9，你只拿到加价。",
-  myAgentsPricingInputLabel: "结算预览 · 输入 USD / 百万",
-  myAgentsPricingOutputLabel: "结算预览 · 输出 USD / 百万",
+  myAgentsPricingInputLabel: "结算预览 · 入 / 百万",
+  myAgentsPricingOutputLabel: "结算预览 · 出 / 百万",
   myAgentsPricingModelLabel: "默认模型 · 每百万 token",
   myAgentsPricingModelHint:
     "从这只智能体已自报的模型里选默认。这里不能增删模型。",
   myAgentsPricingModelsEmpty: "这只智能体还没有自报任何模型。",
   myAgentsPricingModelSearch: "搜索",
-  myAgentsPricingOfficialEmpty: "Host Catalog 里没有匹配的 OpenRouter 模型。",
+  myAgentsPricingOfficialEmpty: "价目里没有匹配的模型。",
   myAgentsPricingOptionLine: "${name} · 入 ${in} · 出 ${out}",
   myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} 星币 /百万",
   myAgentsPricingCreditsNote: "100 星币 = ${price}。用量显示两位小数。充值仍是整数星币。",
   myAgentsPricingRuntimeHint: "运行环境上报：${model}（只认心跳型号，Host 看不见钥匙）。",
   myAgentsPricingSelfReportNote:
-    "Owner 只设默认模型 + 上浮；底价由 Host 维护，智能体不能改写全网结算价。",
+    "你只设默认模型和加价。标价和价目价由这边定，智能体改不了。",
   myAgentsInferencePathByo: "自持钥",
   myAgentsInferencePathByoHint:
-    "这只智能体用自己的钥匙打模型。用量自报，平台未核验。官方代打尚未开放。",
+    "这只智能体用自己的钥匙打模型。用量自报，平台未核验。",
   myAgentsInferencePathByoHintReady:
-    "聊天只选模型。「官方 · OpenRouter」是 Interfaze 持钥。这里的 OpenRouter 是写在智能体上的 Store 钥匙。",
+    "聊天只选模型。官方是 Interfaze 持钥。这里的 OpenRouter 是写在智能体上的自持钥匙。",
   myAgentsProviderLabel: "供应商",
   myAgentsProviderHint:
     "「${official}」是 Interfaze 持钥、本 Host 货架。「OpenRouter」是写在智能体上的 Store/自持钥匙。聊天只选模型，路径由挂牌推断。自持厂家跟心跳走。",
   myAgentsProviderByo: "我的",
-  myAgentsProviderOfficial: "官方 · OpenRouter",
+  myAgentsProviderOfficial: "官方",
   myAgentsProviderMine: "我的",
   myAgentsProviderAgent: "本智能体",
   myAgentsProviderOther: "其他",
-  myAgentsProviderOfficialOpenRouter: "官方 · OpenRouter",
+  myAgentsProviderOfficialOpenRouter: "官方",
   myAgentsProviderOfficialPlain: "官方",
   myAgentsProviderOfficialNamed: "官方 · ${name}",
   myAgentsProviderOpenRouter: "OpenRouter",
@@ -2024,21 +2026,21 @@ const zh: RanchMessages = {
   myAgentsListingStaleHint:
     "挂牌还写着 OpenRouter，但这只智能体正在用自己的钥匙。那是旧挂牌，不是真的 OpenRouter。只有它自报了 OpenRouter 型号才能保存。",
   myAgentsOfficialSectionHint:
-    "「官方 · OpenRouter」走 Interfaze 持钥、本 Host 货架。「OpenRouter」是写在智能体上的 Store/自持钥匙。",
+    "官方走 Interfaze 的钥匙和这边的价目。「OpenRouter」是写在智能体上的自持钥匙。",
   myAgentsMineSectionHint:
     "下列模型走这只智能体自己的钥匙。供应商跟运行时走。",
   myAgentsProviderUnlisted: "已授权，但智能体尚未自报——写进自报之前不会出现在聊天下拉。",
   myAgentsSaveProviders: "保存供应商",
   myAgentsProvidersSaved: "供应商已保存",
   myAgentsProvidersFailed: "保存供应商失败。",
-  myAgentsPricingMarkupLabel: "上浮",
-  myAgentsPricingMarkupHint: "上浮只决定你到手的那一截。换模型保留这个比例。",
-  myAgentsPricingCatalogLine: "底价 ${in} / ${out}",
-  myAgentsPricingSourceOpenRouter: "参考底价 · OpenRouter",
+  myAgentsPricingMarkupLabel: "加价",
+  myAgentsPricingMarkupHint: "加价只决定你到手的那一截。换模型保留这个比例。",
+  myAgentsPricingCatalogLine: "${in} / ${out}",
+  myAgentsPricingSourceOpenRouter: "进货价 · OpenRouter",
   myAgentsPricingSourceTokenHub: "价目 · TokenHub",
   myAgentsPricingSourceTokenHubHint: "这是 TokenHub 的公示价目。",
   myAgentsPricingSourceHint:
-    "Host Catalog 取自该公示价目。官方结算用对外 Catalog（同步价 × 1.15），不是公示牌价。TokenHub 仍含汇率。",
+    "这是进货价。标价是进货价 × 1.15。",
   myAgentsPricingSourceSupplier: "进货价 · ${name}",
   myAgentsPricingSourceSupplierHint: "这是进货价。标价是进货价 × 1.15。",
   myAgentsPricingSourceMenu: "价目价 · OpenRouter",
@@ -2046,11 +2048,10 @@ const zh: RanchMessages = {
   myAgentsPricingListingLine: "对方实付 入 ${in} · 出 ${out} / 百万",
   myAgentsPricingKeepLine: "你到手 入 ${in} · 出 ${out} / 百万",
   myAgentsPricingExampleLine:
-    "例：100 万 input → 对方约付你 $${pay}；Host 底价约 $${cost}",
-  myAgentsPricingCatalogMissing:
-    "Catalog/价包没有这个模型——请换 id，或等 Host 价包录入后再试。",
-  myAgentsPricingUnlisted: "尚未配置——选择默认模型与上浮。保存后生效。",
-  myAgentsSavePricing: "保存默认模型与上浮",
+    "例：100 万输入 token，对方约付 ${pay}，标价约 ${cost}。",
+  myAgentsPricingCatalogMissing: "价目里没有这个模型。请换一个。",
+  myAgentsPricingUnlisted: "尚未配置。先选默认模型和加价，保存后生效。",
+  myAgentsSavePricing: "保存默认模型与加价",
   myAgentsPricingSaved: "定价已保存",
   myAgentsPricingFailed: "保存定价失败。",
   myAgentsSectionPieceSku: "按件",
@@ -2210,7 +2211,8 @@ const zh: RanchMessages = {
   walletTopup: "充值",
   walletWithdraw: "提取",
   walletAmount: "金额（星币）",
-  walletAmountHint: "整数星币。100 星币 = 1 美元或 1 元人民币（按所在区）。",
+  walletAmountHint: "整数星币。100 星币 = 1 美元。",
+  walletAmountHintCn: "整数星币。100 星币 = 1 元人民币。",
   walletAmountInvalid: "请输入 1–100,000,000 之间的整数。",
   walletAmountExceeds: "超出可用余额。",
   attachmentLoadFailed: "附件加载失败",
@@ -2319,8 +2321,32 @@ export function resolveRanchLocale(locale?: string | null): RanchLocale {
   return base === "zh" ? "zh" : "en";
 }
 
-export function ranchMessages(locale?: string | null): RanchMessages {
-  return catalogs[resolveRanchLocale(locale)];
+export function ranchMessages(locale?: string | null, cn = true): RanchMessages {
+  const resolved = resolveRanchLocale(locale);
+  const base = catalogs[resolved];
+  if (cn || resolved !== "zh") return base;
+  return overseasCreditMessages(base);
+}
+
+function rewriteOverseasCredit(text: string): string {
+  return text.split("100 星币").join("100 credits").split("星币").join("credit");
+}
+
+function overseasCreditMessages(messages: RanchMessages): RanchMessages {
+  const out = { ...messages };
+  for (const key of Object.keys(out) as (keyof RanchMessages)[]) {
+    const value = out[key];
+    if (typeof value === "string") {
+      (out as Record<string, unknown>)[key] = rewriteOverseasCredit(value);
+    } else if (typeof value === "function") {
+      const fn = value as (...args: never[]) => unknown;
+      (out as Record<string, unknown>)[key] = ((...args: never[]) => {
+        const result = fn(...args);
+        return typeof result === "string" ? rewriteOverseasCredit(result) : result;
+      }) as typeof value;
+    }
+  }
+  return out;
 }
 
 export const RANCH_LOCALE_STORAGE_KEY = "acnlabs.ranch-chat.locale";
