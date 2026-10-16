@@ -753,6 +753,7 @@ export type RanchMessages = {
   spendApprovalsRejectOk: string;
   spendApprovalsActionFailed: string;
   spendApprovalsExpires: (date: string) => string;
+  spendApprovalAmount: string;
   yes: string;
   no: string;
   unknown: string;
@@ -1554,6 +1555,7 @@ const en: RanchMessages = {
   spendApprovalsRejectOk: "Spend rejected",
   spendApprovalsActionFailed: "Couldn’t update this spend request.",
   spendApprovalsExpires: (date) => `Expires ${date}`,
+  spendApprovalAmount: "{n} Credits",
   yes: "Yes",
   no: "No",
   unknown: "Unknown",
@@ -2327,6 +2329,7 @@ const zh: RanchMessages = {
   spendApprovalsRejectOk: "已拒绝支出",
   spendApprovalsActionFailed: "无法处理该支出申请。",
   spendApprovalsExpires: (date) => `截止 ${date}`,
+  spendApprovalAmount: "{n} 星币",
   yes: "是",
   no: "否",
   unknown: "未知",
@@ -2413,6 +2416,7 @@ const OVERSEAS_ZH: Partial<Record<keyof RanchMessages, string>> = {
     "不限额意味着智能体可不经询问花光其 credit。除非你信任运行环境，建议用「有限额」。",
   spendReserveFloorHint: "自主消费不得使 credit 低于此值。",
   spendApprovalsHint: "超过消费授权额度的支出申请。批准后会立即从 credit 扣款。",
+  spendApprovalAmount: "{n} credits",
 };
 
 function rewriteOverseasCredit(text: string): string {
