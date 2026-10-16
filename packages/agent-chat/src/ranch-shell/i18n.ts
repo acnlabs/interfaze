@@ -689,6 +689,8 @@ export type RanchMessages = {
   walletTxTypeToAgent: string;
   walletTxTypeWithdraw: string;
   walletTxTypeComputer: string;
+  walletTxTypeComputerPause: string;
+  walletTxTypeComputerRefund: string;
   walletBillingDocs: string;
   walletBillingDocsHint: string;
   walletBillingDocsEmpty: string;
@@ -1476,6 +1478,8 @@ const en: RanchMessages = {
   walletTxTypeToAgent: "To the agent",
   walletTxTypeWithdraw: "Withdraw",
   walletTxTypeComputer: "Computer",
+  walletTxTypeComputerPause: "Computer pause",
+  walletTxTypeComputerRefund: "Computer refund",
   walletBillingDocs: "Receipts & invoices",
   walletBillingDocsHint:
     "Download a receipt for any payment. On the CN site you can also request a fapiao — issued manually to your email within 1-3 business days.",
@@ -2240,6 +2244,8 @@ const zh: RanchMessages = {
   walletTxTypeToAgent: "充给智能体",
   walletTxTypeWithdraw: "提现",
   walletTxTypeComputer: "电脑",
+  walletTxTypeComputerPause: "电脑暂停",
+  walletTxTypeComputerRefund: "电脑退回",
   walletBillingDocs: "收据与发票",
   walletBillingDocsHint:
     "每笔收款均可下载英文收据；中国站用户可申请增值税电子普通发票（人工开具，1-3 个工作日内发送到邮箱）。",

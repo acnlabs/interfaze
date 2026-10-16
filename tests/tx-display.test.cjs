@@ -31,8 +31,18 @@ const t = {
   walletTxTypeToAgent: "充给智能体",
   walletTxTypeWithdraw: "提现",
   walletTxTypeComputer: "电脑",
+  walletTxTypeComputerPause: "电脑暂停",
+  walletTxTypeComputerRefund: "电脑退回",
   untitledChat: "未命名对话",
 };
+
+test("a computer pause and a prepaid return are not a generic 电脑", () => {
+  assert.equal(txTypeLabel("computer_usage", t, "cloud computer running time"), "电脑");
+  assert.equal(txTypeLabel("computer_usage", t, "cloud computer paused disk"), "电脑暂停");
+  assert.equal(txTypeLabel("refund", t, "cloud computer running time returned"), "电脑退回");
+  assert.equal(txTypeLabel("refund", t, "plan unused"), "退款");
+  assert.equal(txTypeLabel("extra_computer", t), "电脑");
+});
 
 test("a chat charge and a chat earning share the chat name", () => {
   assert.equal(txTypeLabel("service_usage", t), "对话");

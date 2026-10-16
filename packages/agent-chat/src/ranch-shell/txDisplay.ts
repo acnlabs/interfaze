@@ -23,6 +23,7 @@ export function txTypeLabel(
       if (/Topup agent\b/i.test(text)) return t.walletTxTypeToAgent;
       return t.walletTxTypeWalletTransfer;
     case "refund":
+      if (/cloud computer/i.test(text)) return t.walletTxTypeComputerRefund;
       return t.walletTxTypeRefund;
     case "store_purchase":
       return t.walletTxTypeStorePurchase;
@@ -34,6 +35,8 @@ export function txTypeLabel(
     case "agent_receive":
       return t.walletTxTypeChat;
     case "computer_usage":
+    case "extra_computer":
+      if (/paused disk/i.test(text)) return t.walletTxTypeComputerPause;
       return t.walletTxTypeComputer;
     default:
       return type.replace(/_/g, " ");
