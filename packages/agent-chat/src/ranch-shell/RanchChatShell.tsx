@@ -6089,6 +6089,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           gatewayBaseUrl={gatewayBaseUrl}
           getAccessToken={getAccessToken}
           locale={uiLocale}
+          cn={cnSite}
           onClose={() => closeAccountPanel()}
           onOpenScreen={openCloudScreen}
         />
@@ -6813,6 +6814,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     gatewayBaseUrl={gatewayBaseUrl}
                     getAccessToken={getAccessToken}
                     locale={uiLocale}
+                    cn={cnSite}
                     openScreenIds={dockTabs
                       .filter((tab) => tab.kind === "computer")
                       .map((tab) => tab.id.slice("computer:".length))}

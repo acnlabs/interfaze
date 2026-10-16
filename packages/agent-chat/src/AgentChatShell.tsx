@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChatGatewayError, createGatewayClient } from "./gateway";
 import { sendAsksBeforeBoot, sendNeedsDesk } from "./computerSendBoot";
+import { hourlyCreditCopy } from "./hourlyCreditCopy";
 import { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
+import { isCnInterfazeOrigin, resolveInterfazeOrigin } from "./ranch-shell/interfazeHost";
 import type {
   AgentChatMode,
   AgentChatShellProps,
@@ -343,10 +345,12 @@ export function AgentChatShell(props: AgentChatShellProps) {
             };
             if (sendAsksBeforeBoot(place, [], sendNeedsDesk(text))) {
               const rate = place.resume_credits_per_hour;
-              const message = isAssistant
-                ? "发送后电脑按 {rate} 星币/小时计费。不用的预扣会退回。"
-                : "Sending starts this computer at {rate} credits per hour. Unused prepaid is returned.";
-              const sendAt = isAssistant ? "发送 · {rate} 星币/小时" : "Send · {rate}/hr";
+              const rates = hourlyCreditCopy(
+                isAssistant ? "zh" : "en",
+                isCnInterfazeOrigin(resolveInterfazeOrigin()),
+              );
+              const message = rates.sendConfirm;
+              const sendAt = rates.sendAt;
               setConfirmDialog({
                 message: message.replace("{rate}", rate == null ? "—" : String(rate)),
                 confirmLabel:

@@ -144,10 +144,10 @@ test("an embed send asks only when this bubble copies a file onto the desk", () 
     "utf8",
   );
   assert.match(embed, /sendAsksBeforeBoot\(place, \[\], sendNeedsDesk\(text\)\)/);
-  assert.match(embed, /t\.sendConfirm\.replace/);
+  assert.match(embed, /rates\.sendConfirm\.replace/);
   assert.match(embed, /bootAdmitted: true/);
-  assert.match(embed, /sendAt: "发送 · \{rate\} 星币\/小时"/);
-  assert.match(embed, /confirmLabel:[\s\S]*t\.sendAt\.replace/);
+  assert.match(embed, /hourlyCreditCopy\(zh \? "zh" : "en", isCnRegion\(\)\)/);
+  assert.match(embed, /confirmLabel:[\s\S]*rates\.sendAt\.replace/);
 });
 
 test("opening a screen asks when the machine is idle or paused", () => {
@@ -181,7 +181,7 @@ test("the header screen button uses the chat place rates when the list has not l
   assert.match(panel, /row\?\.status \?\? place\.status/);
   assert.match(panel, /row\?\.resume_credits_per_hour \?\? place\.resume_credits_per_hour/);
   assert.match(panel, /screenAsksBeforeCharge/);
-  assert.match(panel, /screenAt: "打开电脑屏幕 · \{rate\} 星币\/小时"/);
+  assert.match(panel, /hourlyCreditCopy\(locale, cn\)\.screenAt/);
   assert.match(panel, /asks \? caption : null/);
 });
 
@@ -211,7 +211,6 @@ test("the Labs assistant asks only when this send copies a file onto the desk", 
   );
   assert.match(shell, /sendAsksBeforeBoot\(place, \[\], sendNeedsDesk\(text\)\)/);
   assert.match(shell, /bootAdmitted: true/);
-  assert.match(shell, /发送后电脑按 \{rate\} 星币\/小时计费/);
-  assert.match(shell, /发送 · \{rate\} 星币\/小时/);
+  assert.match(shell, /hourlyCreditCopy\(\s*isAssistant \? "zh" : "en",\s*isCnInterfazeOrigin\(resolveInterfazeOrigin\(\)\)/);
   assert.match(shell, /confirmLabel=\{confirmDialog\.confirmLabel\}/);
 });
