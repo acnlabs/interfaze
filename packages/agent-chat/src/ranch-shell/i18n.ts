@@ -2328,15 +2328,65 @@ export function ranchMessages(locale?: string | null, cn = true): RanchMessages 
   return overseasCreditMessages(base);
 }
 
+/** Overseas Chinese names the unit credit. China keeps 星币 in the zh catalog. */
+const OVERSEAS_ZH: Partial<Record<keyof RanchMessages, string>> = {
+  orchProposeCreateAt: "创建群聊 · 每小时 {rate} credits",
+  orchProposeOpenExistingAt: "打开已有群 · 每小时 {rate} credits",
+  sendAt: "发送 · 每小时 {rate} credits",
+  openScreenAt: "打开电脑屏幕 · 每小时 {rate} credits",
+  screenConfirm: "打开电脑屏幕按每小时 {rate} credits 计费。",
+  screenDock: "{label} · 每小时 {rate} credits",
+  sendConfirm: "发送后电脑按每小时 {rate} credits 计费。不用的预扣会退回。",
+  collabAutoOff: "额度空。加 credit 后才可自动协作。",
+  accountPlanFilesHint:
+    "聊天里预览和交付件的空间。原片留在云端电脑或你自己的地方。超额只拒绝新上传，不扣 credit，也不会自动删除已有文件。",
+  accountPlanProBlurb:
+    "用法币订阅 30 天。含等额对话用量包（官方 + 市场他人智能体的有偿对话）；自有智能体仍免费。超出部分从钱包按量扣。到期回免费档，可随时续费。订阅不扣钱包里的 credit。",
+  accountPlanBuyConfirmBody:
+    "将支付 {price} 获得 {plan} 30 天（在 AgentPlanet 用法币结账）。含包对话用量：{pack}。订阅不从钱包扣 credit。",
+  accountPlanBuyConfirmRenewBody:
+    "将支付 {price} 为 {plan} 续费 30 天，并刷新含包（{pack}）。订阅不从钱包扣 credit。",
+  accountPlanNeedCredits: "credit 不足。请先给钱包充值，再重试。",
+  accountPlanPriceCredits: "{n} credits",
+  createAgentTierCredits: "{n} credits",
+  createAgentMachineLine: "机费 {n} credits",
+  createAgentKeyQuotaLine: "模型额度 {n} credits",
+  createAgentKeyFeeLine: "服务费 {n} credits（{pct}%）",
+  createAgentKeyLine: "起步模型额度 {n} credits（含 10% 服务费）",
+  createAgentTotalLine: "合计 {n} credits",
+  myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} credits / 百万",
+  myAgentsPricingCreditsNote:
+    "100 credits = ${price}。用量显示两位小数。充值仍是整数 credit。",
+  walletBalance: "credit",
+  walletCreditsHint: "可转账。充值和提取只动 credit。",
+  walletOwnerBalance: "你的 credit",
+  walletAmount: "金额（credit）",
+  walletAmountHint: "整数 credit。100 credits = 1 美元。",
+  walletTopupDialogTitle: "充值 credit",
+  walletWithdrawDialogTitle: "提取 credit",
+  walletRechargeExternalHint:
+    "在界面内完成支付，credit 直接进入这个钱包。通道费在结账时另列。",
+};
+
 function rewriteOverseasCredit(text: string): string {
-  return text.split("100 星币").join("100 credits").split("星币").join("credit");
+  return text
+    .split("{rate} 星币/小时")
+    .join("每小时 {rate} credits")
+    .split("100 星币")
+    .join("100 credits")
+    .split("星币")
+    .join("credit");
 }
 
 function overseasCreditMessages(messages: RanchMessages): RanchMessages {
   const out = { ...messages };
   for (const key of Object.keys(out) as (keyof RanchMessages)[]) {
+    if (key === "walletAmountHintCn") continue;
+    const specified = OVERSEAS_ZH[key];
     const value = out[key];
-    if (typeof value === "string") {
+    if (typeof specified === "string") {
+      (out as Record<string, unknown>)[key] = specified;
+    } else if (typeof value === "string") {
       (out as Record<string, unknown>)[key] = rewriteOverseasCredit(value);
     } else if (typeof value === "function") {
       const fn = value as (...args: never[]) => unknown;
