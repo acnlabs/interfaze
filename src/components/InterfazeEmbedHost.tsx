@@ -8,6 +8,7 @@ import {
   createGatewayClient,
   hourlyCreditCopy,
   ranchMessages,
+  sendBlockSentence,
   sendAsksBeforeBoot,
   sendButtonLabel,
   sendNeedsDesk,
@@ -325,7 +326,7 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
       if (e instanceof ChatGatewayError) {
         notifyError(
           e.code || "send_failed",
-          e.code === "insufficient_credits" ? spoken.insufficientCredits : e.message,
+          sendBlockSentence(e.code, e.message, spoken) ?? e.message,
         );
       } else {
         notifyError("send_failed", e instanceof Error ? e.message : "Send failed");

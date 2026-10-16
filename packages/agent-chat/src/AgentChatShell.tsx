@@ -9,6 +9,7 @@ import {
   type ChatComputerPlace,
 } from "./computerSendBoot";
 import { hourlyCreditCopy } from "./hourlyCreditCopy";
+import { sendBlockSentence } from "./sendBlockCopy";
 import { ranchMessages } from "./ranch-shell/i18n";
 import { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
 import { isCnInterfazeOrigin, resolveInterfazeOrigin } from "./ranch-shell/interfazeHost";
@@ -429,22 +430,25 @@ export function AgentChatShell(props: AgentChatShellProps) {
       setDraft("");
       await loadMessages(chat.chat_id);
     } catch (e) {
-      const msg =
+      const blocked =
         e instanceof ChatGatewayError
+          ? sendBlockSentence(e.code, e.message, {
+              insufficientCredits: spoken.insufficientCredits,
+              onDemandLimitReached: spoken.onDemandLimitReached,
+              rateLimited: isAssistant ? "余额不足，无法发送" : "Not enough credits to send",
+            })
+          : null;
+      const msg =
+        blocked ??
+        (e instanceof ChatGatewayError
           ? e.code === "agent_unreachable"
             ? isAssistant
               ? "助手暂时无法连接，请稍后再试"
               : "Agent unreachable (gateway is up)"
-            : e.code === "rate_limited"
-              ? isAssistant
-                ? "余额不足，无法发送"
-                : "Not enough credits to send"
-              : e.code === "insufficient_credits"
-                ? spoken.insufficientCredits
-                : e.message
+            : e.message
           : isAssistant
             ? "发送失败"
-            : "Send failed";
+            : "Send failed");
       setError(msg);
       // Still refresh — user message may have landed before delivery failed.
       try {
