@@ -117,10 +117,11 @@ export function AgentChatShell(props: AgentChatShellProps) {
   } = props;
 
   const isAssistant = variant === "assistant";
-  const listedPriceLabel = ranchMessages(
+  const spoken = ranchMessages(
     isAssistant ? "zh" : "en",
     isCnInterfazeOrigin(resolveInterfazeOrigin()),
-  ).pieceListed;
+  );
+  const listedPriceLabel = spoken.pieceListed;
   const allowAgentPicker = isAssistant ? false : (allowAgentPickerProp ?? true);
   const allowGroupChat = isAssistant ? false : (allowGroupChatProp ?? true);
   const showGatewayStatus = isAssistant ? false : (showGatewayStatusProp ?? true);
@@ -438,7 +439,9 @@ export function AgentChatShell(props: AgentChatShellProps) {
               ? isAssistant
                 ? "余额不足，无法发送"
                 : "Not enough credits to send"
-              : e.message
+              : e.code === "insufficient_credits"
+                ? spoken.insufficientCredits
+                : e.message
           : isAssistant
             ? "发送失败"
             : "Send failed";

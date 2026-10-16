@@ -560,7 +560,9 @@ function sendFailureCopy(
                     ? t.modelPricingUnavailable
                     : e.code === "price_unconfirmed"
                       ? t.priceUnconfirmed
-                      : e.code === "canvas_ref"
+                      : e.code === "insufficient_credits"
+                        ? t.insufficientCredits
+                        : e.code === "canvas_ref"
       ? t.pageRefRejected
       : e.message || t.sendFailed;
   return { text, offerStoreKey };

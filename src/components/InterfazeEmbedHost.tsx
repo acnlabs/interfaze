@@ -7,6 +7,7 @@ import {
   connectChatSocket,
   createGatewayClient,
   hourlyCreditCopy,
+  ranchMessages,
   sendAsksBeforeBoot,
   sendButtonLabel,
   sendNeedsDesk,
@@ -62,6 +63,7 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
   const zh = (locale || "").toLowerCase().startsWith("zh");
   const t = zh ? copy.zh : copy.en;
   const rates = hourlyCreditCopy(zh ? "zh" : "en", isCnRegion());
+  const spoken = ranchMessages(zh ? "zh" : "en", isCnRegion());
   const gatewayBaseUrl = getGatewayBaseUrl();
   const dark = theme !== "light";
 
@@ -321,7 +323,10 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
       setMessages(await client.listMessages(session.chat_id));
     } catch (e) {
       if (e instanceof ChatGatewayError) {
-        notifyError(e.code || "send_failed", e.message);
+        notifyError(
+          e.code || "send_failed",
+          e.code === "insufficient_credits" ? spoken.insufficientCredits : e.message,
+        );
       } else {
         notifyError("send_failed", e instanceof Error ? e.message : "Send failed");
       }

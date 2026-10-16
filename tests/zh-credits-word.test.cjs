@@ -34,6 +34,7 @@ test("China Chinese names the unit 星币, not the English word Credits", () => 
   assert.match(zh.myAgentsAllowlistHint, /免扣星币/);
   assert.equal(zh.pieceHeld(3), "按件结算中 3 星币");
   assert.equal(zh.spendApprovalAmount, "{n} 星币");
+  assert.equal(zh.insufficientCredits, "星币不够，这条发不出去。");
   assert.equal(zh.pieceListed(12), "12 星币");
   assert.equal(zh.walletAmountHintCn, "整数星币。100 星币 = 1 元人民币。");
 });
@@ -58,6 +59,7 @@ test("overseas Chinese names the unit credit, and does not say 星币", () => {
   assert.equal(zh.spendReserveFloorHint, "自主消费不得使 credit 低于此值。");
   assert.match(zh.spendApprovalsHint, /从 credit 扣款/);
   assert.equal(zh.spendApprovalAmount, "{n} credits");
+  assert.equal(zh.insufficientCredits, "credit 不够，这条发不出去。");
   assert.match(zh.myAgentsPolicyAllowlistHelp, /免扣 credit/);
   assert.match(zh.myAgentsAllowlistHint, /免扣 credit/);
   assert.equal(zh.pieceHeld(3), "按件结算中 3 credits");
@@ -70,6 +72,8 @@ test("English keeps Credits on both sites", () => {
   const overseas = ranchMessages("en", false);
   assert.equal(china.pieceListed(12), "12 Credits");
   assert.equal(china.spendApprovalAmount, "{n} Credits");
+  assert.equal(china.insufficientCredits, "Not enough credits to send this.");
+  assert.equal(overseas.insufficientCredits, "Not enough credits to send this.");
   assert.equal(overseas.spendApprovalAmount, "{n} Credits");
   assert.equal(overseas.pieceListed(12), "12 Credits");
   assert.equal(china.pieceHeld(3), "3 Credits settling");
@@ -89,6 +93,14 @@ test("chat attachments use the same unit sentence", () => {
     path.join(__dirname, "../packages/agent-chat/src/ranch-shell/AgentOwnerWallet.tsx"),
     "utf8",
   );
+  assert.match(shell, /e\.code === "insufficient_credits"[\s\S]{0,80}t\.insufficientCredits/);
+  assert.doesNotMatch(shell, /Insufficient credits\. Have/);
+  const embed = fs.readFileSync(
+    path.join(__dirname, "../src/components/InterfazeEmbedHost.tsx"),
+    "utf8",
+  );
+  assert.match(embed, /e\.code === "insufficient_credits" \? spoken\.insufficientCredits/);
+  assert.match(assistant, /e\.code === "insufficient_credits"[\s\S]{0,40}spoken\.insufficientCredits/);
   assert.match(wallet, /t\.spendApprovalAmount\.replace\("\{n\}", fmtCredits\(r\.amount\)\)/);
   assert.doesNotMatch(wallet, /fmtCredits\(r\.amount\)\} Credits/);
   assert.match(shell, /listedPriceLabel=\{t\.pieceListed\}/);
