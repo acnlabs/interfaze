@@ -70,6 +70,7 @@ export function ChatComputerControl({
   locale,
   openScreenIds,
   onOpenScreen,
+  onPlace,
 }: {
   chatId: string;
   gatewayBaseUrl: string;
@@ -77,6 +78,7 @@ export function ChatComputerControl({
   locale: RanchLocale;
   openScreenIds: string[];
   onOpenScreen: (computerId: string, label: string, rate?: number, hint?: ScreenChargeHint) => void;
+  onPlace?: (place: ChatPlace | null) => void;
 }) {
   const [place, setPlace] = useState<ChatPlace | null>(null);
   const [computers, setComputers] = useState<ComputerNameRow[]>([]);
@@ -107,6 +109,12 @@ export function ChatComputerControl({
       gone = true;
     };
   }, [load]);
+
+  useEffect(() => {
+    onPlace?.(place);
+  }, [place, onPlace]);
+
+  useEffect(() => () => onPlace?.(null), [onPlace]);
 
   if (!place) return null;
 

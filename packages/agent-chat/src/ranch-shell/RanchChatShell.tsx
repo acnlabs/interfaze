@@ -40,6 +40,7 @@ import {
   screenAsksBeforeCharge,
   sendAsksBeforeBoot,
   sendNeedsDesk,
+  type ChatComputerPlace,
   type ScreenChargeHint,
 } from "../computerSendBoot";
 import { ComputerManagePanel } from "../ComputerManagePanel";
@@ -2837,6 +2838,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showComputer, setShowComputer] = useState(false);
   const [screenComputer, setScreenComputer] = useState<{ id: string; label: string } | null>(null);
   const [cloudComputers, setCloudComputers] = useState<ComputerNameRow[]>([]);
+  const [chatPlace, setChatPlace] = useState<ChatComputerPlace | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     message: string;
     confirmLabel: string;
@@ -6808,6 +6810,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       }
                       openCloudScreen(id, label, rate, hint);
                     }}
+                    onPlace={setChatPlace}
                   />
                   {canOpenTalk ? (
                     <button
@@ -8264,7 +8267,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   disabled={busy || !draft.trim() || healthOk === false}
                   style={{ ...btnPrimary, alignSelf: "flex-end" }}
                 >
-                  {t.send}
+                  {chatPlace &&
+                  sendAsksBeforeBoot(chatPlace, bootScreenIds(), sendNeedsDesk(draft)) &&
+                  chatPlace.resume_credits_per_hour != null
+                    ? t.sendAt.replace("{rate}", String(chatPlace.resume_credits_per_hour))
+                    : t.send}
                 </button>
                 </div>
               </form>
