@@ -133,6 +133,8 @@ export type RanchChatAccount = {
 export type RanchChatShellProps = {
   getAccessToken: () => Promise<string | null>;
   gatewayBaseUrl: string;
+  /** Host-owned same-origin attachment download relay. */
+  attachmentDownloadProxy?: string;
   /** Host mine + official conversation agent (`group: "recommended"`). */
   directoryAgents?: AgentDirectoryItem[];
   title?: string;
