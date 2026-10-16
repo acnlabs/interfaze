@@ -82,6 +82,15 @@ test("the composer asks only when this send copies a file onto the desk", () => 
   assert.match(shell, /t\.sendConfirm\.replace/);
   assert.match(shell, /retryLastUserMessage[\s\S]*void send\(\{ text \}\)/);
   assert.match(i18n, /sendConfirm: "发送后电脑按 \{rate\} 星币\/小时计费/);
+  assert.match(shell, /onPlace=\{setChatPlace\}/);
+  assert.match(
+    shell,
+    /sendAsksBeforeBoot\(chatPlace, bootScreenIds\(\), sendNeedsDesk\(draft\)\)/,
+  );
+  assert.match(
+    shell,
+    /t\.sendAt\.replace\("\{rate\}", String\(chatPlace\.resume_credits_per_hour\)\)/,
+  );
 });
 
 test("a new group lands on the idle default computer, but a text digest does not ask", () => {
