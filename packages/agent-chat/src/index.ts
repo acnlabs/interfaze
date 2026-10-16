@@ -19,6 +19,7 @@ export {
 } from "./gateway";
 export { connectChatSocket, type ChatSocket, type ChatWsEvent } from "./ws";
 export { sendAsksBeforeBoot, sendNeedsDesk, screenAsksBeforeCharge } from "./computerSendBoot";
+export { hourlyCreditCopy, type HourlyCreditCopy } from "./hourlyCreditCopy";
 export { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
 export {
   connectPromptForInvite,

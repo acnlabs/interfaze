@@ -31,11 +31,7 @@ function headerIconStyle(on: boolean, wide = false): CSSProperties {
 }
 import { chatComputerLabel, extraIndex, type ComputerNameRow } from "./computerLabel";
 import { screenAsksBeforeCharge, type ScreenChargeHint } from "./computerSendBoot";
-
-const copy = {
-  en: { screenAt: "Open computer screen · {rate}/hr" },
-  zh: { screenAt: "打开电脑屏幕 · {rate} 星币/小时" },
-} as const;
+import { hourlyCreditCopy } from "./hourlyCreditCopy";
 
 type ChatPlace = {
   place: "agent" | "cloud";
@@ -68,6 +64,7 @@ export function ChatComputerControl({
   gatewayBaseUrl,
   getAccessToken,
   locale,
+  cn,
   openScreenIds,
   onOpenScreen,
   onPlace,
@@ -76,6 +73,7 @@ export function ChatComputerControl({
   gatewayBaseUrl: string;
   getAccessToken: () => Promise<string | null>;
   locale: RanchLocale;
+  cn: boolean;
   openScreenIds: string[];
   onOpenScreen: (computerId: string, label: string, rate?: number, hint?: ScreenChargeHint) => void;
   onPlace?: (place: ChatPlace | null) => void;
@@ -131,9 +129,10 @@ export function ChatComputerControl({
     resumeCreditsPerHour: row?.resume_credits_per_hour ?? place.resume_credits_per_hour,
     screenCreditsPerHour: screen,
   };
-  const t = copy[locale] ?? copy.en;
   const asks = openable && !on && screenAsksBeforeCharge(hint) && screen != null;
-  const caption = asks ? t.screenAt.replace("{rate}", String(screen)) : label;
+  const caption = asks
+    ? hourlyCreditCopy(locale, cn).screenAt.replace("{rate}", String(screen))
+    : label;
 
   return (
     <button

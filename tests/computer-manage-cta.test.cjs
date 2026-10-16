@@ -45,10 +45,12 @@ test("a listed computer can open its screen without a chat", () => {
     "utf8",
   );
   assert.match(panel, /screen: "打开电脑屏幕"/);
-  assert.match(panel, /screenAt: "打开电脑屏幕 · \{rate\} 星币\/小时"/);
+  assert.match(panel, /hourlyCreditCopy\(locale, cn\)/);
   assert.match(panel, /screenAsksBeforeCharge/);
   assert.match(panel, /onOpenScreen\(row\.computer_id, label, row\.screen_credits_per_hour/);
   assert.match(shell, /onOpenScreen=\{openCloudScreen\}/);
+  assert.match(shell, /<ComputerManagePanel[\s\S]*?cn=\{cnSite\}/);
+  assert.match(shell, /<ChatComputerControl[\s\S]*?cn=\{cnSite\}/);
   assert.match(shell, /active \|\| activeDock\.kind === "computer"/);
 });
 
@@ -58,8 +60,7 @@ test("a charged pause shows as 暂停 instead of 空闲", () => {
     "utf8",
   );
   assert.match(panel, /paused: "暂停"/);
-  assert.match(panel, /pausedAt: "暂停 \{rate\} 星币\/小时"/);
-  assert.match(panel, /runningAt: "开着 \{rate\} 星币\/小时"/);
+  assert.match(panel, /hourlyCreditCopy\(locale, cn\)/);
   assert.match(panel, /computerStatusLine\(row, t\)/);
 });
 
@@ -96,7 +97,7 @@ test("a running computer can be paused from the panel", () => {
     "utf8",
   );
   assert.match(panel, /pause: "暂停"/);
-  assert.match(panel, /pauseAt: "暂停 · \{rate\} 星币\/小时"/);
+  assert.match(panel, /hourlyCreditCopy\(locale, cn\)/);
   assert.match(panel, /\/api\/computers\/\$\{encodeURIComponent\(computerId\)\}\/pause/);
   assert.match(panel, /row\.status === "running"/);
   assert.match(panel, /pauseAsksBeforeCharge\(row\.paused_credits_per_hour\) &&/);
@@ -112,7 +113,7 @@ test("pause asks before a charged pause and skips a free one", () => {
     "utf8",
   );
   assert.match(panel, /pauseAsksBeforeCharge\(row\.paused_credits_per_hour\)/);
-  assert.match(panel, /pauseConfirm: "暂停后按 \{rate\} 星币\/小时计费/);
+  assert.match(panel, /pending\.kind === "pause" \? t\.pauseConfirm : t\.resumeConfirm/);
   assert.match(panel, /kind: "pause"/);
 });
 
@@ -122,7 +123,7 @@ test("an idle computer with a disk can be resumed from the panel", () => {
     "utf8",
   );
   assert.match(panel, /resume: "恢复"/);
-  assert.match(panel, /resumeAt: "恢复 · \{rate\} 星币\/小时"/);
+  assert.match(panel, /hourlyCreditCopy\(locale, cn\)/);
   assert.match(panel, /\/api\/computers\/\$\{encodeURIComponent\(computerId\)\}\/resume/);
   assert.match(panel, /row\.has_disk \? \(/);
   assert.match(panel, /withRate\(t\.resumeAt, row\.resume_credits_per_hour\)/);
@@ -134,7 +135,7 @@ test("resuming asks on the panel before it starts billing", () => {
     "utf8",
   );
   assert.match(panel, /ConfirmDialog/);
-  assert.match(panel, /resumeConfirm: "恢复按 \{rate\} 星币\/小时计费/);
+  assert.match(panel, /pending\.kind === "pause" \? t\.pauseConfirm : t\.resumeConfirm/);
   assert.doesNotMatch(panel, /kind: "screen"/);
   assert.doesNotMatch(
     panel,

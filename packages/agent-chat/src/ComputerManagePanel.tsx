@@ -5,6 +5,7 @@ import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
 import { computerName, type ComputerNameRow } from "./computerLabel";
 import { computerManageCta, computerStatusLine, extraAsksBeforeCreate, pauseAsksBeforeCharge } from "./computerManageCta";
+import { hourlyCreditCopy } from "./hourlyCreditCopy";
 import { screenAsksBeforeCharge, type ScreenChargeHint } from "./computerSendBoot";
 import { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
 
@@ -39,21 +40,14 @@ const copy = {
     emptyDisk: "No files yet",
     idle: "Idle",
     paused: "Paused",
-    pausedAt: "Paused · {rate}/hr",
     running: "On",
-    runningAt: "On · {rate}/hr",
     screen: "Open computer screen",
-    screenAt: "Open computer screen · {rate}/hr",
     pause: "Pause",
-    pauseAt: "Pause · {rate}/hr",
     pausing: "Pausing…",
     pauseFailed: "The computer did not pause.",
     resume: "Resume",
-    resumeAt: "Resume · {rate}/hr",
     resuming: "Resuming…",
     resumeFailed: "The computer did not resume.",
-    resumeConfirm: "Resume bills {rate} credits per hour. Unused prepaid is returned.",
-    pauseConfirm: "Pause bills {rate} credits per hour.",
     extraConfirm:
       "Opening another is free. New chats still use the default; this one does not take new chats on its own.",
     cancel: "Cancel",
@@ -76,21 +70,14 @@ const copy = {
     emptyDisk: "还没有文件",
     idle: "空闲",
     paused: "暂停",
-    pausedAt: "暂停 {rate} 星币/小时",
     running: "开着",
-    runningAt: "开着 {rate} 星币/小时",
     screen: "打开电脑屏幕",
-    screenAt: "打开电脑屏幕 · {rate} 星币/小时",
     pause: "暂停",
-    pauseAt: "暂停 · {rate} 星币/小时",
     pausing: "正在暂停…",
     pauseFailed: "没有停下来。",
     resume: "恢复",
-    resumeAt: "恢复 · {rate} 星币/小时",
     resuming: "正在恢复…",
     resumeFailed: "没有恢复。",
-    resumeConfirm: "恢复按 {rate} 星币/小时计费。不用的预扣会退回。",
-    pauseConfirm: "暂停后按 {rate} 星币/小时计费。",
     extraConfirm: "再开一台免费。新对话仍进默认电脑，这台不会自动接新对话。",
     cancel: "取消",
   },
@@ -125,6 +112,7 @@ export function ComputerManagePanel({
   gatewayBaseUrl,
   getAccessToken,
   locale,
+  cn,
   onClose,
   onOpenScreen,
 }: {
@@ -132,10 +120,13 @@ export function ComputerManagePanel({
   gatewayBaseUrl: string;
   getAccessToken: () => Promise<string | null>;
   locale: RanchLocale;
+  cn: boolean;
   onClose: () => void;
   onOpenScreen: (computerId: string, label: string, rate?: number, hint?: ScreenChargeHint) => void;
 }) {
-  const t = copy[locale] ?? copy.en;
+  const spoken = copy[locale] ?? copy.en;
+  const rates = hourlyCreditCopy(locale, cn);
+  const t = { ...spoken, ...rates };
   const [computers, setComputers] = useState<ComputerRow[]>([]);
   const [place, setPlace] = useState<ChatPlace | null>(null);
   const [listReady, setListReady] = useState(false);

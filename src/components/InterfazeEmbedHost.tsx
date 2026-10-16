@@ -6,10 +6,12 @@ import {
   ConfirmDialog,
   connectChatSocket,
   createGatewayClient,
+  hourlyCreditCopy,
   sendAsksBeforeBoot,
   sendNeedsDesk,
   type ChatMessage,
 } from "@acnlabs/agent-chat";
+import { isCnRegion } from "@/lib/region";
 import { getGatewayBaseUrl } from "@/lib/gateway";
 import {
   EMBED_ERROR,
@@ -36,33 +38,29 @@ const copy = {
   en: {
     placeholder: "Message…",
     send: "Send",
-    sendAt: "Send · {rate}/hr",
     empty: "Say something to start.",
     connecting: "Connecting…",
     missing: "This chat couldn't be opened. Please reload it from the host page.",
     loadFailed: "Could not open this chat.",
     retry: "Retry",
     cancel: "Cancel",
-    sendConfirm:
-      "Sending starts this computer at {rate} credits per hour. Unused prepaid is returned.",
   },
   zh: {
     placeholder: "输入消息…",
     send: "发送",
-    sendAt: "发送 · {rate} 星币/小时",
     empty: "说一句，开始这一站。",
     connecting: "正在连接…",
     missing: "这个对话暂时打不开，请从原页面重新进入。",
     loadFailed: "打不开这场对话。",
     retry: "重试",
     cancel: "取消",
-    sendConfirm: "发送后电脑按 {rate} 星币/小时计费。不用的预扣会退回。",
   },
 };
 
 export default function InterfazeEmbedHost({ locale, theme }: Props) {
   const zh = (locale || "").toLowerCase().startsWith("zh");
   const t = zh ? copy.zh : copy.en;
+  const rates = hourlyCreditCopy(zh ? "zh" : "en", isCnRegion());
   const gatewayBaseUrl = getGatewayBaseUrl();
   const dark = theme !== "light";
 
@@ -264,9 +262,9 @@ export default function InterfazeEmbedHost({ locale, theme }: Props) {
           if (sendAsksBeforeBoot(place, [], sendNeedsDesk(text))) {
             const rate = place.resume_credits_per_hour;
             setConfirmDialog({
-              message: t.sendConfirm.replace("{rate}", rate == null ? "—" : String(rate)),
+              message: rates.sendConfirm.replace("{rate}", rate == null ? "—" : String(rate)),
               confirmLabel:
-                rate == null ? t.send : t.sendAt.replace("{rate}", String(rate)),
+                rate == null ? t.send : rates.sendAt.replace("{rate}", String(rate)),
               onConfirm: () => {
                 setConfirmDialog(null);
                 void send({ bootAdmitted: true });
