@@ -15,10 +15,25 @@ const moduleExports = {};
 new Function("exports", js)(moduleExports);
 const {
   sendAsksBeforeBoot,
+  sendButtonLabel,
   sendNeedsDesk,
   placeForDefaultComputer,
   screenAsksBeforeCharge,
 } = moduleExports;
+
+test("the send button prints the hourly rate only when this send would start a bill", () => {
+  const labels = { send: "发送", sendAt: "发送 · {rate} 星币/小时" };
+  const idle = {
+    place: "cloud",
+    status: "idle",
+    computer_id: "pc",
+    resume_credits_per_hour: 58,
+  };
+  assert.equal(sendButtonLabel(idle, "hi", [], labels), "发送");
+  assert.equal(sendButtonLabel(idle, "see mbx:abc", [], labels), "发送 · 58 星币/小时");
+  assert.equal(sendButtonLabel(idle, "see mbx:abc", ["pc"], labels), "发送");
+  assert.equal(sendButtonLabel(null, "see mbx:abc", [], labels), "发送");
+});
 
 test("a plain chat send does not ask just because the computer is idle", () => {
   assert.equal(sendNeedsDesk("hi"), false);
@@ -83,14 +98,7 @@ test("the composer asks only when this send copies a file onto the desk", () => 
   assert.match(shell, /retryLastUserMessage[\s\S]*void send\(\{ text \}\)/);
   assert.match(i18n, /sendConfirm: "发送后电脑按 \{rate\} 星币\/小时计费/);
   assert.match(shell, /onPlace=\{setChatPlace\}/);
-  assert.match(
-    shell,
-    /sendAsksBeforeBoot\(chatPlace, bootScreenIds\(\), sendNeedsDesk\(draft\)\)/,
-  );
-  assert.match(
-    shell,
-    /t\.sendAt\.replace\("\{rate\}", String\(chatPlace\.resume_credits_per_hour\)\)/,
-  );
+  assert.match(shell, /sendButtonLabel\(chatPlace, draft, bootScreenIds\(\)/);
 });
 
 test("a new group lands on the idle default computer, but a text digest does not ask", () => {
@@ -148,6 +156,7 @@ test("an embed send asks only when this bubble copies a file onto the desk", () 
   assert.match(embed, /bootAdmitted: true/);
   assert.match(embed, /hourlyCreditCopy\(zh \? "zh" : "en", isCnRegion\(\)\)/);
   assert.match(embed, /confirmLabel:[\s\S]*rates\.sendAt\.replace/);
+  assert.match(embed, /sendButtonLabel\(chatPlace, draft, \[\]/);
 });
 
 test("opening a screen asks when the machine is idle or paused", () => {
@@ -213,4 +222,6 @@ test("the Labs assistant asks only when this send copies a file onto the desk", 
   assert.match(shell, /bootAdmitted: true/);
   assert.match(shell, /hourlyCreditCopy\(\s*isAssistant \? "zh" : "en",\s*isCnInterfazeOrigin\(resolveInterfazeOrigin\(\)\)/);
   assert.match(shell, /confirmLabel=\{confirmDialog\.confirmLabel\}/);
+  assert.match(shell, /const sendCaption = sendButtonLabel\(chatPlace, draft, \[\]/);
+  assert.match(shell, /\{sendCaption\}/);
 });

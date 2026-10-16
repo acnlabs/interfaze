@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChatGatewayError, createGatewayClient } from "./gateway";
-import { sendAsksBeforeBoot, sendNeedsDesk } from "./computerSendBoot";
+import {
+  sendAsksBeforeBoot,
+  sendButtonLabel,
+  sendNeedsDesk,
+  type ChatComputerPlace,
+} from "./computerSendBoot";
 import { hourlyCreditCopy } from "./hourlyCreditCopy";
 import { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
 import { isCnInterfazeOrigin, resolveInterfazeOrigin } from "./ranch-shell/interfazeHost";
@@ -152,6 +157,7 @@ export function AgentChatShell(props: AgentChatShellProps) {
     confirmLabel: string;
     onConfirm: () => void;
   } | null>(null);
+  const [chatPlace, setChatPlace] = useState<ChatComputerPlace | null>(null);
   const [wsStatus, setWsStatus] = useState<"connecting" | "open" | "closed" | "error" | "idle">(
     "idle",
   );
@@ -324,6 +330,30 @@ export function AgentChatShell(props: AgentChatShellProps) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [open, messages, busy]);
 
+  useEffect(() => {
+    if (!chat?.chat_id) {
+      setChatPlace(null);
+      return;
+    }
+    const chatId = chat.chat_id;
+    let gone = false;
+    void (async () => {
+      const token = await getAccessToken();
+      if (!token || gone) return;
+      const res = await fetch(
+        `${gatewayBaseUrl.replace(/\/+$/, "")}/api/chats/${encodeURIComponent(chatId)}/computer`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok || gone) return;
+      setChatPlace((await res.json()) as ChatComputerPlace);
+    })().catch(() => {
+      if (!gone) setChatPlace(null);
+    });
+    return () => {
+      gone = true;
+    };
+  }, [chat?.chat_id, gatewayBaseUrl, getAccessToken]);
+
   const send = async (opts?: { bootAdmitted?: boolean }) => {
     const text = draft.trim();
     if (!text || !chat) return;
@@ -419,6 +449,14 @@ export function AgentChatShell(props: AgentChatShellProps) {
     }
   };
 
+  const rates = hourlyCreditCopy(
+    isAssistant ? "zh" : "en",
+    isCnInterfazeOrigin(resolveInterfazeOrigin()),
+  );
+  const sendCaption = sendButtonLabel(chatPlace, draft, [], {
+    send: isAssistant ? "发送" : "Send",
+    sendAt: rates.sendAt,
+  });
   const showChrome = allowAgentPicker || allowGroupChat || showGatewayStatus;
   const assistantUnconfigured = isAssistant && !(defaultAgentIds[0] || agentId).trim();
   const inputDisabled = !chat || healthOk === false || busy;
@@ -653,7 +691,7 @@ export function AgentChatShell(props: AgentChatShellProps) {
                     opacity: inputDisabled || !draft.trim() ? 0.4 : 1,
                   }}
                 >
-                  发送
+                  {sendCaption}
                 </button>
               </div>
               {disclaimer && (
@@ -939,7 +977,7 @@ export function AgentChatShell(props: AgentChatShellProps) {
               alignSelf: "flex-end",
             }}
           >
-            Send
+            {sendCaption}
           </button>
         </footer>
         {bootDialog}

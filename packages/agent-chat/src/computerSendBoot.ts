@@ -33,6 +33,21 @@ export function sendAsksBeforeBoot(
   return true;
 }
 
+/** Send button copy when this draft would start the hourly computer bill. */
+export function sendButtonLabel(
+  place: ChatComputerPlace | null | undefined,
+  draft: string,
+  openScreenIds: string[],
+  labels: { send: string; sendAt: string },
+): string {
+  if (!place || !sendAsksBeforeBoot(place, openScreenIds, sendNeedsDesk(draft))) {
+    return labels.send;
+  }
+  const rate = place.resume_credits_per_hour;
+  if (rate == null) return labels.send;
+  return labels.sendAt.replace("{rate}", String(rate));
+}
+
 export type ScreenChargeHint = {
   status?: string | null;
   resumeCreditsPerHour?: number | null;
