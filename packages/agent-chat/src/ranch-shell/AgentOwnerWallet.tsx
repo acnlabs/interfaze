@@ -1059,7 +1059,7 @@ export function AgentOwnerWallet({
                       }}
                     >
                       <span style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>
-                        {fmtCredits(r.amount)} Credits
+                        {t.spendApprovalAmount.replace("{n}", fmtCredits(r.amount))}
                       </span>
                       <span style={{ fontSize: 11, color: colors.muted, flexShrink: 0 }}>
                         {fmtTxTime(r.created_at)}
