@@ -35,6 +35,7 @@ test("China Chinese names the unit 星币, not the English word Credits", () => 
   assert.equal(zh.pieceHeld(3), "按件结算中 3 星币");
   assert.equal(zh.spendApprovalAmount, "{n} 星币");
   assert.equal(zh.insufficientCredits, "星币不够，这条发不出去。");
+  assert.equal(zh.onDemandLimitReached, "这个月的按量额度用完了，这条发不出去。");
   assert.equal(zh.pieceListed(12), "12 星币");
   assert.equal(zh.walletAmountHintCn, "整数星币。100 星币 = 1 元人民币。");
 });
@@ -60,6 +61,7 @@ test("overseas Chinese names the unit credit, and does not say 星币", () => {
   assert.match(zh.spendApprovalsHint, /从 credit 扣款/);
   assert.equal(zh.spendApprovalAmount, "{n} credits");
   assert.equal(zh.insufficientCredits, "credit 不够，这条发不出去。");
+  assert.equal(zh.onDemandLimitReached, "这个月的按量额度用完了，这条发不出去。");
   assert.match(zh.myAgentsPolicyAllowlistHelp, /免扣 credit/);
   assert.match(zh.myAgentsAllowlistHint, /免扣 credit/);
   assert.equal(zh.pieceHeld(3), "按件结算中 3 credits");
@@ -74,6 +76,11 @@ test("English keeps Credits on both sites", () => {
   assert.equal(china.spendApprovalAmount, "{n} Credits");
   assert.equal(china.insufficientCredits, "Not enough credits to send this.");
   assert.equal(overseas.insufficientCredits, "Not enough credits to send this.");
+  assert.equal(
+    china.onDemandLimitReached,
+    "This month's on-demand limit is used up. This can't be sent.",
+  );
+  assert.equal(overseas.onDemandLimitReached, china.onDemandLimitReached);
   assert.equal(overseas.spendApprovalAmount, "{n} Credits");
   assert.equal(overseas.pieceListed(12), "12 Credits");
   assert.equal(china.pieceHeld(3), "3 Credits settling");
@@ -93,14 +100,15 @@ test("chat attachments use the same unit sentence", () => {
     path.join(__dirname, "../packages/agent-chat/src/ranch-shell/AgentOwnerWallet.tsx"),
     "utf8",
   );
-  assert.match(shell, /e\.code === "insufficient_credits"[\s\S]{0,80}t\.insufficientCredits/);
+  assert.match(shell, /sendBlockSentence\(e\.code, e\.message, t\)/);
   assert.doesNotMatch(shell, /Insufficient credits\. Have/);
+  assert.doesNotMatch(shell, /Monthly on-demand limit reached/);
   const embed = fs.readFileSync(
     path.join(__dirname, "../src/components/InterfazeEmbedHost.tsx"),
     "utf8",
   );
-  assert.match(embed, /e\.code === "insufficient_credits" \? spoken\.insufficientCredits/);
-  assert.match(assistant, /e\.code === "insufficient_credits"[\s\S]{0,40}spoken\.insufficientCredits/);
+  assert.match(embed, /sendBlockSentence\(e\.code, e\.message, spoken\)/);
+  assert.match(assistant, /sendBlockSentence\(e\.code, e\.message,/);
   assert.match(wallet, /t\.spendApprovalAmount\.replace\("\{n\}", fmtCredits\(r\.amount\)\)/);
   assert.doesNotMatch(wallet, /fmtCredits\(r\.amount\)\} Credits/);
   assert.match(shell, /listedPriceLabel=\{t\.pieceListed\}/);

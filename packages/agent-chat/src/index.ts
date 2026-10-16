@@ -25,6 +25,7 @@ export {
   screenAsksBeforeCharge,
 } from "./computerSendBoot";
 export { hourlyCreditCopy, type HourlyCreditCopy } from "./hourlyCreditCopy";
+export { sendBlockKind, sendBlockSentence, type SendBlockKind } from "./sendBlockCopy";
 export { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
 export {
   connectPromptForInvite,

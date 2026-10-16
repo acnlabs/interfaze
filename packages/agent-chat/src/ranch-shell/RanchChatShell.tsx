@@ -27,6 +27,7 @@ import type {
   ThreadSummary,
 } from "../types";
 import { connectChatSocket, type ChatSocket } from "../ws";
+import { sendBlockKind, sendBlockSentence } from "../sendBlockCopy";
 import {
   attachmentBilledRefs,
   attachmentListedPriceVisible,
@@ -508,7 +509,8 @@ function shouldOfferStoreOpenRouterKey(
   code: string | null | undefined,
   message: string,
 ): boolean {
-  if (code === "insufficient_credits") return false;
+  const block = sendBlockKind(code, message);
+  if (block === "insufficient_credits" || block === "on_demand_limit") return false;
   if (code === "official_not_authorized" || code === "official_model_unsupported") {
     return false;
   }
@@ -541,12 +543,12 @@ function sendFailureCopy(
 ): { text: string; offerStoreKey: boolean } {
   if (!(e instanceof ChatGatewayError)) return { text: t.sendFailed, offerStoreKey: false };
   const offerStoreKey = shouldOfferStoreOpenRouterKey(e.code, e.message);
+  const blocked = sendBlockSentence(e.code, e.message, t);
+  if (blocked) return { text: blocked, offerStoreKey: false };
   const text =
     e.code === "agent_unreachable"
       ? t.unreachable
-      : e.code === "rate_limited"
-        ? t.rateLimited
-        : e.code === "acn_unavailable"
+      : e.code === "acn_unavailable"
           ? t.billingUnavailable
           : e.code === "unsupported_model"
             ? t.unsupportedModel
@@ -560,9 +562,7 @@ function sendFailureCopy(
                     ? t.modelPricingUnavailable
                     : e.code === "price_unconfirmed"
                       ? t.priceUnconfirmed
-                      : e.code === "insufficient_credits"
-                        ? t.insufficientCredits
-                        : e.code === "canvas_ref"
+                      : e.code === "canvas_ref"
       ? t.pageRefRejected
       : e.message || t.sendFailed;
   return { text, offerStoreKey };

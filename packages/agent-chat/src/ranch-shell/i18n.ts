@@ -50,6 +50,7 @@ export type RanchMessages = {
   unreachable: string;
   rateLimited: string;
   insufficientCredits: string;
+  onDemandLimitReached: string;
   billingUnavailable: string;
   unsupportedModel: string;
   officialNotAuthorized: string;
@@ -802,6 +803,7 @@ const en: RanchMessages = {
   unreachable: "Can’t reach this agent for chat right now.",
   rateLimited: "Not enough credits to send. Top up in Wallet or check Plan & Usage.",
   insufficientCredits: "Not enough credits to send this.",
+  onDemandLimitReached: "This month's on-demand limit is used up. This can't be sent.",
   billingUnavailable: "Billing check unavailable. Try again in a moment.",
   unsupportedModel: "This agent does not support that model.",
   officialNotAuthorized:
@@ -1603,6 +1605,7 @@ const zh: RanchMessages = {
   unreachable: "暂时联系不上对方。",
   rateLimited: "余额不足，无法发送。请先去钱包充值，或查看套餐与用量。",
   insufficientCredits: "星币不够，这条发不出去。",
+  onDemandLimitReached: "这个月的按量额度用完了，这条发不出去。",
   billingUnavailable: "计费服务暂时不可用，请稍后再试。",
   unsupportedModel: "该智能体不支持所选模型。",
   officialNotAuthorized:
@@ -2421,6 +2424,7 @@ const OVERSEAS_ZH: Partial<Record<keyof RanchMessages, string>> = {
   spendApprovalsHint: "超过消费授权额度的支出申请。批准后会立即从 credit 扣款。",
   spendApprovalAmount: "{n} credits",
   insufficientCredits: "credit 不够，这条发不出去。",
+  onDemandLimitReached: "这个月的按量额度用完了，这条发不出去。",
 };
 
 function rewriteOverseasCredit(text: string): string {
