@@ -117,9 +117,16 @@ test("opening a proposed group asks only when that digest copies onto the desk",
     path.join(__dirname, "../packages/agent-chat/src/ranch-shell/RanchChatShell.tsx"),
     "utf8",
   );
+  const i18n = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ranch-shell/i18n.ts"),
+    "utf8",
+  );
   assert.match(shell, /placeForDefaultComputer/);
   assert.match(shell, /confirmProposeGroup[\s\S]*sendNeedsDesk\(summary\)/);
   assert.match(shell, /bootAdmitted: true/);
+  assert.match(i18n, /orchProposeCreateAt: "创建群聊 · \{rate\} 星币\/小时"/);
+  assert.match(i18n, /orchProposeOpenExistingAt: "打开已有群 · \{rate\} 星币\/小时"/);
+  assert.match(shell, /verbAt\.replace\("\{rate\}", String\(rate\)\)/);
 });
 
 test("an embed send asks only when this bubble copies a file onto the desk", () => {

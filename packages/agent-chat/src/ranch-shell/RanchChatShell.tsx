@@ -4316,11 +4316,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
           }
           if (place && sendAsksBeforeBoot(place, bootScreenIds(), sendNeedsDesk(summary))) {
             const rate = place.resume_credits_per_hour;
+            const verb = opts?.preferExisting ? t.orchProposeOpenExisting : t.orchProposeCreate;
+            const verbAt = opts?.preferExisting
+              ? t.orchProposeOpenExistingAt
+              : t.orchProposeCreateAt;
             setConfirmDialog({
               message: t.sendConfirm.replace("{rate}", rate == null ? "—" : String(rate)),
-              confirmLabel: opts?.preferExisting
-                ? t.orchProposeOpenExisting
-                : t.orchProposeCreate,
+              confirmLabel: rate == null ? verb : verbAt.replace("{rate}", String(rate)),
               onConfirm: () => {
                 setConfirmDialog(null);
                 void confirmProposeGroup(propose, messageId, {
