@@ -75,7 +75,11 @@ export type RanchMessages = {
   orchProposeTitle: string;
   orchProposeNeedTwo: string;
   orchProposeCreate: string;
+  /** Confirm button when creating the group would start the hourly computer bill. */
+  orchProposeCreateAt: string;
   orchProposeOpenExisting: string;
+  /** Confirm button when opening the group would start the hourly computer bill. */
+  orchProposeOpenExistingAt: string;
   orchProposeDismiss: string;
   orchProposeMembers: (names: string) => string;
   orchProposePartial: (names: string) => string;
@@ -809,7 +813,9 @@ const en: RanchMessages = {
   orchProposeTitle: "Suggests a group",
   orchProposeNeedTwo: "Need at least two agents to open a group.",
   orchProposeCreate: "Create group",
+  orchProposeCreateAt: "Create group · {rate}/hr",
   orchProposeOpenExisting: "Open existing group",
+  orchProposeOpenExistingAt: "Open existing group · {rate}/hr",
   orchProposeDismiss: "Not now",
   orchProposeMembers: (names) => `With ${names}`,
   orchProposePartial: (names) => `Couldn't add ${names} (no permission)`,
@@ -1596,7 +1602,9 @@ const zh: RanchMessages = {
   orchProposeTitle: "提议开群",
   orchProposeNeedTwo: "开群至少要两个智能体。",
   orchProposeCreate: "创建群聊",
+  orchProposeCreateAt: "创建群聊 · {rate} 星币/小时",
   orchProposeOpenExisting: "打开已有群",
+  orchProposeOpenExistingAt: "打开已有群 · {rate} 星币/小时",
   orchProposeDismiss: "先不",
   orchProposeMembers: (names) => `拉上 ${names}`,
   orchProposePartial: (names) => `${names} 进不去（没权限）`,
