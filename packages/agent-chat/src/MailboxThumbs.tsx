@@ -50,7 +50,7 @@ function retainLabel(iso: string | null | undefined): string | null {
   return at.toLocaleDateString();
 }
 
-function ListedTag({ n }: { n: number }) {
+function ListedTag({ n, label }: { n: number; label: (amount: number) => string }) {
   if (n <= 0) return null;
   return (
     <div
@@ -65,7 +65,7 @@ function ListedTag({ n }: { n: number }) {
         pointerEvents: "none",
       }}
     >
-      {n} Credits
+      {label(n)}
     </div>
   );
 }
@@ -87,6 +87,7 @@ export function MailboxThumbs({
   retryLabel = "Retry",
   unavailableLabel = "Attachment not found or no longer available",
   accessDeniedLabel = "Cannot access attachment. Check your login and chat access.",
+  listedPriceLabel = (amount: number) => `${amount} Credits`,
 }: {
   chatId: string;
   attachments?: string[] | string | null;
@@ -106,6 +107,7 @@ export function MailboxThumbs({
   retryLabel?: string;
   unavailableLabel?: string;
   accessDeniedLabel?: string;
+  listedPriceLabel?: (amount: number) => string;
 }) {
   const ids = mailboxIdsFromAttachments(parseMessageAttachments(attachments ?? []));
   const [files, setFiles] = useState<FileBlob[]>([]);
@@ -297,7 +299,7 @@ export function MailboxThumbs({
                 </span> : null}
               {showListedPrice &&
               (chargedMailboxIds == null || chargedMailboxIds.includes(f.mailboxId)) ? (
-                <ListedTag n={f.listedCredits} />
+                <ListedTag n={f.listedCredits} label={listedPriceLabel} />
               ) : null}
               </div>
               {media}
