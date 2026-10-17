@@ -69,4 +69,9 @@ test("a share under 1% says under 1%, and 1% stays an integer", () => {
   assert.equal(usageShareLabel(0.01, zh.accountPlanUsedPct, zh.accountPlanUsedUnderOne), "已用 1%");
   assert.equal(usageShareLabel(0.016, en.accountPlanUsedPct, en.accountPlanUsedUnderOne), "2% used");
   assert.equal(usageShareLabel(0, zh.accountPlanUsedPct, zh.accountPlanUsedUnderOne), "已用 0%");
+  const panel = fs.readFileSync(
+    path.join(__dirname, "../packages/agent-chat/src/ranch-shell/AccountPanels.tsx"),
+    "utf8",
+  );
+  assert.match(panel, /usageShareLabel\(\s*ratio,/);
 });
