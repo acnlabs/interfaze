@@ -14,7 +14,7 @@ function load(rel) {
   return moduleExports;
 }
 
-const { indexUsageAgentNames, usageAgentLabel } = load(
+const { indexUsageAgentNames, usageAgentLabel, usageShareLabel } = load(
   "../packages/agent-chat/src/usageAgentLabel.ts",
 );
 const { ranchMessages } = load("../packages/agent-chat/src/ranch-shell/i18n.ts");
@@ -53,7 +53,20 @@ test("China and overseas Chinese name the unknown row, and English stays English
     path.join(__dirname, "../packages/agent-chat/src/ranch-shell/RanchChatShell.tsx"),
     "utf8",
   );
+  assert.match(panel, /row\.name \|\| agentNames\[usageAgentKey\(row\.agent_id\)\]/);
   assert.match(panel, /usageAgentLabel\(/);
   assert.doesNotMatch(panel, />\s*\{row\.agent_id\}\s*</);
   assert.match(shell, /agentLabels=\{\[/);
+});
+
+test("a share under 1% says under 1%, and 1% stays an integer", () => {
+  const zh = ranchMessages("zh", true);
+  const overseas = ranchMessages("zh", false);
+  const en = ranchMessages("en", false);
+  assert.equal(usageShareLabel(0.004, zh.accountPlanUsedPct, zh.accountPlanUsedUnderOne), "不到 1%");
+  assert.equal(usageShareLabel(0.004, overseas.accountPlanUsedPct, overseas.accountPlanUsedUnderOne), "不到 1%");
+  assert.equal(usageShareLabel(0.004, en.accountPlanUsedPct, en.accountPlanUsedUnderOne), "under 1%");
+  assert.equal(usageShareLabel(0.01, zh.accountPlanUsedPct, zh.accountPlanUsedUnderOne), "已用 1%");
+  assert.equal(usageShareLabel(0.016, en.accountPlanUsedPct, en.accountPlanUsedUnderOne), "2% used");
+  assert.equal(usageShareLabel(0, zh.accountPlanUsedPct, zh.accountPlanUsedUnderOne), "已用 0%");
 });

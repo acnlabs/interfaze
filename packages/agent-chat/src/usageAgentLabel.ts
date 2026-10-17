@@ -38,3 +38,10 @@ export function usageAgentLabel(
   if (label && !looksLikeId(label, id)) return { text: label, showId: false };
   return { text: key.length > 8 ? key.slice(0, 8) : key, showId: true };
 }
+
+/** Integer percent at 1% and above. A positive share under 1% stays "under 1%". */
+export function usageShareLabel(share: number, usedPct: string, underOne: string): string {
+  const pct = Number.isFinite(share) && share > 0 ? share * 100 : 0;
+  if (pct > 0 && pct < 1) return underOne;
+  return usedPct.split("{n}").join(String(Math.round(pct)));
+}

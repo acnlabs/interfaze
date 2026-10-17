@@ -15,7 +15,12 @@ import type {
   PlanUsage,
 } from "../gateway";
 import { formatCreditBalance, formatSignedCreditAmount } from "../creditDisplay";
-import { indexUsageAgentNames, usageAgentKey, usageAgentLabel } from "../usageAgentLabel";
+import {
+  indexUsageAgentNames,
+  usageAgentKey,
+  usageAgentLabel,
+  usageShareLabel,
+} from "../usageAgentLabel";
 import type { RanchChatAccount } from "../types";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import type { RanchLocale, RanchMessages } from "./i18n";
@@ -1070,9 +1075,11 @@ export function AccountPlanUsagePanel({
                                 fontVariantNumeric: "tabular-nums",
                               }}
                             >
-                              {fmtTpl(t.accountPlanUsedPct, {
-                                n: Math.round(share * 100),
-                              })}
+                              {usageShareLabel(
+                                share,
+                                t.accountPlanUsedPct,
+                                t.accountPlanUsedUnderOne,
+                              )}
                               {" · "}
                               {formatCreditBalance(row.credits)}
                             </span>
