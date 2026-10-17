@@ -351,6 +351,7 @@ export type RanchMessages = {
   accountPlanUsedOfLimit: string;
   accountPlanUsedPct: string;
   accountPlanByAgent: string;
+  accountPlanAgentUnknown: string;
   accountPlanEmptyUsage: string;
   accountPlanComingSoon: string;
   accountPlanFreeBlurb: string;
@@ -1097,6 +1098,7 @@ const en: RanchMessages = {
   accountPlanUsedOfLimit: "{used} / {limit}",
   accountPlanUsedPct: "{n}% used",
   accountPlanByAgent: "By agent",
+  accountPlanAgentUnknown: "Unknown agent",
   accountPlanEmptyUsage: "No on-demand charges this period.",
   accountPlanComingSoon: "Paid tiers coming later",
   accountPlanFreeBlurb:
@@ -1887,6 +1889,7 @@ const zh: RanchMessages = {
   accountPlanUsedOfLimit: "{used} / {limit}",
   accountPlanUsedPct: "已用 {n}%",
   accountPlanByAgent: "按智能体",
+  accountPlanAgentUnknown: "未知智能体",
   accountPlanEmptyUsage: "本周期尚无按量费用。",
   accountPlanComingSoon: "付费档位稍后开放",
   accountPlanFreeBlurb: "无订阅费、无含包，对话从钱包按量扣费。",

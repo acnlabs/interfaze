@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type {
   AccountKey,
@@ -15,6 +15,7 @@ import type {
   PlanUsage,
 } from "../gateway";
 import { formatCreditBalance, formatSignedCreditAmount } from "../creditDisplay";
+import { indexUsageAgentNames, usageAgentKey, usageAgentLabel } from "../usageAgentLabel";
 import type { RanchChatAccount } from "../types";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import type { RanchLocale, RanchMessages } from "./i18n";
@@ -412,6 +413,7 @@ export function AccountPlanUsagePanel({
   locale = "en",
   agentPlanetBaseUrl: _agentPlanetBaseUrl = "https://agentplanet.org",
   interfazeBaseUrl = "https://interfaze.io",
+  agentLabels = [],
   onClose,
 }: {
   client: GatewayClient;
@@ -420,11 +422,14 @@ export function AccountPlanUsagePanel({
   agentPlanetBaseUrl?: string;
   /** Interfaze origin for /subscribe checkout (shell embed + deep link). */
   interfazeBaseUrl?: string;
+  /** Names already known from the directory and direct chats. Owned agents are loaded here. */
+  agentLabels?: Array<{ agentId?: string | null; name?: string | null }>;
   onClose: () => void;
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<PlanUsage | null>(null);
+  const [ownedNames, setOwnedNames] = useState<Record<string, string>>({});
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [limitMode, setLimitMode] = useState<"unlimited" | "fixed">("unlimited");
   const [limitInput, setLimitInput] = useState("200");
@@ -503,6 +508,29 @@ export function AccountPlanUsagePanel({
       return null;
     }
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    void client
+      .listMyAgents(50)
+      .then((rows) => {
+        if (cancelled) return;
+        setOwnedNames(
+          indexUsageAgentNames(rows.map((row) => ({ agentId: row.agent_id, name: row.name }))),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setOwnedNames({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+
+  const agentNames = useMemo(() => {
+    const known = indexUsageAgentNames(agentLabels);
+    return { ...known, ...ownedNames };
+  }, [agentLabels, ownedNames]);
 
   const applyPlanUsage = useCallback((row: PlanUsage) => {
     setData(row);
@@ -1006,6 +1034,11 @@ export function AccountPlanUsagePanel({
                   <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
                     {byAgent.map((row) => {
                       const share = odSpent > 0 ? row.credits / odSpent : 0;
+                      const shown = usageAgentLabel(
+                        row.agent_id,
+                        row.name || agentNames[usageAgentKey(row.agent_id)],
+                        t.accountPlanAgentUnknown,
+                      );
                       return (
                         <li key={row.agent_id} style={{ padding: "10px 0 0" }}>
                           <div
@@ -1017,6 +1050,7 @@ export function AccountPlanUsagePanel({
                             }}
                           >
                             <span
+                              title={shown.showId ? row.agent_id : undefined}
                               style={{
                                 flex: 1,
                                 minWidth: 0,
@@ -1027,7 +1061,7 @@ export function AccountPlanUsagePanel({
                                 whiteSpace: "nowrap",
                               }}
                             >
-                              {row.agent_id}
+                              {shown.text}
                             </span>
                             <span
                               style={{

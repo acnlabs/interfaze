@@ -6123,6 +6123,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
           locale={uiLocale}
           agentPlanetBaseUrl={agentPlanetBaseUrl}
           interfazeBaseUrl={interfazeBaseUrl}
+          agentLabels={[
+            ...directoryAgents.map((agent) => ({ agentId: agent.agent_id, name: agent.name })),
+            ...chats
+              .filter((chat) => !isGroupChat(chat))
+              .map((chat) => ({ agentId: chat.agent_id, name: chat.title })),
+          ]}
           onClose={() => closeAccountPanel()}
         />
       ) : null}
