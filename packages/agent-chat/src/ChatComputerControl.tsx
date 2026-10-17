@@ -13,15 +13,12 @@ function IconMonitor() {
   );
 }
 
-function headerIconStyle(on: boolean, wide = false): CSSProperties {
+function headerIconStyle(on: boolean): CSSProperties {
   return {
     ...btnGhost,
-    width: wide ? "auto" : 28,
+    width: 28,
     height: 28,
-    padding: wide ? "0 8px" : 0,
-    gap: wide ? 6 : 0,
-    fontSize: 12,
-    whiteSpace: "nowrap",
+    padding: 0,
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -137,7 +134,7 @@ export function ChatComputerControl({
   return (
     <button
       type="button"
-      style={headerIconStyle(on, asks)}
+      style={headerIconStyle(on)}
       aria-pressed={openable ? on : undefined}
       aria-label={caption}
       title={caption}
@@ -148,7 +145,6 @@ export function ChatComputerControl({
       }}
     >
       <IconMonitor />
-      {asks ? caption : null}
     </button>
   );
 }
