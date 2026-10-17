@@ -350,6 +350,7 @@ export type RanchMessages = {
   accountPlanLimitSaveFailed: string;
   accountPlanUsedOfLimit: string;
   accountPlanUsedPct: string;
+  accountPlanUsedUnderOne: string;
   accountPlanByAgent: string;
   accountPlanAgentUnknown: string;
   accountPlanEmptyUsage: string;
@@ -1097,6 +1098,7 @@ const en: RanchMessages = {
   accountPlanLimitSaveFailed: "Couldn’t save limit.",
   accountPlanUsedOfLimit: "{used} / {limit}",
   accountPlanUsedPct: "{n}% used",
+  accountPlanUsedUnderOne: "under 1%",
   accountPlanByAgent: "By agent",
   accountPlanAgentUnknown: "Unknown agent",
   accountPlanEmptyUsage: "No on-demand charges this period.",
@@ -1888,6 +1890,7 @@ const zh: RanchMessages = {
   accountPlanLimitSaveFailed: "无法保存限额。",
   accountPlanUsedOfLimit: "{used} / {limit}",
   accountPlanUsedPct: "已用 {n}%",
+  accountPlanUsedUnderOne: "不到 1%",
   accountPlanByAgent: "按智能体",
   accountPlanAgentUnknown: "未知智能体",
   accountPlanEmptyUsage: "本周期尚无按量费用。",
