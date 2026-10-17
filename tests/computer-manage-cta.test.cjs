@@ -215,7 +215,8 @@ test("an open billed screen prints the hourly rate on the dock tab", () => {
     "utf8",
   );
   assert.match(i18n, /screenDock: "\{label\} · \{rate\} 星币\/小时"/);
-  assert.match(i18n, /screenDock: "\{label\} · \{rate\}\/hr"/);
+  assert.match(i18n, /screenDock: "\{label\} · \{rate\} credits\/hr"/);
+  assert.match(i18n, /openScreenAt: "Open computer screen · \{rate\} credits\/hr"/);
   assert.match(
     shell,
     /t\.screenDock\.replace\("\{label\}", label\)\.replace\("\{rate\}", String\(billed\)\)/,
