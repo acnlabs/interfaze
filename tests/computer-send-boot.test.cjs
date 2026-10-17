@@ -191,7 +191,10 @@ test("the header screen button uses the chat place rates when the list has not l
   assert.match(panel, /row\?\.resume_credits_per_hour \?\? place\.resume_credits_per_hour/);
   assert.match(panel, /screenAsksBeforeCharge/);
   assert.match(panel, /hourlyCreditCopy\(locale, cn\)\.screenAt/);
-  assert.match(panel, /asks \? caption : null/);
+  assert.match(panel, /title=\{caption\}/);
+  assert.match(panel, /aria-label=\{caption\}/);
+  assert.doesNotMatch(panel, /asks \? caption : null/);
+  assert.doesNotMatch(panel, /headerIconStyle\(on, asks\)/);
 });
 
 test("opening a screen asks when it would raise the hourly rate", () => {
