@@ -870,9 +870,7 @@ export function AccountPlanUsagePanel({
                   : 0;
                 const ratio = hasPack && pack > 0 ? usedPack / pack : 0;
                 const right = hasPack
-                  ? fmtTpl(t.accountPlanUsedPct, {
-                      n: Math.round(ratio * 100),
-                    })
+                  ? usageShareLabel(ratio, t.accountPlanUsedPct, t.accountPlanUsedUnderOne)
                   : t.accountPlanNotIncluded;
                 return (
                   <div>
