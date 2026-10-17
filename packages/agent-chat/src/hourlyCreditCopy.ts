@@ -13,7 +13,7 @@ export type HourlyCreditCopy = {
 };
 
 const EN: HourlyCreditCopy = {
-  screenAt: "Open computer screen · {rate}/hr",
+  screenAt: "Open computer screen · {rate} credits/hr",
   sendAt: "Send · {rate}/hr",
   sendConfirm:
     "Sending starts this computer at {rate} credits per hour. Unused prepaid is returned.",

@@ -46,7 +46,7 @@ test("English stays credits on both sites", () => {
   const china = hourlyCreditCopy("en", true);
   const overseas = hourlyCreditCopy("en", false);
   assert.deepEqual(china, overseas);
-  assert.equal(china.screenAt, "Open computer screen · {rate}/hr");
+  assert.equal(china.screenAt, "Open computer screen · {rate} credits/hr");
   assert.equal(china.sendAt, "Send · {rate}/hr");
   assert.equal(china.pausedAt, "Paused · {rate}/hr");
   assert.equal(lineHasXingbi(china), false);
