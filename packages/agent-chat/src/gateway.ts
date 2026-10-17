@@ -249,7 +249,7 @@ export type PlanUsage = {
   };
   usage: {
     dialog_credits: number;
-    by_agent: Array<{ agent_id: string; credits: number }>;
+    by_agent: Array<{ agent_id: string; credits: number; name?: string | null }>;
   };
   /** User self-serve monthly on-demand spend cap (works on Free). */
   on_demand?: {
