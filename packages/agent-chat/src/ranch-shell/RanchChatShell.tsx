@@ -8160,14 +8160,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         }
                         return t.composerModelNoPrice;
                       };
-                      const options = offer.ids.filter((id) => {
-                        if (official && composerCatalogLoading) return true;
-                        return priceFor(id) !== t.composerModelNoPrice;
-                      });
+                      const options = offer.ids;
                       const visible = filterComposerModels(options, composerMenuQuery);
                       const value =
                         options.find((id) => sameModelId(id, selectedModelId)) ||
                         options.find((id) => sameModelId(id, listed)) ||
+                        listed ||
                         options[0] ||
                         "";
                       const priceHint = value ? priceFor(value) : "";
