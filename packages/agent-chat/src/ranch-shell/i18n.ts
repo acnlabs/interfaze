@@ -18,6 +18,7 @@ export type RanchMessages = {
   sending: string;
   sent: string;
   queuedOffline: string;
+  queuedStillWaiting: string;
   deliveryFailed: string;
   delivered: string;
   replying: string;
@@ -60,6 +61,7 @@ export type RanchMessages = {
   pricingMismatch: (listed: string, observed: string) => string;
   /** Agent bubble footer: this hop's token burn, in/out separately. */
   agentHopUsage: (input: number, output: number) => string;
+  agentHopDetails: string;
   /** Agent bubble: who this hop invoked (completed). */
   orchCalled: (name: string) => string;
   /** Agent bubble: invoke accepted, waiting on callee. */
@@ -70,6 +72,16 @@ export type RanchMessages = {
   orchIdLabel: string;
   orchHopLabel: string;
   orchCopy: string;
+  /** Right-hand window for agent interaction. The current view is the collaboration graph. */
+  interaction: string;
+  interactionView: string;
+  interactionEmpty: string;
+  interactionWaiting: string;
+  interactionReturned: string;
+  interactionFailed: string;
+  interactionOutside: string;
+  interactionQuiet: string;
+  interactionPerson: string;
   /** P2: agent suggested a group; human must confirm. */
   orchProposeTitle: string;
   orchProposeNeedTwo: string;
@@ -96,13 +108,18 @@ export type RanchMessages = {
   composerModelLabel: string;
   composerModelUnknown: string;
   composerModelListing: string;
-  /** Catalog miss / unpriced — still shown in picker. */
+  /** Catalog miss / unpriced. The picker does not list these. */
   composerModelNoPrice: string;
   composerModelPrice: (input: string, output: string) => string;
+  composerModelInputPrice: (input: string) => string;
+  priceFeedName: (feed: string) => string;
   composerModelMismatch: (listed: string, runtime: string) => string;
   sendFailed: string;
   expand: string;
   collapse: string;
+  headerMore: string;
+  openGroupInfo: string;
+  openAgentInfo: string;
   close: string;
   /** Open the session-bound window as face chat (kind=talk). */
   faceChat: string;
@@ -134,6 +151,8 @@ export type RanchMessages = {
   messagesLoadFailed: string;
   loading: string;
   noChatsYet: string;
+  noMatchingChats: string;
+  clearSearch: string;
   startChat: string;
   selectOrStart: string;
   sayHello: string;
@@ -150,6 +169,7 @@ export type RanchMessages = {
   decisionPicked: string;
   decisionScoring: string;
   decisionAskHuman: string;
+  decisionExpired: string;
   decisionCap: string;
   historyChats: string;
   headerHistory: string;
@@ -178,7 +198,11 @@ export type RanchMessages = {
   agentsCount: (n: number) => string;
   /** Group subtitle: total agents + how many are online. */
   agentsOnlineCount: (online: number, total: number) => string;
+  /** Group subtitle once people are on the roster. */
+  groupRosterLine: (people: number, agentsOnline: number) => string;
   members: string;
+  groupMember: string;
+  groupMemberSelf: string;
   groupInfo: string;
   agentInfo: string;
   topics: string;
@@ -186,9 +210,11 @@ export type RanchMessages = {
   startNewChat: string;
   untitledChat: string;
   noAgentChatsHint: string;
+  noGroupChatsHint: string;
   newTopic: string;
   createTopic: string;
   topicTitle: string;
+  openTopicLabel: (title: string) => string;
   topicDescription: string;
   noTopicsYet: string;
   noTopicsHint: string;
@@ -243,6 +269,9 @@ export type RanchMessages = {
   pasteAgentIdAdvanced: string;
   agentIdPlaceholder: string;
   groupTitle: string;
+  groupNamePlaceholder: string;
+  groupSelectedCount: (count: number) => string;
+  agentNoDescription: string;
   cancel: string;
   startChatAction: string;
   createGroup: string;
@@ -262,6 +291,11 @@ export type RanchMessages = {
   accountProfileHint: string;
   accountWallet: string;
   accountComputer: string;
+  /** Open the chat Canvas beside the conversation. */
+  manuscript: string;
+  addWindow: string;
+  openWindow: string;
+  pageRefRejected: string;
   accountBilling: string;
   accountWalletHint: string;
   /** Account menu: Store model quota (not API keys, not Wallet Credits). */
@@ -277,6 +311,7 @@ export type RanchMessages = {
   collabBudget: string;
   collabBudgetHint: string;
   collabAccountCap: string;
+  collabUnit: string;
   collabRemaining: string;
   collabAdd: string;
   collabApplyDefault: string;
@@ -288,6 +323,9 @@ export type RanchMessages = {
   collabNeedTopupCta: string;
   accountWalletLoadFailed: string;
   accountWalletEmptyTx: string;
+  walletTxIn: string;
+  walletTxOut: string;
+  walletTxNoParty: string;
   accountWalletRecent: string;
   accountWalletAgentWallets: string;
   accountWalletNoAgents: string;
@@ -434,6 +472,7 @@ export type RanchMessages = {
   myAgentsTagsHint: string;
   fieldHintLabel: string;
   myAgentsSaveProfile: string;
+  myAgentsSaveHint: string;
   myAgentsProfileSaved: string;
   myAgentsProfileFailed: string;
   myAgentsSectionPricing: string;
@@ -592,6 +631,8 @@ export type RanchMessages = {
   myAgentsLastHeartbeatHint: string;
   myAgentsLoadFailed: string;
   myAgentsRotateKey: string;
+  myAgentsDangerZone: string;
+  myAgentsDangerHint: string;
   myAgentsRotateConfirm: string;
   myAgentsRotateConfirmLabel: string;
   myAgentsRotateDone: string;
@@ -722,6 +763,8 @@ const en: RanchMessages = {
   sending: "Sending",
   sent: "Sent",
   queuedOffline: "In inbox — waiting for agent",
+  queuedStillWaiting:
+    "Still in the inbox. The agent picks it up when it comes online. Send again if it stays offline.",
   deliveryFailed: "Delivery failed",
   delivered: "Delivered",
   replying: "Replying",
@@ -740,8 +783,8 @@ const en: RanchMessages = {
   copyPromptForAgent: "Copy prompt for agent",
   connectExisting: "Connect agent",
   connectHint:
-    "Share the prompt, link, or QR. Your agent joins ACN with the invite code. Claiming uses a separate private link — this never includes a claim token.",
-  connectYourInvite: "This is your invite.",
+    "Copy the prompt to your agent, or share the link or QR code. The invite code is already inside. After it joins, it shows up under My agents.",
+  connectYourInvite: "The prompt already includes your invite code. Copy it and paste it to your agent.",
   copyPageLink: "Copy link",
   copyQr: "Copy QR",
   qrDownloaded: "Saved image",
@@ -769,12 +812,22 @@ const en: RanchMessages = {
     `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
   agentHopUsage: (input, output) =>
     `in ${input.toLocaleString("en-US")} · out ${output.toLocaleString("en-US")}`,
+  agentHopDetails: "Usage",
   orchCalled: (name) => `Called ${name}`,
   orchAsked: (name) => `Asked ${name}`,
   orchFailed: (name) => `Couldn't reach ${name}`,
   orchIdLabel: "id",
   orchHopLabel: "hop",
   orchCopy: "Copy",
+  interaction: "Interaction",
+  interactionView: "Graph",
+  interactionEmpty: "No agent interactions in this chat yet.",
+  interactionWaiting: "Waiting",
+  interactionReturned: "Returned",
+  interactionFailed: "Failed",
+  interactionOutside: "Not in this chat",
+  interactionQuiet: "No call yet",
+  interactionPerson: "Person",
   orchProposeTitle: "Suggests a group",
   orchProposeNeedTwo: "Need at least two agents to open a group.",
   orchProposeCreate: "Create group",
@@ -798,13 +851,25 @@ const en: RanchMessages = {
   composerModelLabel: "Model",
   composerModelUnknown: "—",
   composerModelListing: "listing",
-  composerModelNoPrice: "—",
-  composerModelPrice: (input, output) => `${input} in · ${output} out`,
+  composerModelNoPrice: "No price",
+  composerModelPrice: (input, output) => `${input} in · ${output} out / 1M tokens`,
+  composerModelInputPrice: (input: string) => `${input} in / 1M tokens`,
+  priceFeedName: (feed) => {
+    const key = feed.trim().toLowerCase();
+    if (key === "tencent") return "Tencent";
+    if (key === "aliyun") return "Alibaba";
+    if (key === "volcengine") return "ByteDance";
+    if (key === "openrouter") return "OpenRouter";
+    return feed;
+  },
   composerModelMismatch: (listed, runtime) =>
     `Listing ${listed} ≠ runtime ${runtime} (still billed at listing price)`,
   sendFailed: "Send failed",
   expand: "Expand",
-  collapse: "Collapse",
+  collapse: "Exit full screen",
+  headerMore: "More",
+  openGroupInfo: "Open group info",
+  openAgentInfo: "Open agent info",
   close: "Close",
   faceChat: "Face chat",
   faceChatOpen: "Face chat on",
@@ -834,6 +899,8 @@ const en: RanchMessages = {
   messagesLoadFailed: "Could not load messages. Please retry.",
   loading: "Loading…",
   noChatsYet: "No chats yet",
+  noMatchingChats: "No matching chats",
+  clearSearch: "Clear search",
   startChat: "Start a chat",
   selectOrStart: "Select a chat or start a new one",
   sayHello: "Say hello to start the conversation.",
@@ -842,17 +909,18 @@ const en: RanchMessages = {
   offlineBanner:
     "This agent is offline and can’t reply. Try again when the status turns green.",
   ownerHowToConnect: "How to connect",
-  messagePlaceholder: "Message… (Type / for commands)",
+  messagePlaceholder: "Message… (type / for commands)",
   decisionGoal: "Save this message as the goal",
   decisionAuto: "Auto-decide",
   decisionAutoHint:
-    "When this chat has a plan with next steps, Jev can pick and send for you. It stops if it should ask you, and after a few hops.",
+    "When this chat has a plan with next steps, auto-decide can pick and send for you. It stops if it should ask you, and after a few hops.",
   decisionAutoNeedGoal: "The agent writes a plan from what you already said. Auto-decide does nothing without one.",
   decisionAutoEnable: "Enable for this chat",
   decisionSuggested: "Suggested",
   decisionPicked: "Picked",
   decisionScoring: "Scoring…",
   decisionAskHuman: "Waiting for you",
+  decisionExpired: "No longer available",
   decisionCap: "Auto-decide paused — hop limit reached.",
   historyChats: "Chats",
   headerHistory: "History",
@@ -880,8 +948,15 @@ const en: RanchMessages = {
   minTwoAgents: "Select at least 2 agents",
   agentsCount: (n) => (n === 1 ? "1 agent" : `${n} agents`),
   agentsOnlineCount: (online, total) =>
-    total === 1 ? `1 agent · ${online} online` : `${total} agents · ${online} online`,
+    total === 1 ? `1 agent · ${online}\u00A0online` : `${total} agents · ${online}\u00A0online`,
+  groupRosterLine: (people, agentsOnline) => {
+    const person = people === 1 ? "1 person" : `${people} people`;
+    const online = agentsOnline === 1 ? "1 agent online" : `${agentsOnline} agents online`;
+    return `${person} · ${online}`;
+  },
   members: "Members",
+  groupMember: "Member",
+  groupMemberSelf: "You",
   groupInfo: "Group info",
   agentInfo: "Agent info",
   topics: "Topics",
@@ -889,9 +964,11 @@ const en: RanchMessages = {
   startNewChat: "New chat",
   untitledChat: "Untitled",
   noAgentChatsHint: "Every conversation with this agent is here — including Studio and other hosts.",
+  noGroupChatsHint: "Every conversation in this group is here — including Studio and other hosts.",
   newTopic: "New Topic",
   createTopic: "Create",
   topicTitle: "Topic title",
+  openTopicLabel: (title) => `Show only “${title}”`,
   topicDescription: "Description (optional)",
   noTopicsYet: "No topics yet",
   noTopicsHint: "Topics are a directory of timeline segments — open one to filter, or /topic to start posting in a segment.",
@@ -917,7 +994,7 @@ const en: RanchMessages = {
   mentionAllHint: "Mention all agents",
   continueWith: (name) => `Continue with ${name}`,
   mentionRequired: "Send to…",
-  groupMessagePlaceholder: "Message… (@ mention, / commands)",
+  groupMessagePlaceholder: "Message… (type @ to mention, / for commands)",
   addMember: "Add member",
   addMemberTitle: "Add an agent",
   removeMember: "Remove",
@@ -945,6 +1022,9 @@ const en: RanchMessages = {
   pasteAgentIdAdvanced: "Paste agent id (advanced)",
   agentIdPlaceholder: "ACN agent id…",
   groupTitle: "Group title",
+  groupNamePlaceholder: "e.g. Product discussion",
+  groupSelectedCount: (count) => `${count} selected`,
+  agentNoDescription: "No description",
   cancel: "Cancel",
   startChatAction: "Start chat",
   createGroup: "Create group",
@@ -964,6 +1044,10 @@ const en: RanchMessages = {
   accountProfileHint: "Signed-in account from your identity provider. Edit name and avatar there for now.",
   accountWallet: "Wallet",
   accountComputer: "Manage computers",
+  manuscript: "Canvas",
+  addWindow: "Add a window",
+  openWindow: "Open canvas",
+  pageRefRejected: "That block is not on the Canvas, so the message was not sent.",
   accountBilling: "Receipts & invoices",
   accountWalletHint: "Your human Credits balance. Agent wallets stay under each agent.",
   accountKeys: "Model quota",
@@ -979,19 +1063,23 @@ const en: RanchMessages = {
   accountKeysOpenList: "View model quota",
   collabBudget: "Collaboration budget",
   collabBudgetHint:
-    "Oil tank for multi-agent help. With remaining Credits, collaboration runs without asking each time.",
-  collabAccountCap: "Default tank size",
+    "One amount, in Credits. Save sets the default. In a chat, the switch fills that chat from this amount so multi-agent help runs without asking. Turning it off refunds what is left.",
+  collabAccountCap: "Amount",
+  collabUnit: "Credits",
   collabRemaining: "Remaining in this chat",
   collabAdd: "Add to chat",
   collabApplyDefault: "Fill from default",
   collabRelease: "Refund unused",
   collabSave: "Save",
-  collabAutoOn: "Auto collaboration on",
+  collabAutoOn: "Auto collaboration",
   collabAutoOff: "Empty — add Credits to allow collaboration",
   collabNeedTopup: "Collaboration budget is empty. Add Credits in Info to continue multi-agent help.",
   collabNeedTopupCta: "Open collaboration budget",
   accountWalletLoadFailed: "Couldn’t load wallet.",
   accountWalletEmptyTx: "No transactions yet.",
+  walletTxIn: "Received",
+  walletTxOut: "Spent",
+  walletTxNoParty: "No counterparty",
   accountWalletRecent: "Recent activity",
   accountWalletAgentWallets: "Agent wallets",
   accountWalletNoAgents: "No agents yet.",
@@ -1077,7 +1165,7 @@ const en: RanchMessages = {
   myAgentsTitle: "My agents",
   myAgentsEmptyTitle: "No agents yet",
   myAgentsEmptyBody:
-    "Create a hosted agent, or connect an existing one with a prompt, link, or QR code. Claiming happens on Interfaze — do not share a claim token.",
+    "Create a hosted agent, or connect one you already run with a prompt, link, or QR code.",
   createAgent: "Create",
   createAgentTitle: "Create a hosted agent",
   createAgentBlurb:
@@ -1148,6 +1236,8 @@ const en: RanchMessages = {
   myAgentsTagsHint: "Comma-separated, up to 20. Helps others discover this agent (e.g. coding, research).",
   fieldHintLabel: "More info",
   myAgentsSaveProfile: "Save profile",
+  myAgentsSaveHint:
+    "Edits on this page are not saved automatically. Save appears here after you change something. The file ceiling has its own Save button.",
   myAgentsProfileSaved: "Saved",
   myAgentsProfileFailed: "Couldn’t save profile.",
   myAgentsSectionPricing: "Agent pricing",
@@ -1161,7 +1251,7 @@ const en: RanchMessages = {
   myAgentsPricingModelsEmpty: "This agent has not reported any models yet.",
   myAgentsPricingModelSearch: "Search",
   myAgentsPricingOfficialEmpty: "No matching OpenRouter models in Host Catalog.",
-  myAgentsPricingOptionLine: "${name} · in ${in} · out ${out}",
+  myAgentsPricingOptionLine: "${name} · in ${in} · out ${out} / 1M",
   myAgentsPricingCreditsLine: "in ${in} · out ${out} Credits / 1M",
   myAgentsPricingCreditsNote: "100 Credits = $1, same as wallet recharge. Each hop settles in whole Credits.",
   myAgentsPricingRuntimeHint:
@@ -1228,7 +1318,7 @@ const en: RanchMessages = {
   myAgentsPieceSkuLabelAudio: "Credits per audio",
   myAgentsPieceSkuLabelFile: "Credits per other file",
   myAgentsPieceSkuOff:
-    "Default 100000. 0 = attachments never occupy. Files still land either way.",
+    "Default 100000. 0 means attachments are not charged. Files still arrive.",
   myAgentsPieceSkuNumeric: "Fill a number (Dreamina / no catalog price)",
   myAgentsPieceSkuModel: "Image model",
   myAgentsPieceSkuModelVideo: "Video model",
@@ -1269,9 +1359,9 @@ const en: RanchMessages = {
   myAgentsDeliveryDirect: "Push to your URL",
   myAgentsDeliveryDirectHint:
     "Platform pushes chat to your public HTTPS address (docs: Mode A / direct). Needs a stable public URL.",
-  myAgentsDeliveryRelay: "Pull inbox (runtime)",
+  myAgentsDeliveryRelay: "Agent fetches messages",
   myAgentsDeliveryRelayHint:
-    "Your runtime stays connected and pulls inbox messages (docs: Mode B / relay). No public URL required.",
+    "The agent stays online and fetches inbox messages itself. No public URL required.",
   myAgentsDeliveryNone: "Not set up",
   myAgentsDeliveryNoneHint: "No receive path yet — Interfaze can’t deliver chats until you connect one.",
   myAgentsEndpoint: "Your receive URL",
@@ -1282,11 +1372,11 @@ const en: RanchMessages = {
   myAgentsInboundNa: "Doesn’t apply",
   myAgentsDeliveryChoose: "Choose how this agent receives Interfaze chats",
   myAgentsDeliveryOptionPush: "Push to a public URL",
-  myAgentsDeliveryOptionPull: "Runtime pulls messages",
+  myAgentsDeliveryOptionPull: "Agent fetches messages",
   myAgentsDeliveryPushHelp:
     "Needs a stable public HTTPS address (A2A). Best when your runtime is on a server with inbound HTTPS.",
   myAgentsDeliveryPullHelp:
-    "No public URL needed. Keep `acn listen` (or equivalent) running so the runtime can fetch inbox messages.",
+    "No public URL needed. Keep the agent online so it can fetch inbox messages.",
   myAgentsEndpointInput: "Public receive URL",
   myAgentsEndpointPlaceholder: "https://your-agent.example.com/a2a",
   myAgentsSaveDelivery: "Save receive mode",
@@ -1345,6 +1435,8 @@ const en: RanchMessages = {
   myAgentsLastHeartbeatHint: "Last time this agent checked in as alive.",
   myAgentsLoadFailed: "Couldn’t load your agents.",
   myAgentsRotateKey: "Rotate API key",
+  myAgentsDangerZone: "Danger zone",
+  myAgentsDangerHint: "These change the key, transfer the agent, or delete it permanently.",
   myAgentsRotateConfirm:
     "Rotate this agent’s API key? The old key stops working immediately. Copy the new key now — it is shown only once.",
   myAgentsRotateConfirmLabel: "Rotate key",
@@ -1374,7 +1466,8 @@ const en: RanchMessages = {
     "This agent still owns subnets. Transfer or delete those subnets on AgentPlanet first.",
   walletTab: "Wallet",
   walletBalance: "Credits",
-  walletCreditsHint: "Transferable. Top up / withdraw move Credits only.",
+  walletCreditsHint:
+    "Spendable balance. 100 Credits = 1 USD. Top up and withdraw move Credits only. AP points are rewards and cannot be transferred.",
   walletApPoints: "AP points",
   walletApPointsHint: "Platform rewards — not transferable.",
   walletOwnerBalance: "Your Credits",
@@ -1391,7 +1484,7 @@ const en: RanchMessages = {
   attachmentDownload: "Download",
   attachmentDownloadFailed: "Download failed. Please retry.",
   attachmentAvailableUntil: "Available until",
-  attachmentUnavailable: "Attachment not found or no longer available",
+  attachmentUnavailable: "This file was deleted or has expired. Trying again will not bring it back.",
   attachmentAccessDenied: "Cannot access attachment. Check your login and chat access.",
   walletTopupDialogTitle: "Top up Credits",
   walletWithdrawDialogTitle: "Withdraw Credits",
@@ -1484,6 +1577,7 @@ const zh: RanchMessages = {
   sending: "发送中",
   sent: "已发送",
   queuedOffline: "已进收件箱，等待智能体拉取",
+  queuedStillWaiting: "仍在收件箱。智能体上线后会取走；若一直不上线，再发一条。",
   deliveryFailed: "投递失败",
   delivered: "已送达",
   replying: "正在回复",
@@ -1500,8 +1594,8 @@ const zh: RanchMessages = {
   copyPromptForAgent: "复制给智能体的提示词",
   connectExisting: "接入智能体",
   connectHint:
-    "把提示词、链接或二维码发给你的智能体。它用邀请码加入 ACN。认领是另一条私密链接，这里不会带认领 token。",
-  connectYourInvite: "这是你的邀请。",
+    "复制提示词发给你的智能体，或把链接、二维码给它。邀请码已经写在里面。加入后会出现在「我的智能体」。",
+  connectYourInvite: "提示词里已经写好邀请码。复制后贴给智能体即可。",
   copyPageLink: "复制链接",
   copyQr: "复制二维码",
   qrDownloaded: "已保存图片",
@@ -1529,12 +1623,22 @@ const zh: RanchMessages = {
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
   agentHopUsage: (input, output) =>
     `入 ${input.toLocaleString("zh-CN")} · 出 ${output.toLocaleString("zh-CN")}`,
+  agentHopDetails: "用量",
   orchCalled: (name) => `调用了 ${name}`,
   orchAsked: (name) => `已请 ${name}`,
   orchFailed: (name) => `没叫到 ${name}`,
   orchIdLabel: "id",
   orchHopLabel: "hop",
   orchCopy: "复制",
+  interaction: "交互",
+  interactionView: "协作图",
+  interactionEmpty: "这场还没有智能体互调。",
+  interactionWaiting: "还在等",
+  interactionReturned: "已返回",
+  interactionFailed: "失败",
+  interactionOutside: "不在本会话",
+  interactionQuiet: "还没互相调用",
+  interactionPerson: "人",
   orchProposeTitle: "提议开群",
   orchProposeNeedTwo: "开群至少要两个智能体。",
   orchProposeCreate: "创建群聊",
@@ -1552,19 +1656,31 @@ const zh: RanchMessages = {
   orchTaskAck: "知道了",
   orchTaskRecruitFailed: "单已经发出，积分已锁定。招人没成功，可以再试一次。",
   orchTaskNeedReward: "这条提议没有赏金，不能发单。",
-  pieceHeld: (amount) => `按件结算中 ${amount} Credits`,
+  pieceHeld: (amount) => `按文件结算中 ${amount} Credits`,
   pieceCaptured: "已入账",
   composerProviderLabel: "供应商",
   composerModelLabel: "模型",
   composerModelUnknown: "—",
   composerModelListing: "挂牌",
-  composerModelNoPrice: "—",
-  composerModelPrice: (input, output) => `${input} 入 · ${output} 出`,
+  composerModelNoPrice: "未标价",
+  composerModelPrice: (input, output) => `${input} 入 · ${output} 出 / 百万 token`,
+  composerModelInputPrice: (input: string) => `${input} 入 / 百万 token`,
+  priceFeedName: (feed) => {
+    const key = feed.trim().toLowerCase();
+    if (key === "tencent") return "腾讯";
+    if (key === "aliyun") return "阿里";
+    if (key === "volcengine") return "字节";
+    if (key === "openrouter") return "OpenRouter";
+    return feed;
+  },
   composerModelMismatch: (listed, runtime) =>
     `挂牌 ${listed} ≠ 运行 ${runtime}（仍按挂牌价结算）`,
   sendFailed: "发送失败",
   expand: "全屏",
-  collapse: "收起",
+  collapse: "退出全屏",
+  headerMore: "更多",
+  openGroupInfo: "打开群资料",
+  openAgentInfo: "打开智能体资料",
   close: "关闭",
   faceChat: "面聊",
   faceChatOpen: "面聊中",
@@ -1594,6 +1710,8 @@ const zh: RanchMessages = {
   messagesLoadFailed: "消息加载失败，请重试。",
   loading: "加载中…",
   noChatsYet: "还没有会话",
+  noMatchingChats: "没有匹配的会话",
+  clearSearch: "清除搜索",
   startChat: "开始聊天",
   selectOrStart: "选择一个会话，或新建聊天",
   sayHello: "打个招呼开始对话。",
@@ -1604,13 +1722,14 @@ const zh: RanchMessages = {
   decisionGoal: "把这句记成目标",
   decisionAuto: "自动决策",
   decisionAutoHint:
-    "这场对话已有计划、并列出下一步时，Jev 可以替你选并发出去。该问你、或连续几次之后会停。",
+    "这场对话已有计划、并列出下一步时，自动决策可以替你选并发出去。该问你、或连续几次之后会停。",
   decisionAutoNeedGoal: "智能体会根据你已经说的需求写出计划。没有计划时自动决策不会发。",
   decisionAutoEnable: "为此会话开启",
   decisionSuggested: "建议",
   decisionPicked: "已选",
   decisionScoring: "打分中…",
   decisionAskHuman: "等你来选",
+  decisionExpired: "已失效",
   decisionCap: "自动决策已暂停——达到次数上限。",
   historyChats: "对话",
   headerHistory: "历史对话",
@@ -1637,15 +1756,20 @@ const zh: RanchMessages = {
   directMode: "单聊",
   minTwoAgents: "至少选择 2 个智能体",
   agentsCount: (n) => `${n} 个智能体`,
-  agentsOnlineCount: (online, total) => `${total} 个智能体 · ${online} 在线`,
+  agentsOnlineCount: (online, total) => `${total} 个智能体 · ${online}\u00A0在线`,
+  groupRosterLine: (people, agentsOnline) => `${people} 人 · ${agentsOnline} 个智能体在线`,
   members: "成员",
+  groupMember: "成员",
+  groupMemberSelf: "你",
   groupInfo: "群资料",
   agentInfo: "智能体资料",
   topics: "话题",
+  openTopicLabel: (title) => `只看「${title}」`,
   chatsTab: "历史",
   startNewChat: "新对话",
   untitledChat: "未命名对话",
   noAgentChatsHint: "和这个智能体的对话都在这里，包括 Studio 等其它渠道。",
+  noGroupChatsHint: "这个群的对话都在这里，包括 Studio 等其它渠道。",
   newTopic: "新建话题",
   createTopic: "创建",
   topicTitle: "话题标题",
@@ -1674,7 +1798,7 @@ const zh: RanchMessages = {
   mentionAllHint: "提及所有智能体",
   continueWith: (name) => `继续问 ${name}`,
   mentionRequired: "发给谁…",
-  groupMessagePlaceholder: "输入消息…（@ 点名，/ 命令）",
+  groupMessagePlaceholder: "输入消息…（输入 @ 点名，/ 打开命令）",
   addMember: "添加成员",
   addMemberTitle: "添加智能体",
   removeMember: "移除",
@@ -1701,6 +1825,9 @@ const zh: RanchMessages = {
   pasteAgentIdAdvanced: "粘贴 agent id（高级）",
   agentIdPlaceholder: "ACN agent id…",
   groupTitle: "群名称",
+  groupNamePlaceholder: "例如：产品讨论",
+  groupSelectedCount: (count) => `已选 ${count}`,
+  agentNoDescription: "暂无简介",
   cancel: "取消",
   startChatAction: "开始聊天",
   createGroup: "创建群聊",
@@ -1715,6 +1842,10 @@ const zh: RanchMessages = {
   accountProfileHint: "登录账号来自身份提供方。目前请在那里修改名称与头像。",
   accountWallet: "钱包",
   accountComputer: "管理电脑",
+  manuscript: "画布",
+  addWindow: "添加窗口",
+  openWindow: "打开画布",
+  pageRefRejected: "这块不在画布上，这句话没有发出去。",
   accountBilling: "收据与发票",
   accountWalletHint: "你本人的 Credits 余额。智能体钱包在各自智能体详情里。",
   accountKeys: "模型额度",
@@ -1727,19 +1858,24 @@ const zh: RanchMessages = {
   accountKeysNotWritten: "未写入任何智能体",
   accountKeysOpenList: "查看模型额度",
   collabBudget: "协作预算",
-  collabBudgetHint: "多智能体协作用的额度油箱。有剩余时自动放行，不用每次点同意。",
-  collabAccountCap: "默认额度",
+  collabBudgetHint:
+    "一个额度，单位是星币。保存后成为默认额度。在会话里打开开关，会按这个额度填进本会话，不用每次点同意。关掉会把还没用掉的退回钱包。",
+  collabAccountCap: "额度",
+  collabUnit: "星币",
   collabRemaining: "本会话剩余",
   collabAdd: "加到本会话",
   collabApplyDefault: "用默认额度填充",
   collabRelease: "退回未用",
   collabSave: "保存",
-  collabAutoOn: "自动协作已开启",
+  collabAutoOn: "自动协作",
   collabAutoOff: "额度空 — 加星币后才可自动协作",
   collabNeedTopup: "协作预算已用完。请在 Info 里加额度，才能继续多智能体协作。",
   collabNeedTopupCta: "打开协作预算",
   accountWalletLoadFailed: "无法加载钱包。",
   accountWalletEmptyTx: "暂无流水。",
+  walletTxIn: "收入",
+  walletTxOut: "支出",
+  walletTxNoParty: "没有对方",
   accountWalletRecent: "最近流水",
   accountWalletAgentWallets: "智能体钱包",
   accountWalletNoAgents: "还没有智能体。",
@@ -1823,7 +1959,7 @@ const zh: RanchMessages = {
   myAgentsTitle: "我的智能体",
   myAgentsEmptyTitle: "还没有智能体",
   myAgentsEmptyBody:
-    "可以创建一台托管机，或用提示词、链接、二维码接入已有智能体。认领在 Interfaze 完成，不要分享认领 token。",
+    "可以创建一台托管机，或用提示词、链接、二维码接入你已经在跑的智能体。",
   createAgent: "创建",
   createAgentTitle: "创建托管智能体",
   createAgentBlurb:
@@ -1893,6 +2029,7 @@ const zh: RanchMessages = {
   myAgentsTagsHint: "逗号分隔，最多 20 个。用于发现（如 coding、research）。",
   fieldHintLabel: "更多信息",
   myAgentsSaveProfile: "保存资料",
+  myAgentsSaveHint: "这一页的修改不会自动保存。改完后，保存按钮会出现在这里。单文件封顶有自己的保存按钮。",
   myAgentsProfileSaved: "已保存",
   myAgentsProfileFailed: "保存失败。",
   myAgentsSectionPricing: "智能体定价",
@@ -1906,7 +2043,7 @@ const zh: RanchMessages = {
   myAgentsPricingModelsEmpty: "这只智能体还没有自报任何模型。",
   myAgentsPricingModelSearch: "搜索",
   myAgentsPricingOfficialEmpty: "Host Catalog 里没有匹配的 OpenRouter 模型。",
-  myAgentsPricingOptionLine: "${name} · 入 ${in} · 出 ${out}",
+  myAgentsPricingOptionLine: "${name} · 入 ${in} · 出 ${out} / 百万",
   myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} Credits /百万",
   myAgentsPricingCreditsNote: "与钱包充值相同：100 Credits = $1。每跳按整数 Credits 结算。",
   myAgentsPricingRuntimeHint: "运行环境上报：${model}（只认心跳型号，Host 看不见钥匙）。",
@@ -1962,7 +2099,7 @@ const zh: RanchMessages = {
   myAgentsSavePricing: "保存默认模型与上浮",
   myAgentsPricingSaved: "定价已保存",
   myAgentsPricingFailed: "保存定价失败。",
-  myAgentsSectionPieceSku: "按件",
+  myAgentsSectionPieceSku: "按文件",
   myAgentsPieceSkuHint:
     "每个文件进邮箱时贴猎人价签。这里只设封顶：占位按 min(价签, 封顶)。0 = 全不占。对话 token 仍另结。",
   myAgentsPieceSkuLabel: "单文件封顶 Credits",
@@ -1970,7 +2107,7 @@ const zh: RanchMessages = {
   myAgentsPieceSkuLabelVideo: "每秒 Credits（猎人一口价）",
   myAgentsPieceSkuLabelAudio: "每条音频 Credits",
   myAgentsPieceSkuLabelFile: "每份其他文件 Credits",
-  myAgentsPieceSkuOff: "默认 100000。0 = 附件永不占钱包。货仍可进。",
+  myAgentsPieceSkuOff: "默认 100000。填 0 时附件不扣钱包，文件仍然收得进来。",
   myAgentsPieceSkuNumeric: "填数字（绘图软件 / 目录没价）",
   myAgentsPieceSkuModel: "生图模型",
   myAgentsPieceSkuModelVideo: "视频模型",
@@ -1989,7 +2126,7 @@ const zh: RanchMessages = {
   myAgentsPieceSkuKindFile: "其他文件",
   myAgentsPieceSkuFillCredits: "填 Credits",
   myAgentsPieceSkuMeterLabel: "计价方式",
-  myAgentsPieceSkuMeterFile: "按件",
+  myAgentsPieceSkuMeterFile: "按文件",
   myAgentsPieceSkuMeterSecond: "按秒",
   myAgentsPieceSkuMeterNumeric: "你自己填每件 Credits",
   myAgentsPieceSkuMarketFile: "目录 ${usd} / 张",
@@ -2008,9 +2145,9 @@ const zh: RanchMessages = {
   myAgentsDeliveryDirect: "推送到你的网址",
   myAgentsDeliveryDirectHint:
     "平台把消息推到你的公网 HTTPS 地址（文档里叫 Mode A / direct）。需要稳定公网入口。",
-  myAgentsDeliveryRelay: "运行程序主动取信",
+  myAgentsDeliveryRelay: "智能体自己来取",
   myAgentsDeliveryRelayHint:
-    "你的运行程序保持连线，主动来取收件箱（文档里叫 Mode B / relay）。不需要公网网址。",
+    "智能体保持在线，自己来取收件箱里的消息。不需要公网网址。",
   myAgentsDeliveryNone: "尚未配置",
   myAgentsDeliveryNoneHint: "还没有收信通路——配好之前Interfaze 送不到消息。",
   myAgentsEndpoint: "收信地址",
@@ -2021,11 +2158,11 @@ const zh: RanchMessages = {
   myAgentsInboundNa: "不适用",
   myAgentsDeliveryChoose: "选择这个智能体如何接收 Interfaze 消息",
   myAgentsDeliveryOptionPush: "推送到公网网址",
-  myAgentsDeliveryOptionPull: "运行程序主动取信",
+  myAgentsDeliveryOptionPull: "智能体自己来取",
   myAgentsDeliveryPushHelp:
     "需要稳定的公网 HTTPS 地址（A2A）。适合跑在有入站 HTTPS 的服务器上。",
   myAgentsDeliveryPullHelp:
-    "不需要公网网址。保持 `acn listen`（或同类程序）在线，由运行程序来取收件箱。",
+    "不需要公网网址。让智能体保持在线，自己来取收件箱里的消息。",
   myAgentsEndpointInput: "公网收信地址",
   myAgentsEndpointPlaceholder: "https://your-agent.example.com/a2a",
   myAgentsSaveDelivery: "保存收信方式",
@@ -2083,6 +2220,8 @@ const zh: RanchMessages = {
   myAgentsLastHeartbeatHint: "此智能体最近一次上报在线的时间。",
   myAgentsLoadFailed: "无法加载你的智能体。",
   myAgentsRotateKey: "轮换 API key",
+  myAgentsDangerZone: "危险操作",
+  myAgentsDangerHint: "轮换密钥、赠送或删除。删除后无法恢复。",
   myAgentsRotateConfirm:
     "确定轮换此智能体的 API key？旧 key 会立刻失效。请立刻复制新 key——只展示一次。",
   myAgentsRotateConfirmLabel: "确认轮换",
@@ -2112,7 +2251,8 @@ const zh: RanchMessages = {
     "此智能体仍拥有子网。请先在 AgentPlanet 转移或删除这些子网。",
   walletTab: "钱包",
   walletBalance: "星币",
-  walletCreditsHint: "可转账。充值 / 提取只针对星币。",
+  walletCreditsHint:
+    "用来付费的余额。100 星币 = 1 美元。充值和提取只动星币。AP 积分是奖励，不能转出。",
   walletApPoints: "AP 积分",
   walletApPointsHint: "平台行为奖励，不可转出。",
   walletOwnerBalance: "你的星币",
@@ -2129,7 +2269,7 @@ const zh: RanchMessages = {
   attachmentDownload: "下载",
   attachmentDownloadFailed: "下载失败，请重试。",
   attachmentAvailableUntil: "保留至",
-  attachmentUnavailable: "附件不存在或已不可用",
+  attachmentUnavailable: "文件已删除或已过期，再试也不会出现。",
   attachmentAccessDenied: "无法访问附件，请检查登录状态与会话权限",
   walletTopupDialogTitle: "充值星币",
   walletWithdrawDialogTitle: "提取星币",
@@ -2230,8 +2370,35 @@ export function resolveRanchLocale(locale?: string | null): RanchLocale {
   return base === "zh" ? "zh" : "en";
 }
 
+function isCnRegion(): boolean {
+  return (process.env.NEXT_PUBLIC_REGION || "").trim().toLowerCase() === "cn";
+}
+
+/** 星币 is the China-region name. Overseas Chinese copy uses Credit. */
+function overseasCreditTerm(value: string): string {
+  return value.replace(/星币/g, (_match, offset: number, whole: string) => {
+    const prev = offset > 0 ? whole.charAt(offset - 1) : "";
+    return /[\u4e00-\u9fff]/.test(prev) ? " Credit" : "Credit";
+  });
+}
+
+function overseasCreditCopy(messages: RanchMessages): RanchMessages {
+  const next: RanchMessages = { ...messages };
+  for (const key of Object.keys(next) as (keyof RanchMessages)[]) {
+    const value = next[key];
+    if (typeof value === "string" && value.indexOf("星币") !== -1) {
+      (next as Record<string, unknown>)[key] = overseasCreditTerm(value);
+    }
+  }
+  next.walletAmountHint = "整数 Credit。100 Credit = 1 美元。";
+  return next;
+}
+
 export function ranchMessages(locale?: string | null): RanchMessages {
-  return catalogs[resolveRanchLocale(locale)];
+  const loc = resolveRanchLocale(locale);
+  const base = catalogs[loc];
+  if (loc === "zh" && !isCnRegion()) return overseasCreditCopy(base);
+  return base;
 }
 
 export const RANCH_LOCALE_STORAGE_KEY = "acnlabs.ranch-chat.locale";

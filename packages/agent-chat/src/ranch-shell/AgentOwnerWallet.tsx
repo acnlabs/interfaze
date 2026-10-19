@@ -596,10 +596,13 @@ export function AgentOwnerWallet({
                     <span style={{ color: colors.text, fontWeight: 600 }}>
                       {txTypeLabel(tx.type, t)}
                     </span>
-                    <span style={{ color: colors.text }}>{fmtCredits(tx.amount)}</span>
+                    <span style={{ color: tx.amount < 0 ? colors.danger : colors.success }}>
+                      {tx.amount > 0 ? `${t.walletTxIn} +` : tx.amount < 0 ? `${t.walletTxOut} ` : ""}
+                      {fmtCredits(tx.amount)}
+                    </span>
                   </div>
                   <div style={{ marginTop: 4, color: colors.muted }}>
-                    {desc || "—"}
+                    {desc || t.walletTxNoParty}
                     {tx.created_at ? ` · ${fmtTxTimeShort(tx.created_at)}` : ""}
                   </div>
                 </li>

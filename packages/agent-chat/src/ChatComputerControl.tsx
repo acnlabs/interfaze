@@ -56,14 +56,14 @@ export function ChatComputerControl({
   gatewayBaseUrl,
   getAccessToken,
   locale,
-  screenOpenId,
+  openScreenIds,
   onOpenScreen,
 }: {
   chatId: string;
   gatewayBaseUrl: string;
   getAccessToken: () => Promise<string | null>;
   locale: RanchLocale;
-  screenOpenId: string | null;
+  openScreenIds: string[];
   onOpenScreen: (computerId: string, label: string) => void;
 }) {
   const [place, setPlace] = useState<ChatPlace | null>(null);
@@ -101,7 +101,7 @@ export function ChatComputerControl({
   const nth = place.computer_id ? extraIndex(computers, place.computer_id) : 0;
   const label = chatComputerLabel(place.place, place.is_default, nth, locale);
   const openable = place.place === "cloud" && !!place.computer_id;
-  const on = openable && screenOpenId === place.computer_id;
+  const on = openable && !!place.computer_id && openScreenIds.includes(place.computer_id);
 
   return (
     <button

@@ -20,6 +20,7 @@ import {
   type MyAgentSummary,
   type PieceSku,
 } from "../gateway";
+import { formatUsdPerMillion } from "../displayMoney";
 import { copyText } from "./connectPrompt";
 import type { RanchMessages } from "./i18n";
 import { officialShelfAllows } from "./officialV0";
@@ -242,8 +243,7 @@ function uniqModelIds(...groups: Array<Array<string | null | undefined> | undefi
 }
 
 function fmtUsd(n: number): string {
-  if (!Number.isFinite(n)) return "—";
-  return roundUsdPerMillion(n).toFixed(6);
+  return formatUsdPerMillion(n);
 }
 
 function shortModelLabel(modelId: string): string {
@@ -565,9 +565,10 @@ function catalogOptionLabel(
   id: string,
   pair: { in: number; out: number } | undefined,
   tmpl: string,
+  noPrice: string,
 ): string {
   const name = shortModelLabel(id) || id;
-  if (!pair) return name;
+  if (!pair) return `${name} · ${noPrice}`;
   return fillTemplate(tmpl, { name, in: fmtUsd(pair.in), out: fmtUsd(pair.out) });
 }
 
@@ -1307,6 +1308,20 @@ export function AgentOwnerSettings({
     const n = Number(markupDraft);
     return Number.isFinite(n) && n >= 0 && n <= 1000 ? n : null;
   })();
+  const payableMarkup =
+    markupParsed ?? (typeof oldMarkup === "number" && Number.isFinite(oldMarkup) ? oldMarkup : null);
+  const payableOptionLabel = (
+    id: string,
+    pair: { in: number; out: number } | undefined,
+  ) =>
+    catalogOptionLabel(
+      id,
+      pair && payableMarkup != null
+        ? { in: applyMarkup(pair.in, payableMarkup), out: applyMarkup(pair.out, payableMarkup) }
+        : pair,
+      t.myAgentsPricingOptionLine,
+      t.composerModelNoPrice,
+    );
   const runtimeId = (detail.runtime_model_id || "").trim();
   const listingStale = listingIsStaleOpenRouter(
     oldModelId,
@@ -2488,10 +2503,9 @@ export function AgentOwnerSettings({
                 searchPlaceholder={t.myAgentsPricingModelSearch}
                 emptyText={t.myAgentsPricingOfficialEmpty}
                 optionLabel={(id) =>
-                  catalogOptionLabel(
+                  payableOptionLabel(
                     id,
                     officialCatalog.find((row) => sameModelId(row.id, id)),
-                    t.myAgentsPricingOptionLine,
                   )
                 }
                 onChange={setModelIdDraft}
@@ -2511,10 +2525,9 @@ export function AgentOwnerSettings({
                 searchPlaceholder={t.myAgentsPricingModelSearch}
                 emptyText={t.myAgentsPricingOfficialEmpty}
                 optionLabel={(id) =>
-                  catalogOptionLabel(
+                  payableOptionLabel(
                     id,
                     openRouterByoCatalog.find((row) => sameModelId(row.id, id)),
-                    t.myAgentsPricingOptionLine,
                   )
                 }
                 onChange={setModelIdDraft}
@@ -2534,7 +2547,7 @@ export function AgentOwnerSettings({
             >
               {vendorModels.map((id) => (
                 <option key={id} value={id}>
-                  {catalogOptionLabel(id, catalogById[id], t.myAgentsPricingOptionLine)}
+                  {payableOptionLabel(id, catalogById[id])}
                 </option>
               ))}
             </select>
@@ -3005,11 +3018,6 @@ export function AgentOwnerSettings({
       </section>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {rotateError || dangerError ? (
-          <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>
-            {rotateError || dangerError}
-          </p>
-        ) : null}
         {profileError || deliveryError || policyError || pricingError || officialError ? (
           <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>
             {profileError || deliveryError || policyError || pricingError || officialError}
@@ -3020,6 +3028,9 @@ export function AgentOwnerSettings({
             {profileMsg || deliveryMsg || policyMsg || pricingMsg || officialMsg}
           </p>
         ) : null}
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
+          {t.myAgentsSaveHint}
+        </p>
         {hasEdits || saving ? (
           <button
             type="button"
@@ -3041,6 +3052,29 @@ export function AgentOwnerSettings({
           >
             {savingPricing ? t.myAgentsPricingSyncing : saving ? t.loading : t.save}
           </button>
+        ) : null}
+      </div>
+
+      <section
+        style={{
+          marginTop: 8,
+          paddingTop: 16,
+          borderTop: `1px solid ${colors.border}`,
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        <h3 style={{ margin: 0, fontSize: 13, fontWeight: 650, color: colors.danger }}>
+          {t.myAgentsDangerZone}
+        </h3>
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
+          {t.myAgentsDangerHint}
+        </p>
+        {rotateError || dangerError ? (
+          <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>
+            {rotateError || dangerError}
+          </p>
         ) : null}
         <button
           type="button"
@@ -3074,16 +3108,20 @@ export function AgentOwnerSettings({
         >
           {t.myAgentsDelete}
         </button>
-        {/* Gift / transfer ownership — last, away from delete */}
         <button
           type="button"
-          style={{ ...btnGhost, width: "100%" }}
+          style={{
+            ...btnGhost,
+            width: "100%",
+            borderColor: "rgba(248,113,113,0.45)",
+            color: colors.danger,
+          }}
           disabled={dangerBusy}
           onClick={openGift}
         >
           {t.myAgentsGift}
         </button>
-      </div>
+      </section>
 
       {confirmRelay ? (
         <div

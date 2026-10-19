@@ -33,6 +33,9 @@ export const colors = {
   onAccent: "#ffffff",
 };
 
+export const shellFontFamily =
+  'ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+
 export const shellRoot = (mode: "side" | "full"): CSSProperties =>
   mode === "full"
     ? {
@@ -42,8 +45,7 @@ export const shellRoot = (mode: "side" | "full"): CSSProperties =>
         display: "flex",
         background: colors.bg,
         color: colors.text,
-        fontFamily:
-          'ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
+        fontFamily: shellFontFamily,
       }
     : {
         position: "fixed",
@@ -58,8 +60,7 @@ export const shellRoot = (mode: "side" | "full"): CSSProperties =>
         color: colors.text,
         borderLeft: `1px solid ${colors.border}`,
         boxShadow: "-8px 0 32px rgba(0,0,0,0.35)",
-        fontFamily:
-          'ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
+        fontFamily: shellFontFamily,
       };
 
 export const btnGhost: CSSProperties = {
@@ -100,4 +101,5 @@ export const inputStyle: CSSProperties = {
   color: colors.text,
   padding: "8px 10px",
   fontSize: 13,
+  fontFamily: "inherit",
 };

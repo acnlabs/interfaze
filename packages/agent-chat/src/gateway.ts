@@ -1,4 +1,5 @@
 import type { ChatMessage, ChatParticipant, ChatSummary, ThreadSummary } from "./types";
+import { createInflightGate } from "./inflight";
 import { filesFromMessages, normalizeChatMessage } from "./mailbox";
 
 export class ChatGatewayError extends Error {
@@ -492,9 +493,17 @@ export type ModelCatalogList = {
   offset: number;
 };
 
+export type ChatListSnapshot = {
+  chats: ChatSummary[];
+  /** When this request started. Joiners share this time, they do not stamp their own. */
+  startedAt: number;
+};
+
 export type GatewayClient = {
   health: () => Promise<{ status: string; gateway?: string; ok: boolean; error?: string }>;
   listChats: () => Promise<ChatSummary[]>;
+  /** Same rows as listChats, plus when the request actually started. `fresh` waits out a request already running. */
+  listChatSnapshot: (fresh?: boolean) => Promise<ChatListSnapshot>;
   createDirect: (
     agentId: string,
     opts?: { context?: string | null },
@@ -516,6 +525,12 @@ export type GatewayClient = {
     status?: string | null;
   }>;
   getChatPlan: (chatId: string, planId: string) => Promise<import("./types").ChatPlanArtifact>;
+  getChatPage: (chatId: string) => Promise<import("./manuscriptPage").ManuscriptPage>;
+  /** Bytes or a short-lived URL for one mailbox file in this chat. Call revoke when done. */
+  openChatFile: (
+    chatId: string,
+    attachmentId: string,
+  ) => Promise<{ url: string; contentType: string; revoke: () => void }>;
   listChatFiles: (chatId: string) => Promise<
     Array<{
       attachment_id: string;
@@ -539,6 +554,7 @@ export type GatewayClient = {
       requested_provider?: string | null;
       decision_goal?: string | null;
       decision_choice?: string | null;
+      canvas_ref?: { block_key: string; rev: number } | null;
     },
   ) => Promise<ChatMessage>;
   patchChatDecision: (chatId: string, auto: boolean) => Promise<ChatSummary>;
@@ -552,6 +568,11 @@ export type GatewayClient = {
   /** Owner's ACN agents (same region / alive as directory mine). */
   listMyAgents: (limit?: number) => Promise<MyAgentSummary[]>;
   getMyAgent: (agentId: string) => Promise<MyAgentSummary>;
+  /** Ask the agent to send the model list it can run now. */
+  refreshAgentModelReport: (agentId: string) => Promise<{
+    agent_id: string;
+    supported_models?: string[];
+  }>;
   /** Listed vs runtime model + supported options for composer (M1/M2). */
   getAgentModelStatus: (agentId: string) => Promise<{
     agent_id: string;
@@ -580,6 +601,7 @@ export type GatewayClient = {
       input_price_per_million?: number;
       output_price_per_million?: number;
       pricing_source?: string;
+      price_from?: string;
       free?: boolean;
       priceable?: boolean;
     }>;
@@ -877,15 +899,23 @@ export function createGatewayClient(
       }),
     });
 
+  const listChatsOnce = createInflightGate<ChatListSnapshot>();
+  const loadChatList = (fresh: boolean) => {
+    const run = async () => {
+      const startedAt = Date.now();
+      const data = await request<{ chats: ChatSummary[] }>("/api/chats?page=1&page_size=200");
+      return { chats: data.chats ?? [], startedAt };
+    };
+    return fresh ? listChatsOnce.fresh(run) : listChatsOnce.share(run);
+  };
+
   return {
     health: async () => {
       const h = await request<{ status: string; gateway?: string }>("/api/chat/health");
       return { ...h, ok: h.status === "ok" };
     },
-    listChats: async () => {
-      const data = await request<{ chats: ChatSummary[] }>("/api/chats?page=1&page_size=200");
-      return data.chats ?? [];
-    },
+    listChats: () => loadChatList(false).then((snapshot) => snapshot.chats),
+    listChatSnapshot: (fresh = false) => loadChatList(fresh),
     createDirect,
     createOrGetDirectChat: createDirect,
     createGroup,
@@ -915,6 +945,42 @@ export function createGatewayClient(
       request<import("./types").ChatPlanArtifact>(
         `/api/chats/${encodeURIComponent(chatId)}/plans/${encodeURIComponent(planId)}`,
       ),
+    getChatPage: (chatId) =>
+      request<import("./manuscriptPage").ManuscriptPage>(
+        `/api/chats/${encodeURIComponent(chatId)}/canvas`,
+      ),
+    openChatFile: async (chatId, attachmentId) => {
+      const token = await getAccessToken();
+      if (!token) {
+        throw new ChatGatewayError(401, "not_authenticated", "Not authenticated");
+      }
+      const res = await fetch(
+        joinUrl(
+          gatewayBaseUrl,
+          `/api/chats/${encodeURIComponent(chatId)}/files/${encodeURIComponent(attachmentId)}`,
+        ),
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) throw await parseError(res);
+      const headerType = (res.headers.get("content-type") || "").toLowerCase();
+      if (headerType.includes("application/json")) {
+        const body = (await res.json()) as { url?: unknown; content_type?: unknown };
+        const remoteUrl = typeof body.url === "string" ? body.url : "";
+        if (!remoteUrl) throw new ChatGatewayError(404, "not_found", "File not found");
+        return {
+          url: remoteUrl,
+          contentType: typeof body.content_type === "string" ? body.content_type : "",
+          revoke: () => {},
+        };
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      return {
+        url,
+        contentType: blob.type || res.headers.get("content-type") || "",
+        revoke: () => URL.revokeObjectURL(url),
+      };
+    },
     listChatFiles: async (chatId) => {
       try {
         const data = await request<{
@@ -955,6 +1021,11 @@ export function createGatewayClient(
     },
     getMyAgent: (agentId) =>
       request<MyAgentSummary>(`/api/chat/my-agents/${encodeURIComponent(agentId)}`),
+    refreshAgentModelReport: (agentId) =>
+      request<{ agent_id: string; supported_models?: string[] }>(
+        `/api/chat/agents/${encodeURIComponent(agentId)}/model-report`,
+        { method: "POST" },
+      ),
     getAgentModelStatus: (agentId) =>
       request<{
         agent_id: string;
@@ -1403,6 +1474,9 @@ export function createGatewayClient(
             : {}),
           ...(opts?.decision_choice
             ? { decision_choice: opts.decision_choice }
+            : {}),
+          ...(opts?.canvas_ref
+            ? { canvas_ref: opts.canvas_ref }
             : {}),
         }),
       }),

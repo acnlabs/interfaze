@@ -1490,7 +1490,6 @@ export function ChatCollabBudgetSection({
   const [cap, setCap] = useState(0);
   const [capDraft, setCapDraft] = useState("0");
   const [budget, setBudget] = useState<ChatCollabBudget | null>(null);
-  const [addDraft, setAddDraft] = useState("20");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -1518,6 +1517,16 @@ export function ChatCollabBudgetSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on chat/client
   }, [client, chatId]);
 
+  const persistCap = useCallback(() => {
+    const n = Math.max(0, Math.trunc(Number(capDraft) || 0));
+    if (n === cap) return Promise.resolve(n);
+    return client.putCollabCap(n).then((r) => {
+      setCap(r.cap_credits);
+      setCapDraft(String(r.cap_credits));
+      return r.cap_credits;
+    });
+  }, [cap, capDraft, client]);
+
   return (
     <div>
       <h3 style={sectionTitle}>{t.collabBudget}</h3>
@@ -1525,10 +1534,46 @@ export function ChatCollabBudgetSection({
       {err ? (
         <p style={{ color: colors.danger, fontSize: 12, margin: "0 0 10px" }}>{err}</p>
       ) : null}
+      {chatId ? (
+        <div style={{ marginBottom: 14 }}>
+          <label
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              userSelect: "none",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={Boolean(budget?.can_auto)}
+              disabled={busy}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setBusy(true);
+                setErr(null);
+                const run = on
+                  ? persistCap().then(() => client.ensureChatCollabDefault(chatId))
+                  : client.releaseChatCollabBudget(chatId);
+                void run
+                  .then(setBudget)
+                  .catch(() => setErr(t.sendFailed))
+                  .finally(() => setBusy(false));
+              }}
+            />
+            {t.collabAutoOn}
+          </label>
+          <p style={{ ...sectionHint, margin: "6px 0 0" }}>
+            {t.collabRemaining} {fmtCredits(budget?.remaining_credits ?? 0)} {t.collabUnit}
+          </p>
+        </div>
+      ) : null}
       <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-        {t.collabAccountCap}
+        {t.collabAccountCap} · {t.collabUnit}
       </label>
-      <div style={{ display: "flex", gap: 8, marginBottom: chatId ? 16 : 0 }}>
+      <div style={{ display: "flex", gap: 8 }}>
         <input
           type="number"
           min={0}
@@ -1541,14 +1586,9 @@ export function ChatCollabBudgetSection({
           style={btnPrimaryLg}
           disabled={busy}
           onClick={() => {
-            const n = Math.max(0, Math.trunc(Number(capDraft) || 0));
             setBusy(true);
-            void client
-              .putCollabCap(n)
-              .then((r) => {
-                setCap(r.cap_credits);
-                setCapDraft(String(r.cap_credits));
-              })
+            setErr(null);
+            void persistCap()
               .catch(() => setErr(t.sendFailed))
               .finally(() => setBusy(false));
           }}
@@ -1556,77 +1596,6 @@ export function ChatCollabBudgetSection({
           {t.collabSave}
         </button>
       </div>
-      {chatId ? (
-        <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: 14 }}>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-            <StatChip
-              label={t.collabRemaining}
-              value={fmtCredits(budget?.remaining_credits ?? 0)}
-            />
-            <StatChip label={t.collabAccountCap} value={fmtCredits(cap)} />
-            <span style={{ alignSelf: "center" }}>
-              <Badge tone={budget?.can_auto ? "ok" : "neutral"}>
-                {budget?.can_auto ? t.collabAutoOn : t.collabAutoOff}
-              </Badge>
-            </span>
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <input
-              type="number"
-              min={1}
-              value={addDraft}
-              onChange={(e) => setAddDraft(e.target.value)}
-              style={{ ...inputStyle, width: 96, padding: "9px 12px", fontSize: 14 }}
-            />
-            <button
-              type="button"
-              style={btnPrimaryLg}
-              disabled={busy}
-              onClick={() => {
-                const n = Math.max(1, Math.trunc(Number(addDraft) || 0));
-                setBusy(true);
-                void client
-                  .addChatCollabBudget(chatId, n)
-                  .then(setBudget)
-                  .catch(() => setErr(t.sendFailed))
-                  .finally(() => setBusy(false));
-              }}
-            >
-              {t.collabAdd}
-            </button>
-            <button
-              type="button"
-              style={btnGhostLg}
-              disabled={busy || cap <= 0}
-              onClick={() => {
-                setBusy(true);
-                void client
-                  .ensureChatCollabDefault(chatId)
-                  .then(setBudget)
-                  .catch(() => setErr(t.sendFailed))
-                  .finally(() => setBusy(false));
-              }}
-            >
-              {t.collabApplyDefault}
-            </button>
-            <button
-              type="button"
-              style={btnGhostLg}
-              disabled={busy || !(budget && budget.remaining_credits > 0)}
-              onClick={() => {
-                setBusy(true);
-                void client
-                  .releaseChatCollabBudget(chatId)
-                  .then((r) => setBudget(r))
-                  .catch(() => setErr(t.sendFailed))
-                  .finally(() => setBusy(false));
-              }}
-            >
-              {t.collabRelease}
-            </button>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -2252,8 +2221,8 @@ export function AccountWalletPanel({
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {desc ? `${desc} · ` : ""}
-                          {fmtTxTimeShort(tx.created_at)}
+                          {desc || t.walletTxNoParty}
+                          {tx.created_at ? ` · ${fmtTxTimeShort(tx.created_at)}` : ""}
                         </span>
                       </span>
                       <span
@@ -2265,7 +2234,7 @@ export function AccountWalletPanel({
                           flexShrink: 0,
                         }}
                       >
-                        {positive ? "+" : ""}
+                        {positive ? `${t.walletTxIn} +` : negative ? `${t.walletTxOut} ` : ""}
                         {fmtCredits(tx.amount)}
                       </span>
                     </div>

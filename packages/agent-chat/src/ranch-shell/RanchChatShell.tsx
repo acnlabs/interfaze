@@ -15,9 +15,29 @@ import {
   createGatewayClient,
   officialCatalogRates,
   syncCatalogRates,
+  type ChatListSnapshot,
   type GatewayClient,
   type MyAgentSummary,
 } from "../gateway";
+import {
+  applyReadHolds,
+  beginReadHold,
+  cancelReadHold,
+  chatIdsToMarkRead,
+  chatMatchesSearch,
+  avatarBackground,
+  avatarGlyph,
+  directShortId,
+  finishReadHold,
+  historyConversationName,
+  hostChannelLabel,
+  maskReadChats,
+  withDistinctNames,
+  type ReadHold,
+} from "../inboxList";
+import { MessageBody } from "../MessageBody";
+import { formatUsdPerMillion } from "../displayMoney";
+import { groupRoster } from "../groupRoster";
 import type {
   AgentDirectoryItem,
   ChatMessage,
@@ -33,14 +53,20 @@ import {
   attachmentSettledVisible,
 } from "../attachmentListedPrice";
 import { ChatComputerControl } from "../ChatComputerControl";
+import { computerName, extraIndex, type ComputerNameRow } from "../computerLabel";
 import { ComputerManagePanel } from "../ComputerManagePanel";
 import { ComputerScreenPanel } from "../ComputerScreenPanel";
 import { MailboxThumbs } from "../MailboxThumbs";
 import { anchorAttachment } from "../anchorAttachment";
 import { HistoryFilesPanel } from "../HistoryFilesPanel";
+import { ManuscriptPanel } from "../ManuscriptPanel";
+import { blockLabel, pageOpLine, pageRefLine, type PageOpRecord, type PageRefRecord } from "../pageOpText";
+import { blockKeyFromSearch, chatIdFromSearch } from "../chatLink";
+import { visibleManuscriptBlocks } from "../manuscriptPage";
 import { mailboxIdsFromAttachments, parseMessageAttachments } from "../mailbox";
-import { calleesFromMetadata, decideFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, planFromMetadata, proposeGroupFromMetadata, proposeTaskFromMetadata, type MessageDecide, type MessagePlan, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
-import { settleQueuedDelivery } from "./settleQueuedDelivery";
+import { calleesFromMetadata, decideChipExpired, decideFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, planFromMetadata, proposeGroupFromMetadata, proposeTaskFromMetadata, type MessageDecide, type MessagePlan, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
+import { foldLiveHops, parseHopUpdate, type HopUpdate } from "../liveHops";
+import { queuedStillWaiting, settleQueuedDelivery } from "./settleQueuedDelivery";
 import {
   AgentOwnerSettings,
   deliveryLabel,
@@ -75,7 +101,18 @@ import { NewComposeMenu } from "./NewComposeMenu";
 import { ConnectAgentModal } from "./ConnectAgentModal";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { copyConnectPromptWithInvite } from "./connectPrompt";
-import { officialShelfAllows, officialV0SupportsModel } from "./officialV0";
+import {
+  catalogKind,
+  composerProviderName,
+  providerDownFromMessages,
+  refusedModelNames,
+  liveWithOpenRouter,
+  resolveComposerOffer,
+  vendorOrder,
+  vendorsNeedingReport,
+  type LiveCatalog,
+} from "./composerModels";
+import { officialShelfAllows } from "./officialV0";
 import {
   RANCH_LOCALE_OPTIONS,
   ranchMessages,
@@ -87,6 +124,8 @@ import {
 } from "./i18n";
 import { btnGhost, btnIcon, btnPrimary, colors, inputStyle, shellRoot } from "./styles";
 import { ChatWindowPane } from "./chat-window/ChatWindowPane";
+import { WorkDock, type WorkTab } from "./WorkDock";
+import { InteractionPanel } from "./InteractionPanel";
 import { openEmbodyHost, openStudioTalk } from "./chat-window/studioTalk";
 import { bodyIdFromHostPath, type ChatWindow, type ChatWindowKind } from "./chat-window/types";
 
@@ -106,7 +145,11 @@ function formatRelativeTime(iso: string | null | undefined, t: RanchMessages): s
 }
 
 function chatTitle(c: ChatSummary): string {
-  return (c.title && c.title.trim()) || c.agent_id || c.chat_id.slice(0, 8);
+  const title = (c.title || "").trim();
+  if (title) return title;
+  const headline = (c.embed?.headline || "").trim();
+  if (headline) return headline;
+  return c.agent_id || c.chat_id.slice(0, 8);
 }
 
 /** Short agent id for conversation header subtitle (list stays name-only). */
@@ -227,22 +270,8 @@ function isGlobalDirect(c: ChatSummary): boolean {
   return !c.embed?.context;
 }
 
-function hostCaption(origin?: string | null): string {
-  const raw = (origin || "").trim();
-  if (!raw) return "";
-  try {
-    return new URL(raw).host;
-  } catch {
-    return raw.replace(/^https?:\/\//, "").replace(/\/+$/, "");
-  }
-}
-
 function conversationLabel(c: ChatSummary, t: RanchMessages): string {
-  const headline = (c.embed?.headline || "").trim();
-  if (headline) return headline;
-  const title = (c.title || "").trim();
-  if (title) return title;
-  return c.last_message_at || c.created_at ? t.untitledChat : t.startNewChat;
+  return historyConversationName(c, { untitled: t.untitledChat, fresh: t.startNewChat });
 }
 
 /** D10: host-named group, then a group that already has the proposed agents, then same title. */
@@ -328,9 +357,13 @@ function parseMessageMetadata(raw: unknown): ChatMessage["metadata"] {
 
 function DeliveryStatusIcon({
   delivery,
+  createdAt,
+  now,
   t,
 }: {
   delivery?: string | null;
+  createdAt?: string | null;
+  now?: number;
   t: RanchMessages;
 }) {
   if (!delivery) return null;
@@ -349,7 +382,7 @@ function DeliveryStatusIcon({
       : delivery === "sent"
         ? t.sent
         : delivery === "queued"
-          ? t.queuedOffline
+          ? queuedStillWaiting(createdAt, now) ? t.queuedStillWaiting : t.queuedOffline
           : delivery === "failed"
             ? t.deliveryFailed
             : t.delivered;
@@ -418,10 +451,17 @@ function DeliveryStatusIcon({
   );
 }
 
-function deliveryStatusLabel(delivery: string, t: RanchMessages): string {
+function deliveryStatusLabel(
+  delivery: string,
+  t: RanchMessages,
+  createdAt?: string | null,
+  now?: number,
+): string {
   if (delivery === "pending") return t.sending;
   if (delivery === "sent") return t.sent;
-  if (delivery === "queued") return t.queuedOffline;
+  if (delivery === "queued") {
+    return queuedStillWaiting(createdAt, now) ? t.queuedStillWaiting : t.queuedOffline;
+  }
   if (delivery === "failed") return t.deliveryFailed;
   return t.delivered;
 }
@@ -431,10 +471,6 @@ function shortModelLabel(modelId: string | null | undefined): string {
   if (!s) return "";
   const slash = s.lastIndexOf("/");
   return slash >= 0 ? s.slice(slash + 1) : s;
-}
-
-function formatUsdPerMillion(n: number): string {
-  return `$${Number(n.toPrecision(6))}`;
 }
 
 function filterComposerModels(ids: string[], query: string): string[] {
@@ -512,7 +548,9 @@ function sendFailureCopy(
                   ? t.needOpenRouterKey
                   : e.code === "model_pricing_unavailable"
                     ? t.modelPricingUnavailable
-                    : e.message || t.sendFailed;
+                    : e.code === "canvas_ref"
+      ? t.pageRefRejected
+      : e.message || t.sendFailed;
   return { text, offerStoreKey };
 }
 
@@ -611,12 +649,7 @@ function modelFitsComposerPath(
   const vendor = modelVendorId(mid).toLowerCase();
   if (args.official) {
     if (isByoVendor(vendor, args.byoVendor)) return false;
-    return (
-      args.officialIds.some((item) => sameModelId(item, mid)) ||
-      args.catalogIds.some((item) => sameModelId(item, mid)) ||
-      args.fallback.some((item) => sameModelId(item, mid)) ||
-      sameModelId(mid, args.listed)
-    );
+    return args.officialIds.some((item) => sameModelId(item, mid));
   }
   if (args.openRouterByo) {
     return (
@@ -655,7 +688,9 @@ function pickComposerModelForPath(args: {
     return (
       args.fallback.find((item) => sameModelId(item, args.wanted)) ||
       args.officialIds.find((item) => sameModelId(item, args.wanted)) ||
-      args.catalogIds.find((item) => sameModelId(item, args.wanted)) ||
+      (args.official
+        ? null
+        : args.catalogIds.find((item) => sameModelId(item, args.wanted))) ||
       (sameModelId(args.wanted, args.listed) ? args.listed : args.wanted)
     );
   }
@@ -760,23 +795,24 @@ function AgentUsageFooter({
 }) {
   const model = compactModelLabel(usage.modelId);
   const tokens = t.agentHopUsage(usage.input, usage.output);
-  const text = model ? `${model} · ${tokens}` : tokens;
   return (
-    <div
-      title={usage.modelId || text}
+    <details
       style={{
         paddingLeft: 4,
         fontSize: 11,
         lineHeight: 1.35,
         color: colors.muted,
         maxWidth: "100%",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
       }}
     >
-      {text}
-    </div>
+      <summary
+        title={usage.modelId || tokens}
+        style={{ cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+      >
+        {model ? `${model} · ${t.agentHopDetails}` : t.agentHopDetails}
+      </summary>
+      <div>{tokens}</div>
+    </details>
   );
 }
 
@@ -837,7 +873,8 @@ function AgentOrchestrationFooter({
             <button
               type="button"
               onClick={() => setOpenId(open ? null : rowKey)}
-              title={c.hop_id || c.agent_id}
+              title={text}
+              aria-label={text}
               aria-expanded={open}
               style={{
                 display: "flex",
@@ -1075,6 +1112,7 @@ function AgentDecideFooter({
   hops,
   hopCap,
   busy,
+  expired,
   t,
   onPick,
 }: {
@@ -1083,22 +1121,24 @@ function AgentDecideFooter({
   hops: number;
   hopCap: number;
   busy: boolean;
+  expired?: boolean;
   t: RanchMessages;
   onPick: (id: string, label: string) => void;
 }) {
   const appliedId = decide.applied?.option_id || null;
   const shadow = decide.shadow;
   const suggested =
-    !appliedId && shadow?.status === "scored" && shadow.choice ? shadow.choice : null;
+    !appliedId && !expired && shadow?.status === "scored" && shadow.choice ? shadow.choice : null;
   const waitingHuman =
     shadow?.status === "ask_human" ||
     shadow?.gate?.ask_human === true ||
     shadow?.status === "low_confidence";
   const scoring = shadow?.status === "pending";
   const capped = auto && hopCap > 0 && hops >= hopCap && !appliedId;
-  const locked = Boolean(appliedId) || busy || (auto && scoring);
+  const locked = Boolean(appliedId) || busy || (auto && scoring) || Boolean(expired);
   let status = "";
   if (appliedId) status = t.decisionPicked;
+  else if (expired) status = t.decisionExpired;
   else if (scoring) status = t.decisionScoring;
   else if (waitingHuman) status = t.decisionAskHuman;
   else if (capped) status = t.decisionCap;
@@ -1129,10 +1169,10 @@ function AgentDecideFooter({
                 ...btnGhost,
                 padding: "4px 10px",
                 fontSize: 12,
-                opacity: locked && !picked ? 0.55 : 1,
+                opacity: expired ? 0.45 : locked && !picked ? 0.55 : 1,
                 borderColor: picked || hint ? "rgba(59,130,246,0.45)" : colors.border,
                 background: picked || hint ? colors.accentSoft : "transparent",
-                color: colors.text,
+                color: expired && !picked ? colors.muted : colors.text,
                 cursor: locked ? "default" : "pointer",
               }}
             >
@@ -1359,13 +1399,25 @@ function DeliveryStatusFooter({
   delivery,
   byAgent,
   names,
+  createdAt,
   t,
 }: {
   delivery?: string | null;
   byAgent?: Record<string, string> | null;
   names: Record<string, string>;
+  createdAt?: string | null;
   t: RanchMessages;
 }) {
+  const queued =
+    delivery === "queued" ||
+    Boolean(byAgent && Object.values(byAgent).some((status) => status === "queued"));
+  const [now, setNow] = useState(() => Date.now());
+  const due = queued && queuedStillWaiting(createdAt, now);
+  useEffect(() => {
+    if (!queued || due) return;
+    const id = window.setInterval(() => setNow(Date.now()), 15_000);
+    return () => window.clearInterval(id);
+  }, [queued, due]);
   const entries =
     byAgent && typeof byAgent === "object"
       ? Object.entries(byAgent).filter(([, s]) => typeof s === "string" && s)
@@ -1375,7 +1427,7 @@ function DeliveryStatusFooter({
     const full = entries
       .map(([id, status]) => {
         const label = names[id]?.trim() || shortAgentId(id) || id;
-        return `${label} ${deliveryStatusLabel(status, t)}`;
+        return `${label} ${deliveryStatusLabel(status, t, createdAt, now)}`;
       })
       .join(" · ");
     return (
@@ -1383,18 +1435,18 @@ function DeliveryStatusFooter({
         title={full}
         aria-label={full}
         style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: 2,
           paddingRight: 2,
           fontSize: 11,
           lineHeight: 1.35,
           color: colors.muted,
           maxWidth: "100%",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          textAlign: "right",
         }}
       >
-        {entries.map(([id, status], i) => {
+        {entries.map(([id, status]) => {
           const label = names[id]?.trim() || shortAgentId(id) || id;
           return (
             <span
@@ -1403,12 +1455,22 @@ function DeliveryStatusFooter({
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 4,
-                verticalAlign: "middle",
+                maxWidth: "100%",
+                minWidth: 0,
               }}
             >
-              {i > 0 ? <span style={{ margin: "0 4px" }}>·</span> : null}
-              <span style={{ color: colors.text }}>{label}</span>
-              <DeliveryStatusIcon delivery={status} t={t} />
+              <span
+                style={{
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  color: colors.text,
+                }}
+              >
+                {label}
+              </span>
+              <DeliveryStatusIcon delivery={status} createdAt={createdAt} now={now} t={t} />
             </span>
           );
         })}
@@ -1419,7 +1481,7 @@ function DeliveryStatusFooter({
   if (!delivery) return null;
   return (
     <div style={{ paddingRight: 2, lineHeight: 1 }}>
-      <DeliveryStatusIcon delivery={delivery} t={t} />
+      <DeliveryStatusIcon delivery={delivery} createdAt={createdAt} now={now} t={t} />
     </div>
   );
 }
@@ -1887,6 +1949,7 @@ function TopicDivider({
   caption,
   highlighted,
   onHighlight,
+  actionLabel,
   borderColor,
   accentSoft,
 }: {
@@ -1894,6 +1957,7 @@ function TopicDivider({
   caption?: string;
   highlighted?: boolean;
   onHighlight?: () => void;
+  actionLabel?: string;
   borderColor: string;
   accentSoft: string;
 }) {
@@ -1949,7 +2013,13 @@ function TopicDivider({
     >
       <div style={{ flex: 1, height: 1, background: borderColor }} />
       {onHighlight ? (
-        <button type="button" onClick={onHighlight} title={title} style={pillStyle}>
+        <button
+          type="button"
+          onClick={onHighlight}
+          title={actionLabel || title}
+          aria-label={actionLabel || title}
+          style={pillStyle}
+        >
           {label}
         </button>
       ) : (
@@ -2041,6 +2111,16 @@ function IconClose() {
   );
 }
 
+/** Right-hand pane toggle. The bar sits on the right of the rectangle. */
+function IconRightPanel() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M15 3v18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** Simple left-rail panel (no chevron). Same glyph for collapse/expand. */
 function IconSidebar() {
   return (
@@ -2101,6 +2181,23 @@ function IconBody() {
       <path d="M12 8V4H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <rect x="4" y="8" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
       <path d="M2 14h2M20 14h2M9 13v2M15 13v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Three agents linked. Opens the Interaction window. */
+function IconInteraction() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M8.4 9.1h7.2M7.5 10.4 10.8 15M16.5 10.4 13.2 15"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <circle cx="6" cy="8" r="2.25" stroke="currentColor" strokeWidth="2" />
+      <circle cx="18" cy="8" r="2.25" stroke="currentColor" strokeWidth="2" />
+      <circle cx="12" cy="17" r="2.25" stroke="currentColor" strokeWidth="2" />
     </svg>
   );
 }
@@ -2501,6 +2598,7 @@ function AccountFooter({
 
       <button
         type="button"
+        aria-label={`${label} · ${t.account}`}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         onClick={() => setMenuOpen((v) => !v)}
@@ -2600,15 +2698,26 @@ function AccountFooter({
   );
 }
 
-function useViewportWidth(): number {
-  // Fixed SSR-safe initial value; synced to the real width on mount.
+function useShellWidth(shellRef: { current: HTMLElement | null }): number {
+  // SSR-safe guess. After mount, follow the shell box — a 582px panel
+  // inside a wide window must stay one column.
   const [width, setWidth] = useState(1024);
   useEffect(() => {
-    const onResize = () => setWidth(window.innerWidth);
-    onResize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+    const el = shellRef.current;
+    const fallback = () => (typeof window === "undefined" ? 1024 : window.innerWidth);
+    if (!el || typeof ResizeObserver === "undefined") {
+      setWidth(fallback());
+      return;
+    }
+    const measure = () => {
+      const next = el.clientWidth;
+      setWidth(next > 0 ? next : fallback());
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [shellRef]);
   return width;
 }
 
@@ -2700,7 +2809,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     if (modeProp !== "full") setSidebarCollapsed(false);
   }, [modeProp]);
 
-  const viewportWidth = useViewportWidth();
+  const shellRef = useRef<HTMLDivElement>(null);
+  const viewportWidth = useShellWidth(shellRef);
   /** <768px in full mode: single-column, list ↔ conversation like side mode. */
   const isNarrowFull = mode === "full" && viewportWidth < 768;
   const listStepsAside = screenHidesList && mode === "full" && !isNarrowFull;
@@ -2716,6 +2826,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showConnect, setShowConnect] = useState(false);
   const [search, setSearch] = useState("");
   const [chats, setChats] = useState<ChatSummary[]>([]);
+  const chatsRef = useRef(chats);
+  chatsRef.current = chats;
+  const readHoldsRef = useRef(new Map<string, ReadHold>());
+  const readTicketRef = useRef(0);
+  const applyServerChats = useCallback((snapshot: ChatListSnapshot) => {
+    setChats(applyReadHolds(snapshot.chats, readHoldsRef.current, snapshot.startedAt));
+  }, []);
   const [loadingChats, setLoadingChats] = useState(true);
   const [chatsLoadError, setChatsLoadError] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -2745,6 +2862,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, [messages]);
   /** agent_id → display name (group chats). */
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
+  const [groupParticipants, setGroupParticipants] = useState<
+    Array<{ participant_type?: string | null; participant_id: string; is_active?: boolean | null; name?: string | null }>
+  >([]);
   /** agent_id → presence status (group chats; from participants API). */
   const [agentStatuses, setAgentStatuses] = useState<Record<string, string>>({});
   /** Ranch-style: tap header → members panel. */
@@ -2767,7 +2887,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showAccountBilling, setShowAccountBilling] = useState(false);
   const [showComputer, setShowComputer] = useState(false);
   const [screenComputer, setScreenComputer] = useState<{ id: string; label: string } | null>(null);
+  const [cloudComputers, setCloudComputers] = useState<ComputerNameRow[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [pageTick, setPageTick] = useState(0);
+  const [dockTabs, setDockTabs] = useState<WorkTab[]>([]);
+  const [activeDockId, setActiveDockId] = useState<string | null>(null);
+  const [hopEvents, setHopEvents] = useState<HopUpdate[]>([]);
+  const liveHops = useMemo(() => foldLiveHops(messages, hopEvents), [messages, hopEvents]);
+  const [pointedBlock, setPointedBlock] = useState<PageRefRecord | null>(null);
+  const openManuscriptRef = useRef<(blockKey?: string) => void>(() => {});
+  const revealInteractionRef = useRef<() => void>(() => {});
+  const dockTabsRef = useRef<WorkTab[]>([]);
+  const topicIdRef = useRef<string | null>(null);
+  const canvasFetchSeq = useRef(0);
+  dockTabsRef.current = dockTabs;
   useEffect(() => {
     setScreenComputer(null);
     setScreenHidesList(false);
@@ -2787,6 +2920,113 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setShowComputer(false);
     setShowMyAgents(false);
   };
+
+  const closeCanvasTabs = () => {
+    const next = dockTabsRef.current.filter((tab) => tab.kind !== "canvas");
+    setDockTabs(next);
+    setActiveDockId((cur) => (cur?.startsWith("canvas:") ? (next[0]?.id ?? null) : cur));
+  };
+
+  const openComputer = () => {
+    closeAccountSurfaces();
+    setShowComputer(true);
+  };
+
+  const openCloudScreen = (id: string, label: string) => {
+    const tabId = `computer:${id}`;
+    if (dockTabsRef.current.some((tab) => tab.id === tabId)) {
+      setActiveDockId(tabId);
+      return;
+    }
+    closeAccountSurfaces();
+    setScreenComputer({ id, label });
+    setDockTabs((prev) => [...prev, { id: tabId, kind: "computer", title: label }]);
+    setActiveDockId(tabId);
+  };
+
+  const openCanvas = (focusKey?: string) => {
+    closeAccountSurfaces();
+    const chatId = activeChatIdRef.current;
+    if (!chatId) return;
+    const seedId = focusKey ? `canvas:${focusKey}` : "canvas:empty";
+    const seedTitle = focusKey ? blockLabel(focusKey) || t.manuscript : t.manuscript;
+    const already = dockTabsRef.current.some((tab) => (focusKey ? tab.id === seedId : tab.kind === "canvas"));
+    if (!already) {
+      setDockTabs((prev) => [...prev, { id: seedId, kind: "canvas", blockKey: focusKey, title: seedTitle }]);
+    }
+    setActiveDockId(() => {
+      if (focusKey) return seedId;
+      return dockTabsRef.current.find((tab) => tab.kind === "canvas")?.id ?? seedId;
+    });
+    const seq = ++canvasFetchSeq.current;
+    void client.getChatPage(chatId).then((page) => {
+      if (seq !== canvasFetchSeq.current || activeChatIdRef.current !== chatId) return;
+      const blocks = visibleManuscriptBlocks(page.blocks ?? [], topicIdRef.current);
+      const canvasTabs: WorkTab[] = blocks.length
+        ? blocks.map((block) => ({
+            id: `canvas:${block.block_key}`,
+            kind: "canvas" as const,
+            blockKey: block.block_key,
+            title: block.title?.trim() || blockLabel(block.block_key) || t.manuscript,
+          }))
+        : [{ id: "canvas:empty", kind: "canvas", title: t.manuscript }];
+      setDockTabs((prev) => [...prev.filter((tab) => tab.kind !== "canvas"), ...canvasTabs]);
+      setActiveDockId((cur) => {
+        if (focusKey && canvasTabs.some((tab) => tab.id === `canvas:${focusKey}`)) return `canvas:${focusKey}`;
+        if (cur && canvasTabs.some((tab) => tab.id === cur)) return cur;
+        return canvasTabs[0]?.id ?? null;
+      });
+    }).catch(() => {});
+  };
+  openManuscriptRef.current = openCanvas;
+  revealInteractionRef.current = () => {
+    const title = t.interaction;
+    const tabs = dockTabsRef.current;
+    if (!tabs.some((tab) => tab.id === "interaction")) {
+      setDockTabs((prev) =>
+        prev.some((tab) => tab.id === "interaction")
+          ? prev
+          : [...prev, { id: "interaction", kind: "interaction", title }],
+      );
+    }
+    if (tabs.length === 0) setActiveDockId("interaction");
+  };
+  const openInteraction = () => {
+    closeAccountSurfaces();
+    const title = t.interaction;
+    setDockTabs((prev) =>
+      prev.some((tab) => tab.id === "interaction")
+        ? prev
+        : [...prev, { id: "interaction", kind: "interaction", title }],
+    );
+    setActiveDockId("interaction");
+  };
+
+  useEffect(() => {
+    setDockTabs([]);
+    setActiveDockId(null);
+    setPointedBlock(null);
+    setHopEvents([]);
+  }, [active?.chat_id]);
+
+  useEffect(() => {
+    let gone = false;
+    void (async () => {
+      const token = await getAccessToken();
+      if (!token || gone) return;
+      const res = await fetch(`${gatewayBaseUrl.replace(/\/+$/, "")}/api/computers`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok || gone) return;
+      const body = (await res.json()) as { computers?: ComputerNameRow[] };
+      if (!gone) setCloudComputers(Array.isArray(body.computers) ? body.computers : []);
+    })().catch(() => {
+      if (!gone) setCloudComputers([]);
+    });
+    return () => {
+      gone = true;
+    };
+  }, [active?.chat_id, gatewayBaseUrl, getAccessToken]);
 
   const applyAccountPanel = (panel: AccountDeepLinkPanel | null) => {
     closeAccountSurfaces();
@@ -2974,6 +3214,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       inference_path?: "byo" | "official" | string | null;
       input_price_per_million?: number;
       output_price_per_million?: number;
+      price_from?: string;
       free?: boolean;
       priceable?: boolean;
     }>;
@@ -2986,14 +3227,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
     [],
   );
   const [composerCatalogLoading, setComposerCatalogLoading] = useState(false);
+  /** Per provider: ids it currently lists. An empty or failed ask is left unset. */
+  const [providerLive, setProviderLive] = useState<Record<string, LiveCatalog>>({});
+  const [providerAsk, setProviderAsk] = useState(0);
   const composerMenuRef = useRef<HTMLDivElement | null>(null);
-  const composerCatalogRef = useRef(composerCatalog);
-  composerCatalogRef.current = composerCatalog;
   /** Last Settings listing seen in this chat; change drops the composer pin. */
   const composerListedRef = useRef<{ chatId: string; listed: string } | null>(null);
   const [ownedAgentLoading, setOwnedAgentLoading] = useState(false);
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [activeTopic, setActiveTopic] = useState<ThreadSummary | null>(null);
+  topicIdRef.current = activeTopic?.id ?? null;
   /**
    * Product model: topic = segment label on the main timeline; Topics list =
    * directory; filtered view (activeTopic) is secondary (list only).
@@ -3082,9 +3325,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
         );
 
       try {
-        const list = await client.listChats();
-        setChats(list);
-        const row = list.find((c) => c.chat_id === chatId);
+        const snapshot = await client.listChatSnapshot(true);
+        applyServerChats(snapshot);
+        const row = snapshot.chats.find((c) => c.chat_id === chatId);
         if (row) {
           setActive((cur) =>
             cur?.chat_id === chatId
@@ -3115,7 +3358,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setDeliveryBroken(chatId, true);
       return "undeliverable";
     },
-    [client, setDeliveryBroken],
+    [applyServerChats, client, setDeliveryBroken],
   );
 
   const clearReplySlot = useCallback((chatId?: string) => {
@@ -3175,8 +3418,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setLoadingChats(true);
     setChatsLoadError(false);
     try {
-      const list = await client.listChats();
-      setChats(list);
+      const snapshot = await client.listChatSnapshot(true);
+      applyServerChats(snapshot);
       setError(null);
     } catch (e) {
       setChatsLoadError(true);
@@ -3190,7 +3433,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     } finally {
       setLoadingChats(false);
     }
-  }, [client, t.sessionExpired]);
+  }, [applyServerChats, client, t.sessionExpired]);
 
   const searchDiscover = useCallback(
     async (q: string): Promise<AgentDirectoryItem[]> => {
@@ -3248,10 +3491,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
     if (!open || !active) return;
     let cancelled = false;
     const tick = window.setInterval(() => {
-      void client.listChats().then((list) => {
+      void client.listChatSnapshot(true).then((snapshot) => {
         if (cancelled) return;
-        setChats(list);
-        const next = list.find((c) => c.chat_id === active.chat_id);
+        applyServerChats(snapshot);
+        const next = snapshot.chats.find((c) => c.chat_id === active.chat_id);
         if (next) setActive((current) => current?.chat_id === next.chat_id ? next : current);
       }).catch(() => {
         // Presence refresh is best-effort; retain the current conversation.
@@ -3284,7 +3527,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const el = listRef.current?.querySelector(`[data-message-id="${safe}"]`);
     if (el && "scrollIntoView" in el) {
       (el as HTMLElement).scrollIntoView({ block: "center", behavior: "smooth" });
+      return true;
     }
+    return false;
   }, []);
 
   const messageIdForMailbox = useCallback((msgs: ChatMessage[], mailboxId: string) => {
@@ -3410,7 +3655,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   /** Ensure host "mine" + official conversation agents have a direct chat row. */
   const ensuredDirectoryKeyRef = useRef("");
   useEffect(() => {
-    if (!open) return;
+    if (!open || loadingChats || chatsLoadError) return;
     const ensure = directoryAgents.filter(
       (a) =>
         (a.group === "mine" || a.group === "recommended") && isAcnCatalogAgentId(a.agent_id),
@@ -3425,7 +3670,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     let cancelled = false;
     (async () => {
       try {
-        const list = await client.listChats();
+        // The inbox list just loaded. Another /api/chats here only duplicates it.
+        const list = chatsRef.current;
         if (cancelled) return;
         const have = new Set(list.map((c) => agentIdKey(c.agent_id)).filter(Boolean));
         const missing = ensure.filter((a) => !have.has(agentIdKey(a.agent_id)));
@@ -3444,7 +3690,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     return () => {
       cancelled = true;
     };
-  }, [open, directoryAgents, client, refreshChats]);
+  }, [open, loadingChats, chatsLoadError, directoryAgents, client, refreshChats]);
 
   const openConversation = useCallback(
     async (chat: ChatSummary, opts?: { keepChatsPanel?: boolean; preserveDraft?: boolean }) => {
@@ -3457,6 +3703,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setLoadingMessages(true);
       setMessagesLoadError(false);
       setAgentNames({});
+      setGroupParticipants([]);
       setAgentStatuses({});
       const keepChats = !!opts?.keepChatsPanel && !isGroupChat(chat);
       setShowMembersPanel(keepChats);
@@ -3478,6 +3725,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setStickyMention(isGroupChat(chat) ? readStickyMention(chat.chat_id) : null);
       clearReplySlot();
       agentIdsRef.current = [];
+      const readIds = chatIdsToMarkRead(chat, chatsRef.current);
+      const ticket = ++readTicketRef.current;
+      beginReadHold(readHoldsRef.current, readIds, ticket);
+      setChats((prev) => maskReadChats(prev, new Set(readIds)));
+      void Promise.all(readIds.map((id) => client.markChatAsRead(id)))
+        .then(() => {
+          finishReadHold(readHoldsRef.current, readIds, ticket, Date.now());
+        })
+        .catch(() => {
+          cancelReadHold(readHoldsRef.current, readIds, ticket);
+          void client.listChatSnapshot(true).then(applyServerChats).catch(() => {});
+        });
       try {
         const [msgs, participants] = await Promise.all([
           client.listMessages(chat.chat_id),
@@ -3493,6 +3752,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
         setTopics([]);
         const agents = participants.filter(
           (p) => p.participant_type === "agent" && p.is_active !== false,
+        );
+        setGroupParticipants(
+          isGroupChat(chat) ? participants.filter((p) => p.is_active !== false) : [],
         );
         agentIdsRef.current = agents.map((p) => p.participant_id);
         if (isGroupChat(chat)) {
@@ -3525,16 +3787,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
           writeStickyMention(chat.chat_id, refreshed);
           return refreshed;
         });
-        // Clear unread locally — avoid full listChats refresh (list flash on every click).
-        void client.markChatAsRead(chat.chat_id)
-          .then(() => {
-            setChats((prev) =>
-              prev.map((c) =>
-                c.chat_id === chat.chat_id ? { ...c, unread_count: 0 } : c,
-              ),
-            );
-          })
-          .catch(() => {});
       } catch (e) {
         if (seq !== loadSeqRef.current) return;
         setMessagesLoadError(true);
@@ -3543,8 +3795,48 @@ export function RanchChatShell(props: RanchChatShellProps) {
         if (seq === loadSeqRef.current) setLoadingMessages(false);
       }
     },
-    [client, clearReplySlot, directoryAgents, resolveAfterDeliveryIssue],
+    [applyServerChats, client, clearReplySlot, directoryAgents, resolveAfterDeliveryIssue],
   );
+
+  const openedChatLinkRef = useRef(false);
+  useEffect(() => {
+    if (!open || loadingChats || openedChatLinkRef.current) return;
+    openedChatLinkRef.current = true;
+    if (typeof window === "undefined") return;
+    const id = chatIdFromSearch(window.location.search);
+    const block = blockKeyFromSearch(window.location.search);
+    if (!id) return;
+    const row = chats.find((chat) => chat.chat_id === id);
+    if (!row) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("chat");
+      url.searchParams.delete("block");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      return;
+    }
+    void openConversation(row).then(() => {
+      if (block) openManuscriptRef.current(block);
+    });
+  }, [open, loadingChats, chats, openConversation]);
+
+  const seenActiveChatRef = useRef(false);
+  useEffect(() => {
+    if (active?.chat_id) seenActiveChatRef.current = true;
+    if (!seenActiveChatRef.current || typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const current = url.searchParams.get("chat");
+    if (active?.chat_id) {
+      if (current === active.chat_id) return;
+      url.searchParams.set("chat", active.chat_id);
+      url.searchParams.delete("block");
+    } else if (current) {
+      url.searchParams.delete("chat");
+      url.searchParams.delete("block");
+    } else {
+      return;
+    }
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [active?.chat_id]);
 
   const openedInitialAgentRef = useRef(false);
   useEffect(() => {
@@ -3590,6 +3882,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const want = agentIdKey(official.agent_id);
     if (!open || !want || openedOfficialRef.current || openedInitialAgentRef.current) return;
     if (initialOpenAgentId || loadingChats || active) return;
+    if (typeof window !== "undefined" && chatIdFromSearch(window.location.search)) return;
     const others = chats.filter((c) => !isGroupChat(c) && agentIdKey(c.agent_id) !== want);
     if (others.length > 0) return;
     openedOfficialRef.current = true;
@@ -3711,6 +4004,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       const agents = participants.filter(
         (p) => p.participant_type === "agent" && p.is_active !== false,
       );
+      setGroupParticipants(participants.filter((p) => p.is_active !== false));
       agentIdsRef.current = agents.map((p) => p.participant_id);
       const ids = agents.map((p) => p.participant_id);
       setGroupAgentsByChat((prev) => ({ ...prev, [chatId]: ids }));
@@ -3780,6 +4074,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
         token,
         onEvent: (ev) => {
           if (ev.chat_id && ev.chat_id !== chatId) return;
+          if (ev.type === "hop.updated") {
+            if (ev.chat_id !== chatId) return;
+            const update = parseHopUpdate(ev.data);
+            if (!update) return;
+            setHopEvents((prev) => [...prev, update]);
+            if (update.phase === "in_flight") revealInteractionRef.current();
+          }
+          if (ev.type === "canvas.updated") {
+            setPageTick((n) => n + 1);
+            const receipts = Array.isArray(ev.data?.receipts) ? ev.data.receipts : [];
+            const hit = receipts.find(
+              (item) => item && typeof item === "object" && typeof (item as { block_key?: unknown }).block_key === "string",
+            ) as { block_key?: string } | undefined;
+            openManuscriptRef.current(hit?.block_key);
+          }
           if (ev.type === "message.new" && ev.data) {
             const d = ev.data;
             const messageId = d.message_id != null ? String(d.message_id) : "";
@@ -3806,6 +4115,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
               }
               return next;
             });
+            if (foldLiveHops([m], []).some((hop) => hop.phase === "in_flight")) {
+              revealInteractionRef.current();
+            }
             void refreshChats();
           }
           // Streaming chunks may omit final content on message.new; resync on end.
@@ -4203,6 +4515,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         const agents = participants.filter(
           (p) => p.participant_type === "agent" && p.is_active !== false,
         );
+        setGroupParticipants(participants.filter((p) => p.is_active !== false));
         agentIdsRef.current = agents.map((p) => p.participant_id);
         setAgentNames(resolveParticipantLabels(agents, directoryAgents));
         const statuses: Record<string, string> = {};
@@ -4240,6 +4553,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
         opts?.threadId !== undefined
           ? opts.threadId
           : (activeTopic?.id ?? composerTopic?.id ?? null);
+      const pageRef =
+        pointedBlock?.block_key && pointedBlock.rev
+          ? { block_key: pointedBlock.block_key, rev: pointedBlock.rev }
+          : null;
       await client.sendMessage(chatId, text, mentions, sendThreadId, {
         requested_model: requestedModelForSend(
           selectedModelId,
@@ -4248,6 +4565,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           composerModel?.official_key_geo,
         ),
         decision_choice: opts?.decisionChoice ?? null,
+        canvas_ref: pageRef,
       });
       if (group && mentions) {
         if (mentions.length === 1) {
@@ -4259,6 +4577,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       }
       if (!opts?.decisionChoice && seq === loadSeqRef.current) {
         setDraft((current) => current === draft ? "" : current);
+        setPointedBlock(null);
       }
       await reloadMessages(chatId, seq);
       await refreshChats();
@@ -4535,23 +4854,29 @@ export function RanchChatShell(props: RanchChatShellProps) {
     // Own agents stay in the inbox even before the first message.
     return isGlobalDirect(c) && agentIsMine(c.agent_id, mineAgentIds);
   });
-  const filtered = collapseDirectChatsByAgent(
-    inboxChats.filter((c) => {
-      // Legacy platform sys:* assistants are retired from Interfaze surfaces.
-      if ((c.agent_id || "").startsWith("sys:")) return false;
-      const q = search.trim().toLowerCase();
-      if (!q) return true;
-      const hay = [
-        chatTitle(c),
-        conversationLabel(c, t),
-        c.agent_id ?? "",
-        c.embed?.context ?? "",
-      ]
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(q);
-    }),
+  const nameFallback = { untitled: t.untitledChat, fresh: t.startNewChat };
+  const filtered = withDistinctNames(
+    collapseDirectChatsByAgent(
+      inboxChats.filter((c) => {
+        if ((c.agent_id || "").startsWith("sys:")) return false;
+        return chatMatchesSearch(c, search, nameFallback);
+      }),
+    ),
+    nameFallback,
+    (c) => (isGroupChat(c) ? c.chat_id.slice(0, 8) : directShortId(c.agent_id)),
   );
+  const labelForOpen = (chat: ChatSummary): string => {
+    const sameChat = filtered.find((item) => item.chat_id === chat.chat_id);
+    if (sameChat) return sameChat.displayName;
+    const sameAgent = filtered.find(
+      (item) =>
+        !isGroupChat(item) &&
+        !isGroupChat(chat) &&
+        agentIdKey(item.agent_id) === agentIdKey(chat.agent_id),
+    );
+    if (sameAgent) return sameAgent.displayName;
+    return historyConversationName(chat, nameFallback);
+  };
   const siblingChats =
     active && !isGroupChat(active) && active.agent_id
       ? inboxChats
@@ -4706,6 +5031,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
     if (!activeTopic) return true;
     return m.thread_id === activeTopic.id;
   });
+  const nameForAgent = (id: string) =>
+    agentNames[id]?.trim() ||
+    agentNames[id.replace(/^acn:/, "")]?.trim() ||
+    shortAgentId(id) ||
+    id;
   const mineAgents = directoryAgents.filter((a) => a.group === "mine" && a.agent_id.trim());
   const hasMineAgents = mineAgents.length > 0;
   const officialAgent =
@@ -4747,6 +5077,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
       cancelled = true;
     };
   }, [showMembersPanel, activeIsOwned, active?.agent_id, infoTab, client]);
+
+  const refusedIds = useMemo(
+    () => messages.flatMap((message) => refusedModelNames(message.content)),
+    [messages],
+  );
+  const providerDead = useMemo(() => providerDownFromMessages(messages), [messages]);
 
   // M1/M2: composer model picker (direct chats only).
   useEffect(() => {
@@ -4814,27 +5150,38 @@ export function RanchChatShell(props: RanchChatShellProps) {
             ? { chatId: active.chat_id, listed }
             : null;
           writeComposerListed(active.chat_id, listed);
-          const catalogIds = listedOfficial
-            ? composerCatalogRef.current.map((row) => row.id)
-            : [];
+          const vendors = vendorOrder(runtime, listed, supported);
+          const live = liveWithOpenRouter(
+            providerLive,
+            vendors,
+            composerCatalog.map((row) => row.id),
+          );
+          if (providerDead) {
+            const vendor = modelVendorId(runtime || listed);
+            if (vendor) live[vendor] = "down";
+          }
+          const menu = resolveComposerOffer({
+            listed,
+            runtime,
+            supported,
+            officialIds,
+            keyGeo: typeof row.official_key_geo === "string" ? row.official_key_geo : "",
+            live,
+            refusedIds,
+          }).ids;
           const nextModel = pickComposerModelForPath({
             official: listedOfficial,
             openRouterByo: isOpenRouterByoListed(listed, runtime, supported),
             wanted: listedChanged ? listed : stored,
             listed,
             runtime,
-            fallback,
+            fallback: menu.length ? menu : fallback,
             officialIds,
-            catalogIds,
+            catalogIds: [],
           });
-          const catalogPending = listedOfficial && catalogIds.length === 0;
-          if (
-            catalogPending &&
-            stored &&
-            !listedChanged &&
-            officialV0SupportsModel(stored) &&
-            officialShelfAllows(stored, row.official_key_geo)
-          ) {
+          const storedOnMenu =
+            !!stored && !listedChanged && menu.some((id) => sameModelId(id, stored));
+          if (storedOnMenu) {
             setSelectedModelId(stored);
           } else {
             setSelectedModelId(nextModel);
@@ -4860,12 +5207,88 @@ export function RanchChatShell(props: RanchChatShellProps) {
     client,
     ownedAgentDetail?.token_pricing?.model_id,
     (ownedAgentDetail?.official_models ?? []).join("\u0001"),
+    composerCatalog,
+    providerLive,
+    providerDead,
+    refusedIds,
   ]);
 
   useEffect(() => {
     setComposerMenuOpen(false);
     setComposerMenuQuery("");
+    setProviderLive({});
   }, [active?.chat_id]);
+
+  useEffect(() => {
+    if (!composerModel) return;
+    const vendors = vendorOrder(
+      composerModel.runtime_model_id,
+      composerModel.listed_model_id,
+      composerModel.supported_models,
+    ).filter((vendor) => catalogKind(vendor) === "tokenhub");
+    const agentId = (active?.agent_id || "").replace(/^acn:/i, "").trim();
+    if (!vendors.length || !agentId) return;
+    let cancelled = false;
+    void (async () => {
+      const token = await getAccessToken();
+      if (cancelled || !token) return;
+      await Promise.all(
+        vendors.map(async (vendor) => {
+          try {
+            const params = new URLSearchParams({ provider: vendor, agent: agentId });
+            const res = await fetch(`/api/provider-models?${params.toString()}`, {
+              cache: "no-store",
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (cancelled || !res.ok) return;
+            const data = (await res.json()) as { ids?: unknown };
+            const ids = Array.isArray(data.ids)
+              ? data.ids.filter((id): id is string => typeof id === "string" && !!id.trim())
+              : [];
+            if (cancelled || !ids.length) return;
+            setProviderLive((prev) => ({ ...prev, [vendor]: ids }));
+          } catch {
+            /* a failed catalog ask leaves the agent's report in place */
+          }
+        }),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    active?.agent_id,
+    active?.chat_id,
+    composerModel?.listed_model_id,
+    composerModel?.runtime_model_id,
+    (composerModel?.supported_models ?? []).join("\u0001"),
+    getAccessToken,
+    providerAsk,
+  ]);
+
+  const requestModelReport = useCallback(() => {
+    if (!composerModel || !active?.agent_id) return;
+    const vendors = vendorOrder(
+      composerModel.runtime_model_id,
+      composerModel.listed_model_id,
+      composerModel.supported_models,
+    );
+    if (!vendorsNeedingReport(vendors, providerLive).length) return;
+    const bare = active.agent_id.replace(/^acn:/i, "").trim();
+    if (!bare) return;
+    void client
+      .refreshAgentModelReport(bare)
+      .then((row) => {
+        const ids = Array.isArray(row.supported_models)
+          ? row.supported_models.filter((id): id is string => typeof id === "string" && !!id.trim())
+          : [];
+        if (!ids.length) return;
+        setComposerModel((prev) => (prev ? { ...prev, supported_models: ids } : prev));
+      })
+      .catch(() => {
+        /* an older agent keeps the report it already sent */
+      });
+  }, [active?.agent_id, client, composerModel, providerLive]);
 
   useEffect(() => {
     if (!composerMenuOpen) setComposerMenuQuery("");
@@ -4878,7 +5301,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
       composerModel?.runtime_model_id,
       composerModel?.supported_models,
     );
-    if (!official && !openRouterByo) {
+    const openRouterVendor = vendorOrder(
+      composerModel?.runtime_model_id,
+      composerModel?.listed_model_id,
+      composerModel?.supported_models ?? [],
+    ).some((vendor) => catalogKind(vendor) === "openrouter");
+    if (!official && !openRouterByo && !openRouterVendor) {
       setComposerCatalog([]);
       setComposerCatalogLoading(false);
       return;
@@ -4937,29 +5365,58 @@ export function RanchChatShell(props: RanchChatShellProps) {
     composerModel?.official_key_geo,
     composerModel?.listed_model_id,
     composerModel?.runtime_model_id,
+    (composerModel?.supported_models ?? []).join("\u0001"),
   ]);
 
   useEffect(() => {
-    if (!composerModel?.official_channel) return;
-    if (officialV0SupportsModel(selectedModelId)) return;
-    const next =
-      composerCatalog.find((row) => officialV0SupportsModel(row.id))?.id ||
-      composerModel.listed_model_id ||
-      null;
+    if (!composerModel) return;
+    const vendors = vendorOrder(
+      composerModel.runtime_model_id,
+      composerModel.listed_model_id,
+      composerModel.supported_models,
+    );
+    const live = liveWithOpenRouter(
+      providerLive,
+      vendors,
+      composerCatalog.map((row) => row.id),
+    );
+    if (providerDead) {
+      const vendor = modelVendorId(
+        composerModel.runtime_model_id || composerModel.listed_model_id,
+      );
+      if (vendor) live[vendor] = "down";
+    }
+    const allowed = resolveComposerOffer({
+      listed: composerModel.listed_model_id,
+      runtime: composerModel.runtime_model_id,
+      supported: composerModel.supported_models,
+      officialIds: composerModel.official_models,
+      keyGeo: composerModel.official_key_geo,
+      live,
+      refusedIds,
+    }).ids;
+    if (allowed.some((id) => sameModelId(id, selectedModelId))) return;
+    const next = allowed[0] || null;
     if (!next || sameModelId(next, selectedModelId)) return;
     setSelectedModelId(next);
     if (active?.chat_id) writeComposerModelPick(active.chat_id, next);
   }, [
     active?.chat_id,
-    composerCatalog,
     composerModel?.listed_model_id,
+    composerCatalog,
     composerModel?.official_channel,
+    composerModel?.official_key_geo,
+    composerModel?.official_models,
+    composerModel?.runtime_model_id,
+    composerModel?.supported_models,
+    providerDead,
+    providerLive,
+    refusedIds,
     selectedModelId,
   ]);
 
   useEffect(() => {
     if (!composerModel?.official_channel || !active?.chat_id) return;
-    if (composerCatalogLoading || composerCatalog.length === 0) return;
     const stored = readComposerModelPick(active.chat_id);
     const listed = composerModel.listed_model_id ?? null;
     const storedListed = readComposerListed(active.chat_id);
@@ -4974,15 +5431,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
       runtime: composerModel.runtime_model_id ?? null,
       fallback: composerModel.supported_models,
       officialIds: composerModel.official_models,
-      catalogIds: composerCatalog.map((row) => row.id),
+      catalogIds: [],
     });
     if (!next || sameModelId(next, selectedModelId)) return;
     setSelectedModelId(next);
     writeComposerModelPick(active.chat_id, next);
   }, [
     active?.chat_id,
-    composerCatalog,
-    composerCatalogLoading,
     composerModel?.listed_model_id,
     composerModel?.official_channel,
     (composerModel?.official_models ?? []).join("\u0001"),
@@ -5090,6 +5545,28 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const activeOffline =
     active && !isGroupChat(active) && isAgentOffline(active.agent_status);
   const groupActive = !!(active && isGroupChat(active));
+  const roster = groupActive
+    ? groupRoster(
+        groupParticipants,
+        agentNames,
+        (account?.name || "").trim() || t.groupMemberSelf,
+      )
+    : [];
+  const rosterHasPeople = roster.some((row) => row.kind === "person");
+  const groupSubtitle = () => {
+    if (!groupActive || !active) return "";
+    if (!rosterHasPeople) {
+      const total = Object.keys(agentNames).length || active.total_members || 0;
+      return t.agentsOnlineCount(active.active_members ?? 0, total);
+    }
+    const people = roster.filter((row) => row.kind === "person").length;
+    const agents = roster.filter((row) => row.kind === "agent");
+    const statuses = agents.map((row) => (agentStatuses[row.id] || "").trim().toLowerCase());
+    const agentsOnline = statuses.some(Boolean)
+      ? statuses.filter((status) => status === "online" || status === "active" || status === "busy").length
+      : Math.max(0, (active.active_members ?? 0) - people);
+    return t.groupRosterLine(people, agentsOnline);
+  };
   const latestDecideId = groupActive
     ? undefined
     : [...messages].reverse().find((m) => decideFromMetadata(m.metadata))?.message_id;
@@ -5116,6 +5593,56 @@ export function RanchChatShell(props: RanchChatShellProps) {
     });
     setWindowError(null);
   }, []);
+
+  useEffect(() => {
+    if (!activeWindow) {
+      setDockTabs((prev) => prev.filter((tab) => tab.kind !== "talk" && tab.kind !== "body"));
+      setActiveDockId((cur) => {
+        if (cur !== "talk" && cur !== "body") return cur;
+        const rest = dockTabsRef.current.filter((tab) => tab.kind !== "talk" && tab.kind !== "body");
+        return rest[0]?.id ?? null;
+      });
+      return;
+    }
+    const id = activeWindow.kind === "talk" ? "talk" : "body";
+    const title =
+      activeWindow.title ||
+      (activeWindow.kind === "body-pick"
+        ? t.bodyChatPick
+        : activeWindow.kind === "body"
+          ? activeWindow.payload.name || t.bodyChat
+          : activeWindow.payload.name || t.faceChat);
+    const alreadyOpen = dockTabsRef.current.some((tab) => tab.id === id);
+    setDockTabs((prev) => {
+      const rest = prev.filter((tab) => tab.kind !== "talk" && tab.kind !== "body");
+      const current = rest.find((tab) => tab.id === id) ?? prev.find((tab) => tab.id === id);
+      if (current && current.title === title) return prev;
+      return [...rest, { id, kind: id, title }];
+    });
+    if (!alreadyOpen) setActiveDockId(id);
+  }, [activeWindow, t.bodyChat, t.bodyChatPick, t.faceChat]);
+
+  const closeTab = (id: string) => {
+    if ((id === "talk" || id === "body") && active?.chat_id) {
+      closeChatWindow(active.chat_id);
+      return;
+    }
+    if (id.startsWith("computer:")) setScreenComputer(null);
+    const prev = dockTabsRef.current;
+    const next = prev.filter((tab) => tab.id !== id);
+    const idx = prev.findIndex((tab) => tab.id === id);
+    setDockTabs(next);
+    setActiveDockId((cur) => {
+      if (cur !== id) return cur;
+      return next[idx]?.id ?? next[idx - 1]?.id ?? null;
+    });
+  };
+
+  const dockWide = mode === "full" && !isNarrowFull;
+  const shownDockId = dockTabs.some((tab) => tab.id === activeDockId)
+    ? activeDockId
+    : (dockTabs[0]?.id ?? null);
+  const activeDock = dockTabs.find((tab) => tab.id === shownDockId) ?? null;
 
   const toggleTalkWindow = useCallback(async () => {
     if (!active?.chat_id || !active.agent_id || !studioOrigin) return;
@@ -5368,6 +5895,128 @@ export function RanchChatShell(props: RanchChatShellProps) {
       t.bodyChatFailed,
     ],
   );
+
+  const workDock =
+    active && activeDock ? (
+      <WorkDock
+        tabs={dockTabs}
+        activeId={shownDockId}
+        overlay={!dockWide}
+        closeLabel={t.close}
+        addLabel={t.addWindow}
+        addCanvasLabel={t.manuscript}
+        addInteractionLabel={t.interaction}
+        interactionOpen={dockTabs.some((tab) => tab.kind === "interaction")}
+        computers={cloudComputers.map((row) => ({
+          id: row.computer_id,
+          label: computerName(row.is_default, extraIndex(cloudComputers, row.computer_id), uiLocale),
+          open: dockTabs.some((tab) => tab.id === `computer:${row.computer_id}`),
+        }))}
+        onSelect={setActiveDockId}
+        onClose={closeTab}
+        onAddCanvas={() => openCanvas()}
+        onAddInteraction={openInteraction}
+        onOpenComputer={openCloudScreen}
+        columnCloseLabel={t.windowClose}
+        onCloseColumn={() => {
+          if (active?.chat_id) closeChatWindow(active.chat_id);
+          setScreenComputer(null);
+          setDockTabs([]);
+          setActiveDockId(null);
+        }}
+      >
+        {activeDock.kind === "canvas" ? (
+          <ManuscriptPanel
+            embedded
+            client={client}
+            chatId={active.chat_id}
+            threadId={activeTopic?.id ?? null}
+            blockKey={activeDock.blockKey}
+            locale={uiLocale}
+            reloadToken={pageTick}
+            pointedKey={pointedBlock?.block_key ?? null}
+            onPoint={(block) => {
+              setPointedBlock((current) =>
+                current?.block_key === block.block_key
+                  ? null
+                  : {
+                      block_key: block.block_key,
+                      rev: block.rev,
+                      title: block.title?.trim() || blockLabel(block.block_key),
+                      thread_id: block.thread_id ?? null,
+                    },
+              );
+            }}
+            onClose={() => closeTab(activeDock.id)}
+          />
+        ) : activeDock.kind === "interaction" ? (
+          <InteractionPanel
+            hops={liveHops}
+            names={(() => {
+              const chat = active;
+              const id = chat?.agent_id;
+              if (!chat || !id) return agentNames;
+              const known = Object.entries(agentNames).find(([key]) => agentIdKey(key) === agentIdKey(id))?.[1]?.trim();
+              return { ...agentNames, [id]: known || chatTitle(chat) };
+            })()}
+            memberIds={active?.agent_id ? [active.agent_id, ...Object.keys(agentNames)] : Object.keys(agentNames)}
+            people={
+              groupActive
+                ? groupRoster(
+                    groupParticipants,
+                    agentNames,
+                    account?.name?.trim() || t.groupMemberSelf,
+                  )
+                    .filter((row) => row.kind === "person")
+                    .map((row) => ({ id: row.id, name: row.name }))
+                : []
+            }
+            presence={{
+              ...agentStatuses,
+              ...(active?.agent_id ? { [active.agent_id]: active.agent_status ?? "" } : {}),
+            }}
+            copy={{
+              view: t.interactionView,
+              empty: t.interactionEmpty,
+              waiting: t.interactionWaiting,
+              returned: t.interactionReturned,
+              failed: t.interactionFailed,
+              outside: t.interactionOutside,
+              quiet: t.interactionQuiet,
+              person: t.interactionPerson,
+              online: t.online,
+              offline: t.offline,
+            }}
+          />
+        ) : activeDock.kind === "computer" ? (
+          <ComputerScreenPanel
+            key={activeDock.id}
+            computerId={activeDock.id.slice("computer:".length)}
+            label={activeDock.title}
+            gatewayBaseUrl={gatewayBaseUrl}
+            getAccessToken={getAccessToken}
+            locale={uiLocale}
+            chatId={active.chat_id}
+            embedded
+            onClose={() => closeTab(activeDock.id)}
+          />
+        ) : activeWindow && windowHostOrigin ? (
+          <ChatWindowPane
+            embedded
+            window={activeWindow}
+            studioBaseUrl={windowHostOrigin}
+            onClose={() => closeTab(activeDock.id)}
+            onPickBody={openPickedBody}
+            onExpired={() => {
+              const win = activeWindow;
+              if (win && win.kind !== "body-pick") void renewHostTicket(win);
+            }}
+            busy={windowBusy === "body"}
+            t={t}
+          />
+        ) : null}
+      </WorkDock>
+    ) : null;
 
   const hostRefreshKey = Object.values(chatWindows)
     .map((win) =>
@@ -5683,7 +6332,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   );
 
   return (
-    <div style={shellRoot(mode)} data-ranch-chat-shell data-mode={mode}>
+    <div ref={shellRef} style={shellRoot(mode)} data-ranch-chat-shell data-mode={mode}>
       <style>{`
         @keyframes ranch-reply-bounce {
           0%, 80%, 100% { transform: translateY(0); opacity: 0.35; }
@@ -5802,12 +6451,40 @@ export function RanchChatShell(props: RanchChatShellProps) {
         </div>
 
         <div style={{ padding: 12, borderBottom: `1px solid ${colors.border}`, display: "flex", gap: 8 }}>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t.searchChats}
-            style={{ ...inputStyle, flex: 1 }}
-          />
+          <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setSearch("");
+              }}
+              placeholder={t.searchChats}
+              aria-label={t.searchChats}
+              style={{ ...inputStyle, width: "100%", paddingRight: search ? 28 : undefined }}
+            />
+            {search ? (
+              <button
+                type="button"
+                aria-label={t.clearSearch}
+                onClick={() => setSearch("")}
+                style={{
+                  position: "absolute",
+                  right: 4,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  border: 0,
+                  background: "transparent",
+                  color: colors.muted,
+                  cursor: "pointer",
+                  fontSize: 16,
+                  lineHeight: 1,
+                  padding: 4,
+                }}
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
           <NewComposeMenu
             allowGroupChat={allowGroupChat}
             messages={t}
@@ -5836,7 +6513,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
           {loadingChats && chats.length === 0 ? (
             <p role="status" style={{ color: colors.muted, textAlign: "center", padding: 24 }}>{t.loading}</p>
           ) : chatsLoadError && chats.length === 0 ? null : filtered.length === 0 ? (
-            hasMineAgents ? (
+            search.trim() ? (
+              <div style={{ textAlign: "center", padding: 32, color: colors.muted }}>
+                <p style={{ margin: "0 0 12px" }}>{t.noMatchingChats}</p>
+                <button type="button" style={btnGhost} onClick={() => setSearch("")}>
+                  {t.clearSearch}
+                </button>
+              </div>
+            ) : hasMineAgents ? (
               <div style={{ textAlign: "center", padding: 32, color: colors.muted }}>
                 <p style={{ margin: "0 0 12px" }}>{t.noChatsYet}</p>
                 <button type="button" style={btnPrimary} onClick={() => setPickerMode("direct")}>
@@ -5871,9 +6555,22 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     !isGroupChat(active) &&
                     agentIdKey(active.agent_id) === agentIdKey(c.agent_id)
                   );
-              const title = chatTitle(c);
+              const title = c.displayName;
+              const pageOpPreview = c.last_message_canvas_op
+                ? pageOpLine(
+                    uiLocale,
+                    c.last_message_canvas_op,
+                    nameForAgent(
+                      typeof c.last_message_canvas_op.actor_id === "string"
+                        ? c.last_message_canvas_op.actor_id
+                        : "",
+                    ),
+                  )
+                : "";
               const preview =
-                c.last_message_content || (isGroupChat(c) ? t.groupChat : t.noMessagesYet);
+                pageOpPreview ||
+                c.last_message_content ||
+                (isGroupChat(c) ? t.groupChat : t.noMessagesYet);
               const listBroken = !!deliveryBrokenByChat[c.chat_id];
               const listPresence = presenceForDot(c.agent_status, listBroken);
               const listTitle = presenceTitle(c.agent_status, listBroken, t);
@@ -5886,11 +6583,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     if (active?.chat_id === c.chat_id) return;
                     void openConversation(c);
                   }}
-                  title={
-                    !isGroupChat(c)
-                      ? [c.agent_id, listTitle].filter(Boolean).join(" · ") || undefined
-                      : undefined
-                  }
+                  aria-label={title}
+                  title={listTitle}
                   data-selected={selected}
                   aria-current={selected ? "true" : undefined}
                   style={{
@@ -5904,14 +6598,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         width: 40,
                         height: 40,
                         borderRadius: c.type === "group" ? 10 : 999,
-                        background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
+                        background:
+                          avatarBackground(isGroupChat(c) ? c.chat_id : c.agent_id || c.chat_id) ||
+                          `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         fontWeight: 700,
+                        fontSize: avatarGlyph(title).length > 1 ? 12 : 15,
                       }}
                     >
-                      {title.slice(0, 1).toUpperCase()}
+                      {avatarGlyph(title)}
                     </span>
                     {dot ? (
                       <span
@@ -6068,14 +6765,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
           style={{
             // full: always show right pane (empty state when no selection);
             // narrow full (<768px): single-column, list view hides it.
-            display: screenComputer && (isNarrowFull || mode !== "full")
-              ? "none"
-              : (mode === "full" && !isNarrowFull) || view === "conversation"
-                ? "flex"
-                : "none",
+            display:
+              (mode === "full" && !isNarrowFull) || view === "conversation" ? "flex" : "none",
             flexDirection: "column",
-            flex: screenComputer && mode === "full" && !isNarrowFull ? "1 1 0%" : 1,
-            minWidth: screenComputer && mode === "full" && !isNarrowFull ? 280 : 0,
+            flex: 1,
+            minWidth: 0,
             height: "100%",
             background: colors.bg,
             position: "relative",
@@ -6213,12 +6907,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       cursor: "pointer",
                       textAlign: "left",
                     }}
+                    aria-label={activeTopic ? activeTopic.title?.trim() || t.topics : labelForOpen(active)}
                     title={
                       activeTopic
                         ? t.topics
                         : isGroupChat(active)
-                          ? t.groupInfo
-                          : t.agentInfo
+                          ? t.openGroupInfo
+                          : t.openAgentInfo
                     }
                   >
                     <span style={{ position: "relative", width: 32, height: 32, flexShrink: 0 }}>
@@ -6227,20 +6922,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           width: 32,
                           height: 32,
                           borderRadius: isGroupChat(active) ? 8 : 999,
-                          background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
+                          background:
+                            avatarBackground(
+                              isGroupChat(active) ? active.chat_id : active.agent_id || active.chat_id,
+                            ) || `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
                           fontWeight: 700,
-                          fontSize: 13,
+                          fontSize: avatarGlyph(labelForOpen(active)).length > 1 ? 11 : 13,
                         }}
                       >
-                        {(isGroupChat(active) || !chatHasStarted(active)
-                          ? chatTitle(active)
-                          : conversationLabel(active, t)
-                        )
-                          .slice(0, 1)
-                          .toUpperCase()}
+                        {avatarGlyph(labelForOpen(active))}
                       </span>
                       {!isGroupChat(active) && agentStatusDotColor(activePresence) ? (
                         <span
@@ -6272,19 +6965,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
                         }}
-                        title={
-                          activeTopic
-                            ? activeTopic.title || t.topics
-                            : isGroupChat(active) || !chatHasStarted(active)
-                              ? chatTitle(active)
-                              : conversationLabel(active, t)
-                        }
+                        title={activeTopic ? activeTopic.title || t.topics : labelForOpen(active)}
                       >
                         {activeTopic
                           ? activeTopic.title?.trim() || t.topics
-                          : isGroupChat(active) || !chatHasStarted(active)
-                            ? chatTitle(active)
-                            : conversationLabel(active, t)}
+                          : labelForOpen(active)}
                       </strong>
                       {activeTopic ? (
                         <span
@@ -6294,20 +6979,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             color: colors.muted,
                           }}
                         >
-                          {t.backToMainChat} · {chatTitle(active)}
+                          {t.backToMainChat} · {labelForOpen(active)}
                         </span>
                       ) : isGroupChat(active) ? (
                         <span
                           style={{
                             display: "block",
                             fontSize: 11,
+                            lineHeight: 1.35,
                             color: colors.muted,
                           }}
                         >
-                          {t.agentsOnlineCount(
-                            active.active_members ?? 0,
-                            Object.keys(agentNames).length || active.total_members || 0,
-                          )}
+                          {groupSubtitle()}
                         </span>
                       ) : shortAgentId(active.agent_id) ? (
                         <span
@@ -6321,9 +7004,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             fontFamily:
                               'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
                           }}
-                          title={active.agent_id || undefined}
                         >
-                          {chatTitle(siblingChats[0] ?? active)} · {shortAgentId(active.agent_id)}
+                          {shortAgentId(active.agent_id)}
                         </span>
                       ) : null}
                     </div>
@@ -6335,14 +7017,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     gatewayBaseUrl={gatewayBaseUrl}
                     getAccessToken={getAccessToken}
                     locale={uiLocale}
-                    screenOpenId={screenComputer?.id ?? null}
+                    openScreenIds={dockTabs
+                      .filter((tab) => tab.kind === "computer")
+                      .map((tab) => tab.id.slice("computer:".length))}
                     onOpenScreen={(id, label) => {
-                      if (screenComputer?.id === id) {
-                        setScreenComputer(null);
+                      const tabId = `computer:${id}`;
+                      if (dockTabsRef.current.some((tab) => tab.id === tabId)) {
+                        if (activeDockId === tabId || activeDockId == null) closeTab(tabId);
+                        else setActiveDockId(tabId);
                         return;
                       }
-                      if (mode === "full" && !isNarrowFull) setScreenHidesList(true);
-                      setScreenComputer({ id, label });
+                      openCloudScreen(id, label);
                     }}
                   />
                   {canOpenTalk ? (
@@ -6371,6 +7056,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       <IconBody />
                     </button>
                   ) : null}
+                  <button
+                    type="button"
+                    style={headerIconStyle(activeDock?.kind === "interaction")}
+                    onClick={() => {
+                      setHistoryOpen(false);
+                      if (activeDock?.kind === "interaction") {
+                        closeTab("interaction");
+                        return;
+                      }
+                      openInteraction();
+                    }}
+                    aria-pressed={activeDock?.kind === "interaction"}
+                    aria-label={t.interaction}
+                    title={t.interaction}
+                  >
+                    <IconInteraction />
+                  </button>
                   <div style={{ position: "relative" }}>
                     <button
                       type="button"
@@ -6405,7 +7107,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         }}
                       >
                         {siblingChats.length === 0 ? (
-                          <p style={{ margin: 0, padding: 8, color: colors.muted, fontSize: 12 }}>{t.noAgentChatsHint}</p>
+                          <p style={{ margin: 0, padding: 8, color: colors.muted, fontSize: 12 }}>
+                            {active && isGroupChat(active) ? t.noGroupChatsHint : t.noAgentChatsHint}
+                          </p>
                         ) : (
                           siblingChats.map((c) => (
                             <button
@@ -6461,11 +7165,22 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       setShowMembersPanel(true);
                     }}
                     aria-pressed={showMembersPanel}
-                    aria-label={isGroupChat(active) ? t.groupInfo : t.agentInfo}
-                    title={isGroupChat(active) ? t.groupInfo : t.agentInfo}
+                    aria-label={t.headerMore}
+                    title={t.headerMore}
                   >
                     <IconMore />
                   </button>
+                  {!activeDock ? (
+                    <button
+                      type="button"
+                      style={headerIconStyle(false)}
+                      onClick={() => openCanvas()}
+                      aria-label={t.openWindow}
+                      title={t.openWindow}
+                    >
+                      <IconRightPanel />
+                    </button>
+                  ) : null}
                 {mode === "side" ? (
                   <button
                     type="button"
@@ -6589,6 +7304,32 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     (prev?.thread_id || null) !== m.thread_id;
                   const dividerTitle = topicLabel || t.topics;
                   const highlight = !!m.thread_id && highlightTopicId === m.thread_id;
+                  const pageOp =
+                    m.sender_type === "system" &&
+                    m.metadata?.kind === "canvas_op" &&
+                    m.metadata.canvas_op &&
+                    typeof m.metadata.canvas_op === "object"
+                      ? (m.metadata.canvas_op as PageOpRecord)
+                      : null;
+                  if (pageOp) {
+                    const actorId =
+                      typeof pageOp.actor_id === "string" ? pageOp.actor_id : m.sender_id;
+                    return (
+                      <div
+                        key={m.message_id}
+                        style={{
+                          alignSelf: "center",
+                          maxWidth: "min(92%, 36rem)",
+                          fontSize: 12,
+                          lineHeight: 1.45,
+                          color: colors.muted,
+                          textAlign: "center",
+                        }}
+                      >
+                        {pageOpLine(uiLocale, pageOp, nameForAgent(actorId))}
+                      </div>
+                    );
+                  }
                   if (topicStart) {
                     // Filter view: skip marker (list already scoped to this topic).
                     if (activeTopic) return null;
@@ -6598,8 +7339,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           title={dividerTitle}
                           caption={m.content || t.topicStarted(dividerTitle)}
                           highlighted={highlight}
+                          actionLabel={t.openTopicLabel(dividerTitle)}
                           onHighlight={
-                            m.thread_id ? () => flashTopicHighlight(m.thread_id!) : undefined
+                            m.thread_id
+                              ? () => {
+                                  const topic = topics.find((tp) => tp.id === m.thread_id);
+                                  if (topic) openTopic(topic);
+                                  else flashTopicHighlight(m.thread_id!);
+                                }
+                              : undefined
                           }
                           borderColor={colors.border}
                           accentSoft={colors.accentSoft}
@@ -6616,8 +7364,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           <TopicDivider
                             title={topicLabel}
                             highlighted={highlight}
+                            actionLabel={t.openTopicLabel(topicLabel)}
                             onHighlight={
-                              m.thread_id ? () => flashTopicHighlight(m.thread_id!) : undefined
+                              m.thread_id
+                                ? () => {
+                                    const topic = topics.find((tp) => tp.id === m.thread_id);
+                                    if (topic) openTopic(topic);
+                                    else flashTopicHighlight(m.thread_id!);
+                                  }
+                                : undefined
                             }
                             borderColor={colors.border}
                             accentSoft={colors.accentSoft}
@@ -6647,7 +7402,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
                           }}
-                          title={m.sender_id}
+                          title={senderLabel}
                         >
                           {senderLabel}
                         </span>
@@ -6663,10 +7418,68 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           padding: "8px 12px",
                           fontSize: 14,
                           lineHeight: 1.5,
-                          whiteSpace: "pre-wrap",
                         }}
                       >
-                        {m.content}
+                        {m.content ? <MessageBody text={m.content} /> : null}
+                        {m.metadata?.canvas_ref && typeof m.metadata.canvas_ref === "object" ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openCanvas(
+                                typeof m.metadata?.canvas_ref?.block_key === "string"
+                                  ? m.metadata.canvas_ref.block_key
+                                  : undefined,
+                              )
+                            }
+                            style={{
+                              display: "block",
+                              marginTop: 8,
+                              padding: 0,
+                              border: 0,
+                              background: "transparent",
+                              color: colors.muted,
+                              fontSize: 12,
+                              lineHeight: 1.4,
+                              textAlign: "left",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {pageRefLine(uiLocale, m.metadata.canvas_ref)}
+                          </button>
+                        ) : null}
+                        {Array.isArray(m.metadata?.canvas_receipt)
+                          ? m.metadata.canvas_receipt.map((item, receiptIdx) => {
+                              if (!item || typeof item !== "object") return null;
+                              const rec = item as PageOpRecord;
+                              return (
+                                <button
+                                  key={`${rec.block_key || receiptIdx}`}
+                                  type="button"
+                                  onClick={() => openCanvas(typeof rec.block_key === "string" ? rec.block_key : undefined)}
+                                  style={{
+                                    display: "block",
+                                    marginTop: 8,
+                                    padding: "6px 8px",
+                                    maxWidth: "100%",
+                                    textAlign: "left",
+                                    fontSize: 12,
+                                    lineHeight: 1.4,
+                                    color: colors.muted,
+                                    background: "transparent",
+                                    border: `1px solid ${colors.border}`,
+                                    borderRadius: 8,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  {pageOpLine(
+                                    uiLocale,
+                                    { ...rec, outcome: "ok" },
+                                    nameForAgent(m.sender_id),
+                                  )}
+                                </button>
+                              );
+                            })
+                          : null}
                         <MailboxThumbs
                           chatId={m.chat_id || active?.chat_id || ""}
                           attachments={m.attachments}
@@ -6729,6 +7542,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           delivery={delivery}
                           byAgent={deliveryByAgent}
                           names={agentNames}
+                          createdAt={m.created_at}
                           t={t}
                         />
                       ) : null}
@@ -6775,6 +7589,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     hops={active?.decision?.auto_hops ?? 0}
                                     hopCap={active?.decision?.auto_hop_cap ?? 5}
                                     busy={busy || m.message_id !== latestDecideId}
+                                    expired={decideChipExpired(m.message_id, latestDecideId)}
                                     t={t}
                                     onPick={(id, label) => {
                                       void send({ text: label, decisionChoice: id });
@@ -7209,7 +8024,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 width: 28,
                                 height: 28,
                                 borderRadius: 999,
-                                background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
+                                background:
+                                  avatarBackground(a.id) ||
+                                  `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
@@ -7217,7 +8034,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 fontSize: 12,
                               }}
                             >
-                              {a.name.slice(0, 1).toUpperCase()}
+                              {avatarGlyph(a.name)}
                             </span>
                             {dot ? (
                               <span
@@ -7254,80 +8071,107 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   >
                     {(() => {
                       const listed = (composerModel.listed_model_id || "").trim();
-                      const official = composerModel.official_channel;
                       const openRouterByo = isOpenRouterByoListed(
                         composerModel.listed_model_id,
                         composerModel.runtime_model_id,
                         composerModel.supported_models,
                       );
-                      const options = (() => {
-                        const fromApi = composerModel.supported_models.length
-                          ? composerModel.supported_models
-                          : [listed].filter(Boolean);
-                        const fromShelf = composerCatalog.map((row) => row.id);
-                        const seen = new Set<string>();
-                        const out: string[] = [];
-                        const source = official
-                          ? [listed, ...fromShelf]
-                          : [listed, ...fromApi];
-                        for (const id of source) {
-                          if (!id || !id.trim()) continue;
-                          const k = id.toLowerCase();
-                          if (seen.has(k)) continue;
-                          seen.add(k);
-                          out.push(id);
+                      const vendors = vendorOrder(
+                        composerModel.runtime_model_id,
+                        listed,
+                        composerModel.supported_models,
+                      );
+                      const live = liveWithOpenRouter(
+                        providerLive,
+                        vendors,
+                        composerCatalog.map((row) => row.id),
+                      );
+                      if (providerDead) {
+                        const vendor = modelVendorId(
+                          composerModel.runtime_model_id || listed,
+                        );
+                        if (vendor) live[vendor] = "down";
+                      }
+                      const offer = resolveComposerOffer({
+                        listed,
+                        runtime: composerModel.runtime_model_id,
+                        supported: composerModel.supported_models,
+                        officialIds: composerModel.official_models,
+                        keyGeo: composerModel.official_key_geo,
+                        live,
+                        refusedIds,
+                      });
+                      const official = offer.official;
+                      const withFeed = (label: string, feed: string | undefined) => {
+                        const name = (feed || "").trim();
+                        return name ? `${label} · ${t.priceFeedName(name)}` : label;
+                      };
+                      const priceFor = (id: string) => {
+                        const cat = composerCatalog.find((row) => sameModelId(row.id, id));
+                        const priced = composerModel.model_options.find((o) =>
+                          sameModelId(o.model_id, id),
+                        );
+                        if (official && cat) {
+                          return withFeed(
+                            t.composerModelPrice(
+                              formatUsdPerMillion(
+                                applyMarkupUsd(cat.in, composerModel.markup_percent),
+                              ),
+                              formatUsdPerMillion(
+                                applyMarkupUsd(cat.out, composerModel.markup_percent),
+                              ),
+                            ),
+                            "openrouter",
+                          );
                         }
-                        return out;
-                      })();
+                        if (priced) {
+                          if (priced.priceable === false) return t.composerModelNoPrice;
+                          if (priced.free) return withFeed("free", priced.price_from);
+                          const inn = priced.input_price_per_million;
+                          const out = priced.output_price_per_million;
+                          if (typeof inn === "number" && typeof out === "number") {
+                            return withFeed(
+                              t.composerModelPrice(
+                                formatUsdPerMillion(inn),
+                                formatUsdPerMillion(out),
+                              ),
+                              priced.price_from,
+                            );
+                          }
+                          if (typeof inn === "number") {
+                            return withFeed(
+                              t.composerModelInputPrice(formatUsdPerMillion(inn)),
+                              priced.price_from,
+                            );
+                          }
+                        }
+                        if (cat) {
+                          return withFeed(
+                            t.composerModelPrice(
+                              formatUsdPerMillion(
+                                applyMarkupUsd(cat.in, composerModel.markup_percent),
+                              ),
+                              formatUsdPerMillion(
+                                applyMarkupUsd(cat.out, composerModel.markup_percent),
+                              ),
+                            ),
+                            "openrouter",
+                          );
+                        }
+                        return t.composerModelNoPrice;
+                      };
+                      const options = offer.ids.filter((id) => {
+                        if (official && composerCatalogLoading) return true;
+                        return priceFor(id) !== t.composerModelNoPrice;
+                      });
                       const visible = filterComposerModels(options, composerMenuQuery);
                       const value =
                         options.find((id) => sameModelId(id, selectedModelId)) ||
                         options.find((id) => sameModelId(id, listed)) ||
                         options[0] ||
                         "";
-                      const priceFor = (id: string) => {
-                        const cat = composerCatalog.find((row) => sameModelId(row.id, id));
-                        if (official && cat) {
-                          return t.composerModelPrice(
-                            formatUsdPerMillion(
-                              applyMarkupUsd(cat.in, composerModel.markup_percent),
-                            ),
-                            formatUsdPerMillion(
-                              applyMarkupUsd(cat.out, composerModel.markup_percent),
-                            ),
-                          );
-                        }
-                        const priced = composerModel.model_options.find((o) =>
-                          sameModelId(o.model_id, id),
-                        );
-                        if (priced) {
-                          if (priced.priceable === false) return t.composerModelNoPrice;
-                          if (priced.free) return "free";
-                          const inn = priced.input_price_per_million;
-                          const out = priced.output_price_per_million;
-                          if (typeof inn === "number" && typeof out === "number") {
-                            return t.composerModelPrice(
-                              formatUsdPerMillion(inn),
-                              formatUsdPerMillion(out),
-                            );
-                          }
-                          if (typeof inn === "number") {
-                            return `${formatUsdPerMillion(inn)} in`;
-                          }
-                        }
-                        if (cat) {
-                          return t.composerModelPrice(
-                            formatUsdPerMillion(
-                              applyMarkupUsd(cat.in, composerModel.markup_percent),
-                            ),
-                            formatUsdPerMillion(
-                              applyMarkupUsd(cat.out, composerModel.markup_percent),
-                            ),
-                          );
-                        }
-                        return t.composerModelNoPrice;
-                      };
                       const priceHint = value ? priceFor(value) : "";
+                      const providerName = composerProviderName(value, official);
                       const displayName = shortModelLabel(value) || t.composerModelUnknown;
                       const canPick = options.length > 0 || official || openRouterByo;
                       return (
@@ -7340,7 +8184,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             aria-label={displayName}
                             onClick={() => {
                               if (!canPick) return;
-                              setComposerMenuOpen((open) => !open);
+                              setComposerMenuOpen((open) => {
+                                if (!open) requestModelReport();
+                                return !open;
+                              });
+                              setProviderAsk((n) => n + 1);
                             }}
                             style={{
                               display: "inline-flex",
@@ -7391,7 +8239,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 </span>
                               ) : null}
                             </span>
-                            {priceHint ? (
+                            {providerName || priceHint ? (
                               <span
                                 style={{
                                   color: colors.muted,
@@ -7399,7 +8247,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   lineHeight: 1.25,
                                 }}
                               >
-                                {priceHint}
+                                {providerName && priceHint
+                                  ? `${providerName} · ${priceHint}`
+                                  : providerName || priceHint}
                               </span>
                             ) : null}
                           </button>
@@ -7488,8 +8338,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                               textAlign: "left",
                                             }}
                                           >
-                                            <span style={{ fontWeight: 600, fontSize: 13 }}>
+                                            <span style={{ fontWeight: 600, fontSize: 13, minWidth: 0 }}>
                                               {shortModelLabel(id) || id}
+                                              {composerProviderName(id, official) ? (
+                                                <span
+                                                  style={{
+                                                    color: colors.muted,
+                                                    fontWeight: 500,
+                                                    fontSize: 11,
+                                                  }}
+                                                >
+                                                  {` · ${composerProviderName(id, official)}`}
+                                                </span>
+                                              ) : null}
                                             </span>
                                             {rowPrice ? (
                                               <span
@@ -7526,6 +8387,30 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </>
                       );
                     })()}
+                  </div>
+                ) : null}
+                {pointedBlock?.block_key ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      marginBottom: 6,
+                      fontSize: 12,
+                      color: colors.muted,
+                    }}
+                  >
+                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {pageRefLine(uiLocale, pointedBlock)}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={t.close}
+                      onClick={() => setPointedBlock(null)}
+                      style={{ border: 0, background: "transparent", color: colors.muted, cursor: "pointer" }}
+                    >
+                      ×
+                    </button>
                   </div>
                 ) : null}
                 <textarea
@@ -7738,15 +8623,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           width: 56,
                           height: 56,
                           borderRadius: groupActive ? 12 : 999,
-                          background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
+                          background:
+                            avatarBackground(
+                              isGroupChat(active) ? active.chat_id : active.agent_id || active.chat_id,
+                            ) || `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
                           fontWeight: 700,
-                          fontSize: 22,
+                          fontSize: avatarGlyph(labelForOpen(active)).length > 1 ? 16 : 22,
                         }}
                       >
-                        {chatTitle(active).slice(0, 1).toUpperCase()}
+                        {avatarGlyph(labelForOpen(active))}
                       </div>
                       {!groupActive && agentStatusDotColor(activePresence) ? (
                         <span
@@ -7805,7 +8693,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       </div>
                     ) : (
                       <>
-                        <div style={{ fontSize: 16, fontWeight: 600 }}>{chatTitle(active)}</div>
+                        <div style={{ fontSize: 16, fontWeight: 600 }}>{labelForOpen(active)}</div>
                         {groupActive ? (
                           <button
                             type="button"
@@ -7826,10 +8714,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     )}
                     {groupActive ? (
                       <div style={{ fontSize: 12, color: colors.muted, marginTop: 8 }}>
-                        {t.agentsOnlineCount(
-                          active.active_members ?? 0,
-                          Object.keys(agentNames).length || active.total_members || 0,
-                        )}
+                        {groupSubtitle()}
                       </div>
                     ) : null}
                   </div>
@@ -8131,7 +9016,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               color: colors.muted,
                             }}
                           >
-                            <p style={{ margin: 0, fontSize: 12 }}>{t.noAgentChatsHint}</p>
+                            <p style={{ margin: 0, fontSize: 12 }}>
+                              {active && isGroupChat(active) ? t.noGroupChatsHint : t.noAgentChatsHint}
+                            </p>
                           </div>
                         ) : (
                           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -8167,7 +9054,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   >
                                     {conversationLabel(c, t)}
                                   </div>
-                                  {hostCaption(c.embed?.origin) ? (
+                                  {hostChannelLabel(c.embed?.origin) ? (
                                     <div
                                       style={{
                                         fontSize: 11,
@@ -8177,7 +9064,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                         whiteSpace: "nowrap",
                                       }}
                                     >
-                                      {hostCaption(c.embed?.origin)}
+                                      {hostChannelLabel(c.embed?.origin)}
                                     </div>
                                   ) : null}
                                 </div>
@@ -8466,10 +9353,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </button>
                       </div>
                       <div style={{ flex: 1, overflow: "auto", padding: "0 8px 8px" }}>
-                        {Object.entries(agentNames).map(([id, name]) => {
-                          const status = agentStatuses[id];
-                          const statusLabel = agentStatusTitle(status, t);
-                          const dot = agentStatusDotColor(status);
+                        {roster.map((member) => {
+                          const { id, name } = member;
+                          const person = member.kind === "person";
+                          const status = person ? undefined : agentStatuses[id];
+                          const statusLabel = person ? t.groupMember : agentStatusTitle(status, t);
+                          const dot = person ? null : agentStatusDotColor(status);
                           return (
                           <div
                             key={id}
@@ -8494,15 +9383,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   width: 36,
                                   height: 36,
                                   borderRadius: 999,
-                                  background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
+                                  background:
+                                    avatarBackground(id) ||
+                                    `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
                                   fontWeight: 700,
-                                  fontSize: 14,
+                                  fontSize: avatarGlyph(name).length > 1 ? 12 : 14,
                                 }}
                               >
-                                {name.slice(0, 1).toUpperCase()}
+                                {avatarGlyph(name)}
                               </span>
                               {dot ? (
                                 <span
@@ -8538,6 +9429,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 {statusLabel || shortAgentId(id)}
                               </span>
                             </span>
+                            {person ? null : (
                             <button
                               type="button"
                               style={btnGhost}
@@ -8549,6 +9441,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             >
                               {t.openDirectChat}
                             </button>
+                            )}
+                            {person ? null : (
                             <button
                               type="button"
                               style={{ ...btnGhost, color: colors.danger }}
@@ -8576,6 +9470,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             >
                               {t.removeMember}
                             </button>
+                            )}
                           </div>
                           );
                         })}
@@ -8812,52 +9707,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
             </>
           )}
           {mode === "full" ? accountPanels : null}
+          {!dockWide ? workDock : null}
         </div>
       )}
 
-      {screenComputer && active ? (
-        <aside
-          data-computer-screen="open"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            flex: mode === "full" && !isNarrowFull ? "1.65 1 0%" : "1 1 0%",
-            minWidth: 0,
-            width: mode === "full" && !isNarrowFull ? undefined : "100%",
-            height: "100%",
-            minHeight: 0,
-            overflow: "hidden",
-            borderLeft:
-              mode === "full" && !isNarrowFull ? `1px solid ${colors.border}` : undefined,
-            background: colors.bg,
-          }}
-        >
-          <ComputerScreenPanel
-            computerId={screenComputer.id}
-            label={screenComputer.label}
-            gatewayBaseUrl={gatewayBaseUrl}
-            getAccessToken={getAccessToken}
-            locale={uiLocale}
-            chatId={activeChatId}
-            onClose={() => setScreenComputer(null)}
-          />
-        </aside>
-      ) : null}
-
-      {active && activeWindow && windowHostOrigin ? (
-        <ChatWindowPane
-          window={activeWindow}
-          studioBaseUrl={windowHostOrigin}
-          onClose={() => closeChatWindow(active.chat_id)}
-          onPickBody={openPickedBody}
-          onExpired={() => {
-            const win = activeWindow;
-            if (win && win.kind !== "body-pick") void renewHostTicket(win);
-          }}
-          busy={windowBusy === "body"}
-          t={t}
-        />
-      ) : null}
+      {dockWide ? workDock : null}
 
       {pickerMode ? (
         <NewChatPicker
@@ -8941,6 +9795,8 @@ const listItem: CSSProperties = {
   cursor: "pointer",
   color: colors.text,
   marginBottom: 2,
+  fontFamily: "inherit",
+  textAlign: "left",
 };
 
 const mentionRow: CSSProperties = {

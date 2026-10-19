@@ -37,7 +37,8 @@ test('attachment loading is visible and localized; no chat does not leave a spin
 });
 test('small video has accessible full-width controls and a separate price header', () => {
   const html = render([file], [], { showListedPrice: true, chargedMailboxIds: ['file'] });
-  assert.match(html, /min-height:160px/);
+  assert.match(html, /max-height:280px/);
+  assert.doesNotMatch(html, /min-height:160px/);
   assert.match(html, /aria-label="tiny.mp4"/);
   assert.match(html, /1.0 KB/);
   assert.ok(html.indexOf('12 Credits') < html.indexOf('<video'));
@@ -76,6 +77,8 @@ test('not-found, denied and network failures use distinct supplied labels', () =
     assert.ok(html.includes(label));
     assert.ok(html.includes(`data-http-status="${status}"`));
     assert.doesNotMatch(html, /role="status"/);
+    if (status === 404 || status === 410) assert.doesNotMatch(html, /Retry/);
+    else assert.match(html, /Retry/);
   }
 });
 test('remote media exposes an explicit blob-download action, not only the native media menu', () => {

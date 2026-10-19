@@ -98,6 +98,7 @@ export function ChatWindowPane({
   onExpired,
   busy,
   t,
+  embedded = false,
 }: {
   window: ChatWindow;
   studioBaseUrl: string;
@@ -106,6 +107,7 @@ export function ChatWindowPane({
   onExpired?: () => void;
   busy?: boolean;
   t: RanchMessages;
+  embedded?: boolean;
 }) {
   const title =
     window.title ||
@@ -122,40 +124,44 @@ export function ChatWindowPane({
       style={{
         display: "flex",
         flexDirection: "column",
-        flex: "1 1 420px",
-        minWidth: 280,
-        maxWidth: 640,
+        flex: embedded ? 1 : "1 1 420px",
+        minWidth: embedded ? 0 : 280,
+        maxWidth: embedded ? "none" : 640,
+        width: embedded ? "100%" : undefined,
         height: "100%",
-        borderLeft: `1px solid ${colors.border}`,
+        minHeight: 0,
+        borderLeft: embedded ? undefined : `1px solid ${colors.border}`,
         background: colors.bg,
       }}
     >
-      <div
-        style={{
-          minHeight: 56,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 8,
-          padding: "10px 14px",
-          borderBottom: `1px solid ${colors.border}`,
-          flexShrink: 0,
-        }}
-      >
-        <strong
+      {embedded ? null : (
+        <div
           style={{
-            fontSize: 14,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            minHeight: 56,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            padding: "10px 14px",
+            borderBottom: `1px solid ${colors.border}`,
+            flexShrink: 0,
           }}
         >
-          {title}
-        </strong>
-        <button type="button" style={btnGhost} onClick={onClose} aria-label={t.windowClose}>
-          {t.close}
-        </button>
-      </div>
+          <strong
+            style={{
+              fontSize: 14,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {title}
+          </strong>
+          <button type="button" style={btnGhost} onClick={onClose} aria-label={t.windowClose}>
+            {t.close}
+          </button>
+        </div>
+      )}
       {window.kind === "body-pick" ? (
         <BodyPickList bodies={window.bodies} busy={busy} onPick={onPickBody} t={t} />
       ) : (

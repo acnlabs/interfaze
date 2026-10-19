@@ -268,7 +268,7 @@ export function MailboxThumbs({
               controlsList="nodownload"
               preload="metadata"
               aria-label={f.name}
-              style={{ width: "100%", minHeight: 160, maxHeight: 320, objectFit: "contain", background: "#0b0d12", display: "block" }}
+              style={{ maxWidth: "100%", maxHeight: 280, width: "auto", height: "auto", objectFit: "contain", background: "#0b0d12", display: "block" }}
             />
           ) : f.contentType.startsWith("audio/") ? (
             <audio
@@ -285,7 +285,7 @@ export function MailboxThumbs({
               src={f.url}
               onError={() => mediaFailed(f.mailboxId)}
               alt={f.name}
-              style={{ width: "100%", minHeight: 96, maxHeight: 320, objectFit: "contain", background: "rgba(127,127,127,0.08)", display: "block" }}
+              style={{ maxWidth: "100%", maxHeight: 280, width: "auto", height: "auto", objectFit: "contain", background: "rgba(127,127,127,0.08)", display: "block" }}
             />
           );
           return (
@@ -372,7 +372,7 @@ export function MailboxThumbs({
               : loadFailedLabel}
         </div>
       ))}
-      {failedIds.length > 0 ? (
+      {failedIds.some((id) => failedStatus[id] !== 404 && failedStatus[id] !== 410) ? (
         <button type="button" onClick={() => setRetryCount((n) => n + 1)}
           style={{ alignSelf: "flex-start", color: "inherit", cursor: "pointer", minHeight: 44, padding: "8px 14px", borderRadius: 8, border: `1px solid ${colors.border}`, background: "transparent" }}>
           {retryLabel}

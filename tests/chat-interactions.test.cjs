@@ -49,14 +49,14 @@ test('late presence response cannot switch the selected conversation', async () 
   const run = new Function('useEffect', 'open', 'active', 'client', 'window',
     'setChats', 'setActive', js(section('// Keep presence dots fresh', '  const flashTopicHighlight')));
   run(f => { effect = f; }, true, selected,
-    { listChats: () => new Promise(r => { resolve = r; }) },
+    { listChatSnapshot: () => new Promise(r => { resolve = r; }) },
     { setInterval: f => { tick = f; return 1; }, clearInterval() {} },
     () => updates++, v => { selected = typeof v === 'function' ? v(selected) : v; });
   const cleanup = effect();
   tick();
   cleanup();
   selected = { chat_id: 'B' };
-  resolve([{ chat_id: 'A' }, { chat_id: 'B' }]);
+  resolve({ chats: [{ chat_id: 'A' }, { chat_id: 'B' }], startedAt: 0 });
   await flush();
   assert.equal(selected.chat_id, 'B');
   assert.equal(updates, 0);
@@ -79,14 +79,17 @@ test('IME Enter does not send or select a slash option', () => {
 });
 
 test('decision sends and stale sends preserve drafts', () => {
-  const run = new Function('opts', 'seq', 'loadSeqRef', 'draft', 'setDraft',
+  const run = new Function('opts', 'seq', 'loadSeqRef', 'draft', 'setDraft', 'setPointedBlock',
     js(section('      if (!opts?.decisionChoice && seq === loadSeqRef.current)',
       '      await reloadMessages(chatId, seq);')));
   const check = (opts, seq, currentSeq, submitted, current, expected) => {
     let result = current;
+    let pointerClears = 0;
     run(opts, seq, { current: currentSeq }, submitted,
-      value => { result = typeof value === 'function' ? value(result) : value; });
+      value => { result = typeof value === 'function' ? value(result) : value; },
+      value => { assert.equal(value, null); pointerClears++; });
     assert.equal(result, expected);
+    assert.equal(pointerClears, !opts?.decisionChoice && seq === currentSeq ? 1 : 0);
   };
   check({ decisionChoice: 'yes' }, 1, 1, 'draft', 'draft', 'draft');
   check(undefined, 1, 2, 'old', 'new chat draft', 'new chat draft');

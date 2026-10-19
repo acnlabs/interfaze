@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { agentPickerSubtitle, agentRefusesChat } from "../agentPicker";
+import { avatarBackground, avatarGlyph, directShortId } from "../inboxList";
 import type { AgentDirectoryItem } from "../types";
 import { copyConnectPromptWithInvite } from "./connectPrompt";
 import type { RanchLocale, RanchMessages } from "./i18n";
@@ -44,7 +46,7 @@ export function NewChatPicker({
 }: Props) {
   const [mode, setMode] = useState<"direct" | "group">(initialMode);
   const [selected, setSelected] = useState<string[]>([]);
-  const [groupTitle, setGroupTitle] = useState(t.defaultGroupTitle);
+  const [groupTitle, setGroupTitle] = useState("");
   const [manualId, setManualId] = useState("");
   const [showPasteId, setShowPasteId] = useState(false);
   const [discoverQ, setDiscoverQ] = useState("");
@@ -96,19 +98,32 @@ export function NewChatPicker({
     );
   };
 
+  const visibleAgents = [...mineRows, ...discoverRows];
   const renderAgentButton = (a: AgentDirectoryItem, accent: string, border: string) => {
-    const on = selected.includes(a.agent_id);
+    const blocked = agentRefusesChat(a.description);
+    const on = !blocked && selected.includes(a.agent_id);
+    const subtitle = agentPickerSubtitle(a.agent_id, a.description, t.agentNoDescription);
+    const baseName = a.name?.trim() || a.agent_id;
+    const collided =
+      visibleAgents.filter((row) => (row.name?.trim() || row.agent_id) === baseName).length > 1;
+    const label = collided ? `${baseName} · ${directShortId(a.agent_id)}` : baseName;
     return (
       <button
         key={a.agent_id}
         type="button"
-        disabled={busy}
+        disabled={busy || blocked}
         aria-pressed={on}
-        onClick={() => toggle(a.agent_id)}
+        aria-disabled={blocked || undefined}
+        onClick={() => {
+          if (blocked) return;
+          toggle(a.agent_id);
+        }}
         style={{
           ...rowBtn,
           borderColor: on ? border : colors.border,
           background: on ? colors.accentSoft : "transparent",
+          opacity: blocked ? 0.45 : 1,
+          cursor: blocked ? "default" : "pointer",
         }}
       >
         <span
@@ -116,20 +131,20 @@ export function NewChatPicker({
             width: 36,
             height: 36,
             borderRadius: 999,
-            background: `linear-gradient(135deg, ${accent}, ${colors.avatarTo})`,
+            background: avatarBackground(a.agent_id) || `linear-gradient(135deg, ${accent}, ${colors.avatarTo})`,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontWeight: 700,
-            fontSize: 14,
+            fontSize: avatarGlyph(label).length > 1 ? 12 : 14,
             flexShrink: 0,
           }}
         >
-          {(a.name || a.agent_id).slice(0, 1).toUpperCase()}
+          {avatarGlyph(label)}
         </span>
         <span style={{ textAlign: "left", minWidth: 0, flex: 1 }}>
           <span style={{ display: "block", fontWeight: 600, fontSize: 13 }}>
-            {a.name?.trim() || a.agent_id}
+            {label}
           </span>
           <span
             style={{
@@ -141,7 +156,7 @@ export function NewChatPicker({
               whiteSpace: "nowrap",
             }}
           >
-            {a.description?.trim() || a.agent_id}
+            {subtitle}
           </span>
         </span>
         {mode === "group" ? (
@@ -342,6 +357,8 @@ export function NewChatPicker({
               <input
                 value={groupTitle}
                 onChange={(e) => setGroupTitle(e.target.value)}
+                placeholder={t.groupNamePlaceholder}
+                aria-label={t.groupTitle}
                 style={inputStyle}
               />
             </div>
@@ -353,8 +370,12 @@ export function NewChatPicker({
             {t.cancel}
           </button>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-            {mode === "group" && pickedIds.length > 0 && !canCreateGroup ? (
-              <span style={{ fontSize: 11, color: colors.muted }}>{t.minTwoAgents}</span>
+            {mode === "group" ? (
+              <span style={{ fontSize: 11, color: colors.muted }}>
+                {pickedIds.length > 0 && !canCreateGroup
+                  ? `${t.groupSelectedCount(pickedIds.length)} · ${t.minTwoAgents}`
+                  : t.groupSelectedCount(pickedIds.length)}
+              </span>
             ) : null}
             <button
               type="button"
