@@ -82,6 +82,8 @@ export type ModelPriceOption = {
   free?: boolean;
   input_price_per_million?: number;
   output_price_per_million?: number;
+  /** Where the number came from, such as the provider or OpenRouter. */
+  price_from?: string;
 };
 
 /** Name after the provider prefix, so a provider id can meet its price-book row. */
