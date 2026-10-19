@@ -578,7 +578,15 @@ export type GatewayClient = {
     agentId: string,
     modelIds: string[],
     retry: boolean,
-  ) => Promise<{ agent_id: string; quoted: string[] }>;
+  ) => Promise<{
+    agent_id: string;
+    quoted: string[];
+    prices?: Array<{
+      model_id: string;
+      input_price_per_million?: number;
+      output_price_per_million?: number;
+    }>;
+  }>;
   /** Listed vs runtime model + supported options for composer (M1/M2). */
   getAgentModelStatus: (agentId: string) => Promise<{
     agent_id: string;
@@ -1033,7 +1041,15 @@ export function createGatewayClient(
         { method: "POST" },
       ),
     quoteAgentModelPrices: (agentId, modelIds, retry) =>
-      request<{ agent_id: string; quoted: string[] }>(
+      request<{
+        agent_id: string;
+        quoted: string[];
+        prices?: Array<{
+          model_id: string;
+          input_price_per_million?: number;
+          output_price_per_million?: number;
+        }>;
+      }>(
         `/api/chat/agents/${encodeURIComponent(agentId)}/model-price-quote`,
         {
           method: "POST",

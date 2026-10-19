@@ -103,11 +103,14 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { copyConnectPromptWithInvite } from "./connectPrompt";
 import {
   catalogKind,
+  agentModelIdForSend,
   composerPricedMenuIds,
+  mergeQuotedPrices,
+  quotedPricesFromOptions,
+  reportedIdsForSend,
   pricedOptionForId,
   choosePricedComposer,
   composerCatalogForOffer,
-  composerProviderName,
   pricedReportedIds,
   unpricedOwnModelIds,
   providerDownFromMessages,
@@ -3295,6 +3298,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
   /** How many times this chat asked the agent to price models the book missed. */
   const [quoteAttempts, setQuoteAttempts] = useState(0);
   const quoteFlightRef = useRef("");
+  /** Agent quotes for this chat. A model-status refresh must not drop them. */
+  const quotedMenuRef = useRef<{ chatId: string; prices: Array<{ model_id: string; input_price_per_million?: number | string | null; output_price_per_million?: number | string | null }> }>({
+    chatId: "",
+    prices: [],
+  });
   const composerMenuRef = useRef<HTMLDivElement | null>(null);
   /** Last Settings listing seen in this chat; change drops the composer pin. */
   const composerListedRef = useRef<{ chatId: string; listed: string } | null>(null);
@@ -4624,7 +4632,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           : null;
       await client.sendMessage(chatId, text, mentions, sendThreadId, {
         requested_model: requestedModelForSend(
-          selectedModelId,
+          agentModelIdForSend(selectedModelId, reportedIdsForSend(composerModel)),
           composerModel?.listed_model_id ?? null,
           Boolean(composerModel?.official_channel),
           composerModel?.official_key_geo,
@@ -4807,7 +4815,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           activeTopic?.id ?? composerTopic?.id ?? null,
           {
             requested_model: requestedModelForSend(
-              selectedModelId,
+              agentModelIdForSend(selectedModelId, reportedIdsForSend(composerModel)),
               composerModel?.listed_model_id ?? null,
               Boolean(composerModel?.official_channel),
               composerModel?.official_key_geo,
@@ -5174,7 +5182,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
           const selfReported = Array.isArray(row.self_reported_models)
             ? row.self_reported_models.filter((m): m is string => typeof m === "string" && !!m.trim())
             : [];
-          const options = Array.isArray(row.model_options) ? row.model_options : [];
+          const serverOptions = Array.isArray(row.model_options) ? row.model_options : [];
+          const keptQuotes =
+            quotedMenuRef.current.chatId === active.chat_id
+              ? quotedMenuRef.current.prices
+              : [];
+          const options = mergeQuotedPrices(serverOptions, keptQuotes);
           const listed = row.listed_model_id ?? null;
           const runtime = row.runtime_model_id ?? null;
           const officialIds = Array.isArray(row.official_models)
@@ -5310,32 +5323,47 @@ export function RanchChatShell(props: RanchChatShellProps) {
     let cancelled = false;
     void client
       .quoteAgentModelPrices(bare, missing, quoteAttempts >= 1)
-      .then(() => client.getAgentModelStatus(bare))
-      .then((row) => {
+      .then((quote) => {
+        const prices = Array.isArray(quote?.prices) ? quote.prices : [];
+        return client.getAgentModelStatus(bare).then(
+          (row) => ({ row, prices }),
+          () => ({ row: null, prices }),
+        );
+      })
+      .then(({ row, prices }) => {
         if (cancelled) return;
-        const options = Array.isArray(row.model_options) ? row.model_options : [];
-        const supported = Array.isArray(row.supported_models)
-          ? row.supported_models.filter((id): id is string => typeof id === "string" && !!id.trim())
-          : [];
-        const selfReported = Array.isArray(row.self_reported_models)
-          ? row.self_reported_models.filter((id): id is string => typeof id === "string" && !!id.trim())
-          : [];
-        const still = unpricedOwnModelIds(
-          [row.runtime_model_id, row.listed_model_id, ...selfReported],
-          options,
-        );
-        setComposerModel((prev) =>
-          prev
-            ? {
-                ...prev,
-                listed_model_id: row.listed_model_id ?? prev.listed_model_id,
-                runtime_model_id: row.runtime_model_id ?? prev.runtime_model_id,
-                supported_models: supported,
-                self_reported_models: selfReported,
-                model_options: options,
-              }
-            : prev,
-        );
+        let still: string[] = [];
+        setComposerModel((prev) => {
+          if (!prev) return prev;
+          const fromStatus = Array.isArray(row?.model_options) ? row.model_options : null;
+          const options = mergeQuotedPrices(fromStatus ?? prev.model_options, prices);
+          const supported = Array.isArray(row?.supported_models)
+            ? row.supported_models.filter((id): id is string => typeof id === "string" && !!id.trim())
+            : prev.supported_models;
+          const selfReported = Array.isArray(row?.self_reported_models)
+            ? row.self_reported_models.filter((id): id is string => typeof id === "string" && !!id.trim())
+            : prev.self_reported_models;
+          quotedMenuRef.current = {
+            chatId: active.chat_id,
+            prices: quotedPricesFromOptions(options),
+          };
+          still = unpricedOwnModelIds(
+            [
+              row?.runtime_model_id ?? prev.runtime_model_id,
+              row?.listed_model_id ?? prev.listed_model_id,
+              ...selfReported,
+            ],
+            options,
+          );
+          return {
+            ...prev,
+            listed_model_id: row?.listed_model_id ?? prev.listed_model_id,
+            runtime_model_id: row?.runtime_model_id ?? prev.runtime_model_id,
+            supported_models: supported,
+            self_reported_models: selfReported,
+            model_options: options,
+          };
+        });
         if (still.length) setQuoteAttempts((n) => Math.min(2, n + 1));
       })
       .catch(() => {
@@ -5356,6 +5384,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setComposerMenuQuery("");
     setProviderLive({});
     quoteFlightRef.current = "";
+    quotedMenuRef.current = { chatId: "", prices: [] };
     setQuoteAttempts(0);
   }, [active?.chat_id]);
 
@@ -8279,10 +8308,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         }),
                       });
                       const official = offer.official;
-                      const withFeed = (label: string, feed: string | undefined) => {
-                        const name = (feed || "").trim();
-                        return name ? `${label} · ${t.priceFeedName(name)}` : label;
-                      };
                       const priceFor = (id: string) => {
                         const asNumber = (value: unknown) =>
                           typeof value === "number" && Number.isFinite(value)
@@ -8293,49 +8318,35 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         const cat = composerCatalog.find((row) => sameModelId(row.id, id));
                         const priced = pricedOptionForId(id, composerModel.model_options);
                         if (official && cat && !priced) {
-                          return withFeed(
-                            t.composerModelPrice(
-                              formatUsdPerMillion(
-                                applyMarkupUsd(cat.in, composerModel.markup_percent),
-                              ),
-                              formatUsdPerMillion(
-                                applyMarkupUsd(cat.out, composerModel.markup_percent),
-                              ),
+                          return t.composerModelPrice(
+                            formatUsdPerMillion(
+                              applyMarkupUsd(cat.in, composerModel.markup_percent),
                             ),
-                            "openrouter",
+                            formatUsdPerMillion(
+                              applyMarkupUsd(cat.out, composerModel.markup_percent),
+                            ),
                           );
                         }
                         if (priced) {
-                          if (priced.free) return withFeed("free", priced.price_from);
+                          if (priced.free) return "free";
                           const inn = asNumber(priced.input_price_per_million);
                           const out = asNumber(priced.output_price_per_million);
                           if (inn != null && out != null) {
-                            return withFeed(
-                              t.composerModelPrice(
-                                formatUsdPerMillion(inn),
-                                formatUsdPerMillion(out),
-                              ),
-                              priced.price_from,
+                            return t.composerModelPrice(
+                              formatUsdPerMillion(inn),
+                              formatUsdPerMillion(out),
                             );
                           }
-                          if (inn != null) {
-                            return withFeed(
-                              t.composerModelInputPrice(formatUsdPerMillion(inn)),
-                              priced.price_from,
-                            );
-                          }
+                          if (inn != null) return t.composerModelInputPrice(formatUsdPerMillion(inn));
                         }
                         if (cat) {
-                          return withFeed(
-                            t.composerModelPrice(
-                              formatUsdPerMillion(
-                                applyMarkupUsd(cat.in, composerModel.markup_percent),
-                              ),
-                              formatUsdPerMillion(
-                                applyMarkupUsd(cat.out, composerModel.markup_percent),
-                              ),
+                          return t.composerModelPrice(
+                            formatUsdPerMillion(
+                              applyMarkupUsd(cat.in, composerModel.markup_percent),
                             ),
-                            "openrouter",
+                            formatUsdPerMillion(
+                              applyMarkupUsd(cat.out, composerModel.markup_percent),
+                            ),
                           );
                         }
                         return "";
@@ -8357,9 +8368,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             )));
                       const priceHint =
                         waitingForOfficial || !value ? "" : priceFor(value);
-                      const providerName = waitingForOfficial
-                        ? ""
-                        : offer.vendor || composerProviderName(value, official);
                       const displayName = waitingForOfficial
                         ? t.loading
                         : shortModelLabel(value) || t.composerModelUnknown;
@@ -8429,7 +8437,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 </span>
                               ) : null}
                             </span>
-                            {providerName || priceHint ? (
+                            {priceHint ? (
                               <span
                                 style={{
                                   color: colors.muted,
@@ -8437,9 +8445,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   lineHeight: 1.25,
                                 }}
                               >
-                                {providerName && priceHint
-                                  ? `${providerName} · ${priceHint}`
-                                  : providerName || priceHint}
+                                {priceHint}
                               </span>
                             ) : null}
                           </button>
@@ -8529,25 +8535,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                               textAlign: "left",
                                             }}
                                           >
-                                            <span style={{ fontWeight: 600, fontSize: 13, minWidth: 0 }}>
+                                            <span
+                                              style={{
+                                                fontWeight: 600,
+                                                fontSize: 13,
+                                                minWidth: 0,
+                                                flex: "1 1 auto",
+                                                overflow: "hidden",
+                                                textOverflow: "ellipsis",
+                                                whiteSpace: "nowrap",
+                                              }}
+                                            >
                                               {shortModelLabel(id) || id}
-                                              {(official
-                                                ? composerProviderName(id, true)
-                                                : offer.vendor || composerProviderName(id, false)) ? (
-                                                <span
-                                                  style={{
-                                                    color: colors.muted,
-                                                    fontWeight: 500,
-                                                    fontSize: 11,
-                                                  }}
-                                                >
-                                                  {` · ${
-                                                    official
-                                                      ? composerProviderName(id, true)
-                                                      : offer.vendor || composerProviderName(id, false)
-                                                  }`}
-                                                </span>
-                                              ) : null}
                                             </span>
                                             {rowPrice ? (
                                               <span
@@ -8555,6 +8554,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                                   color: colors.muted,
                                                   fontSize: 11,
                                                   whiteSpace: "nowrap",
+                                                  flex: "0 0 auto",
                                                 }}
                                               >
                                                 {rowPrice}

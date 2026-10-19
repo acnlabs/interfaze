@@ -145,6 +145,43 @@ export function composerPricedMenuIds(
   return matched;
 }
 
+/**
+ * The id to send. The menu may hold the price-book row (`moonshotai/kimi-k2.5`);
+ * the agent runs its own id (`tencenttokenplan/kimi-k2.5`). Official rows with
+ * no matching report stay as they are.
+ */
+export function agentModelIdForSend(
+  selected: string | null | undefined,
+  reported: Array<string | null | undefined>,
+): string | null {
+  const picked = (selected || "").trim();
+  if (!picked) return null;
+  const ids = dedupe(reported);
+  const exact = ids.find((id) => sameExactId(id, picked));
+  if (exact) return exact;
+  const tail = priceTail(picked);
+  const sameName = tail ? ids.filter((id) => priceTail(id) === tail) : [];
+  return sameName[0] || picked;
+}
+
+/** Ids that may rename a price-book row back to the agent's own model. */
+export function reportedIdsForSend(
+  model: {
+    runtime_model_id?: string | null;
+    listed_model_id?: string | null;
+    self_reported_models?: Array<string | null | undefined> | null;
+    supported_models?: Array<string | null | undefined> | null;
+  } | null | undefined,
+): Array<string | null | undefined> {
+  if (!model) return [];
+  return [
+    model.runtime_model_id,
+    model.listed_model_id,
+    ...(model.self_reported_models ?? []),
+    ...(model.supported_models ?? []),
+  ];
+}
+
 /** Book row for this id, matching the model name after the provider prefix. */
 export function pricedOptionForId(
   id: string | null | undefined,
@@ -161,6 +198,61 @@ export function pricedOptionForId(
       (row) => priceTail(row.model_id) === tail && modelOptionHasPrice(row),
     ) ?? null
   );
+}
+
+export type QuotedModelPrice = {
+  model_id: string;
+  input_price_per_million?: number | string | null;
+  output_price_per_million?: number | string | null;
+};
+
+/** Keep book prices, and add a price the agent just reported for a missing model. */
+export function mergeQuotedPrices(
+  options: ModelPriceOption[],
+  quoted: QuotedModelPrice[] | null | undefined,
+): ModelPriceOption[] {
+  const next = options.map((row) => ({ ...row }));
+  for (const row of quoted || []) {
+    const id = (row?.model_id || "").trim();
+    const inn = priceNumber(row?.input_price_per_million);
+    const out = priceNumber(row?.output_price_per_million);
+    if (!id || inn == null || out == null) continue;
+    const tail = priceTail(id);
+    const index = next.findIndex(
+      (item) => sameExactId(item.model_id, id) || (tail && priceTail(item.model_id) === tail),
+    );
+    if (index >= 0 && modelOptionHasPrice(next[index])) continue;
+    const option: ModelPriceOption = {
+      model_id: id,
+      input_price_per_million: inn,
+      output_price_per_million: out,
+      priceable: true,
+      price_from: "agent",
+    };
+    if (index >= 0) next[index] = { ...next[index], ...option };
+    else next.push(option);
+  }
+  return next;
+}
+
+/** Quotes already on the menu, so a status refresh can put them back. */
+export function quotedPricesFromOptions(
+  options: ModelPriceOption[] | null | undefined,
+): QuotedModelPrice[] {
+  const out: QuotedModelPrice[] = [];
+  for (const row of options || []) {
+    if (row.price_from !== "agent") continue;
+    const id = (row.model_id || "").trim();
+    const inn = priceNumber(row.input_price_per_million);
+    const output = priceNumber(row.output_price_per_million);
+    if (!id || inn == null || output == null) continue;
+    out.push({
+      model_id: id,
+      input_price_per_million: inn,
+      output_price_per_million: output,
+    });
+  }
+  return out;
 }
 
 /** Own-provider ids the price book did not price. */
