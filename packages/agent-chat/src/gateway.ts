@@ -606,6 +606,20 @@ export type GatewayClient = {
   /** Owner's ACN agents (same region / alive as directory mine). */
   listMyAgents: (limit?: number) => Promise<MyAgentSummary[]>;
   getMyAgent: (agentId: string) => Promise<MyAgentSummary>;
+  /** Ask the agent to price own-provider models the price book missed. */
+  quoteAgentModelPrices: (
+    agentId: string,
+    modelIds: string[],
+    retry: boolean,
+  ) => Promise<{
+    agent_id: string;
+    quoted: string[];
+    prices?: Array<{
+      model_id: string;
+      input_price_per_million?: number;
+      output_price_per_million?: number;
+    }>;
+  }>;
   /** Listed vs runtime model + supported options for composer (M1/M2). */
   getAgentModelStatus: (agentId: string) => Promise<{
     agent_id: string;
@@ -1049,6 +1063,19 @@ export function createGatewayClient(
     },
     getMyAgent: (agentId) =>
       request<MyAgentSummary>(`/api/chat/my-agents/${encodeURIComponent(agentId)}`),
+    quoteAgentModelPrices: (agentId, modelIds, retry) =>
+      request<{
+        agent_id: string;
+        quoted: string[];
+        prices?: Array<{
+          model_id: string;
+          input_price_per_million?: number;
+          output_price_per_million?: number;
+        }>;
+      }>(`/api/chat/agents/${encodeURIComponent(agentId)}/model-price-quote`, {
+        method: "POST",
+        body: JSON.stringify({ model_ids: modelIds, retry }),
+      }),
     getAgentModelStatus: (agentId) =>
       request<{
         agent_id: string;
