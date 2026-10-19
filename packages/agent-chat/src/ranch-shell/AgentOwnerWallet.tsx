@@ -13,7 +13,7 @@ import {
 import { FieldHint } from "./AgentOwnerSettings";
 import type { RanchMessages } from "./i18n";
 import { buildWalletCheckoutUrl } from "./interfazeHost";
-import { cleanTxDescription, fmtTxTimeShort, txTypeLabel } from "./txDisplay";
+import { fmtTxTimeShort, txAmountCaption, txCounterpartyName, txSignedAmounts, txTypeLabel } from "./txDisplay";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
 import { useModalA11y } from "./useModalA11y";
 
@@ -580,8 +580,11 @@ export function AgentOwnerWallet({
               gap: 8,
             }}
           >
-            {txs.map((tx) => {
-              const desc = cleanTxDescription(tx.description);
+            {(() => {
+              const signedById = txSignedAmounts(txs);
+              return txs.map((tx) => {
+              const signed = signedById.get(tx.transaction_id) ?? tx.amount;
+              const party = txCounterpartyName(tx.description);
               return (
                 <li
                   key={tx.transaction_id}
@@ -594,20 +597,20 @@ export function AgentOwnerWallet({
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                     <span style={{ color: colors.text, fontWeight: 600 }}>
-                      {txTypeLabel(tx.type, t)}
+                      {txTypeLabel(tx.type, t, tx.description, signed)}
                     </span>
-                    <span style={{ color: tx.amount < 0 ? colors.danger : colors.success }}>
-                      {tx.amount > 0 ? `${t.walletTxIn} +` : tx.amount < 0 ? `${t.walletTxOut} ` : ""}
-                      {fmtCredits(tx.amount)}
+                    <span style={{ color: signed < 0 ? colors.danger : colors.success }}>
+                      {txAmountCaption(signed, t)}
                     </span>
                   </div>
                   <div style={{ marginTop: 4, color: colors.muted }}>
-                    {desc || t.walletTxNoParty}
+                    {party || t.walletTxNoParty}
                     {tx.created_at ? ` · ${fmtTxTimeShort(tx.created_at)}` : ""}
                   </div>
                 </li>
               );
-            })}
+            });
+            })()}
           </ul>
         )}
       </section>

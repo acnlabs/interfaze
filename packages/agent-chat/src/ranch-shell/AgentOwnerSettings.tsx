@@ -2587,9 +2587,15 @@ export function AgentOwnerSettings({
         catalogOut != null ? (
           <div style={{ margin: "0 0 10px", fontSize: 12, lineHeight: 1.45 }}>
             <div style={{ color: colors.text }}>
-              {fillTemplate(t.myAgentsPricingListingLine, {
+              {fillTemplate(t.myAgentsPricingPayerLine, {
                 in: fmtUsd(inputParsed),
                 out: fmtUsd(outputParsed),
+              })}
+            </div>
+            <div style={{ color: colors.text, marginTop: 2 }}>
+              {fillTemplate(t.myAgentsPricingKeepLine, {
+                in: fmtUsd(Math.max(0, inputParsed - catalogIn)),
+                out: fmtUsd(Math.max(0, outputParsed - catalogOut)),
               })}
             </div>
             <div

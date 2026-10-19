@@ -84,7 +84,13 @@ export function NewChatPicker({
     };
   }, [discoverQ, onSearchDiscover, directoryAgents]);
 
-  const mineRows = directoryAgents.filter((a) => a.group === "mine");
+  const mineQuery = discoverQ.trim().toLowerCase();
+  const mineRows = directoryAgents.filter((a) => {
+    if (a.group !== "mine") return false;
+    if (!mineQuery) return true;
+    const name = (a.name || "").toLowerCase();
+    return name.includes(mineQuery) || a.agent_id.toLowerCase().includes(mineQuery);
+  });
   const pickedIds = [
     ...selected,
     ...(manualId.trim() && !selected.includes(manualId.trim()) ? [manualId.trim()] : []),
@@ -102,7 +108,9 @@ export function NewChatPicker({
   const renderAgentButton = (a: AgentDirectoryItem, accent: string, border: string) => {
     const blocked = agentRefusesChat(a.description);
     const on = !blocked && selected.includes(a.agent_id);
-    const subtitle = agentPickerSubtitle(a.agent_id, a.description, t.agentNoDescription);
+    const subtitle = blocked
+      ? t.agentServiceNoChat
+      : agentPickerSubtitle(a.agent_id, a.description, t.agentNoDescription);
     const baseName = a.name?.trim() || a.agent_id;
     const collided =
       visibleAgents.filter((row) => (row.name?.trim() || row.agent_id) === baseName).length > 1;
@@ -215,6 +223,19 @@ export function NewChatPicker({
           </button>
         </div>
 
+        {onSearchDiscover ? (
+          <div style={{ padding: "0 16px 12px" }}>
+            <input
+              ref={searchInputRef}
+              value={discoverQ}
+              onChange={(e) => setDiscoverQ(e.target.value)}
+              placeholder={t.searchAgents}
+              aria-label={t.searchAgents}
+              style={{ ...inputStyle, fontSize: 13 }}
+            />
+          </div>
+        ) : null}
+
         {allowGroupChat && !lockMode && (
           <div style={{ display: "flex", gap: 8, padding: "0 16px 12px" }}>
             <button
@@ -306,15 +327,6 @@ export function NewChatPicker({
             >
               {t.recommended}
             </div>
-            {onSearchDiscover ? (
-              <input
-                ref={searchInputRef}
-                value={discoverQ}
-                onChange={(e) => setDiscoverQ(e.target.value)}
-                placeholder={t.searchAgents}
-                style={{ ...inputStyle, marginBottom: 8, fontSize: 12 }}
-              />
-            ) : null}
             {discoverLoading ? (
               <p style={{ color: colors.muted, fontSize: 12, margin: 0 }}>{t.loading}</p>
             ) : discoverRows.length === 0 ? (
@@ -379,7 +391,12 @@ export function NewChatPicker({
             ) : null}
             <button
               type="button"
-              style={btnPrimary}
+              style={{
+                ...btnPrimary,
+                ...((busy || (mode === "direct" ? !canStartDirect : !canCreateGroup))
+                  ? { background: colors.border, borderColor: colors.border, color: colors.muted, cursor: "default" }
+                  : null),
+              }}
               disabled={busy || (mode === "direct" ? !canStartDirect : !canCreateGroup)}
               onClick={() => {
                 if (mode === "direct") {

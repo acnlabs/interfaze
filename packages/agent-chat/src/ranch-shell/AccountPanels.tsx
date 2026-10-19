@@ -26,7 +26,7 @@ import {
   prefersInPanelCheckout,
   resolveInterfazeOrigin,
 } from "./interfazeHost";
-import { cleanTxDescription, fmtTxTimeShort, txTypeLabel } from "./txDisplay";
+import { fmtTxTimeShort, txAmountCaption, txCounterpartyName, txSignedAmounts, txTypeLabel } from "./txDisplay";
 
 /** Shared card container for all account panel sections. */
 const card: CSSProperties = {
@@ -2181,10 +2181,13 @@ export function AccountWalletPanel({
               <EmptyText>{t.accountWalletEmptyTx}</EmptyText>
             ) : (
               <div style={{ ...card, padding: 6 }}>
-                {txs.map((tx) => {
-                  const positive = tx.amount > 0;
-                  const negative = tx.amount < 0;
-                  const desc = cleanTxDescription(tx.description);
+                {(() => {
+                  const signedById = txSignedAmounts(txs);
+                  return txs.map((tx) => {
+                  const signed = signedById.get(tx.transaction_id) ?? tx.amount;
+                  const positive = signed > 0;
+                  const negative = signed < 0;
+                  const party = txCounterpartyName(tx.description);
                   return (
                     <div
                       key={tx.transaction_id}
@@ -2208,7 +2211,7 @@ export function AccountWalletPanel({
                       />
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>
-                          {txTypeLabel(tx.type, t)}
+                          {txTypeLabel(tx.type, t, tx.description, signed)}
                         </span>
                         <span
                           style={{
@@ -2221,7 +2224,7 @@ export function AccountWalletPanel({
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {desc || t.walletTxNoParty}
+                          {party || t.walletTxNoParty}
                           {tx.created_at ? ` · ${fmtTxTimeShort(tx.created_at)}` : ""}
                         </span>
                       </span>
@@ -2234,12 +2237,12 @@ export function AccountWalletPanel({
                           flexShrink: 0,
                         }}
                       >
-                        {positive ? `${t.walletTxIn} +` : negative ? `${t.walletTxOut} ` : ""}
-                        {fmtCredits(tx.amount)}
+                        {txAmountCaption(signed, t)}
                       </span>
                     </div>
                   );
-                })}
+                });
+                })()}
               </div>
             )}
           </section>

@@ -33,15 +33,9 @@ export function avatarBackground(seed: string): string {
   return `linear-gradient(135deg, hsl(${hue} 38% 36%), hsl(${hue} 42% 22%))`;
 }
 
-/** One letter from the name. A collided name ("Comiclaw · cd7e") shows the hint instead. */
+/** One letter from the name. Color, not an id fragment, separates people who share it. */
 export function avatarGlyph(displayName: string): string {
-  const parts = displayName.trim().split(" · ");
-  const hint = (parts[1] || "").trim();
-  if (hint) {
-    const mark = Array.from(hint).slice(0, 2).join("").toUpperCase();
-    if (mark) return mark;
-  }
-  const base = parts[0] || "?";
+  const base = displayName.trim().split(" · ")[0] || "?";
   return (Array.from(base)[0] || "?").toUpperCase();
 }
 
@@ -107,23 +101,9 @@ export function chatMatchesSearch(chat: InboxChat, query: string, fallback: Name
   return hay.includes(q);
 }
 
-function isLocalHost(hostname: string): boolean {
-  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
-  return host === "localhost" || host === "127.0.0.1" || host === "::1";
-}
-
-/** Local dev hosts are a channel name. Users should not see 127.0.0.1. */
+/** History rows name the channel, not the host domain. */
 export function hostChannelLabel(origin?: string | null): string {
-  const raw = (origin || "").trim();
-  if (!raw) return "";
-  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `http://${raw}`;
-  try {
-    const url = new URL(candidate);
-    if (isLocalHost(url.hostname)) return "Studio";
-    return /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? url.host : raw.replace(/\/+$/, "");
-  } catch {
-    return raw.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").replace(/\/+$/, "");
-  }
+  return (origin || "").trim() ? "Studio" : "";
 }
 
 /**

@@ -573,6 +573,12 @@ export type GatewayClient = {
     agent_id: string;
     supported_models?: string[];
   }>;
+  /** Ask the agent to price these own-provider models the price book missed. */
+  quoteAgentModelPrices: (
+    agentId: string,
+    modelIds: string[],
+    retry: boolean,
+  ) => Promise<{ agent_id: string; quoted: string[] }>;
   /** Listed vs runtime model + supported options for composer (M1/M2). */
   getAgentModelStatus: (agentId: string) => Promise<{
     agent_id: string;
@@ -1025,6 +1031,14 @@ export function createGatewayClient(
       request<{ agent_id: string; supported_models?: string[] }>(
         `/api/chat/agents/${encodeURIComponent(agentId)}/model-report`,
         { method: "POST" },
+      ),
+    quoteAgentModelPrices: (agentId, modelIds, retry) =>
+      request<{ agent_id: string; quoted: string[] }>(
+        `/api/chat/agents/${encodeURIComponent(agentId)}/model-price-quote`,
+        {
+          method: "POST",
+          body: JSON.stringify({ model_ids: modelIds, retry }),
+        },
       ),
     getAgentModelStatus: (agentId) =>
       request<{

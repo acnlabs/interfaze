@@ -26,8 +26,13 @@ function loadShell(file) {
 }
 
 const {
+  choosePricedComposer,
+  pricedReportedIds,
   composerMenuIds,
   composerProviderName,
+  agentProviderPricedIds,
+  composerCatalogForOffer,
+  unpricedOwnModelIds,
   providerDownFromMessages,
   refusedModelNames,
   resolveComposerOffer,
@@ -219,6 +224,162 @@ test("a provider we cannot ask uses the report the agent just sent", () => {
   assert.equal(offer.official, false);
   assert.equal(offer.vendor, "moonshot");
   assert.deepEqual(offer.ids, ["moonshot/kimi-k2", "moonshot/kimi-k2.6"]);
+});
+
+test("unpriced own models switch to priced official models", () => {
+  const offer = choosePricedComposer({
+    listed: "tencenttokenplan/kimi-k2.5",
+    runtime: "tencenttokenplan/deepseek-v4-flash-202605",
+    supported: [
+      "tencenttokenplan/kimi-k2.5",
+      "tencenttokenplan/deepseek-v4-flash-202605",
+    ],
+    officialIds: [],
+    keyGeo: "cn",
+    pricedOwnIds: [],
+    officialPricedIds: [
+      "openai/gpt-4o",
+      "moonshotai/kimi-k2.5",
+      "deepseek/deepseek-chat",
+      "deepseek/deepseek-r1",
+    ],
+  });
+  assert.equal(offer.official, true);
+  assert.equal(offer.vendor, "OpenRouter");
+  assert.equal(offer.ids[0], "deepseek/deepseek-chat");
+  assert.ok(offer.ids.includes("moonshotai/kimi-k2.5"));
+  assert.equal(offer.ids.includes("openai/gpt-4o"), false);
+  assert.equal(offer.ids.includes("deepseek/deepseek-r1"), false);
+  assert.equal(offer.ids.includes("tencenttokenplan/kimi-k2.5"), false);
+});
+
+test("an option marked unpriceable stays unusable even if a catalog row exists", () => {
+  assert.deepEqual(
+    pricedReportedIds(
+      ["tencenttokenplan/kimi-k2.5", "deepseek/deepseek-chat"],
+      [{ model_id: "tencenttokenplan/kimi-k2.5", priceable: false }],
+      ["deepseek/deepseek-chat"],
+    ),
+    ["deepseek/deepseek-chat"],
+  );
+});
+
+test("a priced own model stays on the agent's provider", () => {
+  const offer = choosePricedComposer({
+    listed: "tencenttokenplan/kimi-k2.5",
+    runtime: "tencenttokenplan/deepseek-v4-flash-202605",
+    supported: [
+      "tencenttokenplan/kimi-k2.5",
+      "tencenttokenplan/deepseek-v4-flash-202605",
+    ],
+    officialIds: ["deepseek/deepseek-chat"],
+    keyGeo: "cn",
+    pricedOwnIds: ["tencenttokenplan/deepseek-v4-flash-202605"],
+    officialPricedIds: ["deepseek/deepseek-chat", "moonshotai/kimi-k2.5"],
+  });
+  assert.equal(offer.official, false);
+  assert.equal(offer.vendor, "tencenttokenplan");
+  assert.deepEqual(offer.ids, ["tencenttokenplan/deepseek-v4-flash-202605"]);
+});
+
+test("an official list stays while its prices are still loading", () => {
+  const offer = choosePricedComposer({
+    listed: null,
+    runtime: null,
+    supported: [],
+    officialIds: ["deepseek/deepseek-v4-flash", "moonshotai/kimi-k2.5"],
+    keyGeo: "cn",
+    pricedOwnIds: [],
+    officialPricedIds: [],
+  });
+  assert.equal(offer.official, true);
+  assert.deepEqual(offer.ids, ["deepseek/deepseek-v4-flash", "moonshotai/kimi-k2.5"]);
+});
+
+test("a loaded official list keeps the priced authorized models", () => {
+  const offer = choosePricedComposer({
+    listed: null,
+    runtime: null,
+    supported: [],
+    officialIds: ["moonshotai/kimi-k2.5"],
+    keyGeo: "cn",
+    pricedOwnIds: [],
+    officialPricedIds: [
+      "deepseek/deepseek-chat",
+      "moonshotai/kimi-k2.5",
+      "openai/gpt-4o",
+    ],
+  });
+  assert.equal(offer.official, true);
+  assert.deepEqual(offer.ids, ["moonshotai/kimi-k2.5"]);
+});
+
+test("a priced provider shows its own models, not the OpenRouter shelf", () => {
+  const reported = [
+    "tencenttokenplan/kimi-k2.5",
+    "tencenttokenplan/glm-5",
+    "tencenttokenplan/deepseek-v4-flash-202605",
+  ];
+  const options = [
+    {
+      model_id: "moonshotai/kimi-k2.5",
+      input_price_per_million: 1,
+      output_price_per_million: 4,
+    },
+    {
+      model_id: "z-ai/glm-5",
+      input_price_per_million: 2,
+      output_price_per_million: 6,
+    },
+    {
+      model_id: "deepseek/deepseek-chat",
+      input_price_per_million: 0.5,
+      output_price_per_million: 1.5,
+    },
+  ];
+  assert.deepEqual(agentProviderPricedIds(reported, options), [
+    "moonshotai/kimi-k2.5",
+    "z-ai/glm-5",
+  ]);
+  assert.deepEqual(unpricedOwnModelIds(reported, options), [
+    "tencenttokenplan/deepseek-v4-flash-202605",
+  ]);
+  assert.deepEqual(
+    composerCatalogForOffer({
+      reportedIds: reported,
+      modelOptions: options,
+      catalogIds: ["aion-labs/aion-2.0", "deepseek/deepseek-chat"],
+    }),
+    [],
+  );
+});
+
+test("unpriced own models show official prices while the agent is asked to quote", () => {
+  const reported = ["tencenttokenplan/kimi-k2.5"];
+  const options = [];
+  assert.deepEqual(unpricedOwnModelIds(reported, options), reported);
+  assert.deepEqual(
+    composerCatalogForOffer({
+      reportedIds: reported,
+      modelOptions: options,
+      catalogIds: ["deepseek/deepseek-chat"],
+    }),
+    ["deepseek/deepseek-chat"],
+  );
+  assert.deepEqual(
+    composerCatalogForOffer({
+      reportedIds: reported,
+      modelOptions: [
+        {
+          model_id: "tencenttokenplan/kimi-k2.5",
+          input_price_per_million: 1,
+          output_price_per_million: 2,
+        },
+      ],
+      catalogIds: ["deepseek/deepseek-chat"],
+    }),
+    [],
+  );
 });
 
 test("the button names the provider that will be called", () => {

@@ -199,9 +199,10 @@ export type RanchMessages = {
   /** Group subtitle: total agents + how many are online. */
   agentsOnlineCount: (online: number, total: number) => string;
   /** Group subtitle once people are on the roster. */
-  groupRosterLine: (people: number, agentsOnline: number) => string;
+  groupRosterLine: (people: number, agents: number, agentsOnline: number) => string;
   members: string;
   groupMember: string;
+  groupOwner: string;
   groupMemberSelf: string;
   groupInfo: string;
   agentInfo: string;
@@ -272,6 +273,7 @@ export type RanchMessages = {
   groupNamePlaceholder: string;
   groupSelectedCount: (count: number) => string;
   agentNoDescription: string;
+  agentServiceNoChat: string;
   cancel: string;
   startChatAction: string;
   createGroup: string;
@@ -485,6 +487,8 @@ export type RanchMessages = {
   myAgentsPricingModelSearch: string;
   myAgentsPricingOfficialEmpty: string;
   myAgentsPricingOptionLine: string;
+  myAgentsPricingPayerLine: string;
+  myAgentsPricingKeepLine: string;
   myAgentsPricingCreditsLine: string;
   myAgentsPricingCreditsNote: string;
   myAgentsPricingRuntimeHint: string;
@@ -695,6 +699,12 @@ export type RanchMessages = {
   walletTxTypeStorePurchase: string;
   walletTxTypePlanPurchase: string;
   walletTxTypeRecharge: string;
+  walletTxTypeChat: string;
+  walletTxTypeChatIncome: string;
+  walletTxTypeClawback: string;
+  walletTxTypeToAgent: string;
+  walletTxTypeWithdraw: string;
+  walletTxTypeComputer: string;
   walletBillingDocs: string;
   walletBillingDocsHint: string;
   walletBillingDocsEmpty: string;
@@ -949,13 +959,15 @@ const en: RanchMessages = {
   agentsCount: (n) => (n === 1 ? "1 agent" : `${n} agents`),
   agentsOnlineCount: (online, total) =>
     total === 1 ? `1 agent · ${online}\u00A0online` : `${total} agents · ${online}\u00A0online`,
-  groupRosterLine: (people, agentsOnline) => {
+  groupRosterLine: (people, agents, agentsOnline) => {
     const person = people === 1 ? "1 person" : `${people} people`;
-    const online = agentsOnline === 1 ? "1 agent online" : `${agentsOnline} agents online`;
-    return `${person} · ${online}`;
+    const agent = agents === 1 ? "1 agent" : `${agents} agents`;
+    const online = agentsOnline === 1 ? "1 online" : `${agentsOnline} online`;
+    return `${person} · ${agent} (${online})`;
   },
   members: "Members",
   groupMember: "Member",
+  groupOwner: "Owner",
   groupMemberSelf: "You",
   groupInfo: "Group info",
   agentInfo: "Agent info",
@@ -1025,6 +1037,7 @@ const en: RanchMessages = {
   groupNamePlaceholder: "e.g. Product discussion",
   groupSelectedCount: (count) => `${count} selected`,
   agentNoDescription: "No description",
+  agentServiceNoChat: "Service account, can't chat",
   cancel: "Cancel",
   startChatAction: "Start chat",
   createGroup: "Create group",
@@ -1063,7 +1076,7 @@ const en: RanchMessages = {
   accountKeysOpenList: "View model quota",
   collabBudget: "Collaboration budget",
   collabBudgetHint:
-    "One amount, in Credits. Save sets the default. In a chat, the switch fills that chat from this amount so multi-agent help runs without asking. Turning it off refunds what is left.",
+    "Save stores this amount. Checking Auto collaboration applies it to this chat immediately and does not need another save. Turning it off refunds what is left. There is no separate add-to-this-chat button.",
   collabAccountCap: "Amount",
   collabUnit: "Credits",
   collabRemaining: "Remaining in this chat",
@@ -1251,7 +1264,9 @@ const en: RanchMessages = {
   myAgentsPricingModelsEmpty: "This agent has not reported any models yet.",
   myAgentsPricingModelSearch: "Search",
   myAgentsPricingOfficialEmpty: "No matching OpenRouter models in Host Catalog.",
-  myAgentsPricingOptionLine: "${name} · in ${in} · out ${out} / 1M",
+  myAgentsPricingOptionLine: "${name} · with markup ${in} in · ${out} out / 1M",
+  myAgentsPricingPayerLine: "They pay ${in} in · ${out} out",
+  myAgentsPricingKeepLine: "You keep ${in} in · ${out} out",
   myAgentsPricingCreditsLine: "in ${in} · out ${out} Credits / 1M",
   myAgentsPricingCreditsNote: "100 Credits = $1, same as wallet recharge. Each hop settles in whole Credits.",
   myAgentsPricingRuntimeHint:
@@ -1504,6 +1519,12 @@ const en: RanchMessages = {
   walletTxTypeStorePurchase: "Store purchase",
   walletTxTypePlanPurchase: "Plan purchase",
   walletTxTypeRecharge: "Top-up",
+  walletTxTypeChat: "Chat",
+  walletTxTypeChatIncome: "Chat income",
+  walletTxTypeClawback: "Clawback",
+  walletTxTypeToAgent: "To the agent",
+  walletTxTypeWithdraw: "Withdraw",
+  walletTxTypeComputer: "Computer",
   walletBillingDocs: "Receipts & invoices",
   walletBillingDocsHint:
     "Download a receipt for any payment. On the CN site you can also request a fapiao — issued manually to your email within 1-3 business days.",
@@ -1757,9 +1778,11 @@ const zh: RanchMessages = {
   minTwoAgents: "至少选择 2 个智能体",
   agentsCount: (n) => `${n} 个智能体`,
   agentsOnlineCount: (online, total) => `${total} 个智能体 · ${online}\u00A0在线`,
-  groupRosterLine: (people, agentsOnline) => `${people} 人 · ${agentsOnline} 个智能体在线`,
+  groupRosterLine: (people, agents, agentsOnline) =>
+    `${people} 人 · ${agents} 个智能体（${agentsOnline} 在线）`,
   members: "成员",
   groupMember: "成员",
+  groupOwner: "群主",
   groupMemberSelf: "你",
   groupInfo: "群资料",
   agentInfo: "智能体资料",
@@ -1828,6 +1851,7 @@ const zh: RanchMessages = {
   groupNamePlaceholder: "例如：产品讨论",
   groupSelectedCount: (count) => `已选 ${count}`,
   agentNoDescription: "暂无简介",
+  agentServiceNoChat: "服务账号，不支持聊天",
   cancel: "取消",
   startChatAction: "开始聊天",
   createGroup: "创建群聊",
@@ -1859,7 +1883,7 @@ const zh: RanchMessages = {
   accountKeysOpenList: "查看模型额度",
   collabBudget: "协作预算",
   collabBudgetHint:
-    "一个额度，单位是星币。保存后成为默认额度。在会话里打开开关，会按这个额度填进本会话，不用每次点同意。关掉会把还没用掉的退回钱包。",
+    "额度要先点保存。勾选「自动协作」会马上按这个额度填进本会话，不用再点保存。关掉会把还没用掉的退回。没有单独给本会话再加一笔的入口。",
   collabAccountCap: "额度",
   collabUnit: "星币",
   collabRemaining: "本会话剩余",
@@ -2043,7 +2067,9 @@ const zh: RanchMessages = {
   myAgentsPricingModelsEmpty: "这只智能体还没有自报任何模型。",
   myAgentsPricingModelSearch: "搜索",
   myAgentsPricingOfficialEmpty: "Host Catalog 里没有匹配的 OpenRouter 模型。",
-  myAgentsPricingOptionLine: "${name} · 入 ${in} · 出 ${out} / 百万",
+  myAgentsPricingOptionLine: "${name} · 含上浮 ${in} 入 · ${out} 出 / 百万",
+  myAgentsPricingPayerLine: "对方实付 ${in} 入 · ${out} 出",
+  myAgentsPricingKeepLine: "你到手 ${in} 入 · ${out} 出",
   myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} Credits /百万",
   myAgentsPricingCreditsNote: "与钱包充值相同：100 Credits = $1。每跳按整数 Credits 结算。",
   myAgentsPricingRuntimeHint: "运行环境上报：${model}（只认心跳型号，Host 看不见钥匙）。",
@@ -2289,6 +2315,12 @@ const zh: RanchMessages = {
   walletTxTypeStorePurchase: "商店购买",
   walletTxTypePlanPurchase: "方案购买",
   walletTxTypeRecharge: "充值",
+  walletTxTypeChat: "对话",
+  walletTxTypeChatIncome: "对话收入",
+  walletTxTypeClawback: "冲回",
+  walletTxTypeToAgent: "充给智能体",
+  walletTxTypeWithdraw: "提现",
+  walletTxTypeComputer: "电脑",
   walletBillingDocs: "收据与发票",
   walletBillingDocsHint:
     "每笔收款均可下载英文收据；中国站用户可申请增值税电子普通发票（人工开具，1-3 个工作日内发送到邮箱）。",

@@ -103,11 +103,16 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { copyConnectPromptWithInvite } from "./connectPrompt";
 import {
   catalogKind,
+  composerPricedMenuIds,
+  pricedOptionForId,
+  choosePricedComposer,
+  composerCatalogForOffer,
   composerProviderName,
+  pricedReportedIds,
+  unpricedOwnModelIds,
   providerDownFromMessages,
   refusedModelNames,
   liveWithOpenRouter,
-  resolveComposerOffer,
   vendorOrder,
   vendorsNeedingReport,
   type LiveCatalog,
@@ -141,7 +146,23 @@ function formatRelativeTime(iso: string | null | undefined, t: RanchMessages): s
   if (hours < 24) return t.hoursAgo(hours);
   const days = Math.floor(hours / 24);
   if (days < 7) return t.daysAgo(days);
-  return date.toLocaleDateString();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  if (date.getFullYear() !== new Date().getFullYear()) {
+    return `${date.getFullYear()}/${month}/${day}`;
+  }
+  return `${month}/${day}`;
+}
+
+function plainListPreview(text: string | null | undefined): string {
+  return (text || "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/!\[[^\]]*]\([^)]*\)/g, "")
+    .replace(/\[([^\]]+)]\([^)]*\)/g, "$1")
+    .replace(/[*_~#>]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function chatTitle(c: ChatSummary): string {
@@ -662,6 +683,46 @@ function modelFitsComposerPath(
     args.fallback.some((item) => sameModelId(item, mid)) ||
     sameModelId(mid, args.listed)
   );
+}
+
+function pricedComposerOffer(args: {
+  listed: string | null | undefined;
+  runtime: string | null | undefined;
+  supported: string[];
+  officialIds: string[];
+  keyGeo: string | null | undefined;
+  live?: Record<string, LiveCatalog | null | undefined>;
+  refusedIds?: string[];
+  selfReported?: Array<string | null | undefined>;
+  modelOptions: Array<{
+    model_id: string;
+    priceable?: boolean;
+    free?: boolean;
+    input_price_per_million?: number;
+    output_price_per_million?: number;
+  }>;
+  catalogIds: string[];
+}): { official: boolean; vendor: string; ids: string[] } {
+  const agentIds = composerPricedMenuIds(
+    [args.runtime, args.listed, ...(args.selfReported ?? []), ...args.supported],
+    args.modelOptions,
+  ).filter((id) => pricedOptionForId(id, args.modelOptions));
+  if (agentIds.length) return { official: false, vendor: "", ids: agentIds };
+  return choosePricedComposer({
+    listed: args.listed,
+    runtime: args.runtime,
+    supported: args.supported,
+    officialIds: args.officialIds,
+    keyGeo: args.keyGeo,
+    live: args.live,
+    refusedIds: args.refusedIds,
+    pricedOwnIds: pricedReportedIds(
+      [args.runtime, args.listed, ...args.supported],
+      args.modelOptions,
+      args.catalogIds,
+    ),
+    officialPricedIds: args.catalogIds,
+  });
 }
 
 function pickComposerModelForPath(args: {
@@ -3207,6 +3268,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     official_key_geo?: string;
     markup_percent?: number | null;
     supported_models: string[];
+    self_reported_models: string[];
     model_options: Array<{
       model_id: string;
       is_listing?: boolean;
@@ -3230,6 +3292,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
   /** Per provider: ids it currently lists. An empty or failed ask is left unset. */
   const [providerLive, setProviderLive] = useState<Record<string, LiveCatalog>>({});
   const [providerAsk, setProviderAsk] = useState(0);
+  /** How many times this chat asked the agent to price models the book missed. */
+  const [quoteAttempts, setQuoteAttempts] = useState(0);
+  const quoteFlightRef = useRef("");
   const composerMenuRef = useRef<HTMLDivElement | null>(null);
   /** Last Settings listing seen in this chat; change drops the composer pin. */
   const composerListedRef = useRef<{ chatId: string; listed: string } | null>(null);
@@ -5106,6 +5171,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
           const supported = Array.isArray(row.supported_models)
             ? row.supported_models.filter((m): m is string => typeof m === "string" && !!m.trim())
             : [];
+          const selfReported = Array.isArray(row.self_reported_models)
+            ? row.self_reported_models.filter((m): m is string => typeof m === "string" && !!m.trim())
+            : [];
           const options = Array.isArray(row.model_options) ? row.model_options : [];
           const listed = row.listed_model_id ?? null;
           const runtime = row.runtime_model_id ?? null;
@@ -5127,11 +5195,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
             markup_percent:
               typeof row.markup_percent === "number" ? row.markup_percent : null,
             supported_models: supported,
+            self_reported_models: selfReported,
             model_options: options,
           });
-          const fallback = supported.length
-            ? supported
-            : [listed].filter((m): m is string => !!m && !!m.trim());
           const stored = readComposerModelPick(active.chat_id);
           const storedListed = readComposerListed(active.chat_id);
           const prevFromRef =
@@ -5160,7 +5226,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
             const vendor = modelVendorId(runtime || listed);
             if (vendor) live[vendor] = "down";
           }
-          const menu = resolveComposerOffer({
+          const catalogIds = composerCatalogForOffer({
+            reportedIds: [runtime, listed, ...selfReported],
+            modelOptions: options,
+            catalogIds: composerCatalog.map((row) => row.id),
+          });
+          const priced = pricedComposerOffer({
             listed,
             runtime,
             supported,
@@ -5168,22 +5239,28 @@ export function RanchChatShell(props: RanchChatShellProps) {
             keyGeo: typeof row.official_key_geo === "string" ? row.official_key_geo : "",
             live,
             refusedIds,
-          }).ids;
-          const nextModel = pickComposerModelForPath({
-            official: listedOfficial,
-            openRouterByo: isOpenRouterByoListed(listed, runtime, supported),
-            wanted: listedChanged ? listed : stored,
-            listed,
-            runtime,
-            fallback: menu.length ? menu : fallback,
-            officialIds,
-            catalogIds: [],
+            selfReported,
+            modelOptions: options,
+            catalogIds,
           });
+          const menu = priced.ids;
+          const nextModel = menu.length
+            ? pickComposerModelForPath({
+                official: priced.official,
+                openRouterByo: isOpenRouterByoListed(listed, runtime, supported),
+                wanted: listedChanged ? listed : stored,
+                listed,
+                runtime,
+                fallback: menu,
+                officialIds: priced.official ? menu : officialIds,
+                catalogIds: [],
+              })
+            : null;
           const storedOnMenu =
             !!stored && !listedChanged && menu.some((id) => sameModelId(id, stored));
           if (storedOnMenu) {
             setSelectedModelId(stored);
-          } else {
+          } else if (nextModel) {
             setSelectedModelId(nextModel);
             writeComposerModelPick(active.chat_id, nextModel);
           }
@@ -5213,10 +5290,73 @@ export function RanchChatShell(props: RanchChatShellProps) {
     refusedIds,
   ]);
 
+  const missingPriceKey = unpricedOwnModelIds(
+    [
+      composerModel?.runtime_model_id,
+      composerModel?.listed_model_id,
+      ...(composerModel?.self_reported_models ?? []),
+    ],
+    composerModel?.model_options ?? [],
+  ).join("\u0001");
+
+  useEffect(() => {
+    if (!active || isGroupChat(active) || !missingPriceKey || quoteAttempts >= 2) return;
+    const bare = (active.agent_id || "").replace(/^acn:/i, "").trim();
+    if (!bare || bare.startsWith("sys:")) return;
+    const missing = missingPriceKey.split("\u0001");
+    const flight = `${active.chat_id}:${bare}:${quoteAttempts}:${missingPriceKey}`;
+    if (quoteFlightRef.current === flight) return;
+    quoteFlightRef.current = flight;
+    let cancelled = false;
+    void client
+      .quoteAgentModelPrices(bare, missing, quoteAttempts >= 1)
+      .then(() => client.getAgentModelStatus(bare))
+      .then((row) => {
+        if (cancelled) return;
+        const options = Array.isArray(row.model_options) ? row.model_options : [];
+        const supported = Array.isArray(row.supported_models)
+          ? row.supported_models.filter((id): id is string => typeof id === "string" && !!id.trim())
+          : [];
+        const selfReported = Array.isArray(row.self_reported_models)
+          ? row.self_reported_models.filter((id): id is string => typeof id === "string" && !!id.trim())
+          : [];
+        const still = unpricedOwnModelIds(
+          [row.runtime_model_id, row.listed_model_id, ...selfReported],
+          options,
+        );
+        setComposerModel((prev) =>
+          prev
+            ? {
+                ...prev,
+                listed_model_id: row.listed_model_id ?? prev.listed_model_id,
+                runtime_model_id: row.runtime_model_id ?? prev.runtime_model_id,
+                supported_models: supported,
+                self_reported_models: selfReported,
+                model_options: options,
+              }
+            : prev,
+        );
+        if (still.length) setQuoteAttempts((n) => Math.min(2, n + 1));
+      })
+      .catch(() => {
+        if (!cancelled) setQuoteAttempts((n) => Math.min(2, n + 1));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    active,
+    client,
+    missingPriceKey,
+    quoteAttempts,
+  ]);
+
   useEffect(() => {
     setComposerMenuOpen(false);
     setComposerMenuQuery("");
     setProviderLive({});
+    quoteFlightRef.current = "";
+    setQuoteAttempts(0);
   }, [active?.chat_id]);
 
   useEffect(() => {
@@ -5306,7 +5446,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
       composerModel?.listed_model_id,
       composerModel?.supported_models ?? [],
     ).some((vendor) => catalogKind(vendor) === "openrouter");
-    if (!official && !openRouterByo && !openRouterVendor) {
+    const ownPriced = pricedComposerOffer({
+      listed: composerModel?.listed_model_id,
+      runtime: composerModel?.runtime_model_id,
+      supported: composerModel?.supported_models ?? [],
+      officialIds: composerModel?.official_models ?? [],
+      keyGeo: composerModel?.official_key_geo,
+      selfReported: composerModel?.self_reported_models ?? [],
+      modelOptions: composerModel?.model_options ?? [],
+      catalogIds: [],
+    });
+    const needsOfficialCatalog =
+      !!composerModel && (ownPriced.official || ownPriced.ids.length === 0);
+    const useOfficialShelf =
+      official || (needsOfficialCatalog && !openRouterByo && !openRouterVendor);
+    if (!composerModel || (!official && !openRouterByo && !openRouterVendor && !needsOfficialCatalog)) {
       setComposerCatalog([]);
       setComposerCatalogLoading(false);
       return;
@@ -5329,7 +5483,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           const data = await client.listModelCatalog({
             source: "openrouter",
             active_only: true,
-            official_shelf: official,
+            official_shelf: useOfficialShelf,
             limit: page,
             offset,
           });
@@ -5339,8 +5493,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
             if (src && src !== "openrouter") continue;
             const id = (row.model_id || "").trim();
             if (!id) continue;
-            if (official && !officialShelfAllows(id, keyGeo)) continue;
-            const quote = official ? officialCatalogRates(row) : syncCatalogRates(row);
+            if (useOfficialShelf && !officialShelfAllows(id, keyGeo)) continue;
+            const quote = useOfficialShelf ? officialCatalogRates(row) : syncCatalogRates(row);
             if (!quote) continue;
             if (quote.input < 0 || quote.output < 0) continue;
             if (acc.some((item) => sameModelId(item.id, id))) continue;
@@ -5366,6 +5520,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     composerModel?.listed_model_id,
     composerModel?.runtime_model_id,
     (composerModel?.supported_models ?? []).join("\u0001"),
+    (composerModel?.official_models ?? []).join("\u0001"),
+    (composerModel?.model_options ?? []).map((row) => row.model_id).join("\u0001"),
   ]);
 
   useEffect(() => {
@@ -5386,7 +5542,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
       );
       if (vendor) live[vendor] = "down";
     }
-    const allowed = resolveComposerOffer({
+    const catalogIds = composerCatalogForOffer({
+      reportedIds: [
+        composerModel.runtime_model_id,
+        composerModel.listed_model_id,
+        ...composerModel.self_reported_models,
+      ],
+      modelOptions: composerModel.model_options,
+      catalogIds: composerCatalog.map((row) => row.id),
+    });
+    const priced = pricedComposerOffer({
       listed: composerModel.listed_model_id,
       runtime: composerModel.runtime_model_id,
       supported: composerModel.supported_models,
@@ -5394,7 +5559,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
       keyGeo: composerModel.official_key_geo,
       live,
       refusedIds,
-    }).ids;
+      selfReported: composerModel.self_reported_models,
+      modelOptions: composerModel.model_options,
+      catalogIds,
+    });
+    const allowed = priced.ids;
+    const defaultReady = allowed.some((id) => id.trim().toLowerCase() === "deepseek/deepseek-chat");
+    if (composerCatalogLoading && priced.official && !defaultReady) return;
     if (allowed.some((id) => sameModelId(id, selectedModelId))) return;
     const next = allowed[0] || null;
     if (!next || sameModelId(next, selectedModelId)) return;
@@ -5404,11 +5575,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
     active?.chat_id,
     composerModel?.listed_model_id,
     composerCatalog,
+    composerCatalogLoading,
     composerModel?.official_channel,
     composerModel?.official_key_geo,
     composerModel?.official_models,
     composerModel?.runtime_model_id,
     composerModel?.supported_models,
+    composerModel?.model_options,
     providerDead,
     providerLive,
     refusedIds,
@@ -5565,7 +5738,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const agentsOnline = statuses.some(Boolean)
       ? statuses.filter((status) => status === "online" || status === "active" || status === "busy").length
       : Math.max(0, (active.active_members ?? 0) - people);
-    return t.groupRosterLine(people, agentsOnline);
+    return t.groupRosterLine(people, agents.length, agentsOnline);
   };
   const latestDecideId = groupActive
     ? undefined
@@ -6569,7 +6742,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 : "";
               const preview =
                 pageOpPreview ||
-                c.last_message_content ||
+                plainListPreview(c.last_message_content) ||
                 (isGroupChat(c) ? t.groupChat : t.noMessagesYet);
               const listBroken = !!deliveryBrokenByChat[c.chat_id];
               const listPresence = presenceForDot(c.agent_status, listBroken);
@@ -6988,30 +7161,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             fontSize: 11,
                             lineHeight: 1.35,
                             color: colors.muted,
-                          }}
-                        >
-                          {groupSubtitle()}
-                        </span>
-                      ) : shortAgentId(active.agent_id) ? (
-                        <span
-                          style={{
-                            display: "block",
-                            fontSize: 11,
-                            color: colors.muted,
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
-                            fontFamily:
-                              'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
                           }}
                         >
-                          {shortAgentId(active.agent_id)}
+                          {groupSubtitle()}
                         </span>
                       ) : null}
                     </div>
                   </button>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  {isNarrowFull ? null : (
+                  <>
                   <ChatComputerControl
                     chatId={active.chat_id}
                     gatewayBaseUrl={gatewayBaseUrl}
@@ -7073,6 +7236,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   >
                     <IconInteraction />
                   </button>
+                  </>
+                  )}
                   <div style={{ position: "relative" }}>
                     <button
                       type="button"
@@ -8092,7 +8257,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         );
                         if (vendor) live[vendor] = "down";
                       }
-                      const offer = resolveComposerOffer({
+                      const ownReported = [
+                        composerModel.runtime_model_id,
+                        listed,
+                        ...composerModel.self_reported_models,
+                      ];
+                      const offer = pricedComposerOffer({
                         listed,
                         runtime: composerModel.runtime_model_id,
                         supported: composerModel.supported_models,
@@ -8100,6 +8270,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         keyGeo: composerModel.official_key_geo,
                         live,
                         refusedIds,
+                        selfReported: composerModel.self_reported_models,
+                        modelOptions: composerModel.model_options,
+                        catalogIds: composerCatalogForOffer({
+                          reportedIds: ownReported,
+                          modelOptions: composerModel.model_options,
+                          catalogIds: composerCatalog.map((row) => row.id),
+                        }),
                       });
                       const official = offer.official;
                       const withFeed = (label: string, feed: string | undefined) => {
@@ -8107,11 +8284,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         return name ? `${label} · ${t.priceFeedName(name)}` : label;
                       };
                       const priceFor = (id: string) => {
+                        const asNumber = (value: unknown) =>
+                          typeof value === "number" && Number.isFinite(value)
+                            ? value
+                            : typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))
+                              ? Number(value)
+                              : null;
                         const cat = composerCatalog.find((row) => sameModelId(row.id, id));
-                        const priced = composerModel.model_options.find((o) =>
-                          sameModelId(o.model_id, id),
-                        );
-                        if (official && cat) {
+                        const priced = pricedOptionForId(id, composerModel.model_options);
+                        if (official && cat && !priced) {
                           return withFeed(
                             t.composerModelPrice(
                               formatUsdPerMillion(
@@ -8125,11 +8306,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           );
                         }
                         if (priced) {
-                          if (priced.priceable === false) return t.composerModelNoPrice;
                           if (priced.free) return withFeed("free", priced.price_from);
-                          const inn = priced.input_price_per_million;
-                          const out = priced.output_price_per_million;
-                          if (typeof inn === "number" && typeof out === "number") {
+                          const inn = asNumber(priced.input_price_per_million);
+                          const out = asNumber(priced.output_price_per_million);
+                          if (inn != null && out != null) {
                             return withFeed(
                               t.composerModelPrice(
                                 formatUsdPerMillion(inn),
@@ -8138,7 +8318,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               priced.price_from,
                             );
                           }
-                          if (typeof inn === "number") {
+                          if (inn != null) {
                             return withFeed(
                               t.composerModelInputPrice(formatUsdPerMillion(inn)),
                               priced.price_from,
@@ -8158,19 +8338,31 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             "openrouter",
                           );
                         }
-                        return t.composerModelNoPrice;
+                        return "";
                       };
                       const options = offer.ids;
-                      const visible = filterComposerModels(options, composerMenuQuery);
+                      const matched = filterComposerModels(options, composerMenuQuery);
+                      const visible = matched.length > 80 ? matched.slice(0, 80) : matched;
                       const value =
                         options.find((id) => sameModelId(id, selectedModelId)) ||
-                        options.find((id) => sameModelId(id, listed)) ||
-                        listed ||
                         options[0] ||
                         "";
-                      const priceHint = value ? priceFor(value) : "";
-                      const providerName = composerProviderName(value, official);
-                      const displayName = shortModelLabel(value) || t.composerModelUnknown;
+                      const waitingForOfficial =
+                        composerCatalogLoading &&
+                        (options.length === 0 ||
+                          (official &&
+                            !(composerModel.official_models || []).length &&
+                            !options.some(
+                              (id) => id.trim().toLowerCase() === "deepseek/deepseek-chat",
+                            )));
+                      const priceHint =
+                        waitingForOfficial || !value ? "" : priceFor(value);
+                      const providerName = waitingForOfficial
+                        ? ""
+                        : offer.vendor || composerProviderName(value, official);
+                      const displayName = waitingForOfficial
+                        ? t.loading
+                        : shortModelLabel(value) || t.composerModelUnknown;
                       const canPick = options.length > 0 || official || openRouterByo;
                       return (
                         <>
@@ -8283,7 +8475,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               <ul
                                 role="listbox"
                                 aria-busy={
-                                  composerCatalogLoading && (official || openRouterByo)
+                                  composerCatalogLoading &&
+                                  (official || openRouterByo || waitingForOfficial)
                                 }
                                 style={{
                                   margin: 0,
@@ -8296,7 +8489,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 {visible.length === 0 &&
                                 !(
                                   composerCatalogLoading &&
-                                  (official || openRouterByo)
+                                  (official || openRouterByo || waitingForOfficial)
                                 ) ? (
                                   <li style={{ padding: "8px", fontSize: 12, color: colors.muted }}>
                                     {t.myAgentsPricingOfficialEmpty}
@@ -8338,7 +8531,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                           >
                                             <span style={{ fontWeight: 600, fontSize: 13, minWidth: 0 }}>
                                               {shortModelLabel(id) || id}
-                                              {composerProviderName(id, official) ? (
+                                              {(official
+                                                ? composerProviderName(id, true)
+                                                : offer.vendor || composerProviderName(id, false)) ? (
                                                 <span
                                                   style={{
                                                     color: colors.muted,
@@ -8346,7 +8541,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                                     fontSize: 11,
                                                   }}
                                                 >
-                                                  {` · ${composerProviderName(id, official)}`}
+                                                  {` · ${
+                                                    official
+                                                      ? composerProviderName(id, true)
+                                                      : offer.vendor || composerProviderName(id, false)
+                                                  }`}
                                                 </span>
                                               ) : null}
                                             </span>
@@ -8366,7 +8565,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                       );
                                     })}
                                     {composerCatalogLoading &&
-                                    (official || openRouterByo) ? (
+                                    (official || openRouterByo || waitingForOfficial) ? (
                                       <li
                                         style={{
                                           padding: "8px",
@@ -8601,6 +8800,78 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     </strong>
                     <span style={{ width: 40 }} />
                   </div>
+                  {isNarrowFull ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 8,
+                        padding: "10px 12px",
+                        borderBottom: `1px solid ${colors.border}`,
+                      }}
+                    >
+                      <ChatComputerControl
+                        chatId={active.chat_id}
+                        gatewayBaseUrl={gatewayBaseUrl}
+                        getAccessToken={getAccessToken}
+                        locale={uiLocale}
+                        openScreenIds={dockTabs
+                          .filter((tab) => tab.kind === "computer")
+                          .map((tab) => tab.id.slice("computer:".length))}
+                        onOpenScreen={(id, label) => {
+                          const tabId = `computer:${id}`;
+                          if (dockTabsRef.current.some((tab) => tab.id === tabId)) {
+                            if (activeDockId === tabId || activeDockId == null) closeTab(tabId);
+                            else setActiveDockId(tabId);
+                            return;
+                          }
+                          openCloudScreen(id, label);
+                        }}
+                      />
+                      {canOpenTalk ? (
+                        <button
+                          type="button"
+                          style={headerIconStyle(talkOpen)}
+                          disabled={!!windowBusy}
+                          onClick={() => void toggleTalkWindow()}
+                          aria-pressed={talkOpen}
+                          aria-label={talkOpen ? t.faceChatOpen : t.faceChat}
+                          title={windowBusy === "talk" ? t.faceChatOpening : talkOpen ? t.faceChatOpen : t.faceChat}
+                        >
+                          <IconFace />
+                        </button>
+                      ) : null}
+                      {canOpenBody ? (
+                        <button
+                          type="button"
+                          style={headerIconStyle(bodyOpen)}
+                          disabled={!!windowBusy}
+                          onClick={() => void toggleBodyWindow()}
+                          aria-pressed={bodyOpen}
+                          aria-label={bodyOpen ? t.bodyChatOpen : t.bodyChat}
+                          title={windowBusy === "body" ? t.bodyChatOpening : bodyOpen ? t.bodyChatOpen : t.bodyChat}
+                        >
+                          <IconBody />
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        style={headerIconStyle(activeDock?.kind === "interaction")}
+                        onClick={() => {
+                          if (activeDock?.kind === "interaction") {
+                            closeTab("interaction");
+                            return;
+                          }
+                          openInteraction();
+                        }}
+                        aria-pressed={activeDock?.kind === "interaction"}
+                        aria-label={t.interaction}
+                        title={t.interaction}
+                      >
+                        <IconInteraction />
+                      </button>
+                    </div>
+                  ) : null}
                   <div
                     style={{
                       padding: "20px 16px 12px",
@@ -8711,7 +8982,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       </>
                     )}
                     {groupActive ? (
-                      <div style={{ fontSize: 12, color: colors.muted, marginTop: 8 }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: colors.muted,
+                          marginTop: 8,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         {groupSubtitle()}
                       </div>
                     ) : null}
@@ -9355,7 +9635,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           const { id, name } = member;
                           const person = member.kind === "person";
                           const status = person ? undefined : agentStatuses[id];
-                          const statusLabel = person ? t.groupMember : agentStatusTitle(status, t);
+                          const statusLabel = person
+                            ? id === "self"
+                              ? t.groupOwner
+                              : t.groupMember
+                            : agentStatusTitle(status, t);
                           const dot = person ? null : agentStatusDotColor(status);
                           return (
                           <div

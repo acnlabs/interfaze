@@ -246,14 +246,42 @@ export function MailboxThumbs({
         maxWidth: "100%",
       }}
     >
-      {pendingIds.map((id) => (
-        <div key={`loading-${id}`} role="status" data-mailbox-id={id} data-attachment-loading="true"
-          style={{ padding: 14, border: `1px solid ${colors.border}`, borderRadius: 12, color: colors.muted, fontSize: 13 }}>
-          <span aria-hidden="true">◌ </span>{loadingLabel}
-        </div>
-      ))}
-      {visible.map((f) => {
-        if (failedIds.includes(f.mailboxId)) return null;
+      {ids.map((id) => {
+        const f = visible.find((file) => file.mailboxId === id);
+        if (!f) {
+          if (failedIds.includes(id)) {
+            return (
+              <div
+                key={`failed-${id}`}
+                data-mailbox-id={id}
+                data-http-status={failedStatus[id] || undefined}
+                style={{
+                  fontSize: 12,
+                  color: colors.muted,
+                  padding: "8px 10px",
+                  border: `1px dashed ${colors.border}`,
+                  borderRadius: 8,
+                }}
+              >
+                <div style={{ marginBottom: 4, color: "inherit", overflowWrap: "anywhere" }}>
+                  {files.find((file) => file.mailboxId === id)?.name || `#${ids.indexOf(id) + 1}`}
+                </div>
+                {failedStatus[id] === 404 || failedStatus[id] === 410
+                  ? unavailableLabel
+                  : failedStatus[id] === 401 || failedStatus[id] === 403
+                    ? accessDeniedLabel
+                    : loadFailedLabel}
+              </div>
+            );
+          }
+          if (!pendingIds.includes(id)) return null;
+          return (
+            <div key={`loading-${id}`} role="status" data-mailbox-id={id} data-attachment-loading="true"
+              style={{ padding: 14, border: `1px solid ${colors.border}`, borderRadius: 12, color: colors.muted, fontSize: 13 }}>
+              <span aria-hidden="true">◌ </span>{loadingLabel}
+            </div>
+          );
+        }
         const playable =
           f.contentType.startsWith("video/") ||
           f.contentType.startsWith("audio/") ||
@@ -268,7 +296,7 @@ export function MailboxThumbs({
               controlsList="nodownload"
               preload="metadata"
               aria-label={f.name}
-              style={{ maxWidth: "100%", maxHeight: 280, width: "auto", height: "auto", objectFit: "contain", background: "#0b0d12", display: "block" }}
+              style={{ width: "100%", maxWidth: 360, maxHeight: 320, minHeight: 120, objectFit: "contain", background: "#0b0d12", display: "block" }}
             />
           ) : f.contentType.startsWith("audio/") ? (
             <audio
@@ -278,100 +306,70 @@ export function MailboxThumbs({
               controlsList="nodownload"
               preload="metadata"
               aria-label={f.name}
-              style={{ width: "100%", display: "block" }}
+              style={{ width: "calc(100% - 24px)", margin: "0 12px 12px", display: "block", colorScheme: "dark" }}
             />
           ) : (
             <img
               src={f.url}
               onError={() => mediaFailed(f.mailboxId)}
               alt={f.name}
-              style={{ maxWidth: "100%", maxHeight: 280, width: "auto", height: "auto", objectFit: "contain", background: "rgba(127,127,127,0.08)", display: "block" }}
+              style={{ width: "100%", maxWidth: 360, maxHeight: 320, minHeight: 120, objectFit: "contain", background: "#0b0d12", display: "block" }}
             />
           );
+          const sizeText = f.byteSize == null
+            ? ""
+            : f.byteSize < 1024
+              ? `${f.byteSize} B`
+              : `${(f.byteSize / 1024).toFixed(1)} KB`;
+          const until = retainLabel(f.retainUntil);
+          const meta = [f.name, sizeText, until ? `${availableUntilLabel} ${until}` : ""].filter(Boolean).join(" · ");
+          const framed = f.contentType.startsWith("audio/") ? media : (
+            <div style={{ padding: "0 12px 12px" }}>{media}</div>
+          );
           return (
-            <div key={f.url} data-mailbox-id={f.mailboxId} style={{ width: "100%", maxWidth: 480, overflow: "hidden", border: `1px solid ${colors.border}`, borderRadius: 12 }}>
+            <div key={f.mailboxId} data-mailbox-id={f.mailboxId} style={{ width: "100%", maxWidth: 480, overflow: "hidden", border: `1px solid ${colors.border}`, borderRadius: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px" }}>
-                <span title={f.name} style={{ flex: 1, minWidth: 0, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
-                {f.byteSize != null ? <span style={{ fontSize: 11, color: colors.muted, flexShrink: 0 }}>
-                  {f.byteSize < 1024 ? `${f.byteSize} B` : `${(f.byteSize / 1024).toFixed(1)} KB`}
-                </span> : null}
-              {showListedPrice &&
-              (chargedMailboxIds == null || chargedMailboxIds.includes(f.mailboxId)) ? (
-                <ListedTag n={f.listedCredits} />
-              ) : null}
-              </div>
-              {media}
-              <div style={{ padding: "0 12px" }}>
+                <span title={meta} style={{ flex: 1, minWidth: 0, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{meta}</span>
+                {showListedPrice &&
+                (chargedMailboxIds == null || chargedMailboxIds.includes(f.mailboxId)) ? (
+                  <ListedTag n={f.listedCredits} />
+                ) : null}
                 {f.remote ? <SignedAttachmentLink
+                  compact
                   endpoint={joinUrl(gatewayBaseUrl, `/api/chats/${encodeURIComponent(chatId)}/files/${encodeURIComponent(f.mailboxId)}`)}
                   getAccessToken={getAccessToken} name={f.name} label={downloadLabel} saveAsBlob
                   downloadEndpoint={attachmentDownloadProxy ? `${attachmentDownloadProxy}?chat=${encodeURIComponent(chatId)}&attachment=${encodeURIComponent(f.mailboxId)}` : undefined}
                   preparingLabel={preparingDownloadLabel} failedLabel={downloadFailedLabel}
                   onError={() => { /* Keep a playable preview when only downloading failed. */ }}
-                /> : <a href={f.url} download={f.name} style={{ display: "inline-block", padding: "12px 0", fontSize: 13 }}>{downloadLabel}</a>}
+                /> : <a href={f.url} download={f.name} aria-label={downloadLabel} title={downloadLabel} style={{ width: 32, height: 32, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", color: "inherit", textDecoration: "none" }}>↓</a>}
               </div>
-              {retainLabel(f.retainUntil) ? (
-                <div style={{ fontSize: 11, color: colors.muted, padding: "8px 12px" }}>
-                  {availableUntilLabel} {retainLabel(f.retainUntil)}
-                </div>
-              ) : null}
+              {framed}
             </div>
           );
         }
         if (!isReadableAttachmentName(f.name, f.mailboxId)) return null;
+        const sizeText = f.byteSize == null
+          ? ""
+          : f.byteSize < 1024
+            ? `${f.byteSize} B`
+            : `${(f.byteSize / 1024).toFixed(1)} KB`;
+        const until = retainLabel(f.retainUntil);
+        const meta = [f.name, sizeText, until ? `${availableUntilLabel} ${until}` : ""].filter(Boolean).join(" · ");
         return (
-          <div key={f.url} data-mailbox-id={f.mailboxId} style={{ padding: "12px 14px", border: `1px solid ${colors.border}`, borderRadius: 12, overflowWrap: "anywhere" }}>
+          <div key={f.mailboxId} data-mailbox-id={f.mailboxId} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", border: `1px solid ${colors.border}`, borderRadius: 12 }}>
+            <span title={meta} style={{ flex: 1, minWidth: 0, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{meta}</span>
             {f.remote ? <SignedAttachmentLink
+              compact
               endpoint={joinUrl(gatewayBaseUrl,
                 `/api/chats/${encodeURIComponent(chatId)}/files/${encodeURIComponent(f.mailboxId)}`)}
-              getAccessToken={getAccessToken} name={f.name}
-              preparingLabel={preparingDownloadLabel}
+              getAccessToken={getAccessToken} name={f.name} label={downloadLabel}
+              preparingLabel={preparingDownloadLabel} failedLabel={downloadFailedLabel}
               onError={() => mediaFailed(f.mailboxId)} /> : (
-            <a
-              href={f.url}
-              download={f.name}
-              style={{
-                fontSize: 13,
-                color: "inherit",
-                textDecoration: "underline",
-                wordBreak: "break-all",
-              }}
-            >
-              {f.name}
-            </a>
+            <a href={f.url} download={f.name} aria-label={downloadLabel} title={downloadLabel} style={{ width: 32, height: 32, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", color: "inherit", textDecoration: "none" }}>↓</a>
             )}
-            {f.byteSize != null ? <div style={{ marginTop: 6, fontSize: 11, color: colors.muted }}>
-              {f.byteSize < 1024 ? `${f.byteSize} B` : `${(f.byteSize / 1024).toFixed(1)} KB`}
-            </div> : null}
-            {retainLabel(f.retainUntil) ? <div style={{ marginTop: 6, fontSize: 11, color: colors.muted }}>
-              {availableUntilLabel} {retainLabel(f.retainUntil)}
-            </div> : null}
           </div>
         );
       })}
-      {failedIds.map((id) => (
-        <div
-          key={`failed-${id}`}
-          data-mailbox-id={id}
-          data-http-status={failedStatus[id] || undefined}
-          style={{
-            fontSize: 12,
-            color: colors.muted,
-            padding: "8px 10px",
-            border: `1px dashed ${colors.border}`,
-            borderRadius: 8,
-          }}
-        >
-          <div style={{ marginBottom: 4, color: "inherit", overflowWrap: "anywhere" }}>
-            {files.find((f) => f.mailboxId === id)?.name || `#${ids.indexOf(id) + 1}`}
-          </div>
-          {failedStatus[id] === 404 || failedStatus[id] === 410
-            ? unavailableLabel
-            : failedStatus[id] === 401 || failedStatus[id] === 403
-              ? accessDeniedLabel
-              : loadFailedLabel}
-        </div>
-      ))}
       {failedIds.some((id) => failedStatus[id] !== 404 && failedStatus[id] !== 410) ? (
         <button type="button" onClick={() => setRetryCount((n) => n + 1)}
           style={{ alignSelf: "flex-start", color: "inherit", cursor: "pointer", minHeight: 44, padding: "8px 14px", borderRadius: 8, border: `1px solid ${colors.border}`, background: "transparent" }}>

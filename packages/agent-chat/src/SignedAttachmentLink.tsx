@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 /** Re-authorize every download instead of navigating an expired signed URL. */
 export function SignedAttachmentLink({ endpoint, getAccessToken, name, onError, preparingLabel = "Preparing download…",
-  saveAsBlob = false, label = name, failedLabel = "Download failed. Please retry.", downloadEndpoint }: {
+  saveAsBlob = false, label = name, failedLabel = "Download failed. Please retry.", downloadEndpoint, compact = false }: {
   endpoint: string;
   getAccessToken: () => Promise<string | null>;
   name: string;
@@ -15,6 +15,7 @@ export function SignedAttachmentLink({ endpoint, getAccessToken, name, onError, 
   failedLabel?: string;
   /** Host-owned same-origin authenticated download route, when configured. */
   downloadEndpoint?: string;
+  compact?: boolean;
 }) {
   const pending = useRef<AbortController | null>(null);
   const mounted = useRef(true);
@@ -139,6 +140,14 @@ export function SignedAttachmentLink({ endpoint, getAccessToken, name, onError, 
       if (mounted.current) setBusy(false);
       pending.current = null;
     }
+  }
+  if (compact) {
+    return <button type="button" disabled={busy} aria-busy={busy} aria-label={label === name ? name : `${label}: ${name}`} title={failed ? failedLabel : label} onClick={() => void download()}
+      style={{ width: 32, height: 32, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
+        borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", background: "#0b0d12", color: "#e8eef5",
+        cursor: busy ? "wait" : "pointer", fontSize: 16, lineHeight: 1 }}>
+      {busy ? "…" : "↓"}
+    </button>;
   }
   return <button type="button" disabled={busy} aria-busy={busy} aria-label={label === name ? name : `${label}: ${name}`} onClick={() => void download()}
     style={{ fontSize: 13, color: "inherit", textDecoration: "underline", wordBreak: "break-all",

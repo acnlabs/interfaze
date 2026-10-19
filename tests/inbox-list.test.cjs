@@ -51,10 +51,10 @@ test("a headline is the name only when the chat has no title", () => {
   assert.equal(conversationDisplayName(chat, fallback), "ping-p8-owner-probe 1204");
 });
 
-test("same-name avatars use the short id and a stable color", () => {
+test("same-name avatars use the first letter and a stable color", () => {
   assert.equal(avatarGlyph("Comiclaw"), "C");
-  assert.equal(avatarGlyph("Comiclaw · cd7ec18a"), "CD");
-  assert.equal(avatarGlyph("Comiclaw · aa11bb22"), "AA");
+  assert.equal(avatarGlyph("Comiclaw · cd7ec18a"), "C");
+  assert.equal(avatarGlyph("Comiclaw · aa11bb22"), "C");
   assert.notEqual(avatarHue("cd7ec18a-1111"), avatarHue("aa11bb22-2222"));
   assert.equal(avatarHue("Cd7ec18a-1111"), avatarHue("cd7ec18a-1111"));
   assert.match(avatarBackground("cd7ec18a-1111"), /^linear-gradient\(135deg, hsl\(/);
@@ -93,7 +93,7 @@ test("a local embed origin is shown as Studio", () => {
   assert.equal(hostChannelLabel("http://127.0.0.1:3000"), "Studio");
   assert.equal(hostChannelLabel("127.0.0.1:3000"), "Studio");
   assert.equal(hostChannelLabel("http://localhost:3010/chat"), "Studio");
-  assert.equal(hostChannelLabel("https://interfaze.io"), "interfaze.io");
+  assert.equal(hostChannelLabel("https://interfaze.io"), "Studio");
   assert.equal(hostChannelLabel(""), "");
 });
 

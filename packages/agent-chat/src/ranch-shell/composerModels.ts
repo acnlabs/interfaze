@@ -44,6 +44,181 @@ function sameOfferedModel(left: string, right: string): boolean {
   return bareModelId(a) === bareModelId(b);
 }
 
+function sameExactId(left: string, right: string): boolean {
+  const a = left.trim().toLowerCase();
+  const b = right.trim().toLowerCase();
+  return !!a && a === b;
+}
+
+/** Shelf-safe default when the person's own models have no price. */
+const OFFICIAL_PRICED_DEFAULT = "deepseek/deepseek-chat";
+
+function priceNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+export function modelOptionHasPrice(option: {
+  priceable?: boolean;
+  free?: boolean;
+  input_price_per_million?: number;
+  output_price_per_million?: number;
+} | null | undefined): boolean {
+  if (!option || option.priceable === false) return false;
+  if (option.free) return true;
+  return (
+    priceNumber(option.input_price_per_million) != null ||
+    priceNumber(option.output_price_per_million) != null
+  );
+}
+
+export type ModelPriceOption = {
+  model_id: string;
+  priceable?: boolean;
+  free?: boolean;
+  input_price_per_million?: number;
+  output_price_per_million?: number;
+};
+
+/** Name after the provider prefix, so a provider id can meet its price-book row. */
+export function priceTail(modelId: string | null | undefined): string {
+  let text = (modelId || "").trim().toLowerCase();
+  if (text.startsWith("~")) text = text.slice(1);
+  const colon = text.indexOf(":");
+  if (colon >= 0) text = text.slice(0, colon);
+  const slash = text.lastIndexOf("/");
+  return slash >= 0 ? text.slice(slash + 1) : text;
+}
+
+/**
+ * Price-book rows for models this agent reported.
+ * The book names the row (`moonshotai/kimi-k2.5`); the agent names its provider
+ * (`tencenttokenplan/kimi-k2.5`). A different model on the official card is not included.
+ */
+export function agentProviderPricedIds(
+  reported: Array<string | null | undefined>,
+  modelOptions: ModelPriceOption[],
+): string[] {
+  const tails = new Set(dedupe(reported).map(priceTail).filter(Boolean));
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const row of modelOptions) {
+    if (!modelOptionHasPrice(row)) continue;
+    const id = row.model_id.trim();
+    const tail = priceTail(id);
+    if (!id || !tail || !tails.has(tail)) continue;
+    const key = id.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(id);
+  }
+  return out;
+}
+
+/**
+ * Models to show. Name-matched rows win when several of the agent's models
+ * hit the book. A single current model does not hide the rest of the priced card.
+ */
+export function composerPricedMenuIds(
+  reported: Array<string | null | undefined>,
+  modelOptions: ModelPriceOption[],
+): string[] {
+  const matched = agentProviderPricedIds(reported, modelOptions);
+  const priced: string[] = [];
+  const seen = new Set<string>();
+  for (const row of modelOptions) {
+    if (!modelOptionHasPrice(row)) continue;
+    const id = row.model_id.trim();
+    const key = id.toLowerCase();
+    if (!id || seen.has(key)) continue;
+    seen.add(key);
+    priced.push(id);
+  }
+  if (matched.length > 1) return matched;
+  if (priced.length > matched.length) return priced;
+  return matched;
+}
+
+/** Book row for this id, matching the model name after the provider prefix. */
+export function pricedOptionForId(
+  id: string | null | undefined,
+  modelOptions: ModelPriceOption[],
+): ModelPriceOption | null {
+  const exact = modelOptions.find(
+    (row) => sameExactId(row.model_id, id || "") && modelOptionHasPrice(row),
+  );
+  if (exact) return exact;
+  const tail = priceTail(id);
+  if (!tail) return null;
+  return (
+    modelOptions.find(
+      (row) => priceTail(row.model_id) === tail && modelOptionHasPrice(row),
+    ) ?? null
+  );
+}
+
+/** Own-provider ids the price book did not price. */
+export function unpricedOwnModelIds(
+  reported: Array<string | null | undefined>,
+  modelOptions: ModelPriceOption[],
+): string[] {
+  const pricedTails = new Set(
+    modelOptions
+      .filter((row) => modelOptionHasPrice(row))
+      .map((row) => priceTail(row.model_id))
+      .filter(Boolean),
+  );
+  return dedupe(reported).filter((id) => !pricedTails.has(priceTail(id)));
+}
+
+/**
+ * The menu the person sees is the agent's provider models the price book priced.
+ * The OpenRouter shelf is only loaded when that provider has no priced model.
+ */
+export function composerCatalogForOffer(args: {
+  reportedIds: Array<string | null | undefined>;
+  modelOptions: ModelPriceOption[];
+  catalogIds: string[];
+}): string[] {
+  if (agentProviderPricedIds(args.reportedIds, args.modelOptions).length) return [];
+  if (args.modelOptions.some((row) => modelOptionHasPrice(row))) return [];
+  return args.catalogIds;
+}
+
+/** Reported ids that already have a price, either on the option or the live catalog row. */
+export function pricedReportedIds(
+  reported: Array<string | null | undefined>,
+  modelOptions: Array<{
+    model_id: string;
+    priceable?: boolean;
+    free?: boolean;
+    input_price_per_million?: number;
+    output_price_per_million?: number;
+  }>,
+  catalogIds: string[] = [],
+): string[] {
+  return dedupe(reported).filter((id) => {
+    const option = modelOptions.find((row) => sameExactId(row.model_id, id));
+    if (option?.priceable === false) return false;
+    if (modelOptionHasPrice(option)) return true;
+    return catalogIds.some((live) => sameExactId(live, id));
+  });
+}
+
+function preferOfficialDefault(ids: string[]): string[] {
+  const index = ids.findIndex((id) => sameExactId(id, OFFICIAL_PRICED_DEFAULT));
+  if (index <= 0) return ids;
+  const next = ids.slice();
+  const [picked] = next.splice(index, 1);
+  if (!picked) return ids;
+  next.unshift(picked);
+  return next;
+}
+
 function withoutRefused(ids: string[], refused: string[] | undefined): string[] {
   if (!refused?.length) return ids;
   return ids.filter((id) => !refused.some((blocked) => sameOfferedModel(id, blocked)));
@@ -240,6 +415,43 @@ export function resolveComposerOffer(args: {
   });
   if (officialIds.length) return { official: true, vendor: "OpenRouter", ids: officialIds };
   return { official: false, vendor: "", ids: [] };
+}
+
+/**
+ * Own-provider models with no price cannot be sent. Keep a priced own-provider
+ * model on that key. When none are priced, offer official shelf models that are.
+ */
+export function choosePricedComposer(args: {
+  listed: string | null | undefined;
+  runtime: string | null | undefined;
+  supported: string[];
+  officialIds: string[];
+  keyGeo: string | null | undefined;
+  live?: Record<string, LiveCatalog | null | undefined>;
+  refusedIds?: string[];
+  pricedOwnIds: string[];
+  officialPricedIds: string[];
+}): { official: boolean; vendor: string; ids: string[] } {
+  const offer = resolveComposerOffer(args);
+  if (!offer.official) {
+    const own = offer.ids.filter((id) =>
+      args.pricedOwnIds.some((priced) => sameExactId(priced, id)),
+    );
+    if (own.length) return { official: false, vendor: offer.vendor, ids: own };
+  }
+  const catalog = dedupe(
+    (args.officialPricedIds || []).filter((id) => officialShelfAllows(id, args.keyGeo)),
+  );
+  if (offer.official && offer.ids.length) {
+    if (!catalog.length) return offer;
+    const priced = offer.ids.filter((id) => catalog.some((row) => sameExactId(row, id)));
+    if (priced.length) return { official: true, vendor: "OpenRouter", ids: priced };
+  }
+  if (catalog.length) {
+    return { official: true, vendor: "OpenRouter", ids: preferOfficialDefault(catalog) };
+  }
+  if (offer.official) return offer;
+  return { official: false, vendor: offer.vendor, ids: [] };
 }
 
 /** Name of the provider this send will call. */
