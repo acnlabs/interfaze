@@ -4914,6 +4914,28 @@ export function RanchChatShell(props: RanchChatShellProps) {
           .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))
       : [];
 
+  const labelForOpen = (chat: ChatSummary): string => {
+    if (isGroupChat(chat)) return chatTitle(chat);
+    const sameChat = filtered.find((item) => item.chat_id === chat.chat_id);
+    if (sameChat) return chatTitle(sameChat);
+    const sameAgent = filtered.find(
+      (item) =>
+        !isGroupChat(item) &&
+        agentIdKey(item.agent_id) === agentIdKey(chat.agent_id),
+    );
+    if (sameAgent) return chatTitle(sameAgent);
+    return chatTitle(chat);
+  };
+
+  /** Inbox is one row per agent; the subtitle names which conversation is open. */
+  const directConversationLine = (() => {
+    if (!active || isGroupChat(active)) return "";
+    const agentLabel = labelForOpen(active);
+    const own = conversationLabel(active, t);
+    const name = own && own !== agentLabel ? own : t.untitledChat;
+    return siblingChats.length > 1 ? `${name} · ${t.conversationCount(siblingChats.length)}` : name;
+  })();
+
   const historyPlans: Array<{
     key: string;
     title: string;
@@ -6872,6 +6894,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       cursor: "pointer",
                       textAlign: "left",
                     }}
+                    aria-label={
+                      activeTopic
+                        ? activeTopic.title?.trim() || t.topics
+                        : directConversationLine
+                          ? `${labelForOpen(active)} · ${directConversationLine}`
+                          : labelForOpen(active)
+                    }
                     title={
                       activeTopic
                         ? t.topics
@@ -6894,10 +6923,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           fontSize: 13,
                         }}
                       >
-                        {(isGroupChat(active) || !chatHasStarted(active)
-                          ? chatTitle(active)
-                          : conversationLabel(active, t)
-                        )
+                        {(isGroupChat(active) ? chatTitle(active) : labelForOpen(active))
                           .slice(0, 1)
                           .toUpperCase()}
                       </span>
@@ -6934,16 +6960,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         title={
                           activeTopic
                             ? activeTopic.title || t.topics
-                            : isGroupChat(active) || !chatHasStarted(active)
+                            : isGroupChat(active)
                               ? chatTitle(active)
-                              : conversationLabel(active, t)
+                              : labelForOpen(active)
                         }
                       >
                         {activeTopic
                           ? activeTopic.title?.trim() || t.topics
-                          : isGroupChat(active) || !chatHasStarted(active)
+                          : isGroupChat(active)
                             ? chatTitle(active)
-                            : conversationLabel(active, t)}
+                            : labelForOpen(active)}
                       </strong>
                       {activeTopic ? (
                         <span
@@ -6968,21 +6994,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             Object.keys(agentNames).length || active.total_members || 0,
                           )}
                         </span>
-                      ) : shortAgentId(active.agent_id) ? (
+                      ) : directConversationLine ? (
                         <span
                           style={{
                             display: "block",
                             fontSize: 11,
+                            lineHeight: 1.35,
                             color: colors.muted,
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
-                            fontFamily:
-                              'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
                           }}
-                          title={active.agent_id || undefined}
+                          title={directConversationLine}
                         >
-                          {chatTitle(siblingChats[0] ?? active)} · {shortAgentId(active.agent_id)}
+                          {directConversationLine}
                         </span>
                       ) : null}
                     </div>
