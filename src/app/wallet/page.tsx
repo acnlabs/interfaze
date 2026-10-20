@@ -32,6 +32,7 @@ import { PlanSheet, catalogCloseHref, planSheetColors } from "@/components/PlanC
 const CREDITS_PER_USD = 100;
 const PRESET_AMOUNTS_USD = [10, 25, 50, 100];
 const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? "";
+const WALLET_HELP_HREF = "/help/wallet";
 
 type RechargeQuote = {
   channel: string;
@@ -251,7 +252,7 @@ function WalletInner() {
 
   useEffect(() => {
     if (paypalReturn === "cancel") {
-      setError("Payment cancelled.");
+      setError("Payment cancelled on PayPal. No Credits were added.");
       if (typeof history !== "undefined") history.replaceState(null, "", cleanWalletPath());
     }
   }, [paypalReturn, cleanWalletPath]);
@@ -343,7 +344,15 @@ function WalletInner() {
           </p>
         ) : null}
         {error ? (
-          <p style={{ color: "var(--danger)", fontSize: 13, margin: "0 0 12px" }}>{error}</p>
+          <div style={{ margin: "0 0 12px" }}>
+            <p style={{ color: "var(--danger)", fontSize: 13, margin: "0 0 8px" }}>{error}</p>
+            <p style={{ ...muted, fontSize: 12, margin: 0 }}>
+              PayPal decides approvals (including card checkout).{" "}
+              <Link href={WALLET_HELP_HREF} style={linkStyle}>
+                Payment help
+              </Link>
+            </p>
+          </div>
         ) : null}
 
         {!success ? (
@@ -429,6 +438,12 @@ function WalletInner() {
                     {quote.charge_amount.toFixed(2)}
                   </p>
                 ) : null}
+                <p style={{ ...muted, fontSize: 11, margin: 0 }}>
+                  Processed by PayPal in USD.{" "}
+                  <Link href={WALLET_HELP_HREF} style={linkStyle}>
+                    Payment help
+                  </Link>
+                </p>
               </div>
             ) : (
               <p style={{ color: "#ef4444", fontSize: 13 }}>PayPal is not configured.</p>
