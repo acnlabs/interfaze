@@ -190,6 +190,7 @@ export type RanchMessages = {
   justNow: string;
   minsAgo: (n: number) => string;
   hoursAgo: (n: number) => string;
+  conversationCount: (n: number) => string;
   daysAgo: (n: number) => string;
   groupChat: string;
   groupMode: string;
@@ -951,6 +952,7 @@ const en: RanchMessages = {
   justNow: "Just now",
   minsAgo: (n) => `${n}m ago`,
   hoursAgo: (n) => `${n}h ago`,
+  conversationCount: (n) => `${n} chats`,
   daysAgo: (n) => `${n}d ago`,
   groupChat: "Group chat",
   groupMode: "Group",
@@ -1771,6 +1773,7 @@ const zh: RanchMessages = {
   justNow: "刚刚",
   minsAgo: (n) => `${n} 分钟前`,
   hoursAgo: (n) => `${n} 小时前`,
+  conversationCount: (n) => `共 ${n} 个对话`,
   daysAgo: (n) => `${n} 天前`,
   groupChat: "群聊",
   groupMode: "群聊",

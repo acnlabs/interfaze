@@ -4962,6 +4962,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
           .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))
       : [];
 
+  /** Direct chats collapse to one inbox row per agent; the header's second line says which conversation is open. */
+  const directConversationLine = (() => {
+    if (!active || isGroupChat(active)) return "";
+    const agentLabel = labelForOpen(active);
+    const own = conversationLabel(active, t);
+    const name = own && own !== agentLabel ? own : t.untitledChat;
+    return siblingChats.length > 1 ? `${name} · ${t.conversationCount(siblingChats.length)}` : name;
+  })();
+
   const historyPlans: Array<{
     key: string;
     title: string;
@@ -7109,7 +7118,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       cursor: "pointer",
                       textAlign: "left",
                     }}
-                    aria-label={activeTopic ? activeTopic.title?.trim() || t.topics : labelForOpen(active)}
+                    aria-label={
+                      activeTopic
+                        ? activeTopic.title?.trim() || t.topics
+                        : directConversationLine
+                          ? `${labelForOpen(active)} · ${directConversationLine}`
+                          : labelForOpen(active)
+                    }
                     title={
                       activeTopic
                         ? t.topics
@@ -7196,6 +7211,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           }}
                         >
                           {groupSubtitle()}
+                        </span>
+                      ) : directConversationLine ? (
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: 11,
+                            lineHeight: 1.35,
+                            color: colors.muted,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                          title={directConversationLine}
+                        >
+                          {directConversationLine}
                         </span>
                       ) : null}
                     </div>
