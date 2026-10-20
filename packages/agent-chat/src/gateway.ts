@@ -287,8 +287,10 @@ export type MyAgentWallet = {
   wallet_id: string;
   balance: number;
   balance_micros?: number;
+  spendable_balance?: number;
   ap_points: number;
   owner_id?: string | null;
+  transfer_keep_balance?: boolean;
   status?: string | null;
   /** Human (owner) Credits available for top-up. */
   owner_balance: number;
@@ -797,6 +799,10 @@ export type GatewayClient = {
     agentId: string,
     amount: number,
     description?: string,
+  ) => Promise<MyAgentWallet>;
+  setMyAgentTransferPreference: (
+    agentId: string,
+    keepBalance: boolean,
   ) => Promise<MyAgentWallet>;
   getMyAgentSpendPolicy: (agentId: string) => Promise<MyAgentSpendPolicy>;
   updateMyAgentSpendPolicy: (
@@ -1395,6 +1401,14 @@ export function createGatewayClient(
             amount,
             ...(description ? { description } : {}),
           }),
+        },
+      ),
+    setMyAgentTransferPreference: (agentId, keepBalance) =>
+      request<MyAgentWallet>(
+        `/api/chat/my-agents/${encodeURIComponent(agentId)}/wallet/transfer-preference`,
+        {
+          method: "POST",
+          body: JSON.stringify({ keep_balance: keepBalance }),
         },
       ),
     getMyAgentSpendPolicy: (agentId) =>

@@ -963,6 +963,8 @@ export function AgentOwnerSettings({
   const [giftBusy, setGiftBusy] = useState(false);
   const [giftCopied, setGiftCopied] = useState(false);
   const [giftError, setGiftError] = useState<string | null>(null);
+  const [giftSpendable, setGiftSpendable] = useState<number | null>(null);
+  const [giftKeepBalance, setGiftKeepBalance] = useState(false);
   const [nameDraft, setNameDraft] = useState(detail.name || "");
   const [descDraft, setDescDraft] = useState(detail.description || "");
   const [tagsDraft, setTagsDraft] = useState(formatTagsInput(detail.tags));
@@ -2063,11 +2065,22 @@ export function AgentOwnerSettings({
     setGiftOpen(true);
     setGiftError(null);
     setGiftCopied(false);
+    setGiftSpendable(null);
+    setGiftKeepBalance(false);
     if (giftUrl || giftBusy) return;
     setGiftBusy(true);
-    void client
-      .createMyAgentTransferInvite(detail.agent_id)
-      .then((res) => {
+    void (async () => {
+      try {
+        try {
+          const w = await client.getMyAgentWallet(detail.agent_id);
+          setGiftSpendable(
+            typeof w.spendable_balance === "number" ? w.spendable_balance : w.balance,
+          );
+          setGiftKeepBalance(Boolean(w.transfer_keep_balance));
+        } catch {
+          setGiftSpendable(null);
+        }
+        const res = await client.createMyAgentTransferInvite(detail.agent_id);
         const configured = interfazeBaseUrl.replace(/\/+$/, "");
         // Prefer host-configured public origin; fall back to current origin for local.
         const origin =
@@ -2079,15 +2092,16 @@ export function AgentOwnerSettings({
           ? res.share_url
           : `/${res.share_url}`;
         setGiftUrl(`${origin}${path}`);
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         const msg =
           err instanceof ChatGatewayError && err.message.trim()
             ? err.message
             : t.myAgentsGiftFailed;
         setGiftError(msg);
-      })
-      .finally(() => setGiftBusy(false));
+      } finally {
+        setGiftBusy(false);
+      }
+    })();
   };
 
   const closeGift = () => {
@@ -3369,6 +3383,49 @@ export function AgentOwnerSettings({
                 >
                   {t.myAgentsGiftHint}
                 </p>
+                {giftSpendable != null && giftSpendable > 0 ? (
+                  <p
+                    style={{
+                      margin: "0 0 12px",
+                      fontSize: 13,
+                      lineHeight: 1.5,
+                      color: colors.muted,
+                    }}
+                  >
+                    {(giftKeepBalance
+                      ? t.myAgentsGiftBalanceKeepHint
+                      : t.myAgentsGiftBalanceRefundHint
+                    ).replace("{amount}", String(giftSpendable))}
+                  </p>
+                ) : null}
+                {giftSpendable != null && giftSpendable > 0 ? (
+                  <label
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      alignItems: "flex-start",
+                      marginBottom: 12,
+                      fontSize: 12,
+                      lineHeight: 1.45,
+                      color: colors.muted,
+                      cursor: giftBusy ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={giftKeepBalance}
+                      disabled={giftBusy}
+                      onChange={(e) => {
+                        const next = e.target.checked;
+                        setGiftKeepBalance(next);
+                        void client
+                          .setMyAgentTransferPreference(detail.agent_id, next)
+                          .catch(() => setGiftKeepBalance(!next));
+                      }}
+                    />
+                    <span>{t.myAgentsGiftKeepBalanceLabel}</span>
+                  </label>
+                ) : null}
                 <div
                   style={{
                     ...inputStyle,

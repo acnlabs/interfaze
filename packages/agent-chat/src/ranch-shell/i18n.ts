@@ -644,6 +644,9 @@ export type RanchMessages = {
   myAgentsGift: string;
   myAgentsGiftTitle: string;
   myAgentsGiftHint: string;
+  myAgentsGiftBalanceRefundHint: string;
+  myAgentsGiftBalanceKeepHint: string;
+  myAgentsGiftKeepBalanceLabel: string;
   myAgentsGiftGenerating: string;
   myAgentsGiftCopy: string;
   myAgentsGiftCopied: string;
@@ -1444,6 +1447,12 @@ const en: RanchMessages = {
   myAgentsGiftTitle: "Gift this agent",
   myAgentsGiftHint:
     "Share this link. The recipient must sign in to accept ownership. You stay owner until they accept.",
+  myAgentsGiftBalanceRefundHint:
+    "{amount} Credits in this agent wallet will return to your wallet when the transfer completes.",
+  myAgentsGiftBalanceKeepHint:
+    "{amount} Credits in this agent wallet will go to the recipient with the agent.",
+  myAgentsGiftKeepBalanceLabel:
+    "Include agent wallet balance in this gift (otherwise it returns to you on transfer)",
   myAgentsGiftGenerating: "Creating invite…",
   myAgentsGiftCopy: "Copy link",
   myAgentsGiftCopied: "Copied",
@@ -2223,6 +2232,12 @@ const zh: RanchMessages = {
   myAgentsGiftTitle: "赠送此智能体",
   myAgentsGiftHint:
     "把链接发给对方。对方需登录后才能接受所有权；在对方接受前你仍是主人。",
+  myAgentsGiftBalanceRefundHint:
+    "转出完成时，agent 钱包里的 {amount} 星币将退回你的钱包。",
+  myAgentsGiftBalanceKeepHint:
+    "agent 钱包里的 {amount} 星币将随 agent 一并交给接手方。",
+  myAgentsGiftKeepBalanceLabel:
+    "余额随 agent 一起转给对方（不勾选则转出时退回你的钱包）",
   myAgentsGiftGenerating: "正在生成邀请…",
   myAgentsGiftCopy: "复制链接",
   myAgentsGiftCopied: "已复制",
