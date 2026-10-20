@@ -291,6 +291,11 @@ function CnWalletInner() {
                   ? `微信支付 ¥${selected.price_yuan}`
                   : "微信支付"}
             </button>
+            <p style={{ ...muted, fontSize: 11, margin: "10px 0 0" }}>
+              <Link href="/help/wallet" style={linkStyle}>
+                支付说明
+              </Link>
+            </p>
               </>
             )}
           </>
