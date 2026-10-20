@@ -46,6 +46,17 @@ GitHub Actions (`CI`) also runs `typecheck` + `build` on every push/PR to `main`
 4. Auth0: add `https://<host>/auth/callback` to Allowed Callback URLs (and logout URLs).
 5. Optional: bind custom domain `interfaze.io`.
 
+### CN (`interfaze.acnlabs.cn`)
+
+**Not Vercel.** CN runs as Docker **`interfaze-cn`** on the lighthouse host (see workspace `deploy-cn/`: nginx → container :3003). Build on your Mac, ship the image — do not `compose build` on the server.
+
+```bash
+# From agentplanet-cn-web (default INTERFAZE_GIT = ../interfaze-* checkout on main)
+AP_SSH_KEY=~/cert/ap.pem ./ship-cn-web.sh interfaze-cn
+```
+
+Uses `deploy-cn/Dockerfile.interfaze-cn` (`NEXT_PUBLIC_REGION=cn`, WeChat, `api.acnlabs.cn`). After merging Interfaze to `main`, run the above when you want CN prod to pick up frontend changes (e.g. `/help/wallet`).
+
 ### Attachment downloads
 
 Media downloads use the Node route `/api/attachments/download`. The route reuses
