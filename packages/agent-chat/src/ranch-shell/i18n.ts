@@ -888,7 +888,7 @@ const en: RanchMessages = {
   composerModelUnknown: "—",
   composerModelListing: "listing",
   composerModelNoPrice: "—",
-  composerModelPrice: (input, output) => `${input} in · ${output} out`,
+  composerModelPrice: (input, output) => `${input} in · ${output} out /1M`,
   composerModelMismatch: (listed, runtime) =>
     `Listing ${listed} ≠ runtime ${runtime} (still billed at listing price)`,
   sendFailed: "Send failed",
@@ -1287,7 +1287,7 @@ const en: RanchMessages = {
     "The preview is what the other person pays. With their own key: they pay the menu price × (1+markup) ÷ 0.9, and you keep that marked-up menu price. Official: the list price is the supplier price × 1.15. They pay (list price + your markup) ÷ 0.9, and you keep only the markup.",
   myAgentsPricingInputLabel: "Settle preview · input / 1M",
   myAgentsPricingOutputLabel: "Settle preview · output / 1M",
-  myAgentsPricingModelLabel: "Default model · per 1M tokens",
+  myAgentsPricingModelLabel: "Default model · cost per 1M tokens, before your markup",
   myAgentsPricingModelHint:
     "Pick the default from models this agent already reports. You cannot add or remove models here.",
   myAgentsPricingModelsEmpty: "This agent has not reported any models yet.",
@@ -1731,7 +1731,7 @@ const zh: RanchMessages = {
   composerModelUnknown: "—",
   composerModelListing: "挂牌",
   composerModelNoPrice: "—",
-  composerModelPrice: (input, output) => `${input} 入 · ${output} 出`,
+  composerModelPrice: (input, output) => `${input} 入 · ${output} 出 /百万`,
   composerModelMismatch: (listed, runtime) =>
     `挂牌 ${listed} ≠ 运行 ${runtime}（仍按挂牌价结算）`,
   sendFailed: "发送失败",
@@ -2111,7 +2111,7 @@ const zh: RanchMessages = {
     "预览是对方实付的价。自带钥匙：对方付价目价 ×（1+加价）÷ 0.9，你拿到加价后的价目价。官方：标价是进货价 × 1.15，对方付（标价 + 加价）÷ 0.9，你只拿到加价。",
   myAgentsPricingInputLabel: "结算预览 · 入 / 百万",
   myAgentsPricingOutputLabel: "结算预览 · 出 / 百万",
-  myAgentsPricingModelLabel: "默认模型 · 每百万 token",
+  myAgentsPricingModelLabel: "默认模型 · 每百万 token 成本价（未含上浮）",
   myAgentsPricingModelHint:
     "从这只智能体已自报的模型里选默认。这里不能增删模型。",
   myAgentsPricingModelsEmpty: "这只智能体还没有自报任何模型。",
