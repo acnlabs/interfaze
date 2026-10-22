@@ -44,3 +44,10 @@ test("a China menu option prints yuan and an OpenRouter option prints dollars", 
   assert.equal(overseas, formatUsdPerMillion(1.15));
   assert.match(overseas, /^\$/);
 });
+
+test("menu prices keep four significant digits", () => {
+  assert.equal(formatUsdPerMillion(0.383333), "$0.3833");
+  assert.equal(formatUsdPerMillion(1.53333), "$1.533");
+  assert.equal(formatUsdPerMillion(0.0472778), "$0.04728");
+  assert.equal(formatCnyPerMillion(4), "¥4");
+});

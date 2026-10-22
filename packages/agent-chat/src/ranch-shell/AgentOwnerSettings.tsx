@@ -555,9 +555,10 @@ function catalogOptionLabel(
   id: string,
   pair: { in: number; out: number; currency?: string } | undefined,
   tmpl: string,
+  unpriced?: string,
 ): string {
   const name = shortModelLabel(id) || id;
-  if (!pair) return name;
+  if (!pair) return unpriced ? `${name} · ${unpriced}` : name;
   return fillTemplate(tmpl, {
     name,
     in: fmtLocal(pair.in, pair.currency),
@@ -2590,6 +2591,7 @@ export function AgentOwnerSettings({
                     id,
                     officialCatalog.find((row) => sameModelId(row.id, id)),
                     t.myAgentsPricingOptionLine,
+                    t.myAgentsModelUnpriced,
                   )
                 }
                 onChange={setModelIdDraft}
@@ -2613,6 +2615,7 @@ export function AgentOwnerSettings({
                     id,
                     openRouterByoCatalog.find((row) => sameModelId(row.id, id)),
                     t.myAgentsPricingOptionLine,
+                    t.myAgentsModelUnpriced,
                   )
                 }
                 onChange={setModelIdDraft}
@@ -2632,7 +2635,7 @@ export function AgentOwnerSettings({
             >
               {vendorModels.map((id) => (
                 <option key={id} value={id}>
-                  {catalogOptionLabel(id, catalogById[id], t.myAgentsPricingOptionLine)}
+                  {catalogOptionLabel(id, catalogById[id], t.myAgentsPricingOptionLine, t.myAgentsModelUnpriced)}
                 </option>
               ))}
             </select>
@@ -3116,11 +3119,6 @@ export function AgentOwnerSettings({
       </section>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {rotateError || dangerError ? (
-          <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>
-            {rotateError || dangerError}
-          </p>
-        ) : null}
         {profileError || deliveryError || policyError || pricingError || officialError ? (
           <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>
             {profileError || deliveryError || policyError || pricingError || officialError}
@@ -3152,6 +3150,34 @@ export function AgentOwnerSettings({
           >
             {savingPricing ? t.myAgentsPricingSyncing : saving ? t.loading : t.save}
           </button>
+        ) : (
+          <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
+            {t.myAgentsSaveHint}
+          </p>
+        )}
+      </div>
+
+      <section
+        aria-labelledby="agent-danger-zone"
+        style={{
+          marginTop: 8,
+          paddingTop: 16,
+          borderTop: `1px solid ${colors.border}`,
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        <h3 id="agent-danger-zone" style={{ margin: 0, fontSize: 13, fontWeight: 650, color: colors.danger }}>
+          {t.myAgentsDangerZone}
+        </h3>
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
+          {t.myAgentsDangerHint}
+        </p>
+        {rotateError || dangerError ? (
+          <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>
+            {rotateError || dangerError}
+          </p>
         ) : null}
         <button
           type="button"
@@ -3194,7 +3220,7 @@ export function AgentOwnerSettings({
         >
           {t.myAgentsGift}
         </button>
-      </div>
+      </section>
 
       {confirmRelay ? (
         <div

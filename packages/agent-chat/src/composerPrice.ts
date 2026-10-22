@@ -1,11 +1,12 @@
 /** Menu labels. Settlement stays in dollars; China books also carry list yuan. */
 
+/** Four significant digits: $0.3833, $1.533, ¥4. Enough to compare models, not a ledger. */
 export function formatUsdPerMillion(n: number): string {
-  return `$${Number(n.toPrecision(6))}`;
+  return `$${Number(n.toPrecision(4))}`;
 }
 
 export function formatCnyPerMillion(n: number): string {
-  return `¥${Number(n.toPrecision(6))}`;
+  return `¥${Number(n.toPrecision(4))}`;
 }
 
 export function formatLocalPerMillion(n: number, currency?: string | null): string {
