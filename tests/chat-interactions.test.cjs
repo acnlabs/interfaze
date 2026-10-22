@@ -49,14 +49,14 @@ test('late presence response cannot switch the selected conversation', async () 
   const run = new Function('useEffect', 'open', 'active', 'client', 'window',
     'setChats', 'setActive', js(section('// Keep presence dots fresh', '  const flashTopicHighlight')));
   run(f => { effect = f; }, true, selected,
-    { listChats: () => new Promise(r => { resolve = r; }) },
+    { listChatSnapshot: () => new Promise(r => { resolve = r; }) },
     { setInterval: f => { tick = f; return 1; }, clearInterval() {} },
     () => updates++, v => { selected = typeof v === 'function' ? v(selected) : v; });
   const cleanup = effect();
   tick();
   cleanup();
   selected = { chat_id: 'B' };
-  resolve([{ chat_id: 'A' }, { chat_id: 'B' }]);
+  resolve({ chats: [{ chat_id: 'A' }, { chat_id: 'B' }], startedAt: 0 });
   await flush();
   assert.equal(selected.chat_id, 'B');
   assert.equal(updates, 0);

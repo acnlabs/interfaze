@@ -9,7 +9,18 @@ const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTa
 function client(fetch, token = async () => 'test-token', diagnostics = [], development = false) {
   const exports = {};
   new Function('exports', 'require', 'fetch', 'process', 'console', code)(exports,
-    () => ({ normalizeChatMessage: row => row }), fetch,
+    (specifier) => {
+      if (String(specifier).includes('inflight')) {
+        const inflight = {};
+        const inflightSource = fs.readFileSync(
+          path.join(__dirname, '../packages/agent-chat/src/inflight.ts'), 'utf8');
+        const inflightCode = ts.transpileModule(inflightSource, { compilerOptions: {
+          target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText;
+        new Function('exports', inflightCode)(inflight);
+        return inflight;
+      }
+      return { normalizeChatMessage: row => row };
+    }, fetch,
     { env: { NODE_ENV: development ? 'development' : 'production' } }, { warn: line => diagnostics.push(line) });
   return exports.createGatewayClient('https://gateway.fixture', token);
 }

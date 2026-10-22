@@ -15,9 +15,25 @@ import {
   createGatewayClient,
   officialCatalogRates,
   syncCatalogRates,
+  type ChatListSnapshot,
   type GatewayClient,
   type MyAgentSummary,
 } from "../gateway";
+import {
+  applyReadHolds,
+  avatarBackground,
+  avatarGlyph,
+  beginReadHold,
+  cancelReadHold,
+  chatMatchesSearch,
+  directShortId,
+  finishReadHold,
+  formatListTime,
+  historyConversationName,
+  maskReadChats,
+  withDistinctNames,
+  type ReadHold,
+} from "../inboxList";
 import type {
   AgentDirectoryItem,
   ChatMessage,
@@ -122,19 +138,17 @@ import { foldLiveHops, parseHopUpdate, type HopUpdate } from "../liveHops";
 import { openEmbodyHost, openStudioTalk } from "./chat-window/studioTalk";
 import { bodyIdFromHostPath, type ChatWindow, type ChatWindowKind } from "./chat-window/types";
 
-function formatRelativeTime(iso: string | null | undefined, t: RanchMessages): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  const diffMs = Date.now() - date.getTime();
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return t.justNow;
-  if (mins < 60) return t.minsAgo(mins);
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return t.hoursAgo(hours);
-  const days = Math.floor(hours / 24);
-  if (days < 7) return t.daysAgo(days);
-  return date.toLocaleDateString();
+
+/** Inbox preview line without Markdown punctuation. */
+function plainListPreview(text: string | null | undefined): string {
+  return (text || "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/!\[[^\]]*]\([^)]*\)/g, "")
+    .replace(/\[([^\]]+)]\([^)]*\)/g, "$1")
+    .replace(/[*_~#>]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function chatTitle(c: ChatSummary): string {
@@ -2802,6 +2816,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showConnect, setShowConnect] = useState(false);
   const [search, setSearch] = useState("");
   const [chats, setChats] = useState<ChatSummary[]>([]);
+  /** A list fetched before a mark-read finished must not bring the badge back. */
+  const readHoldsRef = useRef(new Map<string, ReadHold>());
+  const readTicketRef = useRef(0);
+  const applyServerChats = useCallback((snapshot: ChatListSnapshot) => {
+    setChats(applyReadHolds(snapshot.chats, readHoldsRef.current, snapshot.startedAt));
+  }, []);
   const [loadingChats, setLoadingChats] = useState(true);
   const [chatsLoadError, setChatsLoadError] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -3337,8 +3357,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
         );
 
       try {
-        const list = await client.listChats();
-        setChats(list);
+        const snapshot = await client.listChatSnapshot(true);
+        applyServerChats(snapshot);
+        const list = snapshot.chats;
         const row = list.find((c) => c.chat_id === chatId);
         if (row) {
           setActive((cur) =>
@@ -3430,8 +3451,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setLoadingChats(true);
     setChatsLoadError(false);
     try {
-      const list = await client.listChats();
-      setChats(list);
+      const snapshot = await client.listChatSnapshot(true);
+      applyServerChats(snapshot);
       setError(null);
     } catch (e) {
       setChatsLoadError(true);
@@ -3503,10 +3524,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
     if (!open || !active) return;
     let cancelled = false;
     const tick = window.setInterval(() => {
-      void client.listChats().then((list) => {
+      void client.listChatSnapshot().then((snapshot) => {
         if (cancelled) return;
-        setChats(list);
-        const next = list.find((c) => c.chat_id === active.chat_id);
+        applyServerChats(snapshot);
+        const next = snapshot.chats.find((c) => c.chat_id === active.chat_id);
         if (next) setActive((current) => current?.chat_id === next.chat_id ? next : current);
       }).catch(() => {
         // Presence refresh is best-effort; retain the current conversation.
@@ -3780,16 +3801,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
           writeStickyMention(chat.chat_id, refreshed);
           return refreshed;
         });
-        // Clear unread locally — avoid full listChats refresh (list flash on every click).
-        void client.markChatAsRead(chat.chat_id)
+        // Only the conversation on screen is read. The inbox row keeps counting this agent's other ones.
+        const readIds = [chat.chat_id];
+        const ticket = ++readTicketRef.current;
+        beginReadHold(readHoldsRef.current, readIds, ticket);
+        setChats((prev) => maskReadChats(prev, new Set(readIds)));
+        void Promise.all(readIds.map((id) => client.markChatAsRead(id)))
           .then(() => {
-            setChats((prev) =>
-              prev.map((c) =>
-                c.chat_id === chat.chat_id ? { ...c, unread_count: 0 } : c,
-              ),
-            );
+            finishReadHold(readHoldsRef.current, readIds, ticket, Date.now());
           })
-          .catch(() => {});
+          .catch(() => {
+            cancelReadHold(readHoldsRef.current, readIds, ticket);
+            void client.listChatSnapshot(true).then(applyServerChats).catch(() => {});
+          });
       } catch (e) {
         if (seq !== loadSeqRef.current) return;
         setMessagesLoadError(true);
@@ -4885,22 +4909,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
     // Own agents stay in the inbox even before the first message.
     return isGlobalDirect(c) && agentIsMine(c.agent_id, mineAgentIds);
   });
-  const filtered = collapseDirectChatsByAgent(
-    inboxChats.filter((c) => {
-      // Legacy platform sys:* assistants are retired from Interfaze surfaces.
-      if ((c.agent_id || "").startsWith("sys:")) return false;
-      const q = search.trim().toLowerCase();
-      if (!q) return true;
-      const hay = [
-        chatTitle(c),
-        conversationLabel(c, t),
-        c.agent_id ?? "",
-        c.embed?.context ?? "",
-      ]
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(q);
-    }),
+  const nameFallback = { untitled: t.untitledChat, fresh: t.startNewChat };
+  const filtered = withDistinctNames(
+    collapseDirectChatsByAgent(
+      inboxChats.filter((c) => {
+        // Legacy platform sys:* assistants are retired from Interfaze surfaces.
+        if ((c.agent_id || "").startsWith("sys:")) return false;
+        return chatMatchesSearch(c, search, nameFallback);
+      }),
+    ),
+    nameFallback,
+    (c) => (isGroupChat(c) ? c.chat_id.slice(0, 8) : directShortId(c.agent_id)),
   );
   const siblingChats =
     active && !isGroupChat(active) && active.agent_id
@@ -4914,25 +4933,33 @@ export function RanchChatShell(props: RanchChatShellProps) {
           .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))
       : [];
 
+  /** Same name the inbox row shows, including the short id that separates two agents with one name. */
   const labelForOpen = (chat: ChatSummary): string => {
-    if (isGroupChat(chat)) return chatTitle(chat);
     const sameChat = filtered.find((item) => item.chat_id === chat.chat_id);
-    if (sameChat) return chatTitle(sameChat);
+    if (sameChat) return sameChat.displayName;
+    if (isGroupChat(chat)) return chatTitle(chat);
     const sameAgent = filtered.find(
       (item) =>
         !isGroupChat(item) &&
         agentIdKey(item.agent_id) === agentIdKey(chat.agent_id),
     );
-    if (sameAgent) return chatTitle(sameAgent);
-    return chatTitle(chat);
+    if (sameAgent) return sameAgent.displayName;
+    return historyConversationName(chat, nameFallback);
   };
+
+  /** Unread waiting in this agent's other conversations; marks the History button. */
+  const otherChatsUnread = active
+    ? siblingChats
+        .filter((c) => c.chat_id !== active.chat_id)
+        .reduce((n, c) => n + (c.unread_count ?? 0), 0)
+    : 0;
 
   /** Inbox is one row per agent; the subtitle names which conversation is open. */
   const directConversationLine = (() => {
     if (!active || isGroupChat(active)) return "";
     const agentLabel = labelForOpen(active);
     const own = conversationLabel(active, t);
-    const name = own && own !== agentLabel ? own : t.untitledChat;
+    const name = own && own !== agentLabel && own !== chatTitle(active) ? own : t.untitledChat;
     return siblingChats.length > 1 ? `${name} · ${t.conversationCount(siblingChats.length)}` : name;
   })();
 
@@ -6476,12 +6503,41 @@ export function RanchChatShell(props: RanchChatShellProps) {
         </div>
 
         <div style={{ padding: 12, borderBottom: `1px solid ${colors.border}`, display: "flex", gap: 8 }}>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t.searchChats}
-            style={{ ...inputStyle, flex: 1 }}
-          />
+          <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setSearch("");
+              }}
+              placeholder={t.searchChats}
+              aria-label={t.searchChats}
+              style={{ ...inputStyle, width: "100%", paddingRight: search ? 28 : undefined }}
+            />
+            {search ? (
+              <button
+                type="button"
+                aria-label={t.clearSearch}
+                title={t.clearSearch}
+                onClick={() => setSearch("")}
+                style={{
+                  position: "absolute",
+                  right: 4,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  border: 0,
+                  background: "transparent",
+                  color: colors.muted,
+                  cursor: "pointer",
+                  fontSize: 16,
+                  lineHeight: 1,
+                  padding: 4,
+                }}
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
           <NewComposeMenu
             allowGroupChat={allowGroupChat}
             messages={t}
@@ -6510,7 +6566,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
           {loadingChats && chats.length === 0 ? (
             <p role="status" style={{ color: colors.muted, textAlign: "center", padding: 24 }}>{t.loading}</p>
           ) : chatsLoadError && chats.length === 0 ? null : filtered.length === 0 ? (
-            hasMineAgents ? (
+            search.trim() ? (
+              <div style={{ textAlign: "center", padding: 32, color: colors.muted }}>
+                <p style={{ margin: "0 0 12px" }}>{t.noMatchingChats}</p>
+                <button type="button" style={btnGhost} onClick={() => setSearch("")}>
+                  {t.clearSearch}
+                </button>
+              </div>
+            ) : hasMineAgents ? (
               <div style={{ textAlign: "center", padding: 32, color: colors.muted }}>
                 <p style={{ margin: "0 0 12px" }}>{t.noChatsYet}</p>
                 <button type="button" style={btnPrimary} onClick={() => setPickerMode("direct")}>
@@ -6545,7 +6608,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     !isGroupChat(active) &&
                     agentIdKey(active.agent_id) === agentIdKey(c.agent_id)
                   );
-              const title = chatTitle(c);
+              const title = c.displayName;
               const pageOpPreview = c.last_message_canvas_op
                 ? pageOpLine(
                     uiLocale,
@@ -6559,7 +6622,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 : "";
               const preview =
                 pageOpPreview ||
-                c.last_message_content ||
+                plainListPreview(c.last_message_content) ||
                 (isGroupChat(c) ? t.groupChat : t.noMessagesYet);
               const listBroken = !!deliveryBrokenByChat[c.chat_id];
               const listPresence = presenceForDot(c.agent_status, listBroken);
@@ -6573,10 +6636,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     if (active?.chat_id === c.chat_id) return;
                     void openConversation(c);
                   }}
-                  title={
-                    !isGroupChat(c)
-                      ? [c.agent_id, listTitle].filter(Boolean).join(" · ") || undefined
-                      : undefined
+                  aria-label={
+                    [
+                      title,
+                      listTitle,
+                      (c.unread_count ?? 0) > 0 ? t.unreadCount(c.unread_count ?? 0) : "",
+                    ]
+                      .filter(Boolean)
+                      .join(uiLocale === "zh" ? "，" : ", ")
                   }
                   data-selected={selected}
                   aria-current={selected ? "true" : undefined}
@@ -6591,14 +6658,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         width: 40,
                         height: 40,
                         borderRadius: c.type === "group" ? 10 : 999,
-                        background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
+                        background:
+                          avatarBackground(isGroupChat(c) ? c.chat_id : c.agent_id || c.chat_id) ||
+                          `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         fontWeight: 700,
                       }}
                     >
-                      {title.slice(0, 1).toUpperCase()}
+                      {avatarGlyph(title)}
                     </span>
                     {dot ? (
                       <span
@@ -6639,7 +6708,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       </span>
                       <span style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                         <span style={{ fontSize: 10, color: colors.muted }}>
-                          {formatRelativeTime(c.last_message_at || c.created_at, t)}
+                          {formatListTime(c.last_message_at || c.created_at, t)}
                         </span>
                         {(c.unread_count ?? 0) > 0 ? (
                           <span
@@ -6915,7 +6984,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           width: 32,
                           height: 32,
                           borderRadius: isGroupChat(active) ? 8 : 999,
-                          background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
+                          background:
+                            avatarBackground(
+                              isGroupChat(active) ? active.chat_id : active.agent_id || active.chat_id,
+                            ) || `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -6923,9 +6995,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           fontSize: 13,
                         }}
                       >
-                        {(isGroupChat(active) ? chatTitle(active) : labelForOpen(active))
-                          .slice(0, 1)
-                          .toUpperCase()}
+                        {avatarGlyph(labelForOpen(active))}
                       </span>
                       {!isGroupChat(active) && agentStatusDotColor(activePresence) ? (
                         <span
@@ -7083,10 +7153,29 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       style={headerIconStyle(historyOpen)}
                       onClick={() => setHistoryOpen((open) => !open)}
                       aria-expanded={historyOpen}
-                      aria-label={t.headerHistory}
-                      title={t.headerHistory}
+                      aria-label={
+                        otherChatsUnread > 0 ? `${t.headerHistory}${uiLocale === "zh" ? "，" : ", "}${t.otherChatsUnread}` : t.headerHistory
+                      }
+                      title={otherChatsUnread > 0 ? t.otherChatsUnread : t.headerHistory}
                     >
-                      <IconHistory />
+                      <span style={{ position: "relative", display: "inline-flex" }}>
+                        <IconHistory />
+                        {otherChatsUnread > 0 ? (
+                          <span
+                            aria-hidden
+                            style={{
+                              position: "absolute",
+                              top: -3,
+                              right: -4,
+                              width: 8,
+                              height: 8,
+                              borderRadius: 999,
+                              background: colors.accent,
+                              border: `2px solid ${colors.bg}`,
+                            }}
+                          />
+                        ) : null}
+                      </span>
                     </button>
                     {historyOpen ? (
                       <div
@@ -7142,8 +7231,29 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 </div>
                               </div>
                               <span style={{ fontSize: 10, color: colors.muted, flexShrink: 0 }}>
-                                {formatRelativeTime(c.last_message_at || c.created_at, t)}
+                                {formatListTime(c.last_message_at || c.created_at, t)}
                               </span>
+                              {(c.unread_count ?? 0) > 0 && c.chat_id !== active.chat_id ? (
+                                <span
+                                  aria-label={t.unreadCount(c.unread_count ?? 0)}
+                                  style={{
+                                    minWidth: 18,
+                                    height: 18,
+                                    padding: "0 5px",
+                                    borderRadius: 999,
+                                    background: colors.accent,
+                                    color: "#fff",
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {c.unread_count! > 99 ? "99+" : c.unread_count}
+                                </span>
+                              ) : null}
                             </button>
                           ))
                         )}
@@ -8582,7 +8692,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           width: 56,
                           height: 56,
                           borderRadius: groupActive ? 12 : 999,
-                          background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
+                          background:
+                            avatarBackground(
+                              isGroupChat(active) ? active.chat_id : active.agent_id || active.chat_id,
+                            ) || `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -8590,7 +8703,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           fontSize: 22,
                         }}
                       >
-                        {chatTitle(active).slice(0, 1).toUpperCase()}
+                        {avatarGlyph(labelForOpen(active))}
                       </div>
                       {!groupActive && agentStatusDotColor(activePresence) ? (
                         <span
@@ -9026,7 +9139,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   ) : null}
                                 </div>
                                 <span style={{ fontSize: 10, color: colors.muted, flexShrink: 0 }}>
-                                  {formatRelativeTime(c.last_message_at || c.created_at, t)}
+                                  {formatListTime(c.last_message_at || c.created_at, t)}
                                 </span>
                               </button>
                             ))}

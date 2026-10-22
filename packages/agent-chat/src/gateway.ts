@@ -1,4 +1,5 @@
 import type { ChatMessage, ChatParticipant, ChatSummary, ThreadSummary } from "./types";
+import { createInflightGate } from "./inflight";
 import { filesFromMessages, normalizeChatMessage } from "./mailbox";
 
 export class ChatGatewayError extends Error {
@@ -539,9 +540,17 @@ export type ModelCatalogList = {
   offset: number;
 };
 
+export type ChatListSnapshot = {
+  chats: ChatSummary[];
+  /** When this request started. Joiners share this time, they do not stamp their own. */
+  startedAt: number;
+};
+
 export type GatewayClient = {
   health: () => Promise<{ status: string; gateway?: string; ok: boolean; error?: string }>;
   listChats: () => Promise<ChatSummary[]>;
+  /** Same rows as listChats, plus when the request actually started. `fresh` waits out a request already running. */
+  listChatSnapshot: (fresh?: boolean) => Promise<ChatListSnapshot>;
   createDirect: (
     agentId: string,
     opts?: { context?: string | null },
@@ -955,15 +964,23 @@ export function createGatewayClient(
       }),
     });
 
+  const listChatsOnce = createInflightGate<ChatListSnapshot>();
+  const loadChatList = (fresh: boolean) => {
+    const run = async () => {
+      const startedAt = Date.now();
+      const data = await request<{ chats: ChatSummary[] }>("/api/chats?page=1&page_size=200");
+      return { chats: data.chats ?? [], startedAt };
+    };
+    return fresh ? listChatsOnce.fresh(run) : listChatsOnce.share(run);
+  };
+
   return {
     health: async () => {
       const h = await request<{ status: string; gateway?: string }>("/api/chat/health");
       return { ...h, ok: h.status === "ok" };
     },
-    listChats: async () => {
-      const data = await request<{ chats: ChatSummary[] }>("/api/chats?page=1&page_size=200");
-      return data.chats ?? [];
-    },
+    listChats: () => loadChatList(false).then((snapshot) => snapshot.chats),
+    listChatSnapshot: (fresh = false) => loadChatList(fresh),
     createDirect,
     createOrGetDirectChat: createDirect,
     createGroup,

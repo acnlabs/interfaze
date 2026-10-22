@@ -142,6 +142,8 @@ export type RanchMessages = {
   messagesLoadFailed: string;
   loading: string;
   noChatsYet: string;
+  noMatchingChats: string;
+  clearSearch: string;
   startChat: string;
   selectOrStart: string;
   sayHello: string;
@@ -178,6 +180,10 @@ export type RanchMessages = {
   /** Confirm button when send would start the hourly computer bill. */
   sendAt: string;
   justNow: string;
+  yesterday: string;
+  weekdays: readonly string[];
+  unreadCount: (n: number) => string;
+  otherChatsUnread: string;
   minsAgo: (n: number) => string;
   hoursAgo: (n: number) => string;
   conversationCount: (n: number) => string;
@@ -893,6 +899,8 @@ const en: RanchMessages = {
   messagesLoadFailed: "Could not load messages. Please retry.",
   loading: "Loading…",
   noChatsYet: "No chats yet",
+  noMatchingChats: "No matching chats",
+  clearSearch: "Clear search",
   startChat: "Start a chat",
   selectOrStart: "Select a chat or start a new one",
   sayHello: "Say hello to start the conversation.",
@@ -931,6 +939,10 @@ const en: RanchMessages = {
   send: "Send",
   sendAt: "Send · {rate}/hr",
   justNow: "Just now",
+  yesterday: "Yesterday",
+  weekdays: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+  unreadCount: (n) => `${n} unread`,
+  otherChatsUnread: "Other chats with this agent have unread messages",
   minsAgo: (n) => `${n}m ago`,
   hoursAgo: (n) => `${n}h ago`,
   conversationCount: (n) => `${n} chats`,
@@ -1704,6 +1716,8 @@ const zh: RanchMessages = {
   messagesLoadFailed: "消息加载失败，请重试。",
   loading: "加载中…",
   noChatsYet: "还没有会话",
+  noMatchingChats: "没有匹配的会话",
+  clearSearch: "清除搜索",
   startChat: "开始聊天",
   selectOrStart: "选择一个会话，或新建聊天",
   sayHello: "打个招呼开始对话。",
@@ -1740,6 +1754,10 @@ const zh: RanchMessages = {
   send: "发送",
   sendAt: "发送 · {rate} 星币/小时",
   justNow: "刚刚",
+  yesterday: "昨天",
+  weekdays: ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"],
+  unreadCount: (n) => `${n} 条未读`,
+  otherChatsUnread: "和这个智能体的其它对话有未读消息",
   minsAgo: (n) => `${n} 分钟前`,
   hoursAgo: (n) => `${n} 小时前`,
   conversationCount: (n) => `共 ${n} 个对话`,
