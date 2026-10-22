@@ -2842,6 +2842,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const viewportWidth = useViewportWidth();
   /** <768px in full mode: single-column, list ↔ conversation like side mode. */
   const isNarrowFull = mode === "full" && viewportWidth < 768;
+  /** Phone width or the side panel: keep the title readable, fold the rest into ⋯. */
+  const compactHeader = isNarrowFull || mode === "side";
   const listStepsAside = screenHidesList && mode === "full" && !isNarrowFull;
   const showSidebar = (mode !== "full" || !sidebarCollapsed) && !listStepsAside;
 
@@ -2930,6 +2932,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     onConfirm: () => void;
   } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  /** Narrow header: secondary actions live in the ⋯ menu so the title keeps its room. */
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const [pageTick, setPageTick] = useState(0);
   const [dockTabs, setDockTabs] = useState<WorkTab[]>([]);
   const [activeDockId, setActiveDockId] = useState<string | null>(null);
@@ -2946,6 +2950,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setScreenComputer(null);
     setScreenHidesList(false);
     setHistoryOpen(false);
+    setHeaderMenuOpen(false);
   }, [active?.chat_id]);
   useEffect(() => {
     if (!screenComputer) setScreenHidesList(false);
@@ -7201,7 +7206,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     }}
                     onPlace={setChatPlace}
                   />
-                  {canOpenTalk ? (
+                  {!compactHeader && canOpenTalk ? (
                     <button
                       type="button"
                       style={headerIconStyle(talkOpen)}
@@ -7214,7 +7219,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       <IconFace />
                     </button>
                   ) : null}
-                  {canOpenBody ? (
+                  {!compactHeader && canOpenBody ? (
                     <button
                       type="button"
                       style={headerIconStyle(bodyOpen)}
@@ -7227,6 +7232,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       <IconBody />
                     </button>
                   ) : null}
+                  {compactHeader ? null : (
                   <button
                     type="button"
                     style={headerIconStyle(activeDock?.kind === "interaction")}
@@ -7244,11 +7250,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   >
                     <IconInteraction />
                   </button>
+                  )}
                   <div style={{ position: "relative" }}>
                     <button
                       type="button"
                       style={headerIconStyle(historyOpen)}
-                      onClick={() => setHistoryOpen((open) => !open)}
+                      onClick={() => {
+                        setHeaderMenuOpen(false);
+                        setHistoryOpen((open) => !open);
+                      }}
                       aria-expanded={historyOpen}
                       aria-label={
                         otherChatsUnread > 0 ? `${t.headerHistory}${uiLocale === "zh" ? "，" : ", "}${t.otherChatsUnread}` : t.headerHistory
@@ -7359,6 +7369,116 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       </div>
                     ) : null}
                   </div>
+                  {compactHeader ? (
+                    <div style={{ position: "relative" }}>
+                      <button
+                        type="button"
+                        style={headerIconStyle(headerMenuOpen || showMembersPanel)}
+                        onClick={() => {
+                          setHistoryOpen(false);
+                          setHeaderMenuOpen((open) => !open);
+                        }}
+                        aria-haspopup="menu"
+                        aria-expanded={headerMenuOpen}
+                        aria-label={t.headerMoreActions}
+                        title={t.headerMoreActions}
+                      >
+                        <IconMore />
+                      </button>
+                      {headerMenuOpen ? (
+                        <div
+                          role="menu"
+                          style={{
+                            position: "absolute",
+                            top: "100%",
+                            right: 0,
+                            marginTop: 6,
+                            minWidth: 180,
+                            zIndex: 40,
+                            background: colors.panel,
+                            color: colors.text,
+                            border: `1px solid ${colors.border}`,
+                            borderRadius: 10,
+                            boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
+                            padding: 6,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 2,
+                          }}
+                        >
+                          {[
+                            {
+                              key: "info",
+                              icon: <IconMore />,
+                              label: isGroupChat(active) ? t.groupInfo : t.agentInfo,
+                              run: () => {
+                                setShowAddMember(false);
+                                setEditingTitle(false);
+                                setInfoTab(isGroupChat(active) ? "members" : "info");
+                                setShowMembersPanel(true);
+                              },
+                            },
+                            {
+                              key: "interaction",
+                              icon: <IconInteraction />,
+                              label: t.interaction,
+                              run: () => {
+                                if (activeDock?.kind === "interaction") closeTab("interaction");
+                                else openInteraction();
+                              },
+                            },
+                            ...(!activeDock
+                              ? [{ key: "canvas", icon: <IconRightPanel />, label: t.openWindow, run: () => openCanvas() }]
+                              : []),
+                            ...(canOpenTalk
+                              ? [{
+                                  key: "talk",
+                                  icon: <IconFace />,
+                                  label: talkOpen ? t.faceChatOpen : t.faceChat,
+                                  run: () => void toggleTalkWindow(),
+                                  disabled: !!windowBusy,
+                                }]
+                              : []),
+                            ...(canOpenBody
+                              ? [{
+                                  key: "body",
+                                  icon: <IconBody />,
+                                  label: bodyOpen ? t.bodyChatOpen : t.bodyChat,
+                                  run: () => void toggleBodyWindow(),
+                                  disabled: !!windowBusy,
+                                }]
+                              : []),
+                          ].map((item) => (
+                            <button
+                              key={item.key}
+                              type="button"
+                              role="menuitem"
+                              disabled={"disabled" in item ? item.disabled : false}
+                              onClick={() => {
+                                setHeaderMenuOpen(false);
+                                item.run();
+                              }}
+                              style={{
+                                ...listItem,
+                                alignItems: "center",
+                                gap: 10,
+                                padding: "8px 10px",
+                                fontSize: 13,
+                                textAlign: "left",
+                                background: "transparent",
+                              }}
+                            >
+                              <span aria-hidden style={{ display: "inline-flex", color: colors.muted }}>
+                                {item.icon}
+                              </span>
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                  <>
                   <button
                     type="button"
                     style={headerIconStyle(showMembersPanel)}
@@ -7392,6 +7512,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       <IconRightPanel />
                     </button>
                   ) : null}
+                  </>
+                  )}
                 {mode === "side" ? (
                   <button
                     type="button"
