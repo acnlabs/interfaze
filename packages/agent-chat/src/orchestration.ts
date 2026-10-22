@@ -261,6 +261,14 @@ export function decideFromMetadata(meta: unknown): MessageDecide | null {
   return out;
 }
 
+/** An older decide chip is closed. Only the latest unanswered one stays open. */
+export function decideChipExpired(
+  messageId: string,
+  latestDecideId: string | null | undefined,
+): boolean {
+  return Boolean(latestDecideId) && messageId !== latestDecideId;
+}
+
 export type MessagePlan = {
   title: string;
   summary?: string;

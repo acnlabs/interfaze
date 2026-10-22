@@ -18,6 +18,7 @@ export type RanchMessages = {
   sending: string;
   sent: string;
   queuedOffline: string;
+  queuedStillWaiting: string;
   deliveryFailed: string;
   delivered: string;
   replying: string;
@@ -63,6 +64,7 @@ export type RanchMessages = {
   pricingMismatch: (listed: string, observed: string) => string;
   /** Agent bubble footer: this hop's token burn, in/out separately. */
   agentHopUsage: (input: number, output: number) => string;
+  agentHopDetails: string;
   /** Agent bubble: who this hop invoked (completed). */
   orchCalled: (name: string) => string;
   /** Agent bubble: invoke accepted, waiting on callee. */
@@ -158,6 +160,7 @@ export type RanchMessages = {
   decisionAutoEnable: string;
   decisionSuggested: string;
   decisionPicked: string;
+  decisionExpired: string;
   decisionScoring: string;
   decisionAskHuman: string;
   decisionCap: string;
@@ -781,6 +784,8 @@ const en: RanchMessages = {
   sending: "Sending",
   sent: "Sent",
   queuedOffline: "In inbox — waiting for agent",
+  queuedStillWaiting:
+    "Still in the inbox. The agent picks it up when it comes online. Send again if it stays offline.",
   deliveryFailed: "Delivery failed",
   delivered: "Delivered",
   replying: "Replying",
@@ -829,6 +834,7 @@ const en: RanchMessages = {
   priceUnconfirmed: "The current price could not be read, so nothing was sent.",
   pricingMismatch: (listed, observed) =>
     `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
+  agentHopDetails: "Usage",
   agentHopUsage: (input, output) =>
     `in ${input.toLocaleString("en-US")} · out ${output.toLocaleString("en-US")}`,
   orchCalled: (name) => `Called ${name}`,
@@ -918,6 +924,7 @@ const en: RanchMessages = {
   decisionAutoEnable: "Enable for this chat",
   decisionSuggested: "Suggested",
   decisionPicked: "Picked",
+  decisionExpired: "No longer available",
   decisionScoring: "Scoring…",
   decisionAskHuman: "Waiting for you",
   decisionCap: "Auto-decide paused — hop limit reached.",
@@ -1600,6 +1607,7 @@ const zh: RanchMessages = {
   sending: "发送中",
   sent: "已发送",
   queuedOffline: "已进收件箱，等待智能体拉取",
+  queuedStillWaiting: "仍在收件箱。智能体上线后会取走；若一直不上线，再发一条。",
   deliveryFailed: "投递失败",
   delivered: "已送达",
   replying: "正在回复",
@@ -1646,6 +1654,7 @@ const zh: RanchMessages = {
   priceUnconfirmed: "暂时读不到这个模型的现价，没有发送。",
   pricingMismatch: (listed, observed) =>
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
+  agentHopDetails: "用量",
   agentHopUsage: (input, output) =>
     `入 ${input.toLocaleString("zh-CN")} · 出 ${output.toLocaleString("zh-CN")}`,
   orchCalled: (name) => `调用了 ${name}`,
@@ -1733,6 +1742,7 @@ const zh: RanchMessages = {
   decisionAutoEnable: "为此会话开启",
   decisionSuggested: "建议",
   decisionPicked: "已选",
+  decisionExpired: "已失效",
   decisionScoring: "打分中…",
   decisionAskHuman: "等你来选",
   decisionCap: "自动决策已暂停——达到次数上限。",

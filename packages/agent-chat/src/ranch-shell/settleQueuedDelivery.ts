@@ -1,3 +1,16 @@
+/** Show the longer inbox hint once a queued send has been waiting this long. */
+export const QUEUED_STILL_WAITING_MS = 2 * 60 * 1000;
+
+/** True when a queued message is old enough that "waiting" needs a next step. */
+export function queuedStillWaiting(
+  createdAt: string | null | undefined,
+  now = Date.now(),
+): boolean {
+  const at = Date.parse(createdAt || "");
+  if (!Number.isFinite(at)) return true;
+  return now - at >= QUEUED_STILL_WAITING_MS;
+}
+
 /** A user bubble Host parked as inbox-queued, plus the messages around it. */
 export type QueuedDeliveryMessage = {
   message_id: string;
