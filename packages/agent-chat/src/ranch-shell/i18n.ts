@@ -563,6 +563,10 @@ export type RanchMessages = {
   myAgentsPieceSkuNoneHang: string;
   myAgentsPieceSkuPocketHint: string;
   myAgentsPieceSkuMarkup: string;
+  myAgentsDangerZone: string;
+  myAgentsDangerHint: string;
+  myAgentsSaveHint: string;
+  myAgentsModelUnpriced: string;
   myAgentsPieceSkuPreview: string;
   myAgentsPieceSkuPreviewVideo: string;
   myAgentsPieceSkuSeconds: string;
@@ -930,7 +934,7 @@ const en: RanchMessages = {
   decisionGoal: "Save this message as the goal",
   decisionAuto: "Auto-decide",
   decisionAutoHint:
-    "When this chat has a plan with next steps, Jev can pick and send for you. It stops if it should ask you, and after a few hops.",
+    "When this chat has a plan with next steps, auto-decide can pick and send for you. It stops if it should ask you, and after a few hops.",
   decisionAutoNeedGoal: "The agent writes a plan from what you already said. Auto-decide does nothing without one.",
   decisionAutoEnable: "Enable for this chat",
   decisionSuggested: "Suggested",
@@ -1373,6 +1377,10 @@ const en: RanchMessages = {
   myAgentsPieceSkuPocketHint:
     "Catch-all for files that aren’t image, video, or audio. Host owns the kinds — you don’t invent new ones.",
   myAgentsPieceSkuMarkup: "Markup %",
+  myAgentsDangerZone: "Danger zone",
+  myAgentsDangerHint: "These change the key, transfer the agent, or delete it permanently.",
+  myAgentsSaveHint: "Changes on this page are not saved automatically. A Save button appears here once you edit something. The per-file cap has its own button.",
+  myAgentsModelUnpriced: "not priced",
   myAgentsPieceSkuPreview: "Hunter pays ${listed} · you net ${net}",
   myAgentsPieceSkuPreviewVideo:
     "Hunter pays ${listed} for a ${seconds}s clip if we cannot read the file · you net ${net}",
@@ -1764,7 +1772,7 @@ const zh: RanchMessages = {
   decisionGoal: "把这句记成目标",
   decisionAuto: "自动决策",
   decisionAutoHint:
-    "这场对话已有计划、并列出下一步时，Jev 可以替你选并发出去。该问你、或连续几次之后会停。",
+    "这场对话已有计划、并列出下一步时，自动决策可以替你选并发出去。该问你、或连续几次之后会停。",
   decisionAutoNeedGoal: "智能体会根据你已经说的需求写出计划。没有计划时自动决策不会发。",
   decisionAutoEnable: "为此会话开启",
   decisionSuggested: "建议",
@@ -2145,7 +2153,7 @@ const zh: RanchMessages = {
   myAgentsSaveProviders: "保存供应商",
   myAgentsProvidersSaved: "供应商已保存",
   myAgentsProvidersFailed: "保存供应商失败。",
-  myAgentsPricingMarkupLabel: "加价",
+  myAgentsPricingMarkupLabel: "上浮",
   myAgentsPricingMarkupHint: "加价只决定你到手的那一截。换模型保留这个比例。",
   myAgentsPricingCatalogLine: "${in} / ${out}",
   myAgentsPricingSourceOpenRouter: "进货价 · OpenRouter",
@@ -2166,7 +2174,7 @@ const zh: RanchMessages = {
   myAgentsSavePricing: "保存默认模型与加价",
   myAgentsPricingSaved: "定价已保存",
   myAgentsPricingFailed: "保存定价失败。",
-  myAgentsSectionPieceSku: "按件",
+  myAgentsSectionPieceSku: "按文件",
   myAgentsPieceSkuHint:
     "每个文件进邮箱时贴猎人价签。这里只设封顶：占位按 min(价签, 封顶)。0 = 全不占。对话 token 仍另结。",
   myAgentsPieceSkuLabel: "单文件封顶（星币）",
@@ -2174,13 +2182,17 @@ const zh: RanchMessages = {
   myAgentsPieceSkuLabelVideo: "每秒星币（猎人一口价）",
   myAgentsPieceSkuLabelAudio: "每条音频星币",
   myAgentsPieceSkuLabelFile: "每份其他文件星币",
-  myAgentsPieceSkuOff: "默认 100000。0 = 附件永不占钱包。货仍可进。",
+  myAgentsPieceSkuOff: "默认 100000。填 0 时附件不扣钱包，文件仍然收得进来。",
   myAgentsPieceSkuNumeric: "填数字（绘图软件 / 目录没价）",
   myAgentsPieceSkuModel: "生图模型",
   myAgentsPieceSkuModelVideo: "视频模型",
   myAgentsPieceSkuNoneHang: "这台机没有目录认得出价的这种模型，填数字。",
   myAgentsPieceSkuPocketHint: "图 / 视频 / 音频以外的文件。种类由 Host 定，不能自己加。",
-  myAgentsPieceSkuMarkup: "加价 %",
+  myAgentsPieceSkuMarkup: "上浮 %",
+  myAgentsDangerZone: "危险操作",
+  myAgentsDangerHint: "轮换密钥、赠送或删除。删除后无法恢复。",
+  myAgentsSaveHint: "这一页的修改不会自动保存。改完后，保存按钮会出现在这里。单文件封顶有自己的保存按钮。",
+  myAgentsModelUnpriced: "未标价",
   myAgentsPieceSkuPreview: "猎人付 ${listed} · 你实收 ${net}",
   myAgentsPieceSkuPreviewVideo:
     "读不到文件时长时，猎人付 ${listed}（按 ${seconds} 秒）· 你实收 ${net}",
@@ -2193,7 +2205,7 @@ const zh: RanchMessages = {
   myAgentsPieceSkuKindFile: "其他文件",
   myAgentsPieceSkuFillCredits: "填星币",
   myAgentsPieceSkuMeterLabel: "计价方式",
-  myAgentsPieceSkuMeterFile: "按件",
+  myAgentsPieceSkuMeterFile: "按文件",
   myAgentsPieceSkuMeterSecond: "按秒",
   myAgentsPieceSkuMeterNumeric: "你自己填每件星币",
   myAgentsPieceSkuMarketFile: "目录 ${usd} / 张",
@@ -2212,7 +2224,7 @@ const zh: RanchMessages = {
   myAgentsDeliveryDirect: "推送到你的网址",
   myAgentsDeliveryDirectHint:
     "平台把消息推到你的公网 HTTPS 地址（文档里叫 Mode A / direct）。需要稳定公网入口。",
-  myAgentsDeliveryRelay: "运行程序主动取信",
+  myAgentsDeliveryRelay: "智能体自己来取",
   myAgentsDeliveryRelayHint:
     "你的运行程序保持连线，主动来取收件箱（文档里叫 Mode B / relay）。不需要公网网址。",
   myAgentsDeliveryNone: "尚未配置",
@@ -2225,7 +2237,7 @@ const zh: RanchMessages = {
   myAgentsInboundNa: "不适用",
   myAgentsDeliveryChoose: "选择这个智能体如何接收 Interfaze 消息",
   myAgentsDeliveryOptionPush: "推送到公网网址",
-  myAgentsDeliveryOptionPull: "运行程序主动取信",
+  myAgentsDeliveryOptionPull: "智能体自己来取",
   myAgentsDeliveryPushHelp:
     "需要稳定的公网 HTTPS 地址（A2A）。适合跑在有入站 HTTPS 的服务器上。",
   myAgentsDeliveryPullHelp:
