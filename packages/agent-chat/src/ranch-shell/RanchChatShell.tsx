@@ -83,8 +83,8 @@ import { blockLabel, pageOpLine, pageRefLine, type PageOpRecord, type PageRefRec
 import { blockKeyFromSearch, chatIdFromSearch } from "../chatLink";
 import { visibleManuscriptBlocks } from "../manuscriptPage";
 import { mailboxIdsFromAttachments, parseMessageAttachments } from "../mailbox";
-import { calleesFromMetadata, decideFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, planFromMetadata, proposeGroupFromMetadata, proposeTaskFromMetadata, type MessageDecide, type MessagePlan, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
-import { settleQueuedDelivery } from "./settleQueuedDelivery";
+import { calleesFromMetadata, decideChipExpired, decideFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, planFromMetadata, proposeGroupFromMetadata, proposeTaskFromMetadata, type MessageDecide, type MessagePlan, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
+import { queuedStillWaiting, settleQueuedDelivery } from "./settleQueuedDelivery";
 import {
   AgentOwnerSettings,
   deliveryLabel,
@@ -135,6 +135,7 @@ import { ChatWindowPane } from "./chat-window/ChatWindowPane";
 import { WorkDock, type WorkTab } from "./WorkDock";
 import { InteractionPanel } from "./InteractionPanel";
 import { foldLiveHops, parseHopUpdate, type HopUpdate } from "../liveHops";
+import { MessageBody } from "../MessageBody";
 import { openEmbodyHost, openStudioTalk } from "./chat-window/studioTalk";
 import { bodyIdFromHostPath, type ChatWindow, type ChatWindowKind } from "./chat-window/types";
 
@@ -374,9 +375,13 @@ function parseMessageMetadata(raw: unknown): ChatMessage["metadata"] {
 
 function DeliveryStatusIcon({
   delivery,
+  createdAt,
+  now,
   t,
 }: {
   delivery?: string | null;
+  createdAt?: string | null;
+  now?: number;
   t: RanchMessages;
 }) {
   if (!delivery) return null;
@@ -395,7 +400,7 @@ function DeliveryStatusIcon({
       : delivery === "sent"
         ? t.sent
         : delivery === "queued"
-          ? t.queuedOffline
+          ? queuedStillWaiting(createdAt, now) ? t.queuedStillWaiting : t.queuedOffline
           : delivery === "failed"
             ? t.deliveryFailed
             : t.delivered;
@@ -464,10 +469,17 @@ function DeliveryStatusIcon({
   );
 }
 
-function deliveryStatusLabel(delivery: string, t: RanchMessages): string {
+function deliveryStatusLabel(
+  delivery: string,
+  t: RanchMessages,
+  createdAt?: string | null,
+  now?: number,
+): string {
   if (delivery === "pending") return t.sending;
   if (delivery === "sent") return t.sent;
-  if (delivery === "queued") return t.queuedOffline;
+  if (delivery === "queued") {
+    return queuedStillWaiting(createdAt, now) ? t.queuedStillWaiting : t.queuedOffline;
+  }
   if (delivery === "failed") return t.deliveryFailed;
   return t.delivered;
 }
@@ -832,23 +844,24 @@ function AgentUsageFooter({
 }) {
   const model = compactModelLabel(usage.modelId);
   const tokens = t.agentHopUsage(usage.input, usage.output);
-  const text = model ? `${model} · ${tokens}` : tokens;
   return (
-    <div
-      title={usage.modelId || text}
+    <details
       style={{
         paddingLeft: 4,
         fontSize: 11,
         lineHeight: 1.35,
         color: colors.muted,
         maxWidth: "100%",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
       }}
     >
-      {text}
-    </div>
+      <summary
+        title={usage.modelId || tokens}
+        style={{ cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+      >
+        {model ? `${model} · ${t.agentHopDetails}` : t.agentHopDetails}
+      </summary>
+      <div>{tokens}</div>
+    </details>
   );
 }
 
@@ -1147,6 +1160,7 @@ function AgentDecideFooter({
   hops,
   hopCap,
   busy,
+  expired,
   t,
   onPick,
 }: {
@@ -1155,22 +1169,24 @@ function AgentDecideFooter({
   hops: number;
   hopCap: number;
   busy: boolean;
+  expired?: boolean;
   t: RanchMessages;
   onPick: (id: string, label: string) => void;
 }) {
   const appliedId = decide.applied?.option_id || null;
   const shadow = decide.shadow;
   const suggested =
-    !appliedId && shadow?.status === "scored" && shadow.choice ? shadow.choice : null;
+    !appliedId && !expired && shadow?.status === "scored" && shadow.choice ? shadow.choice : null;
   const waitingHuman =
     shadow?.status === "ask_human" ||
     shadow?.gate?.ask_human === true ||
     shadow?.status === "low_confidence";
   const scoring = shadow?.status === "pending";
   const capped = auto && hopCap > 0 && hops >= hopCap && !appliedId;
-  const locked = Boolean(appliedId) || busy || (auto && scoring);
+  const locked = Boolean(appliedId) || busy || (auto && scoring) || Boolean(expired);
   let status = "";
   if (appliedId) status = t.decisionPicked;
+  else if (expired) status = t.decisionExpired;
   else if (scoring) status = t.decisionScoring;
   else if (waitingHuman) status = t.decisionAskHuman;
   else if (capped) status = t.decisionCap;
@@ -1201,10 +1217,10 @@ function AgentDecideFooter({
                 ...btnGhost,
                 padding: "4px 10px",
                 fontSize: 12,
-                opacity: locked && !picked ? 0.55 : 1,
+                opacity: expired ? 0.45 : locked && !picked ? 0.55 : 1,
                 borderColor: picked || hint ? "rgba(59,130,246,0.45)" : colors.border,
                 background: picked || hint ? colors.accentSoft : "transparent",
-                color: colors.text,
+                color: expired && !picked ? colors.muted : colors.text,
                 cursor: locked ? "default" : "pointer",
               }}
             >
@@ -1431,13 +1447,25 @@ function DeliveryStatusFooter({
   delivery,
   byAgent,
   names,
+  createdAt,
   t,
 }: {
   delivery?: string | null;
   byAgent?: Record<string, string> | null;
   names: Record<string, string>;
+  createdAt?: string | null;
   t: RanchMessages;
 }) {
+  const queued =
+    delivery === "queued" ||
+    Boolean(byAgent && Object.values(byAgent).some((status) => status === "queued"));
+  const [now, setNow] = useState(() => Date.now());
+  const due = queued && queuedStillWaiting(createdAt, now);
+  useEffect(() => {
+    if (!queued || due) return;
+    const id = window.setInterval(() => setNow(Date.now()), 15_000);
+    return () => window.clearInterval(id);
+  }, [queued, due]);
   const entries =
     byAgent && typeof byAgent === "object"
       ? Object.entries(byAgent).filter(([, s]) => typeof s === "string" && s)
@@ -1447,7 +1475,7 @@ function DeliveryStatusFooter({
     const full = entries
       .map(([id, status]) => {
         const label = names[id]?.trim() || shortAgentId(id) || id;
-        return `${label} ${deliveryStatusLabel(status, t)}`;
+        return `${label} ${deliveryStatusLabel(status, t, createdAt, now)}`;
       })
       .join(" · ");
     return (
@@ -1475,12 +1503,22 @@ function DeliveryStatusFooter({
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 4,
-                verticalAlign: "middle",
+                maxWidth: "100%",
+                minWidth: 0,
               }}
             >
-              {i > 0 ? <span style={{ margin: "0 4px" }}>·</span> : null}
-              <span style={{ color: colors.text }}>{label}</span>
-              <DeliveryStatusIcon delivery={status} t={t} />
+              <span
+                style={{
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  color: colors.text,
+                }}
+              >
+                {label}
+              </span>
+              <DeliveryStatusIcon delivery={status} createdAt={createdAt} now={now} t={t} />
             </span>
           );
         })}
@@ -1491,7 +1529,7 @@ function DeliveryStatusFooter({
   if (!delivery) return null;
   return (
     <div style={{ paddingRight: 2, lineHeight: 1 }}>
-      <DeliveryStatusIcon delivery={delivery} t={t} />
+      <DeliveryStatusIcon delivery={delivery} createdAt={createdAt} now={now} t={t} />
     </div>
   );
 }
@@ -7516,10 +7554,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           padding: "8px 12px",
                           fontSize: 14,
                           lineHeight: 1.5,
-                          whiteSpace: "pre-wrap",
                         }}
                       >
-                        {m.content}
+                        {m.content ? <MessageBody text={m.content} /> : null}
                         {m.metadata?.canvas_ref && typeof m.metadata.canvas_ref === "object" ? (
                           <button
                             type="button"
@@ -7642,6 +7679,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           delivery={delivery}
                           byAgent={deliveryByAgent}
                           names={agentNames}
+                          createdAt={m.created_at}
                           t={t}
                         />
                       ) : null}
@@ -7688,6 +7726,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     hops={active?.decision?.auto_hops ?? 0}
                                     hopCap={active?.decision?.auto_hop_cap ?? 5}
                                     busy={busy || m.message_id !== latestDecideId}
+                                    expired={decideChipExpired(m.message_id, latestDecideId)}
                                     t={t}
                                     onPick={(id, label) => {
                                       void send({ text: label, decisionChoice: id });
