@@ -43,7 +43,7 @@ export const shellRoot = (mode: "side" | "full"): CSSProperties =>
         background: colors.bg,
         color: colors.text,
         fontFamily:
-          'ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
+          'ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif',
       }
     : {
         position: "fixed",
@@ -59,7 +59,7 @@ export const shellRoot = (mode: "side" | "full"): CSSProperties =>
         borderLeft: `1px solid ${colors.border}`,
         boxShadow: "-8px 0 32px rgba(0,0,0,0.35)",
         fontFamily:
-          'ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
+          'ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif',
       };
 
 export const btnGhost: CSSProperties = {
