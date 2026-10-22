@@ -33,6 +33,9 @@ const t = {
   walletTxTypeComputer: "电脑",
   walletTxTypeComputerPause: "电脑暂停",
   walletTxTypeComputerRefund: "电脑退回",
+  walletTxTypeClawback: "冲回",
+  walletTxTypePointsReward: "积分奖励",
+  walletTxTypeOther: "其他",
   untitledChat: "未命名对话",
 };
 
@@ -69,4 +72,12 @@ test("the line under the name says which chat or computer", () => {
     "zh",
   );
   assert.equal(extra.startsWith("电脑 2 · "), true);
+});
+
+test("ledger types the UI does not know never print in raw English", () => {
+  assert.equal(txTypeLabel("refund_reversal", t, "Clawback test mint balance"), "冲回");
+  assert.equal(txTypeLabel("points_reward", t, ""), "积分奖励");
+  assert.equal(txTypeLabel("promo_grant", t, ""), "奖励");
+  assert.equal(txTypeLabel("something_new", t, ""), "其他");
+  assert.equal(txTypeLabel("refund", t, "cloud computer prepaid return"), "电脑退回");
 });

@@ -15,7 +15,11 @@ export function txTypeLabel(
   description?: string | null,
 ): string {
   const text = description || "";
-  switch (type) {
+  const key = (type || "").trim().toLowerCase();
+  if (key.includes("reversal") || key.includes("clawback") || /\bclawback\b/i.test(text)) {
+    return t.walletTxTypeClawback;
+  }
+  switch (key) {
     case "reward_grant":
       return t.walletTxTypeRewardGrant;
     case "wallet_transfer":
@@ -38,8 +42,19 @@ export function txTypeLabel(
     case "extra_computer":
       if (/paused disk/i.test(text)) return t.walletTxTypeComputerPause;
       return t.walletTxTypeComputer;
+    case "points_reward":
+    case "point_reward":
+    case "points_grant":
+      return t.walletTxTypePointsReward;
     default:
-      return type.replace(/_/g, " ");
+      // Never print the raw ledger type; group the unknown ones by what they look like.
+      if (key.includes("refund")) return t.walletTxTypeRefund;
+      if (key.includes("reward") || key.includes("grant")) return t.walletTxTypeRewardGrant;
+      if (key.includes("recharge") || key.includes("topup")) return t.walletTxTypeRecharge;
+      if (key.includes("transfer")) return t.walletTxTypeWalletTransfer;
+      if (key.includes("service_usage") || key.includes("chat")) return t.walletTxTypeChat;
+      if (key.includes("computer")) return t.walletTxTypeComputer;
+      return t.walletTxTypeOther;
   }
 }
 
