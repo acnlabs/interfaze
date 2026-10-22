@@ -28,7 +28,18 @@ body {
     "PingFang SC",
     "Hiragino Sans GB",
     "Microsoft YaHei",
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Noto Color Emoji",
     sans-serif;
+}
+
+/* Buttons and fields use the page font, not the browser's Arial or monospace default. */
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
 }
 
 a {
