@@ -51,6 +51,18 @@ export function MessageBody({ text }: { text: string }) {
             </p>
           );
         }
+        if (block.type === "heading") {
+          return (
+            <p
+              key={index}
+              role="heading"
+              aria-level={block.level}
+              style={{ ...paragraphStyle, fontWeight: 700, fontSize: block.level <= 2 ? "1.08em" : "1em" }}
+            >
+              <InlineRuns inlines={block.inlines} />
+            </p>
+          );
+        }
         if (block.type === "list") {
           const Tag = block.ordered ? "ol" : "ul";
           return (
