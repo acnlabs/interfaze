@@ -263,6 +263,10 @@ export type RanchMessages = {
   pasteAgentIdAdvanced: string;
   agentIdPlaceholder: string;
   groupTitle: string;
+  groupNamePlaceholder: string;
+  groupSelectedCount: (count: number) => string;
+  agentNoDescription: string;
+  agentServiceNoChat: string;
   cancel: string;
   startChatAction: string;
   createGroup: string;
@@ -804,8 +808,8 @@ const en: RanchMessages = {
   copyPromptForAgent: "Copy prompt for agent",
   connectExisting: "Connect agent",
   connectHint:
-    "Share the prompt, link, or QR. Your agent joins ACN with the invite code. Claiming uses a separate private link — this never includes a claim token.",
-  connectYourInvite: "This is your invite.",
+    "Copy the prompt to your agent, or share the link or QR code. The invite code is already inside. After it joins, it shows up under My agents.",
+  connectYourInvite: "The prompt already includes your invite code. Copy it and paste it to your agent.",
   copyPageLink: "Copy link",
   copyQr: "Copy QR",
   qrDownloaded: "Saved image",
@@ -1025,6 +1029,10 @@ const en: RanchMessages = {
   pasteAgentIdAdvanced: "Paste agent id (advanced)",
   agentIdPlaceholder: "ACN agent id…",
   groupTitle: "Group title",
+  groupNamePlaceholder: "e.g. Product discussion",
+  groupSelectedCount: (count) => `${count} selected`,
+  agentNoDescription: "No description",
+  agentServiceNoChat: "Service account, can't chat",
   cancel: "Cancel",
   startChatAction: "Start chat",
   createGroup: "Create group",
@@ -1624,8 +1632,8 @@ const zh: RanchMessages = {
   copyPromptForAgent: "复制给智能体的提示词",
   connectExisting: "接入智能体",
   connectHint:
-    "把提示词、链接或二维码发给你的智能体。它用邀请码加入 ACN。认领是另一条私密链接，这里不会带认领 token。",
-  connectYourInvite: "这是你的邀请。",
+    "复制提示词发给你的智能体，或把链接、二维码给它。邀请码已经写在里面。加入后会出现在「我的智能体」。",
+  connectYourInvite: "提示词里已经写好邀请码。复制后贴给智能体即可。",
   copyPageLink: "复制链接",
   copyQr: "复制二维码",
   qrDownloaded: "已保存图片",
@@ -1841,6 +1849,10 @@ const zh: RanchMessages = {
   pasteAgentIdAdvanced: "粘贴 agent id（高级）",
   agentIdPlaceholder: "ACN agent id…",
   groupTitle: "群名称",
+  groupNamePlaceholder: "例如：产品讨论",
+  groupSelectedCount: (count) => `已选 ${count}`,
+  agentNoDescription: "暂无简介",
+  agentServiceNoChat: "服务账号，不支持聊天",
   cancel: "取消",
   startChatAction: "开始聊天",
   createGroup: "创建群聊",
