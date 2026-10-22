@@ -45,11 +45,11 @@ export function pageOpLine(
     const kept = zh
       ? block
         ? action === "create"
-          ? `${actor} 在 Canvas 上新增了「${block}」，第 ${rev} 版。`
-          : `${actor} 更新了 Canvas 上的「${block}」，第 ${rev} 版。`
+          ? `${actor} 在画布上新增了「${block}」，第 ${rev} 版。`
+          : `${actor} 更新了画布上的「${block}」，第 ${rev} 版。`
         : action === "create"
-          ? `${actor} 在 Canvas 上新增了一块，第 ${rev} 版。`
-          : `${actor} 更新了 Canvas，第 ${rev} 版。`
+          ? `${actor} 在画布上新增了一块，第 ${rev} 版。`
+          : `${actor} 更新了 画布，第 ${rev} 版。`
       : block
         ? action === "create"
           ? `${actor} added “${block}” to the Canvas, rev ${rev}.`
@@ -63,19 +63,19 @@ export function pageOpLine(
       : `${kept.slice(0, -1)}. The topic is not in this chat, so it stays on the main timeline.`;
   }
   const zhLine: Record<string, string> = {
-    conflict: `${actor} 想更新 Canvas，但这块刚被改过。`,
-    exists: `${actor} 想在 Canvas 上新增一块，但这块已经有了。`,
-    not_found: `${actor} 想更新 Canvas，但这块不在上面。`,
-    bad_topic: `${actor} 想把 Canvas 放进一个不在这场对话里的话题。`,
-    no_text: `${actor} 只给了 Canvas、没有正文，所以没有发出去。`,
-    missing_rev: `${actor} 想更新 Canvas，但没有带上当前版本。`,
-    unexpected_rev: `${actor} 想在 Canvas 上新增一块，但新块不该带版本号。`,
-    empty: `${actor} 想改 Canvas，但正文是空的。`,
-    too_long: `${actor} 想改 Canvas，但这篇太长了。`,
-    bad_type: `${actor} 想改 Canvas，但这种内容上面还不能放。`,
-    bad_name: `${actor} 想改 Canvas，但块的名字不能用。`,
-    bad_file: `${actor} 想在 Canvas 上放一个文件，但这场对话里没有这个文件，或种类不对。`,
-    invalid: `${actor} 想改 Canvas，但这次写入被拒绝了。`,
+    conflict: `${actor} 想更新 画布，但这块刚被改过。`,
+    exists: `${actor} 想在画布上新增一块，但这块已经有了。`,
+    not_found: `${actor} 想更新 画布，但这块不在上面。`,
+    bad_topic: `${actor} 想把画布放进一个不在这场对话里的话题。`,
+    no_text: `${actor} 只给了 画布、没有正文，所以没有发出去。`,
+    missing_rev: `${actor} 想更新 画布，但没有带上当前版本。`,
+    unexpected_rev: `${actor} 想在画布上新增一块，但新块不该带版本号。`,
+    empty: `${actor} 想改 画布，但正文是空的。`,
+    too_long: `${actor} 想改 画布，但这篇太长了。`,
+    bad_type: `${actor} 想改 画布，但这种内容上面还不能放。`,
+    bad_name: `${actor} 想改 画布，但块的名字不能用。`,
+    bad_file: `${actor} 想在画布上放一个文件，但这场对话里没有这个文件，或种类不对。`,
+    invalid: `${actor} 想改 画布，但这次写入被拒绝了。`,
   };
   const enLine: Record<string, string> = {
     conflict: `${actor} tried to update the Canvas, but that block was just changed.`,

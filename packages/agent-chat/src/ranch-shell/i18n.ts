@@ -295,6 +295,13 @@ export type RanchMessages = {
   sendConfirm: string;
   /** Open the chat Canvas beside the conversation. */
   manuscript: string;
+  interactionQuiet: string;
+  interactionPerson: string;
+  groupRosterLine: (people: number, agents: number, agentsOnline: number) => string;
+  groupMember: string;
+  groupOwner: string;
+  groupMemberSelf: string;
+  noGroupChatsHint: string;
   /** Right-hand window for agent interaction. The current view is the collaboration graph. */
   interaction: string;
   interactionView: string;
@@ -1058,6 +1065,18 @@ const en: RanchMessages = {
   screenDock: "{label} · {rate} credits/hr",
   sendConfirm: "Sending starts this computer at {rate} credits per hour. Unused prepaid is returned.",
   manuscript: "Canvas",
+  interactionQuiet: "No call yet",
+  interactionPerson: "Person",
+  groupRosterLine: (people, agents, agentsOnline) => {
+    const person = people === 1 ? "1 person" : `${people} people`;
+    const agent = agents === 1 ? "1 agent" : `${agents} agents`;
+    const online = agentsOnline === 1 ? "1 online" : `${agentsOnline} online`;
+    return `${person} · ${agent} (${online})`;
+  },
+  groupMember: "Member",
+  groupOwner: "Owner",
+  groupMemberSelf: "You",
+  noGroupChatsHint: "Every conversation in this group is here — including Studio and other hosts.",
   interaction: "Interaction",
   interactionView: "Graph",
   interactionEmpty: "No agent interactions in this chat yet.",
@@ -1066,7 +1085,7 @@ const en: RanchMessages = {
   interactionFailed: "Failed",
   interactionOutside: "Not in this chat",
   addWindow: "Add a window",
-  openWindow: "Open window",
+  openWindow: "Open canvas",
   pageRefRejected: "That block is not on the Canvas, so the message was not sent.",
   accountBilling: "Receipts & invoices",
   accountWalletHint: "Your human Credits balance. Agent wallets stay under each agent.",
@@ -1872,7 +1891,15 @@ const zh: RanchMessages = {
   screenConfirm: "打开电脑屏幕按 {rate} 星币/小时计费。",
   screenDock: "{label} · {rate} 星币/小时",
   sendConfirm: "发送后电脑按 {rate} 星币/小时计费。不用的预扣会退回。",
-  manuscript: "Canvas",
+  manuscript: "画布",
+  interactionQuiet: "还没互相调用",
+  interactionPerson: "人",
+  groupRosterLine: (people, agents, agentsOnline) =>
+    `${people} 人 · ${agents} 个智能体（${agentsOnline} 在线）`,
+  groupMember: "成员",
+  groupOwner: "群主",
+  groupMemberSelf: "你",
+  noGroupChatsHint: "这个群的对话都在这里，包括 Studio 等其它渠道。",
   interaction: "交互",
   interactionView: "协作图",
   interactionEmpty: "这场还没有智能体互调。",
@@ -1881,8 +1908,8 @@ const zh: RanchMessages = {
   interactionFailed: "失败",
   interactionOutside: "不在本会话",
   addWindow: "添加窗口",
-  openWindow: "打开窗口",
-  pageRefRejected: "这块不在 Canvas 上，这句话没有发出去。",
+  openWindow: "打开画布",
+  pageRefRejected: "这块不在画布上，这句话没有发出去。",
   accountBilling: "收据与发票",
   accountWalletHint: "你本人的星币余额。智能体钱包在各自智能体详情里。",
   accountKeys: "模型额度",

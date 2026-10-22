@@ -136,6 +136,7 @@ import { WorkDock, type WorkTab } from "./WorkDock";
 import { InteractionPanel } from "./InteractionPanel";
 import { foldLiveHops, parseHopUpdate, type HopUpdate } from "../liveHops";
 import { MessageBody } from "../MessageBody";
+import { groupRoster } from "../groupRoster";
 import { openEmbodyHost, openStudioTalk } from "./chat-window/studioTalk";
 import { bodyIdFromHostPath, type ChatWindow, type ChatWindowKind } from "./chat-window/types";
 
@@ -2889,6 +2890,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, [messages]);
   /** agent_id → display name (group chats). */
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
+  /** Everyone in the open group, people included, for the roster and the interaction map. */
+  const [groupParticipants, setGroupParticipants] = useState<
+    Array<{
+      participant_type?: string | null;
+      participant_id: string;
+      role?: string | null;
+      is_active?: boolean | null;
+      name?: string | null;
+    }>
+  >([]);
   /** agent_id → presence status (group chats; from participants API). */
   const [agentStatuses, setAgentStatuses] = useState<Record<string, string>>({});
   /** Ranch-style: tap header → members panel. */
@@ -3771,6 +3782,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setLoadingMessages(true);
       setMessagesLoadError(false);
       setAgentNames({});
+      setGroupParticipants([]);
       setAgentStatuses({});
       const keepChats = !!opts?.keepChatsPanel && !isGroupChat(chat);
       setShowMembersPanel(keepChats);
@@ -3807,6 +3819,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
         setTopics([]);
         const agents = participants.filter(
           (p) => p.participant_type === "agent" && p.is_active !== false,
+        );
+        setGroupParticipants(
+          isGroupChat(chat) ? participants.filter((p) => p.is_active !== false) : [],
         );
         agentIdsRef.current = agents.map((p) => p.participant_id);
         if (isGroupChat(chat)) {
@@ -4069,6 +4084,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       const agents = participants.filter(
         (p) => p.participant_type === "agent" && p.is_active !== false,
       );
+      setGroupParticipants(participants.filter((p) => p.is_active !== false));
       agentIdsRef.current = agents.map((p) => p.participant_id);
       const ids = agents.map((p) => p.participant_id);
       setGroupAgentsByChat((prev) => ({ ...prev, [chatId]: ids }));
@@ -4683,6 +4699,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         const agents = participants.filter(
           (p) => p.participant_type === "agent" && p.is_active !== false,
         );
+        setGroupParticipants(participants.filter((p) => p.is_active !== false));
         agentIdsRef.current = agents.map((p) => p.participant_id);
         setAgentNames(resolveParticipantLabels(agents, directoryAgents));
         const statuses: Record<string, string> = {};
@@ -5668,6 +5685,28 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const activeOffline =
     active && !isGroupChat(active) && isAgentOffline(active.agent_status);
   const groupActive = !!(active && isGroupChat(active));
+  const roster = groupActive
+    ? groupRoster(
+        groupParticipants,
+        agentNames,
+        (account?.name || "").trim() || t.groupMemberSelf,
+      )
+    : [];
+  const rosterHasPeople = roster.some((row) => row.kind === "person");
+  const groupSubtitle = () => {
+    if (!groupActive || !active) return "";
+    if (!rosterHasPeople) {
+      const total = Object.keys(agentNames).length || active.total_members || 0;
+      return t.agentsOnlineCount(active.active_members ?? 0, total);
+    }
+    const people = roster.filter((row) => row.kind === "person").length;
+    const agents = roster.filter((row) => row.kind === "agent");
+    const statuses = agents.map((row) => (agentStatuses[row.id] || "").trim().toLowerCase());
+    const agentsOnline = statuses.some(Boolean)
+      ? statuses.filter((status) => status === "online" || status === "active" || status === "busy").length
+      : Math.max(0, (active.active_members ?? 0) - people);
+    return t.groupRosterLine(people, agents.length, agentsOnline);
+  };
   const latestDecideId = groupActive
     ? undefined
     : [...messages].reverse().find((m) => decideFromMetadata(m.metadata))?.message_id;
@@ -6061,6 +6100,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
               return { ...agentNames, [id]: known || chatTitle(chat) };
             })()}
             memberIds={active?.agent_id ? [active.agent_id, ...Object.keys(agentNames)] : Object.keys(agentNames)}
+            people={
+              groupActive
+                ? groupRoster(
+                    groupParticipants,
+                    agentNames,
+                    account?.name?.trim() || t.groupMemberSelf,
+                  )
+                    .filter((row) => row.kind === "person")
+                    .map((row) => ({ id: row.id, name: row.name }))
+                : []
+            }
+            presence={{
+              ...agentStatuses,
+              ...(active?.agent_id ? { [active.agent_id]: active.agent_status ?? "" } : {}),
+            }}
             copy={{
               view: t.interactionView,
               empty: t.interactionEmpty,
@@ -6068,6 +6122,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
               returned: t.interactionReturned,
               failed: t.interactionFailed,
               outside: t.interactionOutside,
+              quiet: t.interactionQuiet,
+              person: t.interactionPerson,
+              online: t.online,
+              offline: t.offline,
             }}
           />
         ) : activeDock.kind === "computer" ? (
@@ -7087,20 +7145,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             color: colors.muted,
                           }}
                         >
-                          {t.backToMainChat} · {chatTitle(active)}
+                          {t.backToMainChat} · {labelForOpen(active)}
                         </span>
                       ) : isGroupChat(active) ? (
                         <span
                           style={{
                             display: "block",
                             fontSize: 11,
+                            lineHeight: 1.35,
                             color: colors.muted,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
                           }}
                         >
-                          {t.agentsOnlineCount(
-                            active.active_members ?? 0,
-                            Object.keys(agentNames).length || active.total_members || 0,
-                          )}
+                          {groupSubtitle()}
                         </span>
                       ) : directConversationLine ? (
                         <span
@@ -7238,7 +7297,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         }}
                       >
                         {siblingChats.length === 0 ? (
-                          <p style={{ margin: 0, padding: 8, color: colors.muted, fontSize: 12 }}>{t.noAgentChatsHint}</p>
+                          <p style={{ margin: 0, padding: 8, color: colors.muted, fontSize: 12 }}>
+                            {active && isGroupChat(active) ? t.noGroupChatsHint : t.noAgentChatsHint}
+                          </p>
                         ) : (
                           siblingChats.map((c) => (
                             <button
@@ -8821,11 +8882,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       </>
                     )}
                     {groupActive ? (
-                      <div style={{ fontSize: 12, color: colors.muted, marginTop: 8 }}>
-                        {t.agentsOnlineCount(
-                          active.active_members ?? 0,
-                          Object.keys(agentNames).length || active.total_members || 0,
-                        )}
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: colors.muted,
+                          marginTop: 8,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {groupSubtitle()}
                       </div>
                     ) : null}
                   </div>
@@ -9127,7 +9194,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               color: colors.muted,
                             }}
                           >
-                            <p style={{ margin: 0, fontSize: 12 }}>{t.noAgentChatsHint}</p>
+                            <p style={{ margin: 0, fontSize: 12 }}>
+                              {active && isGroupChat(active) ? t.noGroupChatsHint : t.noAgentChatsHint}
+                            </p>
                           </div>
                         ) : (
                           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -9462,10 +9531,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </button>
                       </div>
                       <div style={{ flex: 1, overflow: "auto", padding: "0 8px 8px" }}>
-                        {Object.entries(agentNames).map(([id, name]) => {
-                          const status = agentStatuses[id];
-                          const statusLabel = agentStatusTitle(status, t);
-                          const dot = agentStatusDotColor(status);
+                        {roster.map((member) => {
+                          const { id, name } = member;
+                          const person = member.kind === "person";
+                          const status = person ? undefined : agentStatuses[id];
+                          const statusLabel = person
+                            ? member.owner
+                              ? t.groupOwner
+                              : id === "self"
+                                ? t.groupMemberSelf
+                                : t.groupMember
+                            : agentStatusTitle(status, t);
+                          const dot = person ? null : agentStatusDotColor(status);
                           return (
                           <div
                             key={id}
@@ -9490,15 +9567,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   width: 36,
                                   height: 36,
                                   borderRadius: 999,
-                                  background: `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
+                                  background:
+                                    avatarBackground(id) ||
+                                    `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
                                   fontWeight: 700,
-                                  fontSize: 14,
+                                  fontSize: avatarGlyph(name).length > 1 ? 12 : 14,
                                 }}
                               >
-                                {name.slice(0, 1).toUpperCase()}
+                                {avatarGlyph(name)}
                               </span>
                               {dot ? (
                                 <span
@@ -9534,6 +9613,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 {statusLabel || shortAgentId(id)}
                               </span>
                             </span>
+                            {person ? null : (
                             <button
                               type="button"
                               style={btnGhost}
@@ -9545,6 +9625,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             >
                               {t.openDirectChat}
                             </button>
+                            )}
+                            {person ? null : (
                             <button
                               type="button"
                               style={{ ...btnGhost, color: colors.danger }}
@@ -9572,6 +9654,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             >
                               {t.removeMember}
                             </button>
+                            )}
                           </div>
                           );
                         })}

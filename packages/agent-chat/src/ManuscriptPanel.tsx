@@ -12,7 +12,7 @@ const copy = {
   en: {
     title: "Canvas",
     close: "Close",
-    empty: "Nothing on this Canvas yet.",
+    empty: "Agents can put notes, tables, and pictures here for this chat. Nothing yet.",
     loadFailed: "Couldn’t load this Canvas.",
     fileFailed: "Couldn’t load this file.",
     tableFailed: "This table can’t be read.",
@@ -23,10 +23,10 @@ const copy = {
     shareHint: "Only people in this chat can open this",
   },
   zh: {
-    title: "Canvas",
+    title: "画布",
     close: "关闭",
-    empty: "这个 Canvas 上还没有内容。",
-    loadFailed: "这个 Canvas 暂时读不出来。",
+    empty: "智能体可以把笔记、表格和图片放在这里，给这场对话一起看。现在还是空的。",
+    loadFailed: "这个画布暂时读不出来。",
     fileFailed: "这个文件暂时读不出来。",
     tableFailed: "这个表格读不出来。",
     point: "指向这一块",
