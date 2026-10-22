@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { avatarGlyph, avatarHue } from "../inboxList";
 import type { HopPhase, LiveHop } from "../liveHops";
 import { colors } from "./styles";
+
+export type InteractionPerson = { id: string; name: string };
 
 export type InteractionCopy = {
   view: string;
@@ -11,7 +14,38 @@ export type InteractionCopy = {
   returned: string;
   failed: string;
   outside: string;
+  quiet: string;
+  person: string;
+  online: string;
+  offline: string;
 };
+
+function LegendLine({ color, label, dashed = false }: { color: string; label: string; dashed?: boolean }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <span
+        aria-hidden
+        style={{
+          width: 16,
+          borderTop: `2px ${dashed ? "dashed" : "solid"} ${color}`,
+        }}
+      />
+      {label}
+    </span>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <span
+        aria-hidden
+        style={{ width: 8, height: 8, borderRadius: 999, background: color }}
+      />
+      {label}
+    </span>
+  );
+}
 
 function phaseColor(phase: HopPhase): string {
   if (phase === "failed") return colors.danger;
@@ -67,15 +101,32 @@ function curve(from: { x: number; y: number }, to: { x: number; y: number }, ben
   return `M ${sx} ${sy} Q ${mx} ${my} ${ex} ${ey}`;
 }
 
+function onlineStatus(status: string | null | undefined): boolean {
+  const value = (status || "").trim().toLowerCase();
+  return value === "online" || value === "active" || value === "busy";
+}
+
+function presenceFor(id: string, presence: Record<string, string | null | undefined>): string | null | undefined {
+  const wanted = bare(id).toLowerCase();
+  for (const [key, value] of Object.entries(presence)) {
+    if (bare(key).toLowerCase() === wanted) return value;
+  }
+  return undefined;
+}
+
 export function InteractionPanel({
   hops,
   names,
   memberIds,
+  people = [],
+  presence = {},
   copy,
 }: {
   hops: LiveHop[];
   names: Record<string, string>;
   memberIds: string[];
+  people?: InteractionPerson[];
+  presence?: Record<string, string | null | undefined>;
   copy: InteractionCopy;
 }) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -93,7 +144,10 @@ export function InteractionPanel({
     addId(hop.fromId);
     addId(hop.toId);
   }
-  const pos = layout(ids);
+  const personIds = people
+    .map((person) => person.id.trim())
+    .filter((id) => id && !ids.some((have) => bare(have).toLowerCase() === bare(id).toLowerCase()));
+  const pos = layout([...ids, ...personIds]);
   const selected = hops.find((hop) => hop.key === selectedKey) ?? null;
   const present = ids.filter((id) => members.has(bare(id).toLowerCase()));
   const quietPairs: Array<[string, string]> = [];
@@ -118,7 +172,7 @@ export function InteractionPanel({
     </p>
   );
 
-  if (!ids.length) {
+  if (!ids.length && personIds.length === 0) {
     return (
       <div data-interaction-panel="" style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
         {viewLabel}
@@ -132,6 +186,32 @@ export function InteractionPanel({
   return (
     <div data-interaction-panel="" data-interaction-agents={ids.length} style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
       {viewLabel}
+      <div
+        data-interaction-legend=""
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "6px 12px",
+          margin: "8px 16px 0",
+          color: colors.muted,
+          fontSize: 11,
+          lineHeight: 1.4,
+        }}
+      >
+        <LegendLine color={colors.success} label={copy.returned} />
+        <LegendLine color={colors.warn} label={copy.waiting} />
+        <LegendLine color={colors.danger} label={copy.failed} />
+        <LegendLine color={colors.muted} label={copy.quiet} dashed />
+        <LegendDot color={colors.success} label={copy.online} />
+        <LegendDot color={colors.muted} label={copy.offline} />
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <span
+            aria-hidden
+            style={{ width: 8, height: 8, borderRadius: 999, border: `2px solid ${colors.mine}` }}
+          />
+          {copy.person}
+        </span>
+      </div>
       <svg viewBox="0 0 360 720" preserveAspectRatio="xMidYMid meet" style={{ width: "100%", flex: "1 1 auto", minHeight: 0 }}>
         {quietPairs.map(([fromId, toId]) => {
           const from = pos[fromId];
@@ -146,7 +226,10 @@ export function InteractionPanel({
               stroke={colors.muted}
               strokeOpacity={0.45}
               strokeWidth="1.4"
-            />
+              strokeDasharray="5 4"
+            >
+              <title>{copy.quiet}</title>
+            </path>
           );
         })}
         {hops.map((hop, index) => {
@@ -186,40 +269,52 @@ export function InteractionPanel({
           );
         })}
         <defs>
-          <linearGradient id="agent-avatar-fill" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor={colors.avatarFrom} />
-            <stop offset="100%" stopColor={colors.avatarTo} />
-          </linearGradient>
           {(["in_flight", "completed", "failed"] as const).map((phase) => (
             <marker key={phase} id={`hop-arrow-${phase}`} markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
               <path d="M0,0 L8,4 L0,8 Z" fill={phaseColor(phase)} />
             </marker>
           ))}
         </defs>
-        {ids.map((id) => {
+        {[...ids, ...personIds].map((id) => {
           const point = pos[id];
-          const inside = members.has(bare(id).toLowerCase());
+          const person = personIds.some((item) => bare(item).toLowerCase() === bare(id).toLowerCase());
+          const inside = person || members.has(bare(id).toLowerCase());
           const hop = hops.find((item) => item.toId === id);
-          const label = displayName(id, names, hop?.name);
-          const initial = label.trim().slice(0, 1).toUpperCase() || "?";
+          const namedPerson = people.find((item) => bare(item.id).toLowerCase() === bare(id).toLowerCase());
+          const label = displayName(id, names, person ? namedPerson?.name : hop?.name);
+          const initial = avatarGlyph(label);
+          const live = !person && onlineStatus(presenceFor(id, presence));
           return (
             <g key={id}>
               <circle
                 cx={point.x}
                 cy={point.y}
                 r="32"
-                fill="url(#agent-avatar-fill)"
-                stroke={inside ? colors.accentBright : colors.muted}
+                fill={`hsl(${avatarHue(id)} 38% 32%)`}
+                stroke={person ? colors.mine : inside ? colors.accentBright : colors.muted}
                 strokeWidth="2.4"
                 strokeDasharray={inside ? undefined : "4 3"}
               />
+              {person ? null : (
+                <circle
+                  data-presence={live ? "online" : "offline"}
+                  cx={point.x + 22}
+                  cy={point.y + 22}
+                  r="6"
+                  fill={live ? colors.success : colors.muted}
+                  stroke={colors.panel}
+                  strokeWidth="2"
+                >
+                  <title>{live ? copy.online : copy.offline}</title>
+                </circle>
+              )}
               <text
                 x={point.x}
                 y={point.y}
                 textAnchor="middle"
                 dominantBaseline="central"
                 fill={colors.text}
-                fontSize="22"
+                fontSize={initial.length > 1 ? "16" : "22"}
                 fontWeight="700"
               >
                 {initial}
@@ -227,7 +322,11 @@ export function InteractionPanel({
               <text x={point.x} y={point.y + 52} textAnchor="middle" fill={colors.text} fontSize="15">
                 {label}
               </text>
-              {inside ? null : (
+              {person ? (
+                <text x={point.x} y={point.y + 66} textAnchor="middle" fill={colors.muted} fontSize="12">
+                  {copy.person}
+                </text>
+              ) : inside ? null : (
                 <text x={point.x} y={point.y + 66} textAnchor="middle" fill={colors.muted} fontSize="12">
                   {copy.outside}
                 </text>
