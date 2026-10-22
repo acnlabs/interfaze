@@ -50,3 +50,15 @@ test("markup is not parsed inside inline code", () => {
   const blocks = parseMessageMarkdown("`**not bold**`");
   assert.deepEqual(blocks[0].inlines, [{ type: "code", text: "**not bold**" }]);
 });
+
+test("a # heading becomes a heading, not a line starting with a hash", () => {
+  const blocks = parseMessageMarkdown("# 15s 自我介绍 · 口播稿\n对齐 6 镜头\n## 小节 ##\n#话题 不是标题");
+  assert.equal(blocks[0].type, "heading");
+  assert.equal(blocks[0].level, 1);
+  assert.equal(blocks[0].inlines[0].text, "15s 自我介绍 · 口播稿");
+  assert.equal(blocks[1].type, "paragraph");
+  assert.equal(blocks[2].type, "heading");
+  assert.equal(blocks[2].level, 2);
+  assert.equal(blocks[2].inlines[0].text, "小节");
+  assert.equal(blocks[3].type, "paragraph");
+});

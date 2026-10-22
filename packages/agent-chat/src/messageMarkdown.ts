@@ -6,6 +6,7 @@ export type MarkdownInline =
 
 export type MarkdownBlock =
   | { type: "paragraph"; inlines: MarkdownInline[] }
+  | { type: "heading"; level: number; inlines: MarkdownInline[] }
   | { type: "list"; ordered: boolean; items: MarkdownInline[][] }
   | { type: "table"; header: string[]; rows: string[][] }
   | { type: "code"; text: string }
@@ -53,6 +54,12 @@ function listMarker(line: string): { ordered: boolean; text: string } | null {
   return { ordered: Boolean(match[2]), text: match[3] ?? "" };
 }
 
+function headingOf(line: string): { level: number; text: string } | null {
+  const match = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line);
+  if (!match) return null;
+  return { level: match[1]!.length, text: match[2] ?? "" };
+}
+
 function isFence(line: string): boolean {
   return /^\s*```/.test(line);
 }
@@ -96,6 +103,12 @@ export function parseMessageMarkdown(source: string | null | undefined): Markdow
       }
       continue;
     }
+    const heading = headingOf(line);
+    if (heading) {
+      blocks.push({ type: "heading", level: heading.level, inlines: parseInlines(heading.text) });
+      index += 1;
+      continue;
+    }
     const marker = listMarker(line);
     if (marker) {
       const ordered = marker.ordered;
@@ -112,7 +125,7 @@ export function parseMessageMarkdown(source: string | null | undefined): Markdow
     const inlines: MarkdownInline[] = [];
     while (index < lines.length) {
       const next = lines[index] ?? "";
-      if (!next.trim() || isFence(next) || isTableRow(next) || listMarker(next)) break;
+      if (!next.trim() || isFence(next) || isTableRow(next) || listMarker(next) || headingOf(next)) break;
       if (inlines.length > 0) inlines.push({ type: "break" });
       inlines.push(...parseInlines(next));
       index += 1;
