@@ -11,6 +11,7 @@ import {
 import { getGatewayBaseUrl } from "@/lib/gateway";
 import { isCnRegion } from "@/lib/region";
 import CnTransferAccept from "@/components/CnTransferAccept";
+import { AgentGiftPreviewCard } from "@/components/AgentGiftPreviewCard";
 import Loading from "@/components/Loading";
 
 type InvitePreview = {
@@ -191,12 +192,12 @@ function TransferAcceptInner() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>
-          {preview.consumed ? "Already claimed" : "Invite expired"}
+          {preview.consumed ? "Already accepted" : "Link expired"}
         </h1>
         <p style={mutedStyle}>
           {preview.consumed
-            ? "Someone already accepted this gift."
-            : "Ask the owner to create a new gift link."}
+            ? "Someone already accepted this agent gift."
+            : "Ask the sender to create a new gift link."}
         </p>
         <a href="/" style={linkStyle}>
           Back to Interfaze
@@ -205,18 +206,21 @@ function TransferAcceptInner() {
     );
   }
 
+  const fromName = preview?.from_nickname?.trim() || "Someone";
+  const agentName = preview?.agent.name?.trim() || "an agent";
+
   if (accepted && preview) {
     return (
       <main style={pageStyle}>
-        <h1 style={titleStyle}>You’re the new owner</h1>
+        <h1 style={titleStyle}>Gift accepted</h1>
         <p style={mutedStyle}>
-          <strong style={{ color: "var(--fg, #fafafa)" }}>{preview.agent.name}</strong>{" "}
-          is now yours on Interfaze.
+          <strong style={{ color: "var(--fg, #fafafa)" }}>{agentName}</strong>{" "}
+          is now yours on Interfaze. You can find it under Manage → Agents.
         </p>
         {apiKey ? (
           <div style={cardStyle}>
             <p style={{ ...mutedStyle, marginBottom: 8 }}>
-              New API key (shown once — previous key is invalid):
+              New API key for this agent (shown once — the old key no longer works):
             </p>
             <code style={keyBoxStyle}>{apiKey}</code>
             <button type="button" onClick={() => void copyKey()} style={secondaryBtnStyle}>
@@ -224,8 +228,14 @@ function TransferAcceptInner() {
             </button>
           </div>
         ) : null}
-        <button type="button" style={ctaStyle} onClick={() => router.replace("/")}>
-          Open Interfaze
+        <button
+          type="button"
+          style={ctaStyle}
+          onClick={() =>
+            router.replace(`/?agent=${encodeURIComponent(preview.agent_id)}`)
+          }
+        >
+          Open in Interfaze
         </button>
       </main>
     );
@@ -234,16 +244,12 @@ function TransferAcceptInner() {
   if (!isAuthenticated) {
     return (
       <main style={pageStyle}>
-        <h1 style={titleStyle}>Accept a gift</h1>
+        <h1 style={titleStyle}>Accept this gift</h1>
         <p style={mutedStyle}>
-          {preview?.from_nickname ?? "A friend"} wants to gift you{" "}
-          <strong style={{ color: "var(--fg, #fafafa)" }}>
-            {preview?.agent.name ?? "an agent"}
-          </strong>
-          . Sign in to accept ownership.
+          {fromName} wants to give you an agent on Interfaze. Sign in to accept.
         </p>
-        {preview?.agent.description ? (
-          <p style={{ ...mutedStyle, marginTop: 8 }}>{preview.agent.description}</p>
+        {preview ? (
+          <AgentGiftPreviewCard preview={preview} locale="en" style={{ marginTop: 16 }} />
         ) : null}
         <button type="button" onClick={handleLogin} style={ctaStyle}>
           Log in to accept
@@ -254,22 +260,14 @@ function TransferAcceptInner() {
 
   return (
     <main style={pageStyle}>
-      <h1 style={titleStyle}>Accept ownership</h1>
-      {preview ? (
-        <div style={cardStyle}>
-          <h2 style={{ margin: "0 0 6px", fontSize: 18 }}>{preview.agent.name}</h2>
-          {preview.agent.description ? (
-            <p style={{ ...mutedStyle, marginBottom: 10 }}>{preview.agent.description}</p>
-          ) : null}
-          <p style={{ ...mutedStyle, fontSize: 12, margin: 0 }}>
-            From {preview.from_nickname} · expires{" "}
-            {new Date(preview.expires_at).toLocaleString()}
-          </p>
-        </div>
-      ) : null}
-      <p style={{ color: "#d97706", fontSize: 13, lineHeight: 1.45, margin: "0 0 16px" }}>
-        Accepting transfers ownership to your account. The previous owner loses
-        control; autonomous agents may receive a new API key.
+      <h1 style={titleStyle}>Accept this gift</h1>
+      <p style={{ ...mutedStyle, marginBottom: 16 }}>
+        {fromName} wants to give you this agent.
+      </p>
+      {preview ? <AgentGiftPreviewCard preview={preview} locale="en" /> : null}
+      <p style={{ ...mutedStyle, margin: "12px 0 16px" }}>
+        If you accept, you&apos;ll control this agent on Interfaze. The sender will
+        lose access.
       </p>
       {error ? (
         <p style={{ color: "var(--danger)", fontSize: 13, marginBottom: 12 }}>{error}</p>
@@ -278,7 +276,7 @@ function TransferAcceptInner() {
         type="button"
         onClick={() => void handleAccept()}
         disabled={submitting}
-        style={{ ...ctaStyle, opacity: submitting ? 0.6 : 1 }}
+        style={{ ...ctaStyle, marginTop: 0, opacity: submitting ? 0.6 : 1 }}
       >
         {submitting ? "Accepting…" : "Accept gift"}
       </button>
