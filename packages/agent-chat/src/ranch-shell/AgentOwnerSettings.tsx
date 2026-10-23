@@ -118,39 +118,6 @@ function isKnownByoVendor(vendor: string, supported: string[]): boolean {
   return supported.some((id) => modelVendorId(id).toLowerCase() === v);
 }
 
-function providerIdForModel(modelId: string, supported: string[]): string {
-  const id = modelId.trim();
-  if (!id) return "";
-  if (supported.some((item) => sameModelId(item, id))) {
-    return modelVendorId(id) || OTHER_VENDOR;
-  }
-  // Before self-report loads, don't treat leftover listing SKUs as OpenRouter.
-  if (supported.length === 0) return "";
-  // Listing ids like moonshotai/kimi-k2.5 are OpenRouter catalog SKUs, not a vendor we sell.
-  return OPENROUTER_BYO;
-}
-
-/** Settings Provider follows the heartbeat default. Official is one vendor you can switch to, not a second default. */
-function providerIdFromRuntime(
-  runtime: string,
-  listed: string,
-  supported: string[],
-  official: string[] = [],
-  hostReady = false,
-): string {
-  const rt = (runtime || "").trim();
-  if (rt) {
-    if (hostReady && modelIsOfficial(rt, official)) {
-      return OFFICIAL_OPENROUTER;
-    }
-    const vendor = modelVendorId(rt);
-    if (!vendor) return OTHER_VENDOR;
-    if (isKnownByoVendor(vendor, supported)) return vendor;
-    return OPENROUTER_BYO;
-  }
-  return providerIdForModel(listed, supported);
-}
-
 function runtimeIsOpenRouter(runtime: string, supported: string[]): boolean {
   const vendor = modelVendorId((runtime || "").trim());
   if (!vendor) return false;
@@ -262,7 +229,22 @@ function catalogSourceHref(
 
 const OPENROUTER_BYO = "openrouter";
 const OFFICIAL_OPENROUTER = "official_openrouter";
-const OTHER_VENDOR = "__other__";
+
+function providerSelectionStands(
+  selected: string,
+  declared: Array<{ id: string }>,
+  hostReady: boolean,
+): boolean {
+  if (selected === OFFICIAL_OPENROUTER) return hostReady;
+  return declared.some((row) => row.id === selected);
+}
+
+function defaultDeclaredProvider(
+  declared: Array<{ id: string; current?: boolean }>,
+  hostReady: boolean,
+): string {
+  return declared.find((row) => row.current)?.id || (hostReady ? OFFICIAL_OPENROUTER : "");
+}
 
 function storeOpenRouterUrl(base?: string): string {
   return `${(base || "https://agentplanet.org").replace(/\/+$/, "")}/store/openrouter`;
@@ -276,31 +258,27 @@ function modelVendorId(modelId: string): string {
   return s.slice(0, slash);
 }
 
-function vendorsFromModels(ids: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const id of ids) {
-    const vendor = modelVendorId(id);
-    if (!vendor) continue;
-    const key = vendor.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(vendor);
-  }
-  return out;
+type AgentProviderReport = { id: string; models: string[]; current?: boolean };
+
+function draftForProvider(
+  picked: string,
+  provider: string,
+  declared: AgentProviderReport[],
+  officialIds: string[],
+): string {
+  const pool =
+    provider === OFFICIAL_OPENROUTER
+      ? officialIds
+      : declared.find((item) => item.id === provider)?.models ?? [];
+  return pool.find((id) => sameModelId(id, picked)) || pool[0] || picked;
 }
 
-function modelsForVendor(ids: string[], vendor: string): string[] {
-  const key = vendor.trim().toLowerCase();
-  if (!key) return ids.filter((id) => !modelVendorId(id));
-  return ids.filter((id) => modelVendorId(id).toLowerCase() === key);
-}
-
-function modelsForProvider(ids: string[], provider: string): string[] {
-  if (!provider) return [];
-  if (provider === OPENROUTER_BYO || provider === OFFICIAL_OPENROUTER) return [];
-  if (provider === OTHER_VENDOR) return modelsForVendor(ids, "");
-  return modelsForVendor(ids, provider);
+function modelsForDeclaredProvider(
+  declared: AgentProviderReport[],
+  provider: string,
+): string[] {
+  const row = declared.find((item) => item.id.toLowerCase() === provider.toLowerCase());
+  return row ? row.models : [];
 }
 
 function findOfficialEquivalent(fromId: string, officialIds: string[]): string | null {
@@ -976,6 +954,7 @@ export function AgentOwnerSettings({
     resolvePricingModelId(detail, [], detail.official_models ?? []),
   );
   const [supportedModels, setSupportedModels] = useState<string[]>([]);
+  const [agentProviders, setAgentProviders] = useState<AgentProviderReport[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [hostReady, setHostReady] = useState(Boolean(detail.host_inference_ready));
   const [feeRate, setFeeRate] = useState(DEFAULT_CHAT_FEE_RATE);
@@ -997,14 +976,16 @@ export function AgentOwnerSettings({
   const [officialCatalogLoading, setOfficialCatalogLoading] = useState(false);
   const [byoCatalogLoading, setByoCatalogLoading] = useState(false);
   const [settingsProvider, setSettingsProvider] = useState(() =>
-    providerIdFromRuntime(
-      detail.runtime_model_id || "",
-      resolvePricingModelId(detail, [], detail.official_models ?? []),
-      [],
-      detail.official_models ?? [],
-      Boolean(detail.host_inference_ready),
-    ),
+    detail.host_inference_ready ? OFFICIAL_OPENROUTER : "",
   );
+  const providerChosen = useRef(false);
+  const selectedProvider = useRef(settingsProvider);
+  selectedProvider.current = settingsProvider;
+  const providerAgentId = useRef(detail.agent_id);
+  if (providerAgentId.current !== detail.agent_id) {
+    providerAgentId.current = detail.agent_id;
+    providerChosen.current = false;
+  }
   const [markupDraft, setMarkupDraft] = useState(() => {
     const mu = detail.token_pricing?.markup_percent;
     if (typeof mu === "number" && Number.isFinite(mu) && mu >= 0) return String(mu);
@@ -1089,15 +1070,13 @@ export function AgentOwnerSettings({
     setOfficialSaved(official);
     setOfficialMsg(null);
     setOfficialError(null);
-    setSettingsProvider(
-      providerIdFromRuntime(
-        detail.runtime_model_id || "",
-        resolvePricingModelId(detail, supportedModels, official),
-        supportedModels,
-        official,
-        Boolean(detail.host_inference_ready),
-      ),
-    );
+    setSettingsProvider((prev) => {
+      const ready = Boolean(detail.host_inference_ready);
+      if (providerChosen.current && providerSelectionStands(prev, agentProviders, ready)) {
+        return prev;
+      }
+      return defaultDeclaredProvider(agentProviders, ready);
+    });
   }, [
     detail.agent_id,
     detail.token_pricing?.model_id,
@@ -1106,6 +1085,7 @@ export function AgentOwnerSettings({
     detail.runtime_model_id,
     detail.host_inference_ready,
     (detail.official_models ?? []).join("\u0001"),
+    agentProviders,
   ]);
 
   useEffect(() => {
@@ -1140,6 +1120,8 @@ export function AgentOwnerSettings({
     ])
       .then(([status, officialRow]) => {
         if (cancelled) return;
+        const declared = Array.isArray(status.agent_providers) ? status.agent_providers : [];
+        setAgentProviders(declared);
         const reported = uniqModelIds(status.self_reported_models);
         const ids = reported.length
           ? reported
@@ -1172,18 +1154,24 @@ export function AgentOwnerSettings({
         if (typeof officialRow?.host_inference_ready === "boolean") {
           setHostReady(officialRow.host_inference_ready);
         }
-        setModelIdDraft(resolvePricingModelId(detail, ids, official));
-        setSettingsProvider(
-          providerIdFromRuntime(
-            status.runtime_model_id || detail.runtime_model_id || "",
+        const ready = Boolean(
+          officialRow?.host_inference_ready ??
+            status.host_inference_ready ??
+            detail.host_inference_ready,
+        );
+        const fallback = defaultDeclaredProvider(declared, ready);
+        const nextProvider =
+          providerChosen.current &&
+          providerSelectionStands(selectedProvider.current, declared, ready)
+            ? selectedProvider.current
+            : fallback;
+        setSettingsProvider(nextProvider);
+        setModelIdDraft(
+          draftForProvider(
             resolvePricingModelId(detail, ids, official),
-            ids,
+            nextProvider,
+            declared,
             official,
-            Boolean(
-              officialRow?.host_inference_ready ??
-                status.host_inference_ready ??
-                detail.host_inference_ready,
-            ),
           ),
         );
       })
@@ -1378,55 +1366,47 @@ export function AgentOwnerSettings({
     typeof oldMarkup === "number" &&
     Number.isFinite(oldMarkup);
   const officialIds = officialCatalog.map((row) => row.id);
-  const byoOpenRouterIds = openRouterByoCatalog.map((row) => row.id);
-  const byoVendors = vendorsFromModels(supportedModels).filter(
+  const reportedVendors = agentProviders.map((row) => row.id);
+  const reportedOpenRouter = reportedVendors.some(
+    (id) => id.toLowerCase() === OPENROUTER_BYO,
+  );
+  const byoVendors = reportedVendors.filter(
     (id) => id.toLowerCase() !== OPENROUTER_BYO,
   );
-  const hasBareModels = supportedModels.some((id) => !modelVendorId(id));
   const providerOptions: Array<{ id: string; label: string }> = [
     ...(hostReady
       ? [{ id: OFFICIAL_OPENROUTER, label: officialProviderLabel(priceBookSource, t) }]
       : []),
     ...byoVendors.map((id) => ({ id, label: id })),
-    ...(hasBareModels ? [{ id: OTHER_VENDOR, label: t.myAgentsProviderOther }] : []),
-    { id: OPENROUTER_BYO, label: t.myAgentsProviderOpenRouter },
+    ...(reportedOpenRouter
+      ? [{ id: OPENROUTER_BYO, label: t.myAgentsProviderOpenRouter }]
+      : []),
   ];
-  if (
-    settingsProvider &&
-    settingsProvider !== OPENROUTER_BYO &&
-    settingsProvider !== OFFICIAL_OPENROUTER &&
-    !providerOptions.some((p) => p.id === settingsProvider)
-  ) {
-    providerOptions.unshift({
-      id: settingsProvider,
-      label:
-        settingsProvider === OTHER_VENDOR
-          ? t.myAgentsProviderOther
-          : settingsProvider,
-    });
-  }
-  const activeProvider = settingsProvider
+  const settingsProviderListed = providerOptions.some((p) => p.id === settingsProvider);
+  const activeProvider = settingsProviderListed
     ? settingsProvider
     : modelsLoading
       ? ""
       : providerOptions.find(
           (p) => p.id !== OPENROUTER_BYO && p.id !== OFFICIAL_OPENROUTER,
         )?.id ||
-        providerOptions.find((p) => p.id !== OPENROUTER_BYO)?.id ||
         providerOptions[0]?.id ||
         "";
   const officialSelected = activeProvider === OFFICIAL_OPENROUTER;
   const openRouterByoSelected = activeProvider === OPENROUTER_BYO;
-  const vendorModelsBase = officialSelected
+  const openRouterDeclaredIds = modelsForDeclaredProvider(
+    agentProviders,
+    OPENROUTER_BYO,
+  );
+  const vendorModels = officialSelected
     ? officialIds
     : openRouterByoSelected
-      ? byoOpenRouterIds
-      : modelsForProvider(supportedModels, activeProvider);
-  const vendorModels =
-    modelIdTrim && !vendorModelsBase.some((id) => sameModelId(id, modelIdTrim))
-      ? [modelIdTrim, ...vendorModelsBase]
-      : vendorModelsBase;
-  const displayedModelId = modelIdTrim || pickListedId(vendorModels, "") || "";
+      ? openRouterDeclaredIds
+      : modelsForDeclaredProvider(agentProviders, activeProvider);
+  const displayedModelId =
+    vendorModels.find((id) => sameModelId(id, modelIdTrim)) ||
+    pickListedId(vendorModels, "") ||
+    "";
   const officialRow = officialCatalog.find((row) =>
     sameModelId(row.id, displayedModelId),
   );
@@ -1930,6 +1910,8 @@ export function AgentOwnerSettings({
     void client
       .getAgentModelStatus(detail.agent_id)
       .then((status) => {
+        const declared = Array.isArray(status.agent_providers) ? status.agent_providers : [];
+        setAgentProviders(declared);
         const reported = uniqModelIds(status.self_reported_models);
         const ids = reported.length
           ? reported
@@ -1952,19 +1934,23 @@ export function AgentOwnerSettings({
         if (Array.isArray(status.official_models)) {
           setOfficialSaved(status.official_models);
         }
-        const runtime = status.runtime_model_id || detail.runtime_model_id || "";
         const ready =
           typeof status.host_inference_ready === "boolean"
             ? status.host_inference_ready
             : hostReady;
-        setModelIdDraft(resolvePricingModelId(detail, ids, official));
-        setSettingsProvider(
-          providerIdFromRuntime(
-            runtime,
+        const fallback = defaultDeclaredProvider(declared, ready);
+        const nextProvider =
+          providerChosen.current &&
+          providerSelectionStands(selectedProvider.current, declared, ready)
+            ? selectedProvider.current
+            : fallback;
+        setSettingsProvider(nextProvider);
+        setModelIdDraft(
+          draftForProvider(
             resolvePricingModelId(detail, ids, official),
-            ids,
+            nextProvider,
+            declared,
             official,
-            ready,
           ),
         );
         onUpdated?.({
@@ -2377,6 +2363,7 @@ export function AgentOwnerSettings({
               value={activeProvider}
               onChange={(e) => {
                 const next = e.target.value;
+                providerChosen.current = true;
                 setSettingsProvider(next);
                 if (next === OFFICIAL_OPENROUTER) {
                   const equiv =
@@ -2393,12 +2380,12 @@ export function AgentOwnerSettings({
                 }
                 if (next === OPENROUTER_BYO) {
                   const equiv =
-                    findOfficialEquivalent(modelIdDraft, byoOpenRouterIds) ||
-                    byoOpenRouterIds[0];
+                    findOfficialEquivalent(modelIdDraft, openRouterDeclaredIds) ||
+                    openRouterDeclaredIds[0];
                   if (equiv) setModelIdDraft(equiv);
                   return;
                 }
-                const list = modelsForProvider(supportedModels, next);
+                const list = modelsForDeclaredProvider(agentProviders, next);
                 if (list.length > 0 && !list.some((id) => sameModelId(id, modelIdDraft))) {
                   setModelIdDraft(list[0]);
                 }
@@ -2598,13 +2585,13 @@ export function AgentOwnerSettings({
               />
             )
           ) : openRouterByoSelected ? (
-            byoOpenRouterIds.length === 0 ? (
+            openRouterDeclaredIds.length === 0 ? (
               <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
                 {t.myAgentsPricingOfficialEmpty}
               </p>
             ) : (
               <OfficialModelPicker
-                ids={byoOpenRouterIds}
+                ids={openRouterDeclaredIds}
                 value={displayedModelId}
                 disabled={busy || savingPricing}
                 ariaLabel={t.myAgentsPricingModelLabel}
