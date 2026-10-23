@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState, type CSSProperties } from "
 import { useSearchParams } from "next/navigation";
 import { getCnSessionToken, startWeChatLogin } from "@/lib/auth/cn";
 import { getGatewayBaseUrl } from "@/lib/gateway";
+import { AgentGiftPreviewCard } from "@/components/AgentGiftPreviewCard";
 import Loading from "@/components/Loading";
 
 type InvitePreview = {
@@ -161,7 +162,12 @@ function CnTransferInner() {
   if (preview?.consumed || preview?.expired) {
     return (
       <main style={pageStyle}>
-        <h1 style={titleStyle}>{preview.consumed ? "已被领取" : "邀请已过期"}</h1>
+        <h1 style={titleStyle}>{preview.consumed ? "已被收下" : "链接已过期"}</h1>
+        <p style={mutedStyle}>
+          {preview.consumed
+            ? "这份智能体赠送已被其他人领取。"
+            : "请让对方重新生成一条赠送链接。"}
+        </p>
         <a href="/" style={linkStyle}>
           返回界面
         </a>
@@ -169,17 +175,20 @@ function CnTransferInner() {
     );
   }
 
+  const fromName = preview?.from_nickname?.trim() || "某人";
+  const agentName = preview?.agent.name?.trim() || "智能体";
+
   if (accepted) {
     return (
       <main style={pageStyle}>
-        <h1 style={titleStyle}>领取成功</h1>
+        <h1 style={titleStyle}>已收下</h1>
         <p style={mutedStyle}>
-          「{preview?.agent.name || "智能体"}」现在是你的了。
+          「{agentName}」现在归你了，可在「管理 → 智能体」里找到它。
         </p>
         {apiKey ? (
           <div style={cardStyle}>
             <p style={{ ...mutedStyle, marginBottom: 8 }}>
-              新 API Key（只显示这一次，旧 Key 已失效）：
+              该智能体的新 API Key（只显示这一次，旧 Key 已失效）：
             </p>
             <code style={keyBoxStyle}>{apiKey}</code>
             <button type="button" onClick={() => void copyKey()} style={secondaryBtnStyle}>
@@ -187,8 +196,15 @@ function CnTransferInner() {
             </button>
           </div>
         ) : null}
-        <a href="/" style={ctaLinkStyle}>
-          打开界面
+        <a
+          href={
+            preview?.agent_id
+              ? `/?agent=${encodeURIComponent(preview.agent_id)}`
+              : "/"
+          }
+          style={ctaLinkStyle}
+        >
+          在界面打开
         </a>
       </main>
     );
@@ -197,10 +213,9 @@ function CnTransferInner() {
   if (!authed) {
     return (
       <main style={pageStyle}>
-        <h1 style={titleStyle}>领取赠送</h1>
-        <p style={mutedStyle}>
-          {preview?.from_nickname || "好友"} 赠送了「{preview?.agent.name || "智能体"}」
-        </p>
+        <h1 style={titleStyle}>收下这份赠送</h1>
+        <p style={mutedStyle}>{fromName} 想在界面里送你一个智能体。登录后即可收下。</p>
+        {preview ? <AgentGiftPreviewCard preview={preview} locale="zh" /> : null}
         <button
           type="button"
           style={btnStyle}
@@ -212,7 +227,7 @@ function CnTransferInner() {
             )
           }
         >
-          微信登录后领取
+          微信登录后收下
         </button>
       </main>
     );
@@ -220,16 +235,15 @@ function CnTransferInner() {
 
   return (
     <main style={pageStyle}>
-      <h1 style={titleStyle}>领取赠送</h1>
-      <p style={mutedStyle}>
-        {preview?.from_nickname || "好友"} 赠送了「{preview?.agent.name || "智能体"}」
-      </p>
-      <p style={{ color: "#d97706", fontSize: 13, lineHeight: 1.45, margin: 0 }}>
-        领取后所有权转到你的账号，原主人将失去控制；自主运行的智能体会换发新 API Key。
+      <h1 style={titleStyle}>收下这份赠送</h1>
+      <p style={mutedStyle}>{fromName} 想把这个智能体送给你。</p>
+      {preview ? <AgentGiftPreviewCard preview={preview} locale="zh" /> : null}
+      <p style={{ ...mutedStyle, margin: 0 }}>
+        收下后，你将在界面里管理它；对方会失去控制权。
       </p>
       {error ? <p style={{ color: "var(--danger)", fontSize: 13 }}>{error}</p> : null}
       <button type="button" style={btnStyle} disabled={submitting} onClick={() => void handleAccept()}>
-        {submitting ? "领取中…" : "确认领取"}
+        {submitting ? "领取中…" : "确认收下"}
       </button>
     </main>
   );
