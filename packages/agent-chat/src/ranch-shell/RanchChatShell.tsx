@@ -2846,6 +2846,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const compactHeader = isNarrowFull || mode === "side";
   const listStepsAside = screenHidesList && mode === "full" && !isNarrowFull;
   const showSidebar = (mode !== "full" || !sidebarCollapsed) && !listStepsAside;
+  /**
+   * Wide full mode mounts account panels in the conversation column.
+   * Narrow full / side mount them in the list column (otherwise they sit in a
+   * `display:none` pane while view=list and look like Manage "does nothing").
+   */
+  const accountPanelsInConversation = mode === "full" && !isNarrowFull;
 
   const client = useMemo(
     () => createGatewayClient(gatewayBaseUrl, getAccessToken),
@@ -5196,10 +5202,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
     let cancelled = false;
     const bare = active.agent_id.replace(/^acn:/, "");
     setOwnedAgentLoading(true);
+    setOwnedAgentDetail(null);
     void client
       .getMyAgent(bare)
       .then((row) => {
-        if (!cancelled) setOwnedAgentDetail(row);
+        if (cancelled) return;
+        if (!row?.agent_id) {
+          setOwnedAgentDetail(null);
+          return;
+        }
+        setOwnedAgentDetail(row);
       })
       .catch(() => {
         if (!cancelled) setOwnedAgentDetail(null);
@@ -6914,7 +6926,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           />
         ) : null}
 
-        {mode === "full" ? null : accountPanels}
+        {accountPanelsInConversation ? null : accountPanels}
       </div>
 
       {(view === "conversation" || mode === "full") && (
@@ -9409,9 +9421,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         onToggle={(next) => void toggleChatDecision(next)}
                       />
                       {activeIsOwned ? (
-                        ownedAgentLoading && !ownedAgentDetail ? (
-                          <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
-                        ) : ownedAgentDetail ? (
+                        ownedAgentDetail ? (
                           <AgentOwnerSettings
                             client={client}
                             detail={ownedAgentDetail}
@@ -9424,6 +9434,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             onRemoved={applyOwnedAgentRemoved}
                             onOpenKeys={() => openAccountPanel("keys")}
                           />
+                        ) : ownedAgentLoading ? (
+                          <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
                         ) : (
                           <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>
                         )
@@ -10012,7 +10024,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               ) : null}
             </>
           )}
-          {mode === "full" ? accountPanels : null}
+          {accountPanelsInConversation ? accountPanels : null}
           {!dockWide ? workDock : null}
         </div>
       )}
