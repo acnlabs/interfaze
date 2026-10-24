@@ -71,7 +71,6 @@ export function MyAgentsPanel({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<MyAgentSummary | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [createAvailable, setCreateAvailable] = useState<boolean | null>(null);
 
@@ -117,20 +116,22 @@ export function MyAgentsPanel({
       return;
     }
     let cancelled = false;
-    setDetailLoading(true);
     setDetailError(null);
     void client
       .getMyAgent(selectedId)
       .then((row) => {
-        if (!cancelled) setDetail(row);
+        if (cancelled) return;
+        if (!row?.agent_id) {
+          setDetail(null);
+          setDetailError(t.myAgentsLoadFailed);
+          return;
+        }
+        setDetail(row);
       })
       .catch(() => {
         if (cancelled) return;
         setDetail(null);
         setDetailError(t.myAgentsLoadFailed);
-      })
-      .finally(() => {
-        if (!cancelled) setDetailLoading(false);
       });
     return () => {
       cancelled = true;
@@ -209,9 +210,7 @@ export function MyAgentsPanel({
 
       <div style={{ flex: 1, overflow: "auto", padding: selectedId ? 16 : 0 }}>
         {selectedId ? (
-          detailLoading && !detail ? (
-            <p style={{ color: colors.muted, fontSize: 13, padding: 16 }}>{t.loading}</p>
-          ) : detail ? (
+          detail ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <section>
                 <h3 style={sectionTitle}>{t.myAgentsSectionOverview}</h3>
@@ -289,10 +288,10 @@ export function MyAgentsPanel({
                 {t.myAgentsOpenChat}
               </button>
             </div>
+          ) : detailError ? (
+            <p style={{ color: colors.danger, fontSize: 13 }}>{detailError}</p>
           ) : (
-            <p style={{ color: colors.danger, fontSize: 13 }}>
-              {detailError || t.myAgentsLoadFailed}
-            </p>
+            <p style={{ color: colors.muted, fontSize: 13, padding: 16 }}>{t.loading}</p>
           )
         ) : loading ? (
           <p style={{ color: colors.muted, fontSize: 13, padding: 16 }}>{t.loading}</p>
@@ -340,7 +339,13 @@ export function MyAgentsPanel({
                 <li key={a.agent_id}>
                   <button
                     type="button"
-                    onClick={() => setSelectedId(a.agent_id)}
+                    onClick={() => {
+                      // Clear detail before paint so we show loading, not a stale
+                      // card — and never the false "couldn't load" empty state.
+                      setDetail(null);
+                      setDetailError(null);
+                      setSelectedId(a.agent_id);
+                    }}
                     style={{
                       width: "100%",
                       textAlign: "left",

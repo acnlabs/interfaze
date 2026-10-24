@@ -49,77 +49,7 @@ function initials(name: string): string {
   return one.slice(0, 2).toUpperCase();
 }
 
-export function AgentGiftPreviewCard({
-  preview,
-  locale = "en",
-  style,
-}: {
-  preview: AgentGiftPreview;
-  locale?: "en" | "zh";
-  style?: CSSProperties;
-}) {
-  const t = locale === "zh" ? ZH : EN;
-  const name = preview.agent.name?.trim() || preview.agent_id;
-  const online = preview.agent.status === "online";
-  const when = new Date(preview.expires_at).toLocaleString();
-  const from = preview.from_nickname?.trim() || (locale === "zh" ? "某人" : "Someone");
-  const profileUrl = `${getAgentPlanetBaseUrl()}/agents/${encodeURIComponent(preview.agent_id)}`;
-
-  return (
-    <div style={{ ...cardStyle, ...style }}>
-      <p style={eyebrowStyle}>{t.agent}</p>
-      <a
-        href={profileUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={headerLinkStyle}
-        aria-label={t.viewProfile}
-      >
-        <div style={avatarStyle} aria-hidden>
-          {initials(name)}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={titleRowStyle}>
-            <h2 style={agentTitleStyle}>{name}</h2>
-            <span
-              style={{
-                ...statusPillStyle,
-                color: online ? "#86efac" : "var(--muted, #a1a1aa)",
-                background: online ? "rgba(34,197,94,0.15)" : "rgba(161,161,170,0.12)",
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: 999,
-                  background: online ? "#22c55e" : "var(--muted, #a1a1aa)",
-                }}
-              />
-              {online ? t.online : t.offline}
-            </span>
-          </div>
-          <p style={idLineStyle}>
-            <span style={{ opacity: 0.75 }}>{t.id}</span>{" "}
-            <code style={idCodeStyle} title={preview.agent_id}>
-              {preview.agent_id}
-            </code>
-          </p>
-        </div>
-      </a>
-      {preview.agent.description ? (
-        <p style={{ ...mutedStyle, marginTop: 12 }}>{preview.agent.description}</p>
-      ) : null}
-      <p style={{ ...mutedStyle, fontSize: 12, marginTop: 12, marginBottom: 8 }}>
-        {t.from} {from} · {t.expires(when)}
-      </p>
-      <a href={profileUrl} target="_blank" rel="noopener noreferrer" style={profileLinkStyle}>
-        {t.viewProfile}
-      </a>
-    </div>
-  );
-}
-
+// Styles above the component so Fast Refresh never hits a TDZ on const bindings.
 const cardStyle: CSSProperties = {
   width: "100%",
   marginTop: 8,
@@ -220,3 +150,74 @@ const mutedStyle: CSSProperties = {
   lineHeight: 1.5,
   margin: 0,
 };
+
+export function AgentGiftPreviewCard({
+  preview,
+  locale = "en",
+  style,
+}: {
+  preview: AgentGiftPreview;
+  locale?: "en" | "zh";
+  style?: CSSProperties;
+}) {
+  const t = locale === "zh" ? ZH : EN;
+  const name = preview.agent.name?.trim() || preview.agent_id;
+  const online = preview.agent.status === "online";
+  const when = new Date(preview.expires_at).toLocaleString();
+  const from = preview.from_nickname?.trim() || (locale === "zh" ? "某人" : "Someone");
+  const profileUrl = `${getAgentPlanetBaseUrl()}/agents/${encodeURIComponent(preview.agent_id)}`;
+
+  return (
+    <div style={{ ...cardStyle, ...style }}>
+      <p style={eyebrowStyle}>{t.agent}</p>
+      <a
+        href={profileUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={headerLinkStyle}
+        aria-label={t.viewProfile}
+      >
+        <div style={avatarStyle} aria-hidden>
+          {initials(name)}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={titleRowStyle}>
+            <h2 style={agentTitleStyle}>{name}</h2>
+            <span
+              style={{
+                ...statusPillStyle,
+                color: online ? "#86efac" : "var(--muted, #a1a1aa)",
+                background: online ? "rgba(34,197,94,0.15)" : "rgba(161,161,170,0.12)",
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 999,
+                  background: online ? "#22c55e" : "var(--muted, #a1a1aa)",
+                }}
+              />
+              {online ? t.online : t.offline}
+            </span>
+          </div>
+          <p style={idLineStyle}>
+            <span style={{ opacity: 0.75 }}>{t.id}</span>{" "}
+            <code style={idCodeStyle} title={preview.agent_id}>
+              {preview.agent_id}
+            </code>
+          </p>
+        </div>
+      </a>
+      {preview.agent.description ? (
+        <p style={{ ...mutedStyle, marginTop: 12 }}>{preview.agent.description}</p>
+      ) : null}
+      <p style={{ ...mutedStyle, fontSize: 12, marginTop: 12, marginBottom: 8 }}>
+        {t.from} {from} · {t.expires(when)}
+      </p>
+      <a href={profileUrl} target="_blank" rel="noopener noreferrer" style={profileLinkStyle}>
+        {t.viewProfile}
+      </a>
+    </div>
+  );
+}
