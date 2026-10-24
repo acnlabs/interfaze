@@ -33,11 +33,18 @@ describe("pickOfficialShelfSelection", () => {
     "aion-labs/aion-2.0",
   ];
 
-  it("ignores BYO leftover preferred_model and uses official default", () => {
+  it("ignores prefixed leftovers not on the shelf (any BYO vendor)", () => {
     expect(
       pickOfficialShelfSelection({
         menuIds: menu,
         stored: "tencenttokenplan/kimi-k2.5",
+        officialDefault: "deepseek/deepseek-chat",
+      }),
+    ).toBe("deepseek/deepseek-chat");
+    expect(
+      pickOfficialShelfSelection({
+        menuIds: menu,
+        stored: "siliconflow/Qwen/Qwen2.5-7B-Instruct",
         officialDefault: "deepseek/deepseek-chat",
       }),
     ).toBe("deepseek/deepseek-chat");
