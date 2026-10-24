@@ -56,8 +56,10 @@ import {
   agentModelIdForSend,
   composerCatalogForOffer,
   composerPricedMenuIds,
+  hasDeclaredProviderModels,
   mergeQuotedPrices,
   modelOptionHasPrice,
+  pickOfficialShelfSelection,
   priceTail,
   pricedOptionForId,
   quotedPricesFromOptions,
@@ -3276,7 +3278,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
     runtime_model_id?: string | null;
     mismatched: boolean;
     official_channel: boolean;
+    /** No declared providers: Host official shelf — do not pin BYO runtime. */
+    shelf_only: boolean;
     official_models: string[];
+    official_default_model_id?: string | null;
     official_key_geo?: string;
     price_book_source?: string;
     markup_percent?: number | null;
@@ -4752,19 +4757,26 @@ export function RanchChatShell(props: RanchChatShellProps) {
         pointedBlock?.block_key && pointedBlock.rev
           ? { block_key: pointedBlock.block_key, rev: pointedBlock.rev }
           : null;
-      const reportedForSend = reportedIdsForSend(composerModel);
+      // Shelf-only agents must send the official shelf id as picked — do not
+      // rewrite to a leftover BYO preferred_model via priceTail.
+      const reportedForSend = composerModel?.shelf_only
+        ? composerModel.supported_models
+        : reportedIdsForSend(composerModel);
       const ownPricedMenu = composerPricedMenuIds(
         reportedForSend,
         composerModel?.model_options ?? [],
       );
       const sendSelected =
-        composerModel && !composerModel.official_channel && ownPricedMenu.length
+        composerModel &&
+        !composerModel.official_channel &&
+        !composerModel.shelf_only &&
+        ownPricedMenu.length
           ? agentModelIdForSend(selectedModelId, reportedForSend)
           : selectedModelId;
       const quotedModel = requestedModelForSend(
         sendSelected,
         composerModel?.listed_model_id ?? null,
-        Boolean(composerModel?.official_channel),
+        Boolean(composerModel?.official_channel || composerModel?.shelf_only),
         composerModel?.official_key_geo,
       );
       const seen = seenMenuPrices(
@@ -5269,12 +5281,24 @@ export function RanchChatShell(props: RanchChatShellProps) {
             row.host_inference_ready !== false &&
             !!listed &&
             officialIds.some((id) => sameModelId(id, listed));
+          const officialDefault =
+            typeof row.official_default_model_id === "string"
+              ? row.official_default_model_id.trim()
+              : "";
+          // No providers → Host already served the official shelf. Do not treat
+          // leftover BYO preferred_model as the composer pin.
+          const shelfOnly =
+            !listedOfficial &&
+            row.host_inference_ready !== false &&
+            !hasDeclaredProviderModels(row.agent_providers);
           setComposerModel({
             listed_model_id: listed,
             runtime_model_id: runtime,
             mismatched: !!row.mismatched,
             official_channel: listedOfficial,
+            shelf_only: shelfOnly,
             official_models: officialIds,
+            official_default_model_id: officialDefault || null,
             official_key_geo:
               typeof row.official_key_geo === "string" ? row.official_key_geo : "",
             price_book_source:
@@ -5307,9 +5331,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
           const catalogIds = listedOfficial
             ? composerCatalogRef.current.map((row) => row.id)
             : [];
-          const pricedMenu = listedOfficial
-            ? []
-            : composerPricedMenuIds([runtime, listed, ...selfReported, ...supported], options);
+          const pricedMenu =
+            listedOfficial || shelfOnly
+              ? []
+              : composerPricedMenuIds([runtime, listed, ...selfReported, ...supported], options);
           const nextModel = pickComposerModelForPath({
             official: listedOfficial,
             openRouterByo: isOpenRouterByoListed(listed, runtime, supported),
@@ -5321,7 +5346,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
             catalogIds,
           });
           const catalogPending = listedOfficial && catalogIds.length === 0;
-          if (!listedOfficial && pricedMenu.length) {
+          if (shelfOnly) {
+            const chosen = pickOfficialShelfSelection({
+              menuIds: supported,
+              stored: listedChanged ? listed : stored,
+              officialDefault,
+            });
+            setSelectedModelId(chosen);
+            writeComposerModelPick(active.chat_id, chosen);
+          } else if (!listedOfficial && pricedMenu.length) {
             const wanted = listedChanged ? listed : stored || nextModel;
             const chosen =
               pricedMenu.find((id) => priceTail(id) && priceTail(id) === priceTail(wanted)) ||
@@ -5368,13 +5401,22 @@ export function RanchChatShell(props: RanchChatShellProps) {
     (ownedAgentDetail?.official_models ?? []).join("\u0001"),
   ]);
 
-  const missingPriceKey = unpricedOwnModelIds(
-    reportedIdsForSend(composerModel),
-    composerModel?.model_options ?? [],
-  ).join("\u0001");
+  const missingPriceKey = composerModel?.shelf_only
+    ? ""
+    : unpricedOwnModelIds(
+        reportedIdsForSend(composerModel),
+        composerModel?.model_options ?? [],
+      ).join("\u0001");
 
   useEffect(() => {
-    if (!active || isGroupChat(active) || composerModel?.official_channel) return;
+    if (
+      !active ||
+      isGroupChat(active) ||
+      composerModel?.official_channel ||
+      composerModel?.shelf_only
+    ) {
+      return;
+    }
     if (!missingPriceKey || quoteAttempts >= 2) return;
     const bare = (active.agent_id || "").replace(/^acn:/i, "").trim();
     if (!bare || bare.startsWith("sys:")) return;
@@ -8402,31 +8444,38 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     {(() => {
                       const listed = (composerModel.listed_model_id || "").trim();
                       const official = composerModel.official_channel;
+                      const shelfOnly = composerModel.shelf_only;
                       const openRouterByo = isOpenRouterByoListed(
                         composerModel.listed_model_id,
                         composerModel.runtime_model_id,
                         composerModel.supported_models,
                       );
-                      const reported = reportedIdsForSend(composerModel);
-                      const pricedMenu = official
-                        ? []
-                        : composerPricedMenuIds(reported, composerModel.model_options);
+                      const reported = shelfOnly
+                        ? composerModel.supported_models
+                        : reportedIdsForSend(composerModel);
+                      const pricedMenu =
+                        official || shelfOnly
+                          ? []
+                          : composerPricedMenuIds(reported, composerModel.model_options);
                       const fromShelf = composerCatalog.map((row) => row.id);
-                      const shelfOffer = official
-                        ? []
-                        : composerCatalogForOffer({
-                            reportedIds: reported,
-                            modelOptions: composerModel.model_options,
-                            catalogIds: fromShelf,
-                          });
+                      const shelfOffer =
+                        official || shelfOnly
+                          ? []
+                          : composerCatalogForOffer({
+                              reportedIds: reported,
+                              modelOptions: composerModel.model_options,
+                              catalogIds: fromShelf,
+                            });
                       const options = (() => {
                         const seen = new Set<string>();
                         const out: string[] = [];
                         const source = official
                           ? [listed, ...fromShelf]
-                          : pricedMenu.length
-                            ? pricedMenu
-                            : shelfOffer;
+                          : shelfOnly
+                            ? composerModel.supported_models
+                            : pricedMenu.length
+                              ? pricedMenu
+                              : shelfOffer;
                         for (const id of source) {
                           if (!id || !id.trim()) continue;
                           if (droppedModelIds.some((row) => sameModelId(row, id))) continue;
@@ -8446,9 +8495,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         return out;
                       })();
                       const visible = filterComposerModels(options, composerMenuQuery);
-                      const sameShownModel = (id: string, wanted: string | null | undefined) =>
-                        sameModelId(id, wanted) ||
-                        (!!priceTail(id) && priceTail(id) === priceTail(wanted));
+                      // Shelf-only: never equate BYO runtime ↔ official row via bare tail
+                      // (tencenttokenplan/kimi-k2.5 must not light up moonshotai/kimi-k2.5).
+                      const sameShownModel = (id: string, wanted: string | null | undefined) => {
+                        if (sameModelId(id, wanted)) return true;
+                        if (shelfOnly) return false;
+                        return !!priceTail(id) && priceTail(id) === priceTail(wanted);
+                      };
                       const value =
                         options.find((id) => sameShownModel(id, selectedModelId)) ||
                         options.find((id) => sameShownModel(id, listed)) ||
