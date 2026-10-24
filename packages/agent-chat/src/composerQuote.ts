@@ -246,3 +246,60 @@ export function composerCatalogForOffer(args: {
   if (args.modelOptions.some((row) => modelOptionHasPrice(row))) return [];
   return args.catalogIds;
 }
+
+/** True when heartbeat declared at least one provider with models. */
+export function hasDeclaredProviderModels(
+  providers:
+    | Array<{ id?: string; models?: unknown } | null | undefined>
+    | null
+    | undefined,
+): boolean {
+  if (!Array.isArray(providers) || !providers.length) return false;
+  return providers.some((row) => {
+    if (!row || typeof row !== "object") return false;
+    const models = row.models;
+    return (
+      Array.isArray(models) &&
+      models.some((m) => typeof m === "string" && m.trim().length > 0)
+    );
+  });
+}
+
+function modelVendor(modelId: string | null | undefined): string {
+  const s = (modelId || "").trim();
+  const slash = s.indexOf("/");
+  return slash > 0 ? s.slice(0, slash).toLowerCase() : "";
+}
+
+/** TokenPlan / other BYO leftovers must not pin an official-shelf menu. */
+function isByoProviderVendor(vendor: string): boolean {
+  return vendor === "tencenttokenplan";
+}
+
+/**
+ * Select on the Host official shelf when the agent declared no providers.
+ * Ignore BYO ``preferred_model`` / runtime; prefer the Host official default.
+ */
+export function pickOfficialShelfSelection(args: {
+  menuIds: Array<string | null | undefined>;
+  stored: string | null | undefined;
+  officialDefault: string | null | undefined;
+}): string | null {
+  const menu = dedupe(args.menuIds);
+  if (!menu.length) return null;
+
+  const onShelf = (wanted: string | null | undefined): string | null => {
+    const raw = (wanted || "").trim();
+    if (!raw) return null;
+    if (isByoProviderVendor(modelVendor(raw))) return null;
+    const exact = menu.find((id) => sameExactId(id, raw));
+    if (exact) return exact;
+    // Bare id may match a shelf row; prefixed non-BYO must be exact (no cross-vendor).
+    if (modelVendor(raw)) return null;
+    const tail = priceTail(raw);
+    if (!tail) return null;
+    return menu.find((id) => priceTail(id) === tail) || null;
+  };
+
+  return onShelf(args.stored) || onShelf(args.officialDefault) || menu[0] || null;
+}
