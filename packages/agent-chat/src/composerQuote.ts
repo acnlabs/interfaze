@@ -271,14 +271,10 @@ function modelVendor(modelId: string | null | undefined): string {
   return slash > 0 ? s.slice(0, slash).toLowerCase() : "";
 }
 
-/** TokenPlan / other BYO leftovers must not pin an official-shelf menu. */
-function isByoProviderVendor(vendor: string): boolean {
-  return vendor === "tencenttokenplan";
-}
-
 /**
  * Select on the Host official shelf when the agent declared no providers.
- * Ignore BYO ``preferred_model`` / runtime; prefer the Host official default.
+ * Prefixed leftovers (any BYO vendor) must match exactly — never pin via
+ * bare-name cross-vendor. Prefer session pin on the shelf, else Host default.
  */
 export function pickOfficialShelfSelection(args: {
   menuIds: Array<string | null | undefined>;
@@ -291,10 +287,9 @@ export function pickOfficialShelfSelection(args: {
   const onShelf = (wanted: string | null | undefined): string | null => {
     const raw = (wanted || "").trim();
     if (!raw) return null;
-    if (isByoProviderVendor(modelVendor(raw))) return null;
     const exact = menu.find((id) => sameExactId(id, raw));
     if (exact) return exact;
-    // Bare id may match a shelf row; prefixed non-BYO must be exact (no cross-vendor).
+    // Prefixed id not on the shelf: do not equate vendors via priceTail.
     if (modelVendor(raw)) return null;
     const tail = priceTail(raw);
     if (!tail) return null;

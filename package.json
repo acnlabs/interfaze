@@ -5,6 +5,7 @@
   "description": "Interfaze — standalone ACN chat host (interfaze.io)",
   "scripts": {
     "test": "node --test tests/*.test.cjs",
+    "test:agent-chat": "npx --yes vitest run packages/agent-chat/src/composerQuote.test.ts",
     "dev": "next dev --port 3010",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && next build",
