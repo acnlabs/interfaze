@@ -725,7 +725,7 @@ export type GatewayClient = {
   ) => Promise<PieceSku>;
   /** Public Host Model Catalog (L1) row for a model id. */
   getModelCatalogItem: (modelId: string) => Promise<ModelCatalogItem>;
-  /** Public Host Model Catalog list (OpenRouter + host_pack). */
+  /** Public Host Model Catalog list. */
   listModelCatalog: (opts?: {
     q?: string;
     source?: string;

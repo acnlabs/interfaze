@@ -72,7 +72,7 @@ export type BookCatalogRow = {
 /**
  * Unique price-book row for a model id's last segment.
  * Mirrors backend `_catalog_pricing`: zero or several hits do not price.
- * `host_pack` OEM stickers are not a book — callers must pass the book only.
+ * Callers must pass the configured price book only.
  */
 export function uniqueBookCatalogPair(
   modelId: string | null | undefined,

@@ -1365,8 +1365,7 @@ export function AgentOwnerSettings({
   const officialRow = officialCatalog.find((row) =>
     sameModelId(row.id, displayedModelId),
   );
-  // BYO (TokenPlan / OpenRouter key / any vendor): settle uses the price book
-  // by tail — never handwritten host_pack OEM stickers.
+  // BYO (TokenPlan / OpenRouter key / any vendor): settle uses the price book by tail.
   const byoBookRow = uniqueBookCatalogPair(displayedModelId, openRouterByoCatalog);
   const selectedCatalog = officialSelected
     ? officialRow

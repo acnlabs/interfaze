@@ -534,10 +534,6 @@ export type RanchMessages = {
   myAgentsPricingMarkupLabel: string;
   myAgentsPricingMarkupHint: string;
   myAgentsPricingCatalogLine: string;
-  myAgentsPricingSourceOpenRouter: string;
-  myAgentsPricingSourceTokenHub: string;
-  myAgentsPricingSourceTokenHubHint: string;
-  myAgentsPricingSourceHint: string;
   myAgentsPricingSourceSupplier: string;
   myAgentsPricingSourceSupplierHint: string;
   myAgentsPricingSourceMenu: string;
@@ -1343,11 +1339,6 @@ const en: RanchMessages = {
   myAgentsPricingMarkupHint:
     "Markup is only the slice you keep. Changing model keeps this %.",
   myAgentsPricingCatalogLine: "${in} / ${out}",
-  myAgentsPricingSourceOpenRouter: "Supplier price · OpenRouter",
-  myAgentsPricingSourceTokenHub: "Menu · TokenHub",
-  myAgentsPricingSourceTokenHubHint: "This is TokenHub’s published price list.",
-  myAgentsPricingSourceHint:
-    "This is the supplier price. The list price is the supplier price × 1.15.",
   myAgentsPricingSourceSupplier: "Supplier price · ${name}",
   myAgentsPricingSourceSupplierHint:
     "This is the supplier price. The list price is the supplier price × 1.15.",
@@ -2165,11 +2156,6 @@ const zh: RanchMessages = {
   myAgentsPricingMarkupLabel: "上浮",
   myAgentsPricingMarkupHint: "加价只决定你到手的那一截。换模型保留这个比例。",
   myAgentsPricingCatalogLine: "${in} / ${out}",
-  myAgentsPricingSourceOpenRouter: "进货价 · OpenRouter",
-  myAgentsPricingSourceTokenHub: "价目 · TokenHub",
-  myAgentsPricingSourceTokenHubHint: "这是 TokenHub 的公示价目。",
-  myAgentsPricingSourceHint:
-    "这是进货价。标价是进货价 × 1.15。",
   myAgentsPricingSourceSupplier: "进货价 · ${name}",
   myAgentsPricingSourceSupplierHint: "这是进货价。标价是进货价 × 1.15。",
   myAgentsPricingSourceMenu: "价目价 · OpenRouter",

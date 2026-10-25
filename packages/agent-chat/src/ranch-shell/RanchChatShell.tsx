@@ -646,7 +646,7 @@ function isByoVendor(vendor: string, runtimeVendor: string): boolean {
   return !!runtimeVendor && vendor === runtimeVendor;
 }
 
-/** Live runtime is OpenRouter, not a self-reported BYO vendor (e.g. TokenHub). */
+/** Live runtime is OpenRouter, not a self-reported BYO vendor. */
 function isOpenRouterByoListed(
   listed: string | null | undefined,
   runtime: string | null | undefined,
