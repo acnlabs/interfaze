@@ -24,6 +24,7 @@ import { copyText } from "./connectPrompt";
 import type { RanchMessages } from "./i18n";
 import { officialShelfAllows } from "./officialV0";
 import { formatLocalPerMillion } from "../composerPrice";
+import { uniqueBookCatalogPair } from "../composerQuote";
 import { formatCreditsFromLocal } from "../creditDisplay";
 import { chatSettleQuote, DEFAULT_CHAT_FEE_RATE } from "./settleQuote";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
@@ -991,8 +992,6 @@ export function AgentOwnerSettings({
     if (typeof mu === "number" && Number.isFinite(mu) && mu >= 0) return String(mu);
     return String(DEFAULT_MARKUP_PERCENT);
   });
-  const [catalogById, setCatalogById] = useState<Record<string, CatalogPair>>({});
-  const [catalogReadyKey, setCatalogReadyKey] = useState("");
   const [savingPricing, setSavingPricing] = useState(false);
   const [pricingMsg, setPricingMsg] = useState<string | null>(null);
   const [pricingError, setPricingError] = useState<string | null>(null);
@@ -1192,42 +1191,6 @@ export function AgentOwnerSettings({
     };
   }, [client, detail.agent_id, detail.token_pricing?.model_id, detail.runtime_model_id]);
 
-  const supportedKey = supportedModels.join("\u0001");
-  useEffect(() => {
-    if (supportedModels.length === 0) {
-      setCatalogReadyKey("");
-      return;
-    }
-    let cancelled = false;
-    const key = supportedKey;
-    void Promise.all(
-      supportedModels.map((id) =>
-        client.getModelCatalogItem(id).then(
-          (row) => {
-            const quote = syncCatalogRates(row);
-            if (!quote) return [id, null] as const;
-            const source = (row.source || "").trim() || undefined;
-            return [id, { in: quote.input, out: quote.output, source, currency: quote.currency }] as const;
-          },
-          () => [id, null] as const,
-        ),
-      ),
-    ).then((rows) => {
-      if (cancelled) return;
-      setCatalogById((prev) => {
-        const next = { ...prev };
-        for (const [id, pair] of rows) {
-          if (pair) next[id] = pair;
-        }
-        return next;
-      });
-      setCatalogReadyKey(key);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [client, supportedKey]);
-
   useEffect(() => {
     let cancelled = false;
     const page = 500;
@@ -1410,11 +1373,11 @@ export function AgentOwnerSettings({
   const officialRow = officialCatalog.find((row) =>
     sameModelId(row.id, displayedModelId),
   );
-  const byoOpenRouterRow = openRouterByoCatalog.find((row) =>
-    sameModelId(row.id, displayedModelId),
-  );
+  // BYO (TokenPlan / OpenRouter key / any vendor): settle uses the price book
+  // by tail — never handwritten host_pack OEM stickers.
+  const byoBookRow = uniqueBookCatalogPair(displayedModelId, openRouterByoCatalog);
   const selectedCatalog = officialSelected
-      ? officialRow
+    ? officialRow
       ? {
           in: officialRow.in,
           out: officialRow.out,
@@ -1422,18 +1385,18 @@ export function AgentOwnerSettings({
           currency: officialRow.currency,
         }
       : null
-    : openRouterByoSelected
-      ? byoOpenRouterRow
-        ? {
-            in: byoOpenRouterRow.in,
-            out: byoOpenRouterRow.out,
-            source: byoOpenRouterRow.source || "openrouter",
-            currency: byoOpenRouterRow.currency,
-          }
-        : null
-      : catalogById[displayedModelId] ??
-        Object.entries(catalogById).find(([id]) => sameModelId(id, displayedModelId))?.[1] ??
-        null;
+    : byoBookRow
+      ? {
+          in: byoBookRow.in,
+          out: byoBookRow.out,
+          source:
+            byoBookRow.source ||
+            (openRouterByoSelected
+              ? "openrouter"
+              : priceBookSource.trim().toLowerCase() || "openrouter"),
+          currency: byoBookRow.currency,
+        }
+      : null;
   const catalogIn = selectedCatalog?.in ?? null;
   const catalogOut = selectedCatalog?.out ?? null;
   const catalogSource = (() => {
@@ -1441,9 +1404,6 @@ export function AgentOwnerSettings({
     const fromRow = (selectedCatalog?.source || "").trim().toLowerCase();
     if (fromRow) return fromRow;
     if (officialSelected) return priceBookSource.trim().toLowerCase();
-    if (modelVendorId(displayedModelId).toLowerCase() === "tencenttokenplan") {
-      return "host_pack";
-    }
     return "";
   })();
   const priceLinkSource = officialSelected
@@ -1454,23 +1414,23 @@ export function AgentOwnerSettings({
       ? null
       : pricingSourcePresentation(priceLinkSource, officialSelected, t);
   const catalogSourceUrl = priceSource
-    ? catalogSourceHref(priceLinkSource, displayedModelId)
+    ? catalogSourceHref(
+        priceLinkSource,
+        !officialSelected && byoBookRow?.id
+          ? byoBookRow.id
+          : displayedModelId,
+      )
     : null;
-  const catalogLoading =
-    officialSelected
-      ? officialCatalogLoading
-      : openRouterByoSelected
-        ? byoCatalogLoading
-        : supportedModels.length > 0 && catalogReadyKey !== supportedKey;
+  const catalogLoading = officialSelected
+    ? officialCatalogLoading
+    : byoCatalogLoading;
   const catalogError =
     !catalogLoading &&
     displayedModelId.length > 0 &&
     selectedCatalog == null &&
     (officialSelected
       ? officialCatalog.length > 0
-      : openRouterByoSelected
-        ? openRouterByoCatalog.length > 0
-        : supportedModels.length > 0)
+      : openRouterByoCatalog.length > 0)
       ? t.myAgentsPricingCatalogMissing
       : null;
   const settleQuote =
@@ -2600,7 +2560,7 @@ export function AgentOwnerSettings({
                 optionLabel={(id) =>
                   catalogOptionLabel(
                     id,
-                    openRouterByoCatalog.find((row) => sameModelId(row.id, id)),
+                    uniqueBookCatalogPair(id, openRouterByoCatalog) ?? undefined,
                     t.myAgentsPricingOptionLine,
                     t.myAgentsModelUnpriced,
                   )
@@ -2622,7 +2582,12 @@ export function AgentOwnerSettings({
             >
               {vendorModels.map((id) => (
                 <option key={id} value={id}>
-                  {catalogOptionLabel(id, catalogById[id], t.myAgentsPricingOptionLine, t.myAgentsModelUnpriced)}
+                  {catalogOptionLabel(
+                    id,
+                    uniqueBookCatalogPair(id, openRouterByoCatalog) ?? undefined,
+                    t.myAgentsPricingOptionLine,
+                    t.myAgentsModelUnpriced,
+                  )}
                 </option>
               ))}
             </select>

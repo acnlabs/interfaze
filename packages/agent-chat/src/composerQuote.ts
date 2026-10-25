@@ -55,6 +55,38 @@ export function priceTail(modelId: string | null | undefined): string {
   return slash >= 0 ? text.slice(slash + 1) : text;
 }
 
+/** Batch rows and ``~`` aliases are not a price of their own (backend `catalog_price_alias`). */
+export function catalogPriceAlias(modelId: string | null | undefined): boolean {
+  const text = (modelId || "").trim().toLowerCase();
+  return text.startsWith("~") || text.includes(":");
+}
+
+export type BookCatalogRow = {
+  id: string;
+  in: number;
+  out: number;
+  source?: string;
+  currency?: string;
+};
+
+/**
+ * Unique price-book row for a model id's last segment.
+ * Mirrors backend `_catalog_pricing`: zero or several hits do not price.
+ * `host_pack` OEM stickers are not a book — callers must pass the book only.
+ */
+export function uniqueBookCatalogPair(
+  modelId: string | null | undefined,
+  book: BookCatalogRow[],
+): BookCatalogRow | null {
+  const tail = priceTail(modelId);
+  if (!tail) return null;
+  const hits = book.filter(
+    (row) => !catalogPriceAlias(row.id) && priceTail(row.id) === tail,
+  );
+  if (hits.length !== 1) return null;
+  return hits[0] ?? null;
+}
+
 export function modelOptionHasPrice(
   option: {
     priceable?: boolean;

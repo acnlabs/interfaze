@@ -2,7 +2,43 @@ import { describe, expect, it } from "vitest";
 import {
   hasDeclaredProviderModels,
   pickOfficialShelfSelection,
+  uniqueBookCatalogPair,
 } from "./composerQuote";
+
+describe("uniqueBookCatalogPair", () => {
+  const book = [
+    { id: "deepseek/deepseek-v4-flash", in: 0.091, out: 0.182, source: "openrouter" },
+    { id: "deepseek/deepseek-v4-pro", in: 0.2088, out: 0.4176, source: "openrouter" },
+    { id: "~deepseek/deepseek-v4-flash-latest", in: 0.0422, out: 0.1763, source: "openrouter" },
+    {
+      id: "deepseek/deepseek-v4-flash:batch",
+      in: 0.05,
+      out: 0.15,
+      source: "openrouter",
+    },
+  ];
+
+  it("matches BYO vendor ids to the book by tail", () => {
+    const hit = uniqueBookCatalogPair(
+      "tencenttokenplan/deepseek/deepseek-v4-flash",
+      book,
+    );
+    expect(hit?.id).toBe("deepseek/deepseek-v4-flash");
+    expect(hit?.in).toBe(0.091);
+  });
+
+  it("does not price dated OEM ids absent from the book", () => {
+    expect(
+      uniqueBookCatalogPair("tencenttokenplan/deepseek-v4-flash-202605", book),
+    ).toBeNull();
+  });
+
+  it("ignores ~ and :batch aliases when counting hits", () => {
+    expect(uniqueBookCatalogPair("deepseek-v4-flash", book)?.id).toBe(
+      "deepseek/deepseek-v4-flash",
+    );
+  });
+});
 
 describe("hasDeclaredProviderModels", () => {
   it("is false for missing or empty providers", () => {
