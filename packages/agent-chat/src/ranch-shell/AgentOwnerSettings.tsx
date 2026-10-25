@@ -208,7 +208,6 @@ function shortModelLabel(modelId: string): string {
 
 type CatalogPair = { in: number; out: number; source?: string; currency?: string };
 
-const TOKENHUB_PRICE_URL = "https://cloud.tencent.com/document/product/1823/130055";
 const TOKENPLUS_PRICE_URL = "https://www.tokenplus.cn/models";
 const SILICONFLOW_PRICE_URL = "https://www.siliconflow.cn/pricing";
 
@@ -224,7 +223,6 @@ function catalogSourceHref(
   }
   if (src === "tokenplus") return TOKENPLUS_PRICE_URL;
   if (src === "siliconflow") return SILICONFLOW_PRICE_URL;
-  if (src === "host_pack") return TOKENHUB_PRICE_URL;
   return null;
 }
 
@@ -584,12 +582,6 @@ function pricingSourcePresentation(
   t: RanchMessages,
 ): { label: string; hint: string } | null {
   const src = source.trim().toLowerCase();
-  if (src === "host_pack") {
-    return {
-      label: t.myAgentsPricingSourceTokenHub,
-      hint: t.myAgentsPricingSourceTokenHubHint,
-    };
-  }
   if (!official) {
     if (src !== "openrouter") return null;
     return {
