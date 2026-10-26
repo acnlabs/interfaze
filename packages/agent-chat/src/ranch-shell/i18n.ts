@@ -110,6 +110,9 @@ export type RanchMessages = {
   composerModelNoPrice: string;
   composerModelPrice: (input: string, output: string) => string;
   composerModelMismatch: (listed: string, runtime: string) => string;
+  /** Show the rest of the ranked official menu after the preview slice. */
+  composerModelShowAll: (n: number) => string;
+  composerModelShowLess: string;
   sendFailed: string;
   expand: string;
   collapse: string;
@@ -887,6 +890,8 @@ const en: RanchMessages = {
   composerModelListing: "listing",
   composerModelNoPrice: "—",
   composerModelPrice: (input, output) => `${input} in · ${output} out /1M`,
+  composerModelShowAll: (n) => `Show all (${n})`,
+  composerModelShowLess: "Show less",
   composerModelMismatch: (listed, runtime) =>
     `Listing ${listed} ≠ runtime ${runtime} (still billed at listing price)`,
   sendFailed: "Send failed",
@@ -1728,6 +1733,8 @@ const zh: RanchMessages = {
   composerModelListing: "挂牌",
   composerModelNoPrice: "—",
   composerModelPrice: (input, output) => `${input} 入 · ${output} 出 /百万`,
+  composerModelShowAll: (n) => `展开全部（${n}）`,
+  composerModelShowLess: "收起",
   composerModelMismatch: (listed, runtime) =>
     `挂牌 ${listed} ≠ 运行 ${runtime}（仍按挂牌价结算）`,
   sendFailed: "发送失败",

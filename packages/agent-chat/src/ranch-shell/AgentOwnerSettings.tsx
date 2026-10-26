@@ -1498,12 +1498,9 @@ export function AgentOwnerSettings({
     displayedModelId,
     officialSelected,
   );
-  const officialDirty =
-    hostReady &&
-    displayedModelId.length > 0 &&
-    !officialSetsEqual(nextOfficial, officialSaved);
-  const canSaveOfficial =
-    officialDirty && !savingOfficial && !busy && !modelsBusy && hostReady;
+  // Owner official whitelist suspended — chat menu uses the full ranked book.
+  const officialDirty = false;
+  const canSaveOfficial = false;
 
   const policyMode = (detail.policy_mode || "").toLowerCase();
   const currentPolicy = policyFromDetail(detail.policy_mode);
