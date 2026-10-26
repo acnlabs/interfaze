@@ -654,6 +654,8 @@ export type GatewayClient = {
     network_usage_fee_rate?: number | null;
     supported_models?: string[];
     self_reported_models?: string[];
+    /** Ranked official rows shown before expand. */
+    composer_menu_preview?: number;
     agent_providers?: Array<{ id: string; models: string[]; current?: boolean }>;
     model_options?: Array<{
       model_id: string;
@@ -1124,6 +1126,7 @@ export function createGatewayClient(
         network_usage_fee_rate?: number | null;
         supported_models?: string[];
         self_reported_models?: string[];
+        composer_menu_preview?: number;
         agent_providers?: Array<{ id: string; models: string[]; current?: boolean }>;
         model_options?: Array<{
           model_id: string;

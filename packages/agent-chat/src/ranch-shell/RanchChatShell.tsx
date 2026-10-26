@@ -5314,10 +5314,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
             supported_models: supported,
             self_reported_models: selfReported,
             composer_menu_preview:
-              typeof (row as { composer_menu_preview?: unknown }).composer_menu_preview ===
-                "number" &&
-              (row as { composer_menu_preview: number }).composer_menu_preview > 0
-                ? (row as { composer_menu_preview: number }).composer_menu_preview
+              typeof row.composer_menu_preview === "number" && row.composer_menu_preview > 0
+                ? row.composer_menu_preview
                 : 20,
             model_options: options,
           });
