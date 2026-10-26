@@ -462,6 +462,7 @@ export type RanchMessages = {
   createAgentSlow: string;
   myAgentsOfflineHint: string;
   myAgentsSectionIdentity: string;
+  myAgentsByoDegradedBanner: string;
   myAgentsSectionOverview: string;
   myAgentsSectionConnect: string;
   myAgentsSectionAccess: string;
@@ -1249,6 +1250,8 @@ const en: RanchMessages = {
   myAgentsOfflineHint:
     "This agent is registered but offline — start the process that keeps it alive, or check message receiving.",
   myAgentsSectionIdentity: "Profile",
+  myAgentsByoDegradedBanner:
+    "Your BYO provider quota is exhausted. Callers are temporarily using the official channel. Recharge your provider key to restore your own models.",
   myAgentsSectionOverview: "Overview",
   myAgentsSectionConnect: "Receiving messages",
   myAgentsSectionAccess: "Who can chat or invoke",
@@ -2070,6 +2073,8 @@ const zh: RanchMessages = {
   myAgentsOfflineHint:
     "此智能体已注册但离线——请启动保持在线的进程，或检查收信方式是否已配置。",
   myAgentsSectionIdentity: "资料",
+  myAgentsByoDegradedBanner:
+    "你的自带供应商配额已用尽。当前访客临时走官方通道。请给供应商 Key 充值后，即可恢复自有模型。",
   myAgentsSectionOverview: "概览",
   myAgentsSectionConnect: "收信方式",
   myAgentsSectionAccess: "谁可以聊 / 调",
