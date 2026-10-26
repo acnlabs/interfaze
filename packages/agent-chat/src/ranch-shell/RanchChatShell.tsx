@@ -3287,6 +3287,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     markup_percent?: number | null;
     supported_models: string[];
     self_reported_models?: string[];
+    /** Ranked official rows shown before expand; default 20. */
+    composer_menu_preview?: number;
     model_options: Array<{
       model_id: string;
       is_listing?: boolean;
@@ -3307,6 +3309,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [droppedModelIds, setDroppedModelIds] = useState<string[]>([]);
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
   const [composerMenuQuery, setComposerMenuQuery] = useState("");
+  const [composerMenuExpanded, setComposerMenuExpanded] = useState(false);
   const [composerCatalog, setComposerCatalog] = useState<
     Array<{ id: string; in: number; out: number; currency?: string }>
   >(
@@ -5310,8 +5313,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
               typeof row.markup_percent === "number" ? row.markup_percent : null,
             supported_models: supported,
             self_reported_models: selfReported,
+            composer_menu_preview:
+              typeof row.composer_menu_preview === "number" && row.composer_menu_preview > 0
+                ? row.composer_menu_preview
+                : 20,
             model_options: options,
           });
+          setComposerMenuExpanded(false);
           const fallback = supported;
           const stored = readComposerModelPick(active.chat_id);
           const storedListed = readComposerListed(active.chat_id);
@@ -5493,7 +5501,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, [active?.chat_id]);
 
   useEffect(() => {
-    if (!composerMenuOpen) setComposerMenuQuery("");
+    if (!composerMenuOpen) {
+      setComposerMenuQuery("");
+      setComposerMenuExpanded(false);
+    }
   }, [composerMenuOpen]);
 
   useEffect(() => {
@@ -8476,10 +8487,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       const options = (() => {
                         const seen = new Set<string>();
                         const out: string[] = [];
-                        const source = official
-                          ? [listed, ...fromShelf]
-                          : shelfOnly
-                            ? composerModel.supported_models
+                        // Official / empty-BYO: prefer Host ranked supported_models
+                        // (full book by popularity); fall back to local catalog.
+                        const source =
+                          official || shelfOnly
+                            ? composerModel.supported_models.length > 0
+                              ? composerModel.supported_models
+                              : [listed, ...fromShelf]
                             : pricedMenu.length
                               ? pricedMenu
                               : shelfOffer;
@@ -8501,7 +8515,22 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         }
                         return out;
                       })();
-                      const visible = filterComposerModels(options, composerMenuQuery);
+                      const filtered = filterComposerModels(options, composerMenuQuery);
+                      const previewN = Math.max(
+                        1,
+                        composerModel.composer_menu_preview ?? 20,
+                      );
+                      const usePreview =
+                        (official || shelfOnly) &&
+                        !composerMenuQuery.trim() &&
+                        !composerMenuExpanded &&
+                        filtered.length > previewN;
+                      const visible = usePreview
+                        ? filtered.slice(0, previewN)
+                        : filtered;
+                      const hiddenCount = usePreview
+                        ? filtered.length - visible.length
+                        : 0;
                       // Shelf-only: never equate BYO runtime ↔ official row via bare tail
                       // (tencenttokenplan/kimi-k2.5 must not light up moonshotai/kimi-k2.5).
                       const sameShownModel = (id: string, wanted: string | null | undefined) => {
@@ -8727,6 +8756,54 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                         </li>
                                       );
                                     })}
+                                    {hiddenCount > 0 ? (
+                                      <li role="none">
+                                        <button
+                                          type="button"
+                                          onClick={() => setComposerMenuExpanded(true)}
+                                          style={{
+                                            display: "block",
+                                            width: "100%",
+                                            padding: "8px",
+                                            border: "none",
+                                            borderRadius: 8,
+                                            background: "transparent",
+                                            color: colors.muted,
+                                            cursor: "pointer",
+                                            fontSize: 12,
+                                            textAlign: "left",
+                                          }}
+                                        >
+                                          {t.composerModelShowAll(filtered.length)}
+                                        </button>
+                                      </li>
+                                    ) : null}
+                                    {!usePreview &&
+                                    composerMenuExpanded &&
+                                    (official || shelfOnly) &&
+                                    filtered.length > previewN &&
+                                    !composerMenuQuery.trim() ? (
+                                      <li role="none">
+                                        <button
+                                          type="button"
+                                          onClick={() => setComposerMenuExpanded(false)}
+                                          style={{
+                                            display: "block",
+                                            width: "100%",
+                                            padding: "8px",
+                                            border: "none",
+                                            borderRadius: 8,
+                                            background: "transparent",
+                                            color: colors.muted,
+                                            cursor: "pointer",
+                                            fontSize: 12,
+                                            textAlign: "left",
+                                          }}
+                                        >
+                                          {t.composerModelShowLess}
+                                        </button>
+                                      </li>
+                                    ) : null}
                                     {composerCatalogLoading &&
                                     (official || openRouterByo || pricedMenu.length === 0) ? (
                                       <li
