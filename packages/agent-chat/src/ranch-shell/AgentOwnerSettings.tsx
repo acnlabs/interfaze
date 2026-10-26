@@ -957,6 +957,7 @@ export function AgentOwnerSettings({
   const [officialKeyGeo, setOfficialKeyGeo] = useState<string>("");
   const [priceBookSource, setPriceBookSource] = useState("");
   const [officialDefaultModelId, setOfficialDefaultModelId] = useState<string>("");
+  const [byoDegraded, setByoDegraded] = useState(false);
   const [savingOfficial, setSavingOfficial] = useState(false);
   const [officialMsg, setOfficialMsg] = useState<string | null>(null);
   const [officialError, setOfficialError] = useState<string | null>(null);
@@ -1142,6 +1143,7 @@ export function AgentOwnerSettings({
         if (officialRow?.official_default_model_id) {
           setOfficialDefaultModelId(officialRow.official_default_model_id);
         }
+        setByoDegraded(status.byo_degraded === true);
         if (typeof officialRow?.host_inference_ready === "boolean") {
           setHostReady(officialRow.host_inference_ready);
         }
@@ -2171,6 +2173,21 @@ export function AgentOwnerSettings({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, position: "relative" }}>
+      {byoDegraded ? (
+        <div
+          role="status"
+          style={{
+            padding: "10px 12px",
+            borderRadius: 8,
+            background: "rgba(180, 83, 9, 0.12)",
+            color: colors.text,
+            fontSize: 13,
+            lineHeight: 1.45,
+          }}
+        >
+          {t.myAgentsByoDegradedBanner}
+        </div>
+      ) : null}
       <section>
         <h3 style={sectionTitle}>{t.myAgentsSectionIdentity}</h3>
         <label style={{ display: "block", marginBottom: 10 }}>

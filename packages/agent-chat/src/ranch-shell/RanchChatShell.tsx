@@ -5277,6 +5277,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           const officialIds = Array.isArray(row.official_models)
             ? row.official_models.filter((m): m is string => typeof m === "string" && !!m.trim())
             : [];
+          const byoDegraded = row.byo_degraded === true;
           const listedOfficial =
             row.host_inference_ready !== false &&
             !!listed &&
@@ -5291,12 +5292,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
             !listedOfficial &&
             row.host_inference_ready !== false &&
             !hasDeclaredProviderModels(row.agent_providers);
+          // Quota-exhausted Owner key: force official shelf picks (drop sticky BYO).
+          const forceOfficialShelf = shelfOnly || byoDegraded;
           setComposerModel({
             listed_model_id: listed,
             runtime_model_id: runtime,
             mismatched: !!row.mismatched,
-            official_channel: listedOfficial,
-            shelf_only: shelfOnly,
+            official_channel: listedOfficial || byoDegraded,
+            shelf_only: forceOfficialShelf,
             official_models: officialIds,
             official_default_model_id: officialDefault || null,
             official_key_geo:
@@ -5328,17 +5331,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
             ? { chatId: active.chat_id, listed }
             : null;
           writeComposerListed(active.chat_id, listed);
-          const catalogIds = listedOfficial
+          const catalogIds = listedOfficial || byoDegraded
             ? composerCatalogRef.current.map((row) => row.id)
             : [];
           const pricedMenu =
-            listedOfficial || shelfOnly
+            listedOfficial || forceOfficialShelf
               ? []
               : composerPricedMenuIds([runtime, listed, ...selfReported, ...supported], options);
           const nextModel = pickComposerModelForPath({
-            official: listedOfficial,
+            official: listedOfficial || byoDegraded,
             openRouterByo: isOpenRouterByoListed(listed, runtime, supported),
-            wanted: listedChanged ? listed : stored,
+            wanted: byoDegraded
+              ? officialDefault || listed
+              : listedChanged
+                ? listed
+                : stored,
             listed,
             runtime,
             fallback,
@@ -5346,10 +5353,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
             catalogIds,
           });
           const catalogPending = listedOfficial && catalogIds.length === 0;
-          if (shelfOnly) {
+          if (forceOfficialShelf) {
             const chosen = pickOfficialShelfSelection({
               menuIds: supported,
-              stored: listedChanged ? listed : stored,
+              stored: byoDegraded ? null : listedChanged ? listed : stored,
               officialDefault,
             });
             setSelectedModelId(chosen);
