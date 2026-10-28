@@ -2645,6 +2645,13 @@ export function AgentOwnerSettings({
                 })}
               </div>
             ) : null}
+            {feeRate > 0 ? (
+              <div style={{ color: colors.muted, marginTop: 2 }}>
+                {fillTemplate(t.myAgentsPricingFeeLine, {
+                  pct: String(Math.round(feeRate * 1000) / 10),
+                })}
+              </div>
+            ) : null}
             <div
               style={{
                 color: colors.muted,

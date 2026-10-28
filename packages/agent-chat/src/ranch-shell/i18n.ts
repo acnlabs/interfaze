@@ -544,6 +544,7 @@ export type RanchMessages = {
   myAgentsPricingSourceMenuHint: string;
   myAgentsPricingListingLine: string;
   myAgentsPricingKeepLine: string;
+  myAgentsPricingFeeLine: string;
   myAgentsPricingExampleLine: string;
   myAgentsPricingCatalogMissing: string;
   myAgentsPricingUnlisted: string;
@@ -1324,9 +1325,9 @@ const en: RanchMessages = {
   myAgentsProviderOfficialNamed: "Official · ${name}",
   myAgentsProviderOpenRouter: "OpenRouter",
   myAgentsOfficialHostHint:
-    "${official} uses Interfaze’s key. ${cnLimit}The machine default stays on the agent’s own key.",
+    "${official} uses Interfaze’s key.${cnLimit} Machine default stays on the agent’s own key.",
   myAgentsOfficialHostCnLimit:
-    "This China card cannot run GPT, Claude, or Gemini. ",
+    " This card cannot run GPT, Claude, or Gemini.",
   myAgentsNeedStoreKey:
     "OpenRouter needs a key on this agent. Host cannot see the key — we only read the heartbeat model. If it doesn’t have one yet, buy Store credits, write the key into the runtime, then Refresh status.",
   myAgentsOpenRouterRuntimeRequired:
@@ -1345,7 +1346,7 @@ const en: RanchMessages = {
   myAgentsProvidersFailed: "Couldn’t save providers.",
   myAgentsPricingMarkupLabel: "Markup",
   myAgentsPricingMarkupHint:
-    "Markup is only the slice you keep. Changing model keeps this %.",
+    "Markup is only the slice you keep. Network fee sits outside it. Changing model keeps this %.",
   myAgentsPricingCatalogLine: "${in} / ${out}",
   myAgentsPricingSourceSupplier: "Supplier price · ${name}",
   myAgentsPricingSourceSupplierHint:
@@ -1354,6 +1355,7 @@ const en: RanchMessages = {
   myAgentsPricingSourceMenuHint: "This is the menu price.",
   myAgentsPricingListingLine: "They pay in ${in} · out ${out} / 1M",
   myAgentsPricingKeepLine: "You keep in ${in} · out ${out} / 1M",
+  myAgentsPricingFeeLine: "Includes ${pct}% network fee outside your markup.",
   myAgentsPricingExampleLine:
     "Example: 1M input tokens, they pay about ${pay}. The list price is about ${cost}.",
   myAgentsPricingCatalogMissing:
@@ -2147,8 +2149,8 @@ const zh: RanchMessages = {
   myAgentsProviderOfficialNamed: "官方 · ${name}",
   myAgentsProviderOpenRouter: "OpenRouter",
   myAgentsOfficialHostHint:
-    "「${official}」用的是 Interfaze 的钥匙。${cnLimit}机器上的默认型号仍用智能体自己的钥匙。",
-  myAgentsOfficialHostCnLimit: "这张国内卡打不了 GPT、Claude、Gemini。",
+    "「${official}」用的是 Interfaze 的钥匙。${cnLimit}机器默认型号仍用智能体自己的钥匙。",
+  myAgentsOfficialHostCnLimit: "这张卡打不了 GPT、Claude、Gemini。",
   myAgentsNeedStoreKey:
     "OpenRouter 需要这只智能体自己的钥匙。Host 看不见钥匙，只认心跳型号。还没有的话，去 Store 买额度、写入运行环境，再点「刷新状态」。",
   myAgentsOpenRouterRuntimeRequired:
@@ -2166,7 +2168,7 @@ const zh: RanchMessages = {
   myAgentsProvidersSaved: "供应商已保存",
   myAgentsProvidersFailed: "保存供应商失败。",
   myAgentsPricingMarkupLabel: "上浮",
-  myAgentsPricingMarkupHint: "加价只决定你到手的那一截。换模型保留这个比例。",
+  myAgentsPricingMarkupHint: "加价只决定你到手的那一截；网络费在加价之外。换模型保留这个比例。",
   myAgentsPricingCatalogLine: "${in} / ${out}",
   myAgentsPricingSourceSupplier: "进货价 · ${name}",
   myAgentsPricingSourceSupplierHint: "这是进货价。标价是进货价 × 1.15。",
@@ -2174,6 +2176,7 @@ const zh: RanchMessages = {
   myAgentsPricingSourceMenuHint: "这是价目价。",
   myAgentsPricingListingLine: "对方实付 入 ${in} · 出 ${out} / 百万",
   myAgentsPricingKeepLine: "你到手 入 ${in} · 出 ${out} / 百万",
+  myAgentsPricingFeeLine: "含 ${pct}% 价外网络费（加价之外）。",
   myAgentsPricingExampleLine:
     "例：100 万输入 token，对方约付 ${pay}，标价约 ${cost}。",
   myAgentsPricingCatalogMissing: "价目里没有这个模型。请换一个。",
