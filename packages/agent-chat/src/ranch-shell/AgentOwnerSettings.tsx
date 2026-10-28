@@ -206,7 +206,15 @@ function shortModelLabel(modelId: string): string {
   return slash >= 0 ? s.slice(slash + 1) : s;
 }
 
-type CatalogPair = { in: number; out: number; source?: string; currency?: string };
+type CatalogPair = {
+  in: number;
+  out: number;
+  /** Supplier / sync book before official × 1.15. */
+  bookIn?: number;
+  bookOut?: number;
+  source?: string;
+  currency?: string;
+};
 
 const TOKENPLUS_PRICE_URL = "https://www.tokenplus.cn/models";
 const SILICONFLOW_PRICE_URL = "https://www.siliconflow.cn/pricing";
@@ -218,7 +226,7 @@ function catalogSourceHref(
   const src = (source || "").trim().toLowerCase();
   if (src === "openrouter") {
     const parts = modelId.trim().replace(/^\/+/, "").split("/").filter(Boolean);
-    if (parts.length === 0) return null;
+    if (parts.length === 0) return "https://openrouter.ai/models";
     return `https://openrouter.ai/${parts.map(encodeURIComponent).join("/")}`;
   }
   if (src === "tokenplus") return TOKENPLUS_PRICE_URL;
@@ -552,14 +560,6 @@ function fillTemplate(
     out = out.split(`\${${k}}`).join(String(v));
   }
   return out;
-}
-
-function officialHostHint(book: string, keyGeo: string, t: RanchMessages): string {
-  const cn = keyGeo.trim().toLowerCase() === "cn";
-  return fillTemplate(t.myAgentsOfficialHostHint, {
-    official: officialProviderLabel(book, t),
-    cnLimit: cn ? t.myAgentsOfficialHostCnLimit : "",
-  });
 }
 
 function priceBookVendor(book: string): string {
@@ -1212,10 +1212,13 @@ export function AgentOwnerSettings({
           if (!quote) continue;
           if (official && !officialShelfAllows(id, officialKeyGeo)) continue;
           if (acc.some((item) => sameModelId(item.id, id))) continue;
+          const bookRates = official ? syncCatalogRates(row) : null;
           acc.push({
             id,
             in: quote.input,
             out: quote.output,
+            bookIn: bookRates?.input,
+            bookOut: bookRates?.output,
             source: src || book,
             currency: quote.currency,
           });
@@ -1374,6 +1377,8 @@ export function AgentOwnerSettings({
       ? {
           in: officialRow.in,
           out: officialRow.out,
+          bookIn: officialRow.bookIn,
+          bookOut: officialRow.bookOut,
           source: officialRow.source || priceBookSource.trim().toLowerCase(),
           currency: officialRow.currency,
         }
@@ -1392,20 +1397,22 @@ export function AgentOwnerSettings({
       : null;
   const catalogIn = selectedCatalog?.in ?? null;
   const catalogOut = selectedCatalog?.out ?? null;
+  const feeDenom = Math.round((1 - Math.min(0.99, Math.max(0, feeRate))) * 1000) / 1000;
   const catalogSource = (() => {
     if (openRouterByoSelected) return "openrouter";
     const fromRow = (selectedCatalog?.source || "").trim().toLowerCase();
     if (fromRow) return fromRow;
-    if (officialSelected) return priceBookSource.trim().toLowerCase();
+    if (officialSelected) {
+      return priceBookSource.trim().toLowerCase() || "openrouter";
+    }
     return "";
   })();
   const priceLinkSource = officialSelected
-    ? priceBookSource.trim().toLowerCase() || catalogSource
+    ? priceBookSource.trim().toLowerCase() || catalogSource || "openrouter"
     : catalogSource;
-  const priceSource =
-    officialSelected && !priceBookSource.trim()
-      ? null
-      : pricingSourcePresentation(priceLinkSource, officialSelected, t);
+  const priceSource = priceLinkSource
+    ? pricingSourcePresentation(priceLinkSource, officialSelected, t)
+    : null;
   const catalogSourceUrl = priceSource
     ? catalogSourceHref(
         priceLinkSource,
@@ -1464,6 +1471,33 @@ export function AgentOwnerSettings({
       : openRouterByoSelected
         ? byoCatalogLoading
         : modelsLoading;
+  const hasPricingModels = officialSelected
+    ? officialIds.length > 0
+    : openRouterByoSelected
+      ? openRouterDeclaredIds.length > 0
+      : vendorModels.length > 0;
+  const pricingShelfEmptyText =
+    officialSelected || openRouterByoSelected
+      ? runtimeId
+        ? fillTemplate(t.myAgentsPricingShelfEmptyRuntime, { model: runtimeId })
+        : t.myAgentsPricingShelfEmpty
+      : t.myAgentsPricingModelsEmpty;
+  const modelFieldHint = t.myAgentsPricingModelHint;
+  const markupFieldHint = [
+    officialSelected
+      ? t.myAgentsPricingMarkupHintOfficial
+      : t.myAgentsPricingMarkupHintByo,
+    markupParsed != null
+      ? fillTemplate(
+          officialSelected
+            ? t.myAgentsPricingFormulaOfficial
+            : t.myAgentsPricingFormulaByo,
+          { markup: String(markupParsed), denom: String(feeDenom) },
+        )
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
   const openRouterOnRuntime = runtimeIsOpenRouter(
     detail.runtime_model_id || "",
     supportedModels,
@@ -2279,115 +2313,245 @@ export function AgentOwnerSettings({
               text={`${t.myAgentsPricingHint} ${t.myAgentsPricingSelfReportNote} ${t.myAgentsPricingModelHint}`}
             />
           </span>
+          <button
+            type="button"
+            onClick={refreshRuntimeStatus}
+            disabled={busy || modelsLoading || refreshingRuntime}
+            style={{
+              ...btnGhost,
+              marginLeft: "auto",
+              padding: "2px 8px",
+              fontSize: 11,
+              lineHeight: 1.3,
+              opacity: busy || modelsLoading || refreshingRuntime ? 0.55 : 1,
+            }}
+          >
+            {refreshingRuntime ? t.loading : t.myAgentsRefreshRuntime}
+          </button>
         </h3>
         {detail.token_pricing == null ? (
           <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
             {t.myAgentsPricingUnlisted}
           </p>
         ) : null}
-        <div style={{ marginBottom: 10 }}>
+        <div style={{ marginBottom: 14 }}>
           <div
             style={{
-              fontSize: 12,
-              color: colors.muted,
-              marginBottom: 6,
               display: "flex",
-              alignItems: "center",
-              gap: 8,
+              gap: 16,
+              alignItems: "flex-start",
+              flexWrap: "wrap",
             }}
           >
-            {t.myAgentsProviderLabel}
-            <FieldHint
-              label={t.fieldHintLabel}
-              text={fillTemplate(t.myAgentsProviderHint, {
-                official: officialProviderLabel(priceBookSource, t),
-              })}
-            />
-            <button
-              type="button"
-              onClick={refreshRuntimeStatus}
-              disabled={busy || modelsLoading || refreshingRuntime}
-              style={{
-                ...btnGhost,
-                marginLeft: "auto",
-                padding: "4px 8px",
-                fontSize: 11,
-                opacity: busy || modelsLoading || refreshingRuntime ? 0.55 : 1,
-              }}
-            >
-              {refreshingRuntime ? t.loading : t.myAgentsRefreshRuntime}
-            </button>
+            <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: colors.muted,
+                  marginBottom: 6,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  minHeight: 22,
+                }}
+              >
+                {t.myAgentsProviderLabel}
+                <FieldHint
+                  label={t.fieldHintLabel}
+                  text={fillTemplate(t.myAgentsProviderHint, {
+                    official: officialProviderLabel(priceBookSource, t),
+                  })}
+                />
+              </div>
+              {providerOptions.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>
+                  {t.myAgentsPricingModelsEmpty}
+                </p>
+              ) : (
+                <select
+                  aria-label={t.myAgentsProviderLabel}
+                  value={activeProvider}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    providerChosen.current = true;
+                    setSettingsProvider(next);
+                    if (next === OFFICIAL_OPENROUTER) {
+                      const equiv =
+                        findOfficialEquivalent(modelIdDraft, officialIds) ||
+                        officialSaved.find((id) =>
+                          officialIds.some((item) => sameModelId(item, id)),
+                        ) ||
+                        (officialDefaultModelId
+                          ? officialIds.find((id) => sameModelId(id, officialDefaultModelId))
+                          : undefined) ||
+                        officialIds[0];
+                      if (equiv) setModelIdDraft(equiv);
+                      return;
+                    }
+                    if (next === OPENROUTER_BYO) {
+                      const equiv =
+                        findOfficialEquivalent(modelIdDraft, openRouterDeclaredIds) ||
+                        openRouterDeclaredIds[0];
+                      if (equiv) setModelIdDraft(equiv);
+                      return;
+                    }
+                    const list = modelsForDeclaredProvider(agentProviders, next);
+                    if (list.length > 0 && !list.some((id) => sameModelId(id, modelIdDraft))) {
+                      setModelIdDraft(list[0]);
+                    }
+                  }}
+                  disabled={busy || modelsLoading}
+                  style={{ ...inputStyle, width: "100%" }}
+                >
+                  {!activeProvider ? (
+                    <option value="" disabled>
+                      …
+                    </option>
+                  ) : null}
+                  {providerOptions.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div style={{ flex: "1.2 1 260px", minWidth: 0 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginBottom: 6,
+                  minHeight: 22,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: colors.muted,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    minWidth: 0,
+                  }}
+                >
+                  {t.myAgentsPricingModelLabel}
+                  <FieldHint label={t.fieldHintLabel} text={modelFieldHint} />
+                </span>
+                {catalogSourceUrl && priceSource ? (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      marginLeft: "auto",
+                      flexShrink: 0,
+                      gap: 2,
+                    }}
+                  >
+                    <a
+                      href={catalogSourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        fontSize: 11,
+                        color: colors.muted,
+                        textDecoration: "underline",
+                      }}
+                    >
+                      {priceSource.label}
+                    </a>
+                    <FieldHint
+                      label={t.fieldHintLabel}
+                      text={priceSource.hint}
+                      align="right"
+                    />
+                  </span>
+                ) : null}
+              </div>
+              {modelsBusy ? (
+                <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>…</p>
+              ) : officialSelected ? (
+                officialIds.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+                    {pricingShelfEmptyText}
+                  </p>
+                ) : (
+                  <OfficialModelPicker
+                    ids={officialIds}
+                    value={displayedModelId}
+                    disabled={busy || savingPricing}
+                    ariaLabel={t.myAgentsPricingModelLabel}
+                    searchPlaceholder={t.myAgentsPricingModelSearch}
+                    emptyText={t.myAgentsPricingOfficialEmpty}
+                    optionLabel={(id) =>
+                      catalogOptionLabel(
+                        id,
+                        officialCatalog.find((row) => sameModelId(row.id, id)),
+                        t.myAgentsPricingOptionLine,
+                        t.myAgentsModelUnpriced,
+                      )
+                    }
+                    onChange={setModelIdDraft}
+                  />
+                )
+              ) : openRouterByoSelected ? (
+                openRouterDeclaredIds.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+                    {pricingShelfEmptyText}
+                  </p>
+                ) : (
+                  <OfficialModelPicker
+                    ids={openRouterDeclaredIds}
+                    value={displayedModelId}
+                    disabled={busy || savingPricing}
+                    ariaLabel={t.myAgentsPricingModelLabel}
+                    searchPlaceholder={t.myAgentsPricingModelSearch}
+                    emptyText={t.myAgentsPricingOfficialEmpty}
+                    optionLabel={(id) =>
+                      catalogOptionLabel(
+                        id,
+                        uniqueBookCatalogPair(id, openRouterByoCatalog) ?? undefined,
+                        t.myAgentsPricingOptionLine,
+                        t.myAgentsModelUnpriced,
+                      )
+                    }
+                    onChange={setModelIdDraft}
+                  />
+                )
+              ) : vendorModels.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+                  {pricingShelfEmptyText}
+                </p>
+              ) : (
+                <select
+                  aria-label={t.myAgentsPricingModelLabel}
+                  value={displayedModelId}
+                  onChange={(e) => setModelIdDraft(e.target.value)}
+                  disabled={busy || savingPricing}
+                  style={{ ...inputStyle, width: "100%" }}
+                >
+                  {vendorModels.map((id) => (
+                    <option key={id} value={id}>
+                      {catalogOptionLabel(
+                        id,
+                        uniqueBookCatalogPair(id, openRouterByoCatalog) ?? undefined,
+                        t.myAgentsPricingOptionLine,
+                        t.myAgentsModelUnpriced,
+                      )}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
-          {providerOptions.length === 0 ? (
-            <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>
-              {t.myAgentsPricingModelsEmpty}
-            </p>
-          ) : (
-            <select
-              aria-label={t.myAgentsProviderLabel}
-              value={activeProvider}
-              onChange={(e) => {
-                const next = e.target.value;
-                providerChosen.current = true;
-                setSettingsProvider(next);
-                if (next === OFFICIAL_OPENROUTER) {
-                  const equiv =
-                    findOfficialEquivalent(modelIdDraft, officialIds) ||
-                    officialSaved.find((id) =>
-                      officialIds.some((item) => sameModelId(item, id)),
-                    ) ||
-                    (officialDefaultModelId
-                      ? officialIds.find((id) => sameModelId(id, officialDefaultModelId))
-                      : undefined) ||
-                    officialIds[0];
-                  if (equiv) setModelIdDraft(equiv);
-                  return;
-                }
-                if (next === OPENROUTER_BYO) {
-                  const equiv =
-                    findOfficialEquivalent(modelIdDraft, openRouterDeclaredIds) ||
-                    openRouterDeclaredIds[0];
-                  if (equiv) setModelIdDraft(equiv);
-                  return;
-                }
-                const list = modelsForDeclaredProvider(agentProviders, next);
-                if (list.length > 0 && !list.some((id) => sameModelId(id, modelIdDraft))) {
-                  setModelIdDraft(list[0]);
-                }
-              }}
-              disabled={busy || modelsLoading}
-              style={inputStyle}
-            >
-              {!activeProvider ? (
-                <option value="" disabled>
-                  …
-                </option>
-              ) : null}
-              {providerOptions.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          )}
-          {officialSelected ? (
+          {openRouterByoSelected ? (
             <p
               style={{
                 margin: "8px 0 0",
-                fontSize: 12,
-                color: colors.muted,
-                lineHeight: 1.45,
-              }}
-            >
-              {officialHostHint(priceBookSource, officialKeyGeo, t)}
-            </p>
-          ) : openRouterByoSelected ? (
-            <p
-              style={{
-                margin: "8px 0 0",
-                fontSize: 12,
+                fontSize: 11,
                 color: openRouterOnRuntime ? colors.muted : colors.danger,
-                lineHeight: 1.45,
+                lineHeight: 1.4,
               }}
             >
               {openRouterOnRuntime
@@ -2461,7 +2625,7 @@ export function AgentOwnerSettings({
                 </>
               ) : null}
             </p>
-          ) : onOpenKeys ? (
+          ) : onOpenKeys && !officialSelected ? (
             <p
               style={{
                 margin: "8px 0 0",
@@ -2487,189 +2651,181 @@ export function AgentOwnerSettings({
               </button>
             </p>
           ) : null}
-        </div>
-        <div style={{ marginBottom: 10 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 8,
-              marginBottom: 6,
-            }}
-          >
-            <span style={{ fontSize: 12, color: colors.muted }}>
-              {t.myAgentsPricingModelLabel}
-            </span>
-            {catalogSourceUrl ? (
-              <span style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-                <a
-                  href={catalogSourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    fontSize: 12,
-                    color: colors.muted,
-                    textDecoration: "underline",
-                  }}
-                >
-                  {priceSource?.label}
-                </a>
-                <FieldHint
-                  label={t.fieldHintLabel}
-                  text={priceSource?.hint || ""}
-                  align="right"
-                />
-              </span>
-            ) : null}
-          </div>
-          {modelsBusy ? (
-            <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>…</p>
-          ) : officialSelected ? (
-            officialIds.length === 0 ? (
-              <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
-                {t.myAgentsPricingOfficialEmpty}
-              </p>
-            ) : (
-              <OfficialModelPicker
-                ids={officialIds}
-                value={displayedModelId}
-                disabled={busy || savingPricing}
-                ariaLabel={t.myAgentsPricingModelLabel}
-                searchPlaceholder={t.myAgentsPricingModelSearch}
-                emptyText={t.myAgentsPricingOfficialEmpty}
-                optionLabel={(id) =>
-                  catalogOptionLabel(
-                    id,
-                    officialCatalog.find((row) => sameModelId(row.id, id)),
-                    t.myAgentsPricingOptionLine,
-                    t.myAgentsModelUnpriced,
-                  )
-                }
-                onChange={setModelIdDraft}
-              />
-            )
-          ) : openRouterByoSelected ? (
-            openRouterDeclaredIds.length === 0 ? (
-              <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
-                {t.myAgentsPricingOfficialEmpty}
-              </p>
-            ) : (
-              <OfficialModelPicker
-                ids={openRouterDeclaredIds}
-                value={displayedModelId}
-                disabled={busy || savingPricing}
-                ariaLabel={t.myAgentsPricingModelLabel}
-                searchPlaceholder={t.myAgentsPricingModelSearch}
-                emptyText={t.myAgentsPricingOfficialEmpty}
-                optionLabel={(id) =>
-                  catalogOptionLabel(
-                    id,
-                    uniqueBookCatalogPair(id, openRouterByoCatalog) ?? undefined,
-                    t.myAgentsPricingOptionLine,
-                    t.myAgentsModelUnpriced,
-                  )
-                }
-                onChange={setModelIdDraft}
-              />
-            )
-          ) : vendorModels.length === 0 ? (
-            <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.muted }}>
-              {t.myAgentsPricingModelsEmpty}
-            </p>
-          ) : (
-            <select
-              aria-label={t.myAgentsPricingModelLabel}
-              value={displayedModelId}
-              onChange={(e) => setModelIdDraft(e.target.value)}
-              disabled={busy || savingPricing}
-              style={inputStyle}
-            >
-              {vendorModels.map((id) => (
-                <option key={id} value={id}>
-                  {catalogOptionLabel(
-                    id,
-                    uniqueBookCatalogPair(id, openRouterByoCatalog) ?? undefined,
-                    t.myAgentsPricingOptionLine,
-                    t.myAgentsModelUnpriced,
-                  )}
-                </option>
-              ))}
-            </select>
-          )}
-          {runtimeMismatch ? (
+          {runtimeMismatch && hasPricingModels ? (
             <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
               {fillTemplate(t.myAgentsPricingRuntimeHint, { model: runtimeId })}
             </div>
           ) : null}
         </div>
-        <label style={{ display: "block", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
-            {t.myAgentsPricingMarkupLabel}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input
-              value={markupDraft}
-              onChange={(e) => setMarkupDraft(e.target.value)}
-              style={{ ...inputStyle, flex: 1 }}
-              inputMode="decimal"
-              disabled={busy || savingPricing}
-              autoComplete="off"
-            />
-            <span style={{ fontSize: 13, color: colors.muted }}>%</span>
-          </div>
-        </label>
-        {!previewReady && !catalogError ? (
-          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted }}>…</p>
-        ) : null}
-        {catalogError ? (
-          <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.danger }}>{catalogError}</p>
-        ) : null}
-        {previewReady &&
-        inputParsed != null &&
-        outputParsed != null &&
-        catalogIn != null &&
-        catalogOut != null ? (
-          <div style={{ margin: "0 0 10px", fontSize: 12, lineHeight: 1.45 }}>
-            <div style={{ color: colors.text }}>
-              {fillTemplate(t.myAgentsPricingListingLine, {
-                in: fmtLocal(inputParsed, selectedCatalog?.currency),
-                out: fmtLocal(outputParsed, selectedCatalog?.currency),
-              })}
+        {!modelsBusy && hasPricingModels ? (
+          <div
+            style={{
+              display: "flex",
+              gap: 16,
+              alignItems: "flex-start",
+              flexWrap: "wrap",
+              marginBottom: 14,
+            }}
+          >
+            <div style={{ flex: "1 1 120px", minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: colors.muted,
+                  marginBottom: 6,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  minHeight: 22,
+                }}
+              >
+                {t.myAgentsPricingMarkupLabel}
+                <FieldHint label={t.fieldHintLabel} text={markupFieldHint} />
+              </div>
+              <div
+                style={{
+                  ...inputStyle,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  width: "100%",
+                  boxSizing: "border-box",
+                }}
+              >
+                <input
+                  value={markupDraft}
+                  onChange={(e) => setMarkupDraft(e.target.value)}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    width: "100%",
+                    border: "none",
+                    outline: "none",
+                    background: "transparent",
+                    color: "inherit",
+                    font: "inherit",
+                    padding: 0,
+                  }}
+                  inputMode="decimal"
+                  disabled={busy || savingPricing}
+                  autoComplete="off"
+                  aria-label={t.myAgentsPricingMarkupLabel}
+                />
+                <span style={{ color: colors.muted, fontSize: 12, flexShrink: 0 }}>%</span>
+              </div>
             </div>
-            {ownerInParsed != null && ownerOutParsed != null ? (
-              <div style={{ color: colors.muted, marginTop: 2 }}>
-                {fillTemplate(t.myAgentsPricingKeepLine, {
-                  in: fmtLocal(ownerInParsed, selectedCatalog?.currency),
-                  out: fmtLocal(ownerOutParsed, selectedCatalog?.currency),
-                })}
+            <div style={{ flex: "1.2 1 180px", minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: colors.muted,
+                  marginBottom: 6,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  minHeight: 22,
+                }}
+              >
+                {t.myAgentsPricingEstimateLabel}
+                <FieldHint label={t.fieldHintLabel} text={t.myAgentsPricingEstimateHint} />
               </div>
-            ) : null}
-            {feeRate > 0 ? (
-              <div style={{ color: colors.muted, marginTop: 2 }}>
-                {fillTemplate(t.myAgentsPricingFeeLine, {
-                  pct: String(Math.round(feeRate * 1000) / 10),
-                })}
+              {catalogError ? (
+                <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>{catalogError}</p>
+              ) : (
+                <>
+                  <input
+                    value={
+                      previewReady && inputParsed != null && outputParsed != null
+                        ? fillTemplate(t.myAgentsPricingFormulaPay, {
+                            in: formatCreditsFromLocal(inputParsed),
+                            out: formatCreditsFromLocal(outputParsed),
+                          })
+                        : "…"
+                    }
+                    readOnly
+                    tabIndex={-1}
+                    aria-label={t.myAgentsPricingEstimateLabel}
+                    style={{
+                      ...inputStyle,
+                      width: "100%",
+                      cursor: "default",
+                      opacity: previewReady ? 1 : 0.7,
+                    }}
+                  />
+                  {previewReady && inputParsed != null && outputParsed != null ? (
+                    <div
+                      style={{
+                        marginTop: 4,
+                        fontSize: 11,
+                        color: colors.muted,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {fillTemplate(t.myAgentsPricingMoneyPair, {
+                        moneyIn: fmtLocal(inputParsed, selectedCatalog?.currency),
+                        moneyOut: fmtLocal(outputParsed, selectedCatalog?.currency),
+                      })}
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
+            <div style={{ flex: "1.2 1 180px", minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: colors.muted,
+                  marginBottom: 6,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  minHeight: 22,
+                }}
+              >
+                {t.myAgentsPricingKeepLabel}
+                <FieldHint
+                  label={t.fieldHintLabel}
+                  text={
+                    officialSelected
+                      ? t.myAgentsPricingKeepHintOfficial
+                      : t.myAgentsPricingKeepHintByo
+                  }
+                />
               </div>
-            ) : null}
-            <div
-              style={{
-                color: colors.muted,
-                marginTop: 2,
-                display: "flex",
-                alignItems: "center",
-              }}
-            >
-              {fillTemplate(t.myAgentsPricingCreditsLine, {
-                in: formatCreditsFromLocal(inputParsed),
-                out: formatCreditsFromLocal(outputParsed),
-              })}
-              <FieldHint
-                label={t.fieldHintLabel}
-                text={fillTemplate(t.myAgentsPricingCreditsNote, {
-                  price: (selectedCatalog?.currency || "").toUpperCase() === "CNY" ? "¥1" : "$1",
-                })}
+              <input
+                value={
+                  previewReady && ownerInParsed != null && ownerOutParsed != null
+                    ? fillTemplate(t.myAgentsPricingKeepLine, {
+                        in: formatCreditsFromLocal(ownerInParsed),
+                        out: formatCreditsFromLocal(ownerOutParsed),
+                      })
+                    : "…"
+                }
+                readOnly
+                tabIndex={-1}
+                aria-label={t.myAgentsPricingKeepLabel}
+                style={{
+                  ...inputStyle,
+                  width: "100%",
+                  cursor: "default",
+                  opacity: previewReady && ownerInParsed != null ? 1 : 0.7,
+                }}
               />
+              {previewReady && ownerInParsed != null && ownerOutParsed != null ? (
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontSize: 11,
+                    color: colors.muted,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {fillTemplate(t.myAgentsPricingMoneyPair, {
+                    moneyIn: fmtLocal(ownerInParsed, selectedCatalog?.currency),
+                    moneyOut: fmtLocal(ownerOutParsed, selectedCatalog?.currency),
+                  })}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
