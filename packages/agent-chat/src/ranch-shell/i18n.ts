@@ -503,6 +503,9 @@ export type RanchMessages = {
   myAgentsPricingModelsEmpty: string;
   myAgentsPricingModelSearch: string;
   myAgentsPricingOfficialEmpty: string;
+  myAgentsPricingShelfEmpty: string;
+  myAgentsPricingShelfEmptyRuntime: string;
+  myAgentsPricingEmptyRuntimeNote: string;
   myAgentsPricingOptionLine: string;
   myAgentsPricingCreditsLine: string;
   myAgentsPricingCreditsNote: string;
@@ -523,7 +526,6 @@ export type RanchMessages = {
   myAgentsProviderOfficialNamed: string;
   myAgentsProviderOpenRouter: string;
   myAgentsOfficialHostHint: string;
-  myAgentsOfficialHostCnLimit: string;
   myAgentsNeedStoreKey: string;
   myAgentsOpenRouterRuntimeRequired: string;
   myAgentsBuyStoreKey: string;
@@ -537,13 +539,24 @@ export type RanchMessages = {
   myAgentsProvidersFailed: string;
   myAgentsPricingMarkupLabel: string;
   myAgentsPricingMarkupHint: string;
+  myAgentsPricingMarkupHintOfficial: string;
+  myAgentsPricingMarkupHintByo: string;
   myAgentsPricingCatalogLine: string;
   myAgentsPricingSourceSupplier: string;
   myAgentsPricingSourceSupplierHint: string;
   myAgentsPricingSourceMenu: string;
   myAgentsPricingSourceMenuHint: string;
   myAgentsPricingListingLine: string;
+  myAgentsPricingFormulaOfficial: string;
+  myAgentsPricingFormulaByo: string;
+  myAgentsPricingFormulaPay: string;
+  myAgentsPricingEstimateLabel: string;
+  myAgentsPricingEstimateHint: string;
+  myAgentsPricingMoneyPair: string;
+  myAgentsPricingKeepLabel: string;
   myAgentsPricingKeepLine: string;
+  myAgentsPricingKeepHintOfficial: string;
+  myAgentsPricingKeepHintByo: string;
   myAgentsPricingFeeLine: string;
   myAgentsPricingExampleLine: string;
   myAgentsPricingCatalogMissing: string;
@@ -1291,15 +1304,20 @@ const en: RanchMessages = {
   myAgentsProfileFailed: "Couldn’t save profile.",
   myAgentsSectionPricing: "Agent pricing",
   myAgentsPricingHint:
-    "The preview is what the other person pays. With their own key: they pay the menu price × (1+markup) ÷ 0.9, and you keep that marked-up menu price. Official: the list price is the supplier price × 1.15. They pay (list price + your markup) ÷ 0.9, and you keep only the markup.",
+    "Top: provider and default model. Middle: markup edits the formula. Bottom: your keep as credits (with money in parentheses). They pay = model price × (1+markup) ÷ 0.9. Official model price already includes supplier × 1.15; you keep only the markup. Own key: model price is the menu price; you keep the marked-up menu (includes model cost).",
   myAgentsPricingInputLabel: "Settle preview · input / 1M",
   myAgentsPricingOutputLabel: "Settle preview · output / 1M",
-  myAgentsPricingModelLabel: "Default model · cost per 1M tokens, before your markup",
+  myAgentsPricingModelLabel: "Default model",
   myAgentsPricingModelHint:
-    "Pick the default from models this agent already reports. You cannot add or remove models here.",
+    "Price shown is per 1M tokens before your markup. Official already includes supplier × 1.15; your own key shows the menu price. Pick from models this agent already reports — you cannot add or remove models here.",
   myAgentsPricingModelsEmpty: "This agent has not reported any models yet.",
   myAgentsPricingModelSearch: "Search",
   myAgentsPricingOfficialEmpty: "No matching models on this price list.",
+  myAgentsPricingShelfEmpty:
+    "No models on this price list for the selected provider. Switch provider, or Refresh status after the shelf updates.",
+  myAgentsPricingShelfEmptyRuntime:
+    "No models on this price list for the selected provider. Runtime still reports ${model}. Switch provider or Refresh status.",
+  myAgentsPricingEmptyRuntimeNote: "Runtime still reports ${model}.",
   myAgentsPricingOptionLine: "${name} · in ${in} · out ${out}",
   myAgentsPricingCreditsLine: "in ${in} · out ${out} credits / 1M",
   myAgentsPricingCreditsNote: "100 credits = ${price}. Usage is shown to 2 decimals. Top-up stays a whole number.",
@@ -1325,9 +1343,7 @@ const en: RanchMessages = {
   myAgentsProviderOfficialNamed: "Official · ${name}",
   myAgentsProviderOpenRouter: "OpenRouter",
   myAgentsOfficialHostHint:
-    "${official} uses Interfaze’s key.${cnLimit} Machine default stays on the agent’s own key.",
-  myAgentsOfficialHostCnLimit:
-    " This card cannot run GPT, Claude, or Gemini.",
+    "Machine default stays on the agent’s own key.",
   myAgentsNeedStoreKey:
     "OpenRouter needs a key on this agent. Host cannot see the key — we only read the heartbeat model. If it doesn’t have one yet, buy Store credits, write the key into the runtime, then Refresh status.",
   myAgentsOpenRouterRuntimeRequired:
@@ -1347,6 +1363,10 @@ const en: RanchMessages = {
   myAgentsPricingMarkupLabel: "Markup",
   myAgentsPricingMarkupHint:
     "Markup is only the slice you keep. Network fee sits outside it. Changing model keeps this %.",
+  myAgentsPricingMarkupHintOfficial:
+    "Official: markup is only what you keep; model cost stays with the Host. Network fee sits outside. Changing model keeps this %.",
+  myAgentsPricingMarkupHintByo:
+    "Your key: you keep the marked-up menu price (includes model cost). Network fee sits outside. Changing model keeps this %.",
   myAgentsPricingCatalogLine: "${in} / ${out}",
   myAgentsPricingSourceSupplier: "Supplier price · ${name}",
   myAgentsPricingSourceSupplierHint:
@@ -1354,7 +1374,19 @@ const en: RanchMessages = {
   myAgentsPricingSourceMenu: "Menu price · OpenRouter",
   myAgentsPricingSourceMenuHint: "This is the menu price.",
   myAgentsPricingListingLine: "They pay in ${in} · out ${out} / 1M",
-  myAgentsPricingKeepLine: "You keep in ${in} · out ${out} / 1M",
+  myAgentsPricingFormulaOfficial: "Estimated price = model × (1 + ${markup}%) ÷ ${denom}.",
+  myAgentsPricingFormulaByo: "Estimated price = model × (1 + ${markup}%) ÷ ${denom}.",
+  myAgentsPricingFormulaPay: "${in} · ${out} credits / 1M",
+  myAgentsPricingEstimateLabel: "Estimated price",
+  myAgentsPricingEstimateHint:
+    "What they pay per 1M tokens after your markup and the network fee.",
+  myAgentsPricingMoneyPair: "${moneyIn} · ${moneyOut}",
+  myAgentsPricingKeepLabel: "You keep",
+  myAgentsPricingKeepLine: "${in} · ${out} credits / 1M",
+  myAgentsPricingKeepHintOfficial:
+    "Official: you keep only the markup slice. Model cost stays with the Host.",
+  myAgentsPricingKeepHintByo:
+    "Your key: you keep the full marked-up menu price (includes model cost).",
   myAgentsPricingFeeLine: "Includes ${pct}% network fee outside your markup.",
   myAgentsPricingExampleLine:
     "Example: 1M input tokens, they pay about ${pay}. The list price is about ${cost}.",
@@ -2116,15 +2148,20 @@ const zh: RanchMessages = {
   myAgentsProfileFailed: "保存失败。",
   myAgentsSectionPricing: "智能体定价",
   myAgentsPricingHint:
-    "预览是对方实付的价。自带钥匙：对方付价目价 ×（1+加价）÷ 0.9，你拿到加价后的价目价。官方：标价是进货价 × 1.15，对方付（标价 + 加价）÷ 0.9，你只拿到加价。",
+    "上面选供应商和默认模型；中间改加价，公式跟着变；下面是你到手（星币，括号里是对应金额）。对方实付 = 模型价 ×（1+加价）÷ 0.9。官方模型价已含进货 × 1.15，你只拿加价；自持钥模型价是价目价，你拿加价后的整段（含模型费）。",
   myAgentsPricingInputLabel: "结算预览 · 入 / 百万",
   myAgentsPricingOutputLabel: "结算预览 · 出 / 百万",
-  myAgentsPricingModelLabel: "默认模型 · 每百万 token 成本价（未含上浮）",
+  myAgentsPricingModelLabel: "默认模型",
   myAgentsPricingModelHint:
-    "从这只智能体已自报的模型里选默认。这里不能增删模型。",
+    "下拉里是每百万 token、未含你加价的模型价。官方已含进货 × 1.15；自持钥是价目价。从已自报的模型里选默认，这里不能增删。",
   myAgentsPricingModelsEmpty: "这只智能体还没有自报任何模型。",
   myAgentsPricingModelSearch: "搜索",
   myAgentsPricingOfficialEmpty: "价目里没有匹配的模型。",
+  myAgentsPricingShelfEmpty:
+    "当前供应商价目里没有可用模型。请换供应商，或等货架更新后点「刷新状态」。",
+  myAgentsPricingShelfEmptyRuntime:
+    "当前供应商价目里没有可用模型。运行环境仍上报 ${model}。请换供应商或点「刷新状态」。",
+  myAgentsPricingEmptyRuntimeNote: "运行环境仍上报 ${model}。",
   myAgentsPricingOptionLine: "${name} · 入 ${in} · 出 ${out}",
   myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} 星币 /百万",
   myAgentsPricingCreditsNote: "100 星币 = ${price}。用量显示两位小数。充值仍是整数星币。",
@@ -2148,9 +2185,7 @@ const zh: RanchMessages = {
   myAgentsProviderOfficialPlain: "官方",
   myAgentsProviderOfficialNamed: "官方 · ${name}",
   myAgentsProviderOpenRouter: "OpenRouter",
-  myAgentsOfficialHostHint:
-    "「${official}」用的是 Interfaze 的钥匙。${cnLimit}机器默认型号仍用智能体自己的钥匙。",
-  myAgentsOfficialHostCnLimit: "这张卡打不了 GPT、Claude、Gemini。",
+  myAgentsOfficialHostHint: "机器默认型号仍用智能体自己的钥匙。",
   myAgentsNeedStoreKey:
     "OpenRouter 需要这只智能体自己的钥匙。Host 看不见钥匙，只认心跳型号。还没有的话，去 Store 买额度、写入运行环境，再点「刷新状态」。",
   myAgentsOpenRouterRuntimeRequired:
@@ -2169,13 +2204,26 @@ const zh: RanchMessages = {
   myAgentsProvidersFailed: "保存供应商失败。",
   myAgentsPricingMarkupLabel: "上浮",
   myAgentsPricingMarkupHint: "加价只决定你到手的那一截；网络费在加价之外。换模型保留这个比例。",
+  myAgentsPricingMarkupHintOfficial:
+    "官方：加价只是你到手的那一截，模型成本归平台；网络费在加价之外。换模型保留这个比例。",
+  myAgentsPricingMarkupHintByo:
+    "自持钥：你拿到加价后的价目价（含模型费）；网络费在加价之外。换模型保留这个比例。",
   myAgentsPricingCatalogLine: "${in} / ${out}",
   myAgentsPricingSourceSupplier: "进货价 · ${name}",
   myAgentsPricingSourceSupplierHint: "这是进货价。标价是进货价 × 1.15。",
   myAgentsPricingSourceMenu: "价目价 · OpenRouter",
   myAgentsPricingSourceMenuHint: "这是价目价。",
   myAgentsPricingListingLine: "对方实付 入 ${in} · 出 ${out} / 百万",
-  myAgentsPricingKeepLine: "你到手 入 ${in} · 出 ${out} / 百万",
+  myAgentsPricingFormulaOfficial: "预估售价 = 模型价 × (1 + ${markup}%) ÷ ${denom}。",
+  myAgentsPricingFormulaByo: "预估售价 = 模型价 × (1 + ${markup}%) ÷ ${denom}。",
+  myAgentsPricingFormulaPay: "${in} · ${out} 星币 / 百万",
+  myAgentsPricingEstimateLabel: "预估售价",
+  myAgentsPricingEstimateHint: "加价与网络费之后，对方每百万 token 实付。",
+  myAgentsPricingMoneyPair: "${moneyIn} · ${moneyOut}",
+  myAgentsPricingKeepLabel: "你到手",
+  myAgentsPricingKeepLine: "${in} · ${out} 星币 / 百万",
+  myAgentsPricingKeepHintOfficial: "官方：你只拿到加价那一截，模型成本归平台。",
+  myAgentsPricingKeepHintByo: "自持钥：你拿到加价后的整段价目价（含模型费）。",
   myAgentsPricingFeeLine: "含 ${pct}% 价外网络费（加价之外）。",
   myAgentsPricingExampleLine:
     "例：100 万输入 token，对方约付 ${pay}，标价约 ${cost}。",
@@ -2507,6 +2555,8 @@ const OVERSEAS_ZH: Partial<Record<keyof RanchMessages, string>> = {
   createAgentKeyLine: "起步模型额度 {n} credits（含 10% 服务费）",
   createAgentTotalLine: "合计 {n} credits",
   myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} credits / 百万",
+  myAgentsPricingFormulaPay: "${in} · ${out} credits / 百万",
+  myAgentsPricingKeepLine: "${in} · ${out} credits / 百万",
   myAgentsPricingCreditsNote:
     "100 credits = ${price}。用量显示两位小数。充值仍是整数 credit。",
   walletBalance: "credit",
