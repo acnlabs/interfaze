@@ -9044,7 +9044,22 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   fontSize: 12,
                                 }}
                               />
+                              <style>{`
+                                .ranch-composer-menu-list::-webkit-scrollbar {
+                                  width: 10px;
+                                }
+                                .ranch-composer-menu-list::-webkit-scrollbar-track {
+                                  background: transparent;
+                                }
+                                .ranch-composer-menu-list::-webkit-scrollbar-thumb {
+                                  background-color: rgba(148, 163, 184, 0.4);
+                                  border: 3px solid transparent;
+                                  border-radius: 999px;
+                                  background-clip: padding-box;
+                                }
+                              `}</style>
                               <ul
+                                className="ranch-composer-menu-list"
                                 role="listbox"
                                 aria-busy={
                                   composerCatalogLoading &&
