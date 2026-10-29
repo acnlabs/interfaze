@@ -82,6 +82,9 @@ export type ChatSummary = {
   chat_id: string;
   type: string;
   title?: string | null;
+  description?: string | null;
+  /** Chat owner. Present on list and detail. Used to hide group edits from other members. */
+  owner_id?: string | null;
   agent_id?: string | null;
   created_at?: string | null;
   last_message_at?: string | null;
