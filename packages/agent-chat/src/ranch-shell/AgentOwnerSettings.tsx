@@ -216,6 +216,41 @@ type CatalogPair = {
   currency?: string;
 };
 
+type OwnerCatalogRow = { id: string } & CatalogPair;
+
+/** Session cache for owner settings catalog pages (avoids re-paging every open). */
+const OWNER_CATALOG_TTL_MS = 5 * 60 * 1000;
+const ownerCatalogCache = new Map<string, { at: number; rows: OwnerCatalogRow[] }>();
+
+function ownerCatalogCacheKey(book: string, official: boolean, geo: string): string {
+  return `${book}|${official ? "official" : "byo"}|${(geo || "").trim().toLowerCase() || "any"}`;
+}
+
+function readOwnerCatalogCache(key: string): OwnerCatalogRow[] | null {
+  const hit = ownerCatalogCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > OWNER_CATALOG_TTL_MS) {
+    ownerCatalogCache.delete(key);
+    return null;
+  }
+  return hit.rows;
+}
+
+function writeOwnerCatalogCache(key: string, rows: OwnerCatalogRow[]): void {
+  ownerCatalogCache.set(key, { at: Date.now(), rows });
+}
+
+function invalidateOwnerCatalogCache(book?: string): void {
+  if (!book) {
+    ownerCatalogCache.clear();
+    return;
+  }
+  const prefix = `${book.trim().toLowerCase()}|`;
+  for (const key of [...ownerCatalogCache.keys()]) {
+    if (key.startsWith(prefix) || !book) ownerCatalogCache.delete(key);
+  }
+}
+
 const TOKENPLUS_PRICE_URL = "https://www.tokenplus.cn/models";
 const SILICONFLOW_PRICE_URL = "https://www.siliconflow.cn/pricing";
 
@@ -969,6 +1004,7 @@ export function AgentOwnerSettings({
   >([]);
   const [officialCatalogLoading, setOfficialCatalogLoading] = useState(false);
   const [byoCatalogLoading, setByoCatalogLoading] = useState(false);
+  const [catalogEpoch, setCatalogEpoch] = useState(0);
   const [settingsProvider, setSettingsProvider] = useState(() =>
     detail.host_inference_ready ? OFFICIAL_OPENROUTER : "",
   );
@@ -1191,7 +1227,12 @@ export function AgentOwnerSettings({
 
     const book = (priceBookSource || "openrouter").trim().toLowerCase();
     const loadCatalog = async (official: boolean) => {
-      const acc: Array<{ id: string } & CatalogPair> = [];
+      const geo = official ? officialKeyGeo : "";
+      const cacheKey = ownerCatalogCacheKey(book, official, geo);
+      const cached = readOwnerCatalogCache(cacheKey);
+      if (cached) return cached;
+
+      const acc: OwnerCatalogRow[] = [];
       let offset = 0;
       let total = Number.POSITIVE_INFINITY;
       while (!cancelled && offset < total && offset < 8000) {
@@ -1210,7 +1251,7 @@ export function AgentOwnerSettings({
           if (!id) continue;
           const quote = official ? officialCatalogRates(row) : syncCatalogRates(row);
           if (!quote) continue;
-          if (official && !officialShelfAllows(id, officialKeyGeo)) continue;
+          if (official && !officialShelfAllows(id, geo)) continue;
           if (acc.some((item) => sameModelId(item.id, id))) continue;
           const bookRates = official ? syncCatalogRates(row) : null;
           acc.push({
@@ -1226,6 +1267,7 @@ export function AgentOwnerSettings({
         if (!data.items.length) break;
         offset += data.items.length;
       }
+      if (!cancelled) writeOwnerCatalogCache(cacheKey, acc);
       return acc;
     };
 
@@ -1233,7 +1275,8 @@ export function AgentOwnerSettings({
     setByoCatalogLoading(true);
     void (async () => {
       try {
-        if (hostReady && officialKeyGeo) {
+        // Do not wait for officialKeyGeo — empty geo allows all non-CN-blocked v0 models.
+        if (hostReady) {
           const officialAcc = await loadCatalog(true);
           if (!cancelled) setOfficialCatalog(officialAcc);
         } else if (!cancelled) {
@@ -1258,7 +1301,7 @@ export function AgentOwnerSettings({
     return () => {
       cancelled = true;
     };
-  }, [client, hostReady, officialKeyGeo, priceBookSource]);
+  }, [client, hostReady, officialKeyGeo, priceBookSource, catalogEpoch]);
 
   useEffect(() => {
     setDeliveryDraft(deliveryFromDetail(detail.delivery));
@@ -1891,9 +1934,11 @@ export function AgentOwnerSettings({
   const refreshRuntimeStatus = () => {
     if (refreshingRuntime || modelsLoading || busy) return;
     setRefreshingRuntime(true);
-    void client
-      .getAgentModelStatus(detail.agent_id)
-      .then((status) => {
+    void Promise.all([
+      client.getAgentModelStatus(detail.agent_id),
+      client.getMyAgentOfficialModels(detail.agent_id).catch(() => null),
+    ])
+      .then(([status, officialRow]) => {
         const declared = Array.isArray(status.agent_providers) ? status.agent_providers : [];
         setAgentProviders(declared);
         const reported = uniqModelIds(status.self_reported_models);
@@ -1918,10 +1963,24 @@ export function AgentOwnerSettings({
         if (Array.isArray(status.official_models)) {
           setOfficialSaved(status.official_models);
         }
-        const ready =
-          typeof status.host_inference_ready === "boolean"
-            ? status.host_inference_ready
-            : hostReady;
+        if (officialRow?.official_key_geo) {
+          setOfficialKeyGeo(officialRow.official_key_geo);
+        }
+        if (typeof officialRow?.host_inference_ready === "boolean") {
+          setHostReady(officialRow.host_inference_ready);
+        }
+        if (typeof status.price_book_source === "string" && status.price_book_source.trim()) {
+          setPriceBookSource(status.price_book_source);
+        }
+        if (officialRow?.official_default_model_id) {
+          setOfficialDefaultModelId(officialRow.official_default_model_id);
+        }
+        const ready = Boolean(
+          officialRow?.host_inference_ready ??
+            (typeof status.host_inference_ready === "boolean"
+              ? status.host_inference_ready
+              : hostReady),
+        );
         const fallback = defaultDeclaredProvider(declared, ready);
         const nextProvider =
           providerChosen.current &&
@@ -1942,10 +2001,15 @@ export function AgentOwnerSettings({
           runtime_model_id: status.runtime_model_id ?? detail.runtime_model_id,
           official_models: status.official_models ?? detail.official_models,
           host_inference_ready:
-            typeof status.host_inference_ready === "boolean"
-              ? status.host_inference_ready
-              : detail.host_inference_ready,
+            typeof officialRow?.host_inference_ready === "boolean"
+              ? officialRow.host_inference_ready
+              : typeof status.host_inference_ready === "boolean"
+                ? status.host_inference_ready
+                : detail.host_inference_ready,
         });
+        // Bust session catalog cache and reload official/BYO shelves.
+        invalidateOwnerCatalogCache(priceBookSource || "openrouter");
+        setCatalogEpoch((n) => n + 1);
       })
       .finally(() => setRefreshingRuntime(false));
   };
@@ -2439,7 +2503,7 @@ export function AgentOwnerSettings({
                   {t.myAgentsPricingModelLabel}
                   <FieldHint label={t.fieldHintLabel} text={modelFieldHint} />
                 </span>
-                {catalogSourceUrl && priceSource ? (
+                {hasPricingModels && catalogSourceUrl && priceSource ? (
                   <span
                     style={{
                       display: "inline-flex",
