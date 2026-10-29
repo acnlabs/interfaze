@@ -645,6 +645,8 @@ export type GatewayClient = {
     /** Priced-menu default pick (ignores stale BYO runtime when shelf-only). */
     recommended_model_id?: string | null;
     byo_degraded?: boolean;
+    /** Provider catalog rejected the BYO API key (401/403). */
+    byo_key_invalid?: boolean;
     price_book_source?: string | null;
     providers?: Array<{
       id: string;
@@ -881,6 +883,11 @@ export type GatewayClient = {
   retryBindAgentCreateJob: (jobId: string) => Promise<AgentCreateJob>;
   addParticipant: (chatId: string, agentId: string) => Promise<ChatParticipant>;
   removeParticipant: (chatId: string, participantId: string) => Promise<void>;
+  setParticipantRole: (
+    chatId: string,
+    participantId: string,
+    role: "admin" | "member",
+  ) => Promise<ChatParticipant>;
   updateChat: (chatId: string, patch: { title?: string; description?: string }) => Promise<ChatSummary>;
   deleteChat: (chatId: string) => Promise<void>;
   markChatAsRead: (chatId: string) => Promise<void>;
@@ -1123,6 +1130,7 @@ export function createGatewayClient(
         official_default_model_id?: string | null;
         recommended_model_id?: string | null;
         byo_degraded?: boolean;
+        byo_key_invalid?: boolean;
         price_book_source?: string | null;
         mismatched: boolean;
         markup_percent?: number | null;
@@ -1607,6 +1615,11 @@ export function createGatewayClient(
       request<void>(
         `/api/chats/${encodeURIComponent(chatId)}/participants/${encodeURIComponent(participantId)}`,
         { method: "DELETE" },
+      ),
+    setParticipantRole: (chatId, participantId, role) =>
+      request<ChatParticipant>(
+        `/api/chats/${encodeURIComponent(chatId)}/participants/${encodeURIComponent(participantId)}/role`,
+        { method: "PUT", body: JSON.stringify({ role }) },
       ),
     updateChat: (chatId, patch) =>
       request<ChatSummary>(`/api/chats/${encodeURIComponent(chatId)}`, {
