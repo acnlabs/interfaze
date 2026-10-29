@@ -881,6 +881,8 @@ type ComposerStatusSnapshot = {
   shelf_only: boolean;
   official_models: string[];
   official_default_model_id?: string | null;
+  /** Server pick already constrained to the priced menu. */
+  recommended_model_id?: string | null;
   official_key_geo?: string;
   price_book_source?: string;
   markup_percent?: number | null;
@@ -961,6 +963,8 @@ function readComposerStatus(agentId: string): ComposerStatusSnapshot | null {
       official_models: composerStringList(parsed.official_models),
       official_default_model_id:
         typeof parsed.official_default_model_id === "string" ? parsed.official_default_model_id : null,
+      recommended_model_id:
+        typeof parsed.recommended_model_id === "string" ? parsed.recommended_model_id : null,
       official_key_geo: typeof parsed.official_key_geo === "string" ? parsed.official_key_geo : "",
       price_book_source: typeof parsed.price_book_source === "string" ? parsed.price_book_source : "",
       markup_percent: typeof parsed.markup_percent === "number" ? parsed.markup_percent : null,
@@ -5505,6 +5509,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
             typeof row.official_default_model_id === "string"
               ? row.official_default_model_id.trim()
               : "";
+          const recommended =
+            typeof row.recommended_model_id === "string"
+              ? row.recommended_model_id.trim()
+              : "";
           // No providers → Host already served the official shelf. Do not treat
           // leftover BYO preferred_model as the composer pin.
           const shelfOnly =
@@ -5521,6 +5529,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             shelf_only: forceOfficialShelf,
             official_models: officialIds,
             official_default_model_id: officialDefault || null,
+            recommended_model_id: recommended || null,
             official_key_geo:
               typeof row.official_key_geo === "string" ? row.official_key_geo : "",
             price_book_source:
@@ -5575,7 +5584,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             official: listedOfficial || byoDegraded,
             openRouterByo: isOpenRouterByoListed(listed, runtime, supported),
             wanted: byoDegraded
-              ? officialDefault || listed
+              ? recommended || officialDefault || listed
               : listedChanged
                 ? listed
                 : stored,
@@ -5592,14 +5601,22 @@ export function RanchChatShell(props: RanchChatShellProps) {
               // A degraded key drops a private model that is not on this shelf.
               // A pick already on the shelf stays.
               stored: listedChanged ? listed : stored,
-              officialDefault,
+              // Server already constrained this id to the priced shelf.
+              officialDefault: recommended || officialDefault,
             });
             setSelectedModelId(chosen);
             writeComposerModelPick(active.chat_id, chosen);
           } else if (!listedOfficial && pricedMenu.length) {
-            const wanted = listedChanged ? listed : stored || nextModel;
+            const wanted = listedChanged
+              ? listed
+              : stored || recommended || nextModel;
             const chosen =
               pricedMenu.find((id) => priceTail(id) && priceTail(id) === priceTail(wanted)) ||
+              (recommended
+                ? pricedMenu.find(
+                    (id) => priceTail(id) && priceTail(id) === priceTail(recommended),
+                  )
+                : undefined) ||
               pricedMenu[0];
             setSelectedModelId(chosen);
             writeComposerModelPick(active.chat_id, chosen);
@@ -5832,6 +5849,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     if (officialV0SupportsModel(selectedModelId)) return;
     const next =
       composerCatalog.find((row) => officialV0SupportsModel(row.id))?.id ||
+      composerModel.recommended_model_id ||
       composerModel.listed_model_id ||
       null;
     if (!next || sameModelId(next, selectedModelId)) return;
@@ -5842,6 +5860,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     composerCatalog,
     composerModel?.listed_model_id,
     composerModel?.official_channel,
+    composerModel?.recommended_model_id,
     selectedModelId,
   ]);
 
@@ -5857,7 +5876,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const next = pickComposerModelForPath({
       official: true,
       openRouterByo: false,
-      wanted: listedChanged ? listed : stored,
+      wanted: listedChanged
+        ? listed
+        : stored || composerModel.recommended_model_id || null,
       listed: composerModel.listed_model_id ?? null,
       runtime: composerModel.runtime_model_id ?? null,
       fallback: composerModel.supported_models,
@@ -5873,6 +5894,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     composerCatalogLoading,
     composerModel?.listed_model_id,
     composerModel?.official_channel,
+    composerModel?.recommended_model_id,
     (composerModel?.official_models ?? []).join("\u0001"),
     composerModel?.runtime_model_id,
     (composerModel?.supported_models ?? []).join("\u0001"),
@@ -5887,7 +5909,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
         return;
       }
       const next =
-        menu.find((id) => priceTail(id) === priceTail(composerModel.listed_model_id)) || menu[0];
+        menu.find((id) => priceTail(id) === priceTail(composerModel.listed_model_id)) ||
+        menu.find((id) => priceTail(id) === priceTail(composerModel.recommended_model_id)) ||
+        menu[0];
       if (!next) return;
       setSelectedModelId(next);
       if (active?.chat_id) writeComposerModelPick(active.chat_id, next);
@@ -5898,6 +5922,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
       return;
     }
     const next =
+      composerCatalog.find((row) =>
+        sameModelId(row.id, composerModel.recommended_model_id),
+      )?.id ||
       composerCatalog.find((row) => sameModelId(row.id, "deepseek/deepseek-chat"))?.id ||
       composerCatalog[0]?.id;
     if (!next) return;
@@ -6854,6 +6881,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
         [data-ranch-chat-shell] :focus-visible {
           outline: 2px solid ${colors.accent};
           outline-offset: 2px;
+        }
+        [data-ranch-chat-shell] textarea.ranch-composer-field:focus,
+        [data-ranch-chat-shell] textarea.ranch-composer-field:focus-visible {
+          outline: none;
         }
       `}</style>
       <div
@@ -8423,7 +8454,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   void send();
                 }}
                 style={{
-                  borderTop: `1px solid ${colors.border}`,
                   padding: 12,
                   paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
                   display: "flex",
@@ -8483,6 +8513,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     rowGap: 2,
                     background: colors.inputBg,
                     border: `1px solid ${composerFocused ? colors.accent : colors.border}`,
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
                     borderRadius: 12,
                     padding: "6px 8px",
                   }}
@@ -9243,6 +9274,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 ) : null}
                 <textarea
                   ref={composerFieldRef}
+                  className="ranch-composer-field"
                   value={draft}
                   role="combobox"
                   aria-expanded={Boolean(
@@ -9301,6 +9333,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     padding: "4px 4px",
                     lineHeight: `${COMPOSER_LINE_PX}px`,
                     overflowY: "auto",
+                    outline: "none",
                   }}
                   onKeyDown={(e) => {
                     if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
