@@ -642,6 +642,8 @@ export type GatewayClient = {
     official_key_geo?: string;
     official_region?: string;
     official_default_model_id?: string | null;
+    /** Priced-menu default pick (ignores stale BYO runtime when shelf-only). */
+    recommended_model_id?: string | null;
     byo_degraded?: boolean;
     price_book_source?: string | null;
     providers?: Array<{
@@ -1119,6 +1121,7 @@ export function createGatewayClient(
         official_key_geo?: string;
         official_region?: string;
         official_default_model_id?: string | null;
+        recommended_model_id?: string | null;
         byo_degraded?: boolean;
         price_book_source?: string | null;
         mismatched: boolean;
