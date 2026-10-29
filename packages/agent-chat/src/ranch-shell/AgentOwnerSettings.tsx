@@ -993,6 +993,7 @@ export function AgentOwnerSettings({
   const [priceBookSource, setPriceBookSource] = useState("");
   const [officialDefaultModelId, setOfficialDefaultModelId] = useState<string>("");
   const [byoDegraded, setByoDegraded] = useState(false);
+  const [byoKeyInvalid, setByoKeyInvalid] = useState(false);
   const [savingOfficial, setSavingOfficial] = useState(false);
   const [officialMsg, setOfficialMsg] = useState<string | null>(null);
   const [officialError, setOfficialError] = useState<string | null>(null);
@@ -1180,6 +1181,7 @@ export function AgentOwnerSettings({
           setOfficialDefaultModelId(officialRow.official_default_model_id);
         }
         setByoDegraded(status.byo_degraded === true);
+        setByoKeyInvalid(status.byo_key_invalid === true);
         if (typeof officialRow?.host_inference_ready === "boolean") {
           setHostReady(officialRow.host_inference_ready);
         }
@@ -2268,7 +2270,21 @@ export function AgentOwnerSettings({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, position: "relative" }}>
-      {byoDegraded ? (
+      {byoKeyInvalid ? (
+        <div
+          role="status"
+          style={{
+            padding: "10px 12px",
+            borderRadius: 8,
+            background: "rgba(180, 83, 9, 0.12)",
+            color: colors.text,
+            fontSize: 13,
+            lineHeight: 1.45,
+          }}
+        >
+          {t.myAgentsByoKeyInvalidBanner}
+        </div>
+      ) : byoDegraded ? (
         <div
           role="status"
           style={{

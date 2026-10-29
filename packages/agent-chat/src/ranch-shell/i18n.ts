@@ -255,6 +255,9 @@ export type RanchMessages = {
   groupDescription: string;
   groupDescriptionPlaceholder: string;
   groupNoDescription: string;
+  groupAdmin: string;
+  setGroupAdmin: string;
+  clearGroupAdmin: string;
   chatName: string;
   save: string;
   deleteGroup: string;
@@ -473,6 +476,8 @@ export type RanchMessages = {
   myAgentsOfflineHint: string;
   myAgentsSectionIdentity: string;
   myAgentsByoDegradedBanner: string;
+  /** BYO catalog rejected the API key — Owner must rotate the key on the agent. */
+  myAgentsByoKeyInvalidBanner: string;
   myAgentsSectionOverview: string;
   myAgentsSectionConnect: string;
   myAgentsSectionAccess: string;
@@ -1054,6 +1059,9 @@ const en: RanchMessages = {
   groupDescription: "Description",
   groupDescriptionPlaceholder: "What this group is for",
   groupNoDescription: "No description yet.",
+  groupAdmin: "Admin",
+  setGroupAdmin: "Make admin",
+  clearGroupAdmin: "Remove admin",
   chatName: "Chat name",
   save: "Save",
   deleteGroup: "Delete group",
@@ -1284,6 +1292,8 @@ const en: RanchMessages = {
   myAgentsSectionIdentity: "Profile",
   myAgentsByoDegradedBanner:
     "Your BYO provider quota is exhausted. Callers are temporarily using the official channel. Recharge your provider key to restore your own models.",
+  myAgentsByoKeyInvalidBanner:
+    "Your BYO provider API key was rejected (unauthorized). Callers are on the official channel. Update the key in the agent’s runtime (ACN_PROVIDER_API_KEY / provider env file) — listen reloads it without a restart when ACN_PROVIDER_ENV_FILE is set.",
   myAgentsSectionOverview: "Overview",
   myAgentsSectionConnect: "Receiving messages",
   myAgentsSectionAccess: "Who can chat or invoke",
@@ -1920,6 +1930,9 @@ const zh: RanchMessages = {
   groupDescription: "群说明",
   groupDescriptionPlaceholder: "这个群是做什么的",
   groupNoDescription: "还没有群说明。",
+  groupAdmin: "管理员",
+  setGroupAdmin: "设为管理员",
+  clearGroupAdmin: "取消管理员",
   chatName: "会话名称",
   save: "保存",
   deleteGroup: "解散群聊",
@@ -2135,6 +2148,8 @@ const zh: RanchMessages = {
   myAgentsSectionIdentity: "资料",
   myAgentsByoDegradedBanner:
     "你的自带供应商配额已用尽。当前访客临时走官方通道。请给供应商 Key 充值后，即可恢复自有模型。",
+  myAgentsByoKeyInvalidBanner:
+    "自带供应商 API Key 已失效（未授权）。当前访客走官方通道。请在智能体运行环境更新 Key（ACN_PROVIDER_API_KEY / provider env）；配置了 ACN_PROVIDER_ENV_FILE 时 listen 会热加载，不必重启。",
   myAgentsSectionOverview: "概览",
   myAgentsSectionConnect: "收信方式",
   myAgentsSectionAccess: "谁可以聊 / 调",
