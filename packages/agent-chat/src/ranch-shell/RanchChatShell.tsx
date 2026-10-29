@@ -7044,7 +7044,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           </div>
         )}
 
-        <div style={{ flex: 1, overflow: "auto", padding: 8 }}>
+        <div className="ranch-thin-scroll" style={{ flex: 1, overflow: "auto", padding: 8 }}>
           {chatsLoadError ? (
             <div role="alert" style={{ padding: 16, color: colors.muted }}>
               <p>{t.chatsLoadFailed}</p>
