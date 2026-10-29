@@ -109,6 +109,10 @@ export type RanchMessages = {
   /** Catalog miss / unpriced — still shown in picker. */
   composerModelNoPrice: string;
   composerModelPrice: (input: string, output: string) => string;
+  /** Chip beside the model name. Amounts are already short ("$0.19"). */
+  composerModelPriceShort: (input: string, output: string) => string;
+  /** Hover text. Amounts are full menu precision. */
+  composerModelPriceTitle: (input: string, output: string) => string;
   composerModelMismatch: (listed: string, runtime: string) => string;
   /** Show the rest of the ranked official menu after the preview slice. */
   composerModelShowAll: (n: number) => string;
@@ -248,6 +252,9 @@ export type RanchMessages = {
   renameGroup: string;
   renameChat: string;
   groupName: string;
+  groupDescription: string;
+  groupDescriptionPlaceholder: string;
+  groupNoDescription: string;
   chatName: string;
   save: string;
   deleteGroup: string;
@@ -903,7 +910,10 @@ const en: RanchMessages = {
   composerModelUnknown: "—",
   composerModelListing: "listing",
   composerModelNoPrice: "—",
-  composerModelPrice: (input, output) => `${input} in · ${output} out /1M`,
+  composerModelPrice: (input, output) => `In ${input} · Out ${output} / 1M tokens`,
+  composerModelPriceShort: (input, output) => `${input} / ${output}`,
+  composerModelPriceTitle: (input, output) =>
+    `Per 1M tokens · input ${input} · output ${output}`,
   composerModelShowAll: (n) => `Show all (${n})`,
   composerModelShowLess: "Show less",
   composerModelMismatch: (listed, runtime) =>
@@ -950,7 +960,7 @@ const en: RanchMessages = {
   offlineBanner:
     "This agent is offline and can’t reply. Try again when the status turns green.",
   ownerHowToConnect: "How to connect",
-  messagePlaceholder: "Message… (Type / for commands)",
+  messagePlaceholder: "Message…",
   decisionGoal: "Save this message as the goal",
   decisionAuto: "Auto-decide",
   decisionAutoHint:
@@ -1033,7 +1043,7 @@ const en: RanchMessages = {
   mentionAllHint: "Mention all agents",
   continueWith: (name) => `Continue with ${name}`,
   mentionRequired: "Send to…",
-  groupMessagePlaceholder: "Message… (@ mention, / commands)",
+  groupMessagePlaceholder: "Message…",
   addMember: "Add member",
   addMemberTitle: "Add an agent",
   removeMember: "Remove",
@@ -1041,6 +1051,9 @@ const en: RanchMessages = {
   renameGroup: "Rename",
   renameChat: "Rename chat",
   groupName: "Group name",
+  groupDescription: "Description",
+  groupDescriptionPlaceholder: "What this group is for",
+  groupNoDescription: "No description yet.",
   chatName: "Chat name",
   save: "Save",
   deleteGroup: "Delete group",
@@ -1136,7 +1149,7 @@ const en: RanchMessages = {
   collabSave: "Save",
   collabAutoOn: "Auto collaboration on",
   collabAutoOff: "Empty — add Credits to allow collaboration",
-  collabNeedTopup: "Collaboration budget is empty. Add Credits in Info to continue multi-agent help.",
+  collabNeedTopup: "Collaboration budget is empty. Add Credits to continue multi-agent help.",
   collabNeedTopupCta: "Open collaboration budget",
   accountWalletLoadFailed: "Couldn’t load wallet.",
   accountWalletEmptyTx: "No transactions yet.",
@@ -1766,7 +1779,10 @@ const zh: RanchMessages = {
   composerModelUnknown: "—",
   composerModelListing: "挂牌",
   composerModelNoPrice: "—",
-  composerModelPrice: (input, output) => `${input} 入 · ${output} 出 /百万`,
+  composerModelPrice: (input, output) => `输入 ${input} · 输出 ${output} / 百万 token`,
+  composerModelPriceShort: (input, output) => `${input} / ${output}`,
+  composerModelPriceTitle: (input, output) =>
+    `每百万 token · 输入 ${input} · 输出 ${output}`,
   composerModelShowAll: (n) => `展开全部（${n}）`,
   composerModelShowLess: "收起",
   composerModelMismatch: (listed, runtime) =>
@@ -1811,7 +1827,7 @@ const zh: RanchMessages = {
   sayHelloOffline: "当前智能体离线，无法回复，请等状态变绿后再试。",
   offlineBanner: "当前智能体离线，无法回复，请等状态变绿后再试。",
   ownerHowToConnect: "如何接上",
-  messagePlaceholder: "输入消息…（输入 / 打开命令）",
+  messagePlaceholder: "输入消息…",
   decisionGoal: "把这句记成目标",
   decisionAuto: "自动决策",
   decisionAutoHint:
@@ -1893,7 +1909,7 @@ const zh: RanchMessages = {
   mentionAllHint: "提及所有智能体",
   continueWith: (name) => `继续问 ${name}`,
   mentionRequired: "发给谁…",
-  groupMessagePlaceholder: "输入消息…（@ 点名，/ 命令）",
+  groupMessagePlaceholder: "输入消息…",
   addMember: "添加成员",
   addMemberTitle: "添加智能体",
   removeMember: "移除",
@@ -1901,6 +1917,9 @@ const zh: RanchMessages = {
   renameGroup: "改名",
   renameChat: "重命名会话",
   groupName: "群名称",
+  groupDescription: "群说明",
+  groupDescriptionPlaceholder: "这个群是做什么的",
+  groupNoDescription: "还没有群说明。",
   chatName: "会话名称",
   save: "保存",
   deleteGroup: "解散群聊",
@@ -1983,7 +2002,7 @@ const zh: RanchMessages = {
   collabSave: "保存",
   collabAutoOn: "自动协作已开启",
   collabAutoOff: "额度空 — 加星币后才可自动协作",
-  collabNeedTopup: "协作预算已用完。请在 Info 里加额度，才能继续多智能体协作。",
+  collabNeedTopup: "协作预算已用完。加上额度后才能继续多智能体协作。",
   collabNeedTopupCta: "打开协作预算",
   accountWalletLoadFailed: "无法加载钱包。",
   accountWalletEmptyTx: "暂无流水。",

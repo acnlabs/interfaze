@@ -13,7 +13,15 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const moduleExports = {};
 new Function("exports", js)(moduleExports);
-const { formatCnyPerMillion, formatLocalPerMillion, formatMenuSide, formatUsdPerMillion } = moduleExports;
+const {
+  formatCnyPerMillion,
+  formatCnyPerMillionShort,
+  formatLocalPerMillion,
+  formatMenuSide,
+  formatMenuSideShort,
+  formatUsdPerMillion,
+  formatUsdPerMillionShort,
+} = moduleExports;
 
 test("a local rate prints yuan only when the book says CNY", () => {
   assert.equal(formatLocalPerMillion(0.69, "CNY"), "¥0.69");
@@ -43,6 +51,42 @@ test("a China menu option prints yuan and an OpenRouter option prints dollars", 
   );
   assert.equal(overseas, formatUsdPerMillion(1.15));
   assert.match(overseas, /^\$/);
+});
+
+test("chip prices keep cheap models distinct", () => {
+  assert.equal(formatUsdPerMillionShort(0.04843), "$0.048");
+  assert.equal(formatUsdPerMillionShort(0.102), "$0.102");
+  assert.equal(formatUsdPerMillionShort(0.1917), "$0.192");
+  assert.equal(formatUsdPerMillionShort(0.6389), "$0.639");
+  assert.equal(formatUsdPerMillionShort(1.533), "$1.53");
+  assert.equal(formatUsdPerMillionShort(4), "$4");
+  assert.equal(formatUsdPerMillionShort(0.001234), "$0.00123");
+  assert.equal(formatCnyPerMillionShort(0.6), "¥0.6");
+  assert.equal(formatCnyPerMillionShort(1.2), "¥1.2");
+  assert.equal(
+    formatMenuSideShort(
+      { input_price_per_million: 0.04843, output_price_per_million: 0.102 },
+      "input",
+    ),
+    "$0.048",
+  );
+  assert.equal(
+    formatMenuSideShort(
+      { input_price_per_million: 0.1917, output_price_per_million: 0.6389 },
+      "output",
+    ),
+    "$0.639",
+  );
+  assert.equal(
+    formatMenuSideShort(
+      {
+        input_price_cny_per_million: 0.6,
+        output_price_cny_per_million: 1.2,
+      },
+      "input",
+    ),
+    "¥0.6",
+  );
 });
 
 test("menu prices keep four significant digits", () => {

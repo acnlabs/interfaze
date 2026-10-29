@@ -1522,10 +1522,13 @@ export function ChatCollabBudgetSection({
   client,
   messages: t,
   chatId,
+  readOnly = false,
 }: {
   client: GatewayClient;
   messages: RanchMessages;
   chatId?: string | null;
+  /** Show remaining Credits only. Hide the account cap and top-up controls. */
+  readOnly?: boolean;
 }) {
   const [cap, setCap] = useState(0);
   const [capDraft, setCapDraft] = useState("0");
@@ -1536,13 +1539,15 @@ export function ChatCollabBudgetSection({
 
   const reload = () => {
     setErr(null);
-    void client
-      .getCollabCap()
-      .then((r) => {
-        setCap(r.cap_credits);
-        setCapDraft(String(r.cap_credits));
-      })
-      .catch(() => setErr(t.sendFailed));
+    if (!readOnly) {
+      void client
+        .getCollabCap()
+        .then((r) => {
+          setCap(r.cap_credits);
+          setCapDraft(String(r.cap_credits));
+        })
+        .catch(() => setErr(t.sendFailed));
+    }
     if (chatId) {
       void client
         .getChatCollabBudget(chatId)
@@ -1556,7 +1561,7 @@ export function ChatCollabBudgetSection({
   useEffect(() => {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on chat/client
-  }, [client, chatId]);
+  }, [client, chatId, readOnly]);
 
   return (
     <div>
@@ -1565,51 +1570,69 @@ export function ChatCollabBudgetSection({
       {err ? (
         <p style={{ color: colors.danger, fontSize: 12, margin: "0 0 10px" }}>{err}</p>
       ) : null}
-      <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-        {t.collabAccountCap}
-      </label>
-      <div style={{ display: "flex", gap: 8, marginBottom: chatId ? 16 : 0 }}>
-        <input
-          type="number"
-          min={0}
-          value={capDraft}
-          onChange={(e) => setCapDraft(e.target.value)}
-          style={{ ...inputStyle, flex: 1, padding: "9px 12px", fontSize: 14 }}
-        />
-        <button
-          type="button"
-          style={btnPrimaryLg}
-          disabled={busy}
-          onClick={() => {
-            const n = Math.max(0, Math.trunc(Number(capDraft) || 0));
-            setBusy(true);
-            void client
-              .putCollabCap(n)
-              .then((r) => {
-                setCap(r.cap_credits);
-                setCapDraft(String(r.cap_credits));
-              })
-              .catch(() => setErr(t.sendFailed))
-              .finally(() => setBusy(false));
-          }}
-        >
-          {t.collabSave}
-        </button>
-      </div>
+      {readOnly ? null : (
+        <>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+            {t.collabAccountCap}
+          </label>
+          <div style={{ display: "flex", gap: 8, marginBottom: chatId ? 16 : 0 }}>
+            <input
+              type="number"
+              min={0}
+              value={capDraft}
+              onChange={(e) => setCapDraft(e.target.value)}
+              style={{ ...inputStyle, flex: 1, padding: "9px 12px", fontSize: 14 }}
+            />
+            <button
+              type="button"
+              style={btnPrimaryLg}
+              disabled={busy}
+              onClick={() => {
+                const n = Math.max(0, Math.trunc(Number(capDraft) || 0));
+                setBusy(true);
+                void client
+                  .putCollabCap(n)
+                  .then((r) => {
+                    setCap(r.cap_credits);
+                    setCapDraft(String(r.cap_credits));
+                  })
+                  .catch(() => setErr(t.sendFailed))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              {t.collabSave}
+            </button>
+          </div>
+        </>
+      )}
       {chatId ? (
-        <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: 14 }}>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        <div
+          style={
+            readOnly
+              ? undefined
+              : { borderTop: `1px solid ${colors.border}`, paddingTop: 14 }
+          }
+        >
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              marginBottom: readOnly ? 0 : 12,
+            }}
+          >
             <StatChip
               label={t.collabRemaining}
               value={fmtCredits(budget?.remaining_credits ?? 0)}
             />
-            <StatChip label={t.collabAccountCap} value={fmtCredits(cap)} />
+            {readOnly ? null : <StatChip label={t.collabAccountCap} value={fmtCredits(cap)} />}
             <span style={{ alignSelf: "center" }}>
               <Badge tone={budget?.can_auto ? "ok" : "neutral"}>
                 {budget?.can_auto ? t.collabAutoOn : t.collabAutoOff}
               </Badge>
             </span>
           </div>
+          {readOnly ? null : (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <input
               type="number"
@@ -1665,6 +1688,7 @@ export function ChatCollabBudgetSection({
               {t.collabRelease}
             </button>
           </div>
+          )}
         </div>
       ) : null}
     </div>
