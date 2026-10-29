@@ -1314,9 +1314,9 @@ const en: RanchMessages = {
   myAgentsPricingModelSearch: "Search",
   myAgentsPricingOfficialEmpty: "No matching models on this price list.",
   myAgentsPricingShelfEmpty:
-    "No models on this price list for the selected provider. Switch provider, or Refresh status after the shelf updates.",
+    "No models on this price list for the selected provider. Switch provider, or tap Refresh status to reload the shelf.",
   myAgentsPricingShelfEmptyRuntime:
-    "No models on this price list for the selected provider. Runtime still reports ${model}. Switch provider or Refresh status.",
+    "No models on this price list for the selected provider. Runtime still reports ${model}. Switch provider, or tap Refresh status to reload the shelf.",
   myAgentsPricingEmptyRuntimeNote: "Runtime still reports ${model}.",
   myAgentsPricingOptionLine: "${name} · in ${in} · out ${out}",
   myAgentsPricingCreditsLine: "in ${in} · out ${out} credits / 1M",
@@ -2158,9 +2158,9 @@ const zh: RanchMessages = {
   myAgentsPricingModelSearch: "搜索",
   myAgentsPricingOfficialEmpty: "价目里没有匹配的模型。",
   myAgentsPricingShelfEmpty:
-    "当前供应商价目里没有可用模型。请换供应商，或等货架更新后点「刷新状态」。",
+    "当前供应商价目里没有可用模型。请换供应商，或点「刷新状态」重新拉取货架。",
   myAgentsPricingShelfEmptyRuntime:
-    "当前供应商价目里没有可用模型。运行环境仍上报 ${model}。请换供应商或点「刷新状态」。",
+    "当前供应商价目里没有可用模型。运行环境仍上报 ${model}。请换供应商，或点「刷新状态」重新拉取货架。",
   myAgentsPricingEmptyRuntimeNote: "运行环境仍上报 ${model}。",
   myAgentsPricingOptionLine: "${name} · 入 ${in} · 出 ${out}",
   myAgentsPricingCreditsLine: "入 ${in} · 出 ${out} 星币 /百万",
