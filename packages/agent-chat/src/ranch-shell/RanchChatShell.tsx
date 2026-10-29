@@ -3541,6 +3541,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const composerMenuRef = useRef<HTMLDivElement | null>(null);
   const composerCatalogRef = useRef(composerCatalog);
   composerCatalogRef.current = composerCatalog;
+  const composerModelRef = useRef(composerModel);
+  composerModelRef.current = composerModel;
   /** Last Settings listing seen in this chat; change drops the composer pin. */
   const composerListedRef = useRef<{ chatId: string; listed: string } | null>(null);
   const [ownedAgentLoading, setOwnedAgentLoading] = useState(false);
@@ -5472,7 +5474,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setQuoteAttempts(0);
     }
     let cancelled = false;
-    const load = () => {
+    const load = (refresh: boolean) => {
       void client
         .getAgentModelStatus(bare)
         .then((row) => {
@@ -5533,9 +5535,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 : 20,
             model_options: options,
           };
-          setComposerModel(nextStatus);
-          writeComposerStatus(bare, nextStatus);
-          setComposerMenuExpanded(false);
+          const sameStatus =
+            !!composerModelRef.current &&
+            JSON.stringify(composerModelRef.current) === JSON.stringify(nextStatus);
+          if (!sameStatus) {
+            setComposerModel(nextStatus);
+            writeComposerStatus(bare, nextStatus);
+          }
+          // A later poll must not fold the open "show all" list back to the preview.
+          if (!refresh) setComposerMenuExpanded(false);
+          if (refresh && sameStatus) return;
           const fallback = supported;
           const stored = readComposerModelPick(active.chat_id);
           const storedListed = readComposerListed(active.chat_id);
@@ -5577,28 +5586,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
             catalogIds,
           });
           const catalogPending = listedOfficial && catalogIds.length === 0;
-          try {
-            sessionStorage.setItem(
-              "interfaze:composerDebug",
-              JSON.stringify({
-                byoDegraded,
-                shelfOnly,
-                forceOfficialShelf,
-                listedOfficial,
-                listedChanged,
-                listed,
-                stored,
-                catalogPending,
-                catalogIds: catalogIds.length,
-              }),
-            );
-          } catch {
-            /* debug */
-          }
           if (forceOfficialShelf) {
             const chosen = pickOfficialShelfSelection({
               menuIds: supported,
-              stored: byoDegraded ? null : listedChanged ? listed : stored,
+              // A degraded key drops a private model that is not on this shelf.
+              // A pick already on the shelf stays.
+              stored: listedChanged ? listed : stored,
               officialDefault,
             });
             setSelectedModelId(chosen);
@@ -5635,8 +5628,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
           }
         });
     };
-    load();
-    const timer = window.setInterval(load, 60_000);
+    load(false);
+    const timer = window.setInterval(() => load(true), 60_000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -5749,6 +5742,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
     );
     const shelfForUnpriced =
       Boolean(composerModel) && !official && !openRouterByo && !hasPricedOption;
+    const statusMenuIds =
+      official || composerModel?.shelf_only ? composerModel?.supported_models ?? [] : [];
+    const statusMenuPriced =
+      statusMenuIds.length > 0 &&
+      statusMenuIds.every((id) => {
+        const row = pricedOptionForId(id, composerModel?.model_options ?? []);
+        return !!row && (row.free || modelOptionHasPrice(row));
+      });
+    // The menu renders these rows from model-status. A full catalog walk
+    // (hundreds of pages, a state update each page) only fills prices we lack.
+    if (statusMenuPriced) {
+      setComposerCatalog([]);
+      setComposerCatalogLoading(false);
+      return;
+    }
     if (!official && !openRouterByo && !shelfForUnpriced) {
       setComposerCatalog([]);
       setComposerCatalogLoading(false);
@@ -5791,10 +5799,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
             if (acc.some((item) => sameModelId(item.id, id))) continue;
             acc.push({ id, in: quote.input, out: quote.output, currency: quote.currency });
           }
-          if (!cancelled) setComposerCatalog([...acc]);
           if (!data.items.length) break;
           offset += data.items.length;
         }
+        if (!cancelled) setComposerCatalog(acc);
       } catch {
         if (!cancelled) setComposerCatalog([]);
       } finally {
@@ -5807,11 +5815,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, [
     client,
     composerModel?.official_channel,
+    composerModel?.shelf_only,
     composerModel?.official_key_geo,
     composerModel?.price_book_source,
     composerModel?.listed_model_id,
     composerModel?.runtime_model_id,
-    (composerModel?.model_options ?? []).some((row) => modelOptionHasPrice(row)),
+    // Re-run when the status menu set or its prices change (skip full catalog walk).
+    (composerModel?.supported_models ?? []).join("\u0001"),
+    (composerModel?.model_options ?? [])
+      .map((row) => `${row.model_id}:${row.free ? "f" : modelOptionHasPrice(row) ? "p" : "u"}`)
+      .join("\u0001"),
   ]);
 
   useEffect(() => {
@@ -9043,6 +9056,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   listStyle: "none",
                                   maxHeight: 240,
                                   overflowY: "auto",
+                                  scrollbarWidth: "thin",
+                                  scrollbarColor: `rgba(148,163,184,0.45) ${colors.panel}`,
                                 }}
                               >
                                 {visible.length === 0 &&
