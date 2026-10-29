@@ -12,7 +12,13 @@ export type RosterRow = {
   kind: "agent" | "person";
   /** True when the server marks this person as the group's owner. */
   owner?: boolean;
+  /** True when this agent is a group admin. */
+  admin?: boolean;
 };
+
+function isAdminRole(role: string | null | undefined): boolean {
+  return (role || "").trim().toLowerCase() === "admin";
+}
 
 function isOwnerRole(role: string | null | undefined): boolean {
   const value = (role || "").trim().toLowerCase();
@@ -52,6 +58,7 @@ export function groupRoster(
         id: row.participant_id,
         name: labeled || personName(row.name, row.participant_id),
         kind: "agent",
+        admin: isAdminRole(row.role),
       });
       continue;
     }
