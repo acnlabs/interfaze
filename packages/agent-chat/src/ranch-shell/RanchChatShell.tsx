@@ -6886,6 +6886,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
         [data-ranch-chat-shell] textarea.ranch-composer-field:focus-visible {
           outline: none;
         }
+        .ranch-thin-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+        }
+        .ranch-thin-scroll::-webkit-scrollbar {
+          width: 10px;
+          height: 10px;
+        }
+        .ranch-thin-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .ranch-thin-scroll::-webkit-scrollbar-thumb {
+          background-color: rgba(148, 163, 184, 0.4);
+          border: 3px solid transparent;
+          border-radius: 999px;
+          background-clip: padding-box;
+        }
       `}</style>
       <div
         style={{
@@ -7946,6 +7963,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
               <div
                 ref={listRef}
+                className="ranch-thin-scroll"
                 style={{
                   flex: 1,
                   overflow: "auto",
@@ -9075,22 +9093,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   fontSize: 12,
                                 }}
                               />
-                              <style>{`
-                                .ranch-composer-menu-list::-webkit-scrollbar {
-                                  width: 10px;
-                                }
-                                .ranch-composer-menu-list::-webkit-scrollbar-track {
-                                  background: transparent;
-                                }
-                                .ranch-composer-menu-list::-webkit-scrollbar-thumb {
-                                  background-color: rgba(148, 163, 184, 0.4);
-                                  border: 3px solid transparent;
-                                  border-radius: 999px;
-                                  background-clip: padding-box;
-                                }
-                              `}</style>
                               <ul
-                                className="ranch-composer-menu-list"
+                                className="ranch-thin-scroll"
                                 role="listbox"
                                 aria-busy={
                                   composerCatalogLoading &&
