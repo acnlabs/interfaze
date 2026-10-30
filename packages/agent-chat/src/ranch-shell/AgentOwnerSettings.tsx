@@ -24,7 +24,16 @@ import { copyText } from "./connectPrompt";
 import type { RanchMessages } from "./i18n";
 import { officialShelfAllows } from "./officialV0";
 import { formatLocalPerMillion } from "../composerPrice";
-import { uniqueBookCatalogPair } from "../composerQuote";
+import {
+  mergeQuotedPrices,
+  modelOptionHasPrice,
+  pricedOptionForId,
+  quotedPricesFromOptions,
+  uniqueBookCatalogPair,
+  unpricedOwnModelIds,
+  type ModelPriceOption,
+  type QuotedModelPrice,
+} from "../composerQuote";
 import { formatCreditsFromLocal } from "../creditDisplay";
 import { chatSettleQuote, DEFAULT_CHAT_FEE_RATE } from "./settleQuote";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
@@ -321,6 +330,34 @@ function modelsForDeclaredProvider(
 ): string[] {
   const row = declared.find((item) => item.id.toLowerCase() === provider.toLowerCase());
   return row ? row.models : [];
+}
+
+/** Book hits for declared ids, then agent stickers the Host quote returned. */
+function pricedOptionsForDeclared(
+  declared: string[],
+  book: Array<{ id: string } & CatalogPair>,
+  quotes: QuotedModelPrice[],
+): ModelPriceOption[] {
+  const base: ModelPriceOption[] = declared.map((id) => {
+    const pair = uniqueBookCatalogPair(id, book);
+    if (!pair) return { model_id: id, priceable: false };
+    return {
+      model_id: id,
+      input_price_per_million: pair.in,
+      output_price_per_million: pair.out,
+      priceable: true,
+    };
+  });
+  return mergeQuotedPrices(base, quotes);
+}
+
+function priceableDeclaredIds(
+  declared: string[],
+  book: Array<{ id: string } & CatalogPair>,
+  quotes: QuotedModelPrice[],
+): string[] {
+  const options = pricedOptionsForDeclared(declared, book, quotes);
+  return declared.filter((id) => modelOptionHasPrice(pricedOptionForId(id, options)));
 }
 
 function findOfficialEquivalent(fromId: string, officialIds: string[]): string | null {
@@ -1003,6 +1040,10 @@ export function AgentOwnerSettings({
   const [openRouterByoCatalog, setOpenRouterByoCatalog] = useState<
     Array<{ id: string } & CatalogPair>
   >([]);
+  const [agentQuotes, setAgentQuotes] = useState<QuotedModelPrice[]>([]);
+  const [quoteAttempts, setQuoteAttempts] = useState(0);
+  const [quoteBusy, setQuoteBusy] = useState(false);
+  const quoteFlightRef = useRef("");
   const [officialCatalogLoading, setOfficialCatalogLoading] = useState(false);
   const [byoCatalogLoading, setByoCatalogLoading] = useState(false);
   const [catalogEpoch, setCatalogEpoch] = useState(0);
@@ -1403,11 +1444,17 @@ export function AgentOwnerSettings({
     agentProviders,
     OPENROUTER_BYO,
   );
-  const vendorModels = officialSelected
+  const declaredVendorIds = officialSelected
     ? officialIds
     : openRouterByoSelected
       ? openRouterDeclaredIds
       : modelsForDeclaredProvider(agentProviders, activeProvider);
+  const byoPricedOptions = officialSelected
+    ? []
+    : pricedOptionsForDeclared(declaredVendorIds, openRouterByoCatalog, agentQuotes);
+  const vendorModels = officialSelected
+    ? officialIds
+    : priceableDeclaredIds(declaredVendorIds, openRouterByoCatalog, agentQuotes);
   const displayedModelId =
     vendorModels.find((id) => sameModelId(id, modelIdTrim)) ||
     pickListedId(vendorModels, "") ||
@@ -1415,8 +1462,9 @@ export function AgentOwnerSettings({
   const officialRow = officialCatalog.find((row) =>
     sameModelId(row.id, displayedModelId),
   );
-  // BYO (TokenPlan / OpenRouter key / any vendor): settle uses the price book by tail.
+  // BYO: Host book by tail, else agent sticker from model-price-quote.
   const byoBookRow = uniqueBookCatalogPair(displayedModelId, openRouterByoCatalog);
+  const byoQuotedRow = pricedOptionForId(displayedModelId, byoPricedOptions);
   const selectedCatalog = officialSelected
     ? officialRow
       ? {
@@ -1439,7 +1487,14 @@ export function AgentOwnerSettings({
               : priceBookSource.trim().toLowerCase() || "openrouter"),
           currency: byoBookRow.currency,
         }
-      : null;
+      : byoQuotedRow && modelOptionHasPrice(byoQuotedRow)
+        ? {
+            in: Number(byoQuotedRow.input_price_per_million),
+            out: Number(byoQuotedRow.output_price_per_million),
+            source: "agent",
+            currency: undefined,
+          }
+        : null;
   const catalogIn = selectedCatalog?.in ?? null;
   const catalogOut = selectedCatalog?.out ?? null;
   const feeDenom = Math.round((1 - Math.min(0.99, Math.max(0, feeRate))) * 1000) / 1000;
@@ -1510,17 +1565,12 @@ export function AgentOwnerSettings({
   const modelOnList =
     vendorModels.length > 0 &&
     vendorModels.some((id) => sameModelId(id, displayedModelId));
-  const modelsBusy =
-    officialSelected
-      ? officialCatalogLoading
-      : openRouterByoSelected
-        ? byoCatalogLoading
-        : modelsLoading;
+  const modelsBusy = officialSelected
+    ? officialCatalogLoading
+    : modelsLoading || byoCatalogLoading || quoteBusy;
   const hasPricingModels = officialSelected
     ? officialIds.length > 0
-    : openRouterByoSelected
-      ? openRouterDeclaredIds.length > 0
-      : vendorModels.length > 0;
+    : vendorModels.length > 0;
   const pricingShelfEmptyText =
     officialSelected || openRouterByoSelected
       ? runtimeId
@@ -1565,6 +1615,84 @@ export function AgentOwnerSettings({
     capCreditsParsed !== null && capCreditsParsed !== skuSaved.cap_credits;
   const canSavePieceSku = pieceSkuDirty && !savingPieceSku && !busy;
   const vendorModelsKey = vendorModels.join("\u0001");
+  const declaredVendorKey = declaredVendorIds.join("\u0001");
+  useEffect(() => {
+    setAgentQuotes([]);
+    setQuoteAttempts(0);
+    quoteFlightRef.current = "";
+  }, [detail.agent_id, activeProvider]);
+
+  useEffect(() => {
+    if (officialSelected) return;
+    if (modelsLoading || byoCatalogLoading) return;
+    if (quoteAttempts >= 2) return;
+    if (!declaredVendorKey) return;
+    const declared = declaredVendorKey.split("\u0001").filter(Boolean);
+    if (!declared.length) return;
+    const options = pricedOptionsForDeclared(
+      declared,
+      openRouterByoCatalog,
+      agentQuotes,
+    );
+    const missing = unpricedOwnModelIds(declared, options);
+    if (!missing.length) return;
+    const bare = (detail.agent_id || "").replace(/^acn:/i, "").trim();
+    if (!bare) return;
+    const flight = `${bare}:${activeProvider}:${quoteAttempts}:${missing.join("\u0001")}`;
+    if (quoteFlightRef.current === flight) return;
+    quoteFlightRef.current = flight;
+    let cancelled = false;
+    setQuoteBusy(true);
+    void client
+      .quoteAgentModelPrices(bare, missing, quoteAttempts >= 1)
+      .then((quote) => {
+        const prices = Array.isArray(quote?.prices) ? quote.prices : [];
+        return client.getAgentModelStatus(bare).then(
+          (row) => ({ row, prices }),
+          () => ({ row: null, prices }),
+        );
+      })
+      .then(({ row, prices }) => {
+        if (cancelled) return;
+        const nextQuotes = quotedPricesFromOptions(
+          mergeQuotedPrices(
+            pricedOptionsForDeclared(declared, openRouterByoCatalog, agentQuotes),
+            prices,
+          ),
+        );
+        setAgentQuotes(nextQuotes);
+        if (Array.isArray(row?.agent_providers)) {
+          setAgentProviders(row.agent_providers as AgentProviderReport[]);
+        }
+        const still = unpricedOwnModelIds(
+          declared,
+          pricedOptionsForDeclared(declared, openRouterByoCatalog, nextQuotes),
+        );
+        if (still.length) setQuoteAttempts((n) => Math.min(2, n + 1));
+      })
+      .catch(() => {
+        if (!cancelled) setQuoteAttempts((n) => Math.min(2, n + 1));
+      })
+      .finally(() => {
+        if (!cancelled) setQuoteBusy(false);
+      });
+    return () => {
+      cancelled = true;
+      if (quoteFlightRef.current === flight) quoteFlightRef.current = "";
+    };
+  }, [
+    officialSelected,
+    modelsLoading,
+    byoCatalogLoading,
+    quoteAttempts,
+    declaredVendorKey,
+    openRouterByoCatalog,
+    agentQuotes,
+    detail.agent_id,
+    activeProvider,
+    client,
+  ]);
+
   useEffect(() => {
     if (modelsBusy) return;
     if (vendorModels.length === 0) return;
@@ -2575,52 +2703,71 @@ export function AgentOwnerSettings({
                     onChange={setModelIdDraft}
                   />
                 )
-              ) : openRouterByoSelected ? (
-                openRouterDeclaredIds.length === 0 ? (
-                  <p style={{ margin: 0, fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
-                    {pricingShelfEmptyText}
-                  </p>
-                ) : (
-                  <OfficialModelPicker
-                    ids={openRouterDeclaredIds}
-                    value={displayedModelId}
-                    disabled={busy || savingPricing}
-                    ariaLabel={t.myAgentsPricingModelLabel}
-                    searchPlaceholder={t.myAgentsPricingModelSearch}
-                    emptyText={t.myAgentsPricingOfficialEmpty}
-                    optionLabel={(id) =>
-                      catalogOptionLabel(
-                        id,
-                        uniqueBookCatalogPair(id, openRouterByoCatalog) ?? undefined,
-                        t.myAgentsPricingOptionLine,
-                        t.myAgentsModelUnpriced,
-                      )
-                    }
-                    onChange={setModelIdDraft}
-                  />
-                )
               ) : vendorModels.length === 0 ? (
                 <p style={{ margin: 0, fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
                   {pricingShelfEmptyText}
                 </p>
+              ) : openRouterByoSelected ? (
+                  <OfficialModelPicker
+                    ids={vendorModels}
+                    value={displayedModelId}
+                    disabled={busy || savingPricing || quoteBusy}
+                    ariaLabel={t.myAgentsPricingModelLabel}
+                    searchPlaceholder={t.myAgentsPricingModelSearch}
+                    emptyText={t.myAgentsPricingOfficialEmpty}
+                    optionLabel={(id) => {
+                      const book = uniqueBookCatalogPair(id, openRouterByoCatalog);
+                      if (book) {
+                        return catalogOptionLabel(
+                          id,
+                          book,
+                          t.myAgentsPricingOptionLine,
+                        );
+                      }
+                      const quoted = pricedOptionForId(id, byoPricedOptions);
+                      if (quoted && modelOptionHasPrice(quoted)) {
+                        return catalogOptionLabel(
+                          id,
+                          {
+                            in: Number(quoted.input_price_per_million),
+                            out: Number(quoted.output_price_per_million),
+                          },
+                          t.myAgentsPricingOptionLine,
+                        );
+                      }
+                      return shortModelLabel(id) || id;
+                    }}
+                    onChange={setModelIdDraft}
+                  />
               ) : (
                 <select
                   aria-label={t.myAgentsPricingModelLabel}
                   value={displayedModelId}
                   onChange={(e) => setModelIdDraft(e.target.value)}
-                  disabled={busy || savingPricing}
+                  disabled={busy || savingPricing || quoteBusy}
                   style={{ ...inputStyle, width: "100%" }}
                 >
-                  {vendorModels.map((id) => (
+                  {vendorModels.map((id) => {
+                    const book = uniqueBookCatalogPair(id, openRouterByoCatalog);
+                    const quoted = pricedOptionForId(id, byoPricedOptions);
+                    const pair = book
+                      ? book
+                      : quoted && modelOptionHasPrice(quoted)
+                        ? {
+                            in: Number(quoted.input_price_per_million),
+                            out: Number(quoted.output_price_per_million),
+                          }
+                        : undefined;
+                    return (
                     <option key={id} value={id}>
                       {catalogOptionLabel(
                         id,
-                        uniqueBookCatalogPair(id, openRouterByoCatalog) ?? undefined,
+                        pair,
                         t.myAgentsPricingOptionLine,
-                        t.myAgentsModelUnpriced,
                       )}
                     </option>
-                  ))}
+                    );
+                  })}
                 </select>
               )}
             </div>
