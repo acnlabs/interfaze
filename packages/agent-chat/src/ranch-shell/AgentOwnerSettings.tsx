@@ -246,6 +246,11 @@ function readOwnerCatalogCache(key: string): OwnerCatalogRow[] | null {
 }
 
 function writeOwnerCatalogCache(key: string, rows: OwnerCatalogRow[]): void {
+  // Never cache an empty shelf — a race or failed page must not stick for TTL.
+  if (!rows.length) {
+    ownerCatalogCache.delete(key);
+    return;
+  }
   ownerCatalogCache.set(key, { at: Date.now(), rows });
 }
 
@@ -1044,8 +1049,12 @@ export function AgentOwnerSettings({
   const [quoteAttempts, setQuoteAttempts] = useState(0);
   const [quoteBusy, setQuoteBusy] = useState(false);
   const quoteFlightRef = useRef("");
-  const [officialCatalogLoading, setOfficialCatalogLoading] = useState(false);
-  const [byoCatalogLoading, setByoCatalogLoading] = useState(false);
+  // Start busy so the first paint does not flash "No models on this price list"
+  // while Official is the provisional provider and the catalog has not arrived.
+  const [officialCatalogLoading, setOfficialCatalogLoading] = useState(() =>
+    Boolean(detail.host_inference_ready),
+  );
+  const [byoCatalogLoading, setByoCatalogLoading] = useState(true);
   const [catalogEpoch, setCatalogEpoch] = useState(0);
   const [settingsProvider, setSettingsProvider] = useState(() =>
     detail.host_inference_ready ? OFFICIAL_OPENROUTER : "",
@@ -1566,7 +1575,7 @@ export function AgentOwnerSettings({
     vendorModels.length > 0 &&
     vendorModels.some((id) => sameModelId(id, displayedModelId));
   const modelsBusy = officialSelected
-    ? officialCatalogLoading
+    ? modelsLoading || officialCatalogLoading
     : modelsLoading || byoCatalogLoading || quoteBusy;
   const hasPricingModels = officialSelected
     ? officialIds.length > 0
