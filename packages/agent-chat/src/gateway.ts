@@ -272,6 +272,29 @@ export type PlanUsage = {
   };
 };
 
+/** User default room cap and UTC-month total. Null cap means unset (unlimited). */
+export type RoomSpendCaps = {
+  default_cap_credits: number | null;
+  period_total_cap_credits: number | null;
+  default_set: boolean;
+  period_total_set: boolean;
+  period_yyyy_mm?: string;
+  period_timezone?: string;
+};
+
+/** Effective spend cap for one user in one private chat or group. */
+export type RoomSpendStatus = {
+  room_cap_credits: number | null;
+  room_cap_source?: string;
+  room_spent_credits: number;
+  room_spent_micros: number;
+  period_total_cap_credits: number | null;
+  period_total_set: boolean;
+  period_spent_credits: number;
+  period_spent_micros: number;
+  chat_id?: string | null;
+};
+
 /** Per-chat collaboration oil tank (P13). */
 export type ChatCollabBudget = {
   cap_credits: number;
@@ -793,6 +816,16 @@ export type GatewayClient = {
     plan_code?: string;
     landing_page?: "LOGIN" | "BILLING" | "NO_PREFERENCE";
   }) => Promise<{ order_id: string; approve_url: string | null }>;
+  getRoomSpendCaps: () => Promise<RoomSpendCaps>;
+  putRoomSpendCaps: (body: {
+    default_cap_credits?: number | null;
+    period_total_cap_credits?: number | null;
+    clear_default?: boolean;
+    clear_period_total?: boolean;
+  }) => Promise<RoomSpendCaps>;
+  getChatRoomSpend: (chatId: string) => Promise<RoomSpendStatus>;
+  putChatRoomSpend: (chatId: string, capCredits: number | null) => Promise<RoomSpendStatus>;
+  deleteChatRoomSpend: (chatId: string) => Promise<RoomSpendStatus>;
   /** Account default collaboration tank size (preference; no lock). */
   getCollabCap: () => Promise<{ cap_credits: number }>;
   putCollabCap: (capCredits: number) => Promise<{ cap_credits: number }>;
@@ -1376,6 +1409,23 @@ export function createGatewayClient(
         `/api/chat/wallet/transactions?${params}`,
       );
     },
+    getRoomSpendCaps: () => request<RoomSpendCaps>("/api/chat/room-spend-caps"),
+    putRoomSpendCaps: (body) =>
+      request<RoomSpendCaps>("/api/chat/room-spend-caps", {
+        method: "PUT",
+        body: JSON.stringify(body),
+      }),
+    getChatRoomSpend: (chatId) =>
+      request<RoomSpendStatus>(`/api/chat/chats/${encodeURIComponent(chatId)}/room-spend`),
+    putChatRoomSpend: (chatId, capCredits) =>
+      request<RoomSpendStatus>(`/api/chat/chats/${encodeURIComponent(chatId)}/room-spend`, {
+        method: "PUT",
+        body: JSON.stringify({ cap_credits: capCredits }),
+      }),
+    deleteChatRoomSpend: (chatId) =>
+      request<RoomSpendStatus>(`/api/chat/chats/${encodeURIComponent(chatId)}/room-spend`, {
+        method: "DELETE",
+      }),
     getCollabCap: () => request<{ cap_credits: number }>("/api/chat/collab-cap"),
     putCollabCap: (capCredits) =>
       request<{ cap_credits: number }>("/api/chat/collab-cap", {

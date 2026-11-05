@@ -616,6 +616,12 @@ function sendFailureCopy(
   t: RanchMessages,
 ): { text: string; offerStoreKey: boolean } {
   if (!(e instanceof ChatGatewayError)) return { text: t.sendFailed, offerStoreKey: false };
+  if (e.code === "room_spend_cap_exceeded") {
+    return { text: t.collabNeedTopup, offerStoreKey: false };
+  }
+  if (e.code === "period_spend_cap_exceeded") {
+    return { text: t.collabPeriodNeedTopup, offerStoreKey: false };
+  }
   const offerStoreKey = shouldOfferStoreOpenRouterKey(e.code, e.message);
   const blocked = sendBlockSentence(e.code, e.message, t);
   if (blocked) return { text: blocked, offerStoreKey: false };
@@ -3119,16 +3125,27 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
-  /** P13: agent writeback asked for collab but tank empty / shortfall. */
-  const collabNeedTopup = useMemo(() => {
+  /** Latest collab settlement, when that charge hit this chat's cap or the UTC-month total. */
+  const collabCapBlock = useMemo((): "room" | "period" | null => {
     for (let i = messages.length - 1; i >= 0; i--) {
       const meta = messages[i]?.metadata;
       if (!meta || typeof meta !== "object") continue;
-      const collab = (meta as { collab?: { need_topup?: boolean } }).collab;
-      if (collab?.need_topup) return true;
+      const settle = (
+        meta as { collab?: { settle?: { skipped?: string } } }
+      ).collab?.settle;
+      if (!settle || typeof settle !== "object") continue;
+      if (settle.skipped === "period_spend_cap_exceeded") return "period";
+      if (settle.skipped === "room_spend_cap_exceeded") return "room";
+      return null;
     }
-    return false;
+    return null;
   }, [messages]);
+  /** This send was blocked by the room cap or the UTC-month total. */
+  const [spendCapBlock, setSpendCapBlock] = useState<"room" | "period" | null>(null);
+  const spendCapBanner = spendCapBlock ?? collabCapBlock;
+  useEffect(() => {
+    setSpendCapBlock(null);
+  }, [active?.chat_id]);
   /** agent_id → display name (group chats). */
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
   /** Everyone in the open group, people included, for the roster and the interaction map. */
@@ -4038,6 +4055,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setActive(chat);
       setView("conversation");
       setError(null);
+      setSpendCapBlock(null);
+      setBusy(false);
       setMessages([]);
       setLoadingMessages(true);
       setMessagesLoadError(false);
@@ -4954,6 +4973,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const pollGen = ++replyPollGenRef.current;
     setBusy(true);
     setError(null);
+    setSpendCapBlock(null);
     setRecipientPickerOpen(false);
     try {
       if (group && agentIdsRef.current.length === 0) {
@@ -5177,8 +5197,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
           else setDeliveryBroken(chatId, true);
         });
       }
+      if (seq !== loadSeqRef.current || activeChatIdRef.current !== chatId) return;
       const fail = sendFailureCopy(e, t);
       setError(fail.text);
+      setSpendCapBlock(
+        e instanceof ChatGatewayError
+          ? e.code === "period_spend_cap_exceeded"
+            ? "period"
+            : e.code === "room_spend_cap_exceeded"
+              ? "room"
+              : null
+          : null,
+      );
       setStoreKeyPrompt(fail.offerStoreKey);
       try {
         await reloadMessages(chatId, seq);
@@ -5186,7 +5216,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
         /* ignore */
       }
     } finally {
-      setBusy(false);
+      if (seq === loadSeqRef.current && activeChatIdRef.current === chatId) {
+        setBusy(false);
+      }
     }
   };
   sendRef.current = send;
@@ -8424,7 +8456,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 ) : null}
               </div>
 
-              {collabNeedTopup ? (
+              {spendCapBanner ? (
                 <div
                   style={{
                     padding: "8px 14px",
@@ -8440,11 +8472,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     flexWrap: "wrap",
                   }}
                 >
-                  <span>{t.collabNeedTopup}</span>
+                  <span>
+                    {spendCapBanner === "period" ? t.collabPeriodNeedTopup : t.collabNeedTopup}
+                  </span>
                   <button
                     type="button"
                     onClick={() => {
-                      setInfoTab(groupActive ? "settings" : "info");
+                      setInfoTab("settings");
                       setShowAddMember(false);
                       setShowMembersPanel(true);
                     }}
@@ -10072,6 +10106,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           client={client}
                           messages={t}
                           chatId={active.chat_id}
+                          onUpdated={() => setSpendCapBlock(null)}
                         />
                       </div>
                       {canEditGroup ? (
@@ -10139,6 +10174,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         t={t}
                         onToggle={(next) => void toggleChatDecision(next)}
                       />
+                      <ChatCollabBudgetSection
+                        client={client}
+                        messages={t}
+                        chatId={active.chat_id}
+                        onUpdated={() => setSpendCapBlock(null)}
+                      />
                       {activeIsOwned ? (
                         ownedAgentDetail ? (
                           <AgentOwnerSettings
@@ -10203,12 +10244,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           {active.description?.trim() || t.groupNoDescription}
                         </div>
                       </div>
-                      <ChatCollabBudgetSection
-                        readOnly
-                        client={client}
-                        messages={t}
-                        chatId={active.chat_id}
-                      />
                     </div>
                   ) : infoTab === "info" && !groupActive ? (
                     <>
@@ -10246,11 +10281,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   : agentStatusTitle(activePresence, t) || t.offline}
                           </div>
                         </div>
-                        <ChatCollabBudgetSection
-                          client={client}
-                          messages={t}
-                          chatId={active.chat_id}
-                        />
                         {ownedAgentDetail?.name ? (
                           <div>
                             <div

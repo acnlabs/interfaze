@@ -350,7 +350,14 @@ export type RanchMessages = {
   collabAutoOn: string;
   collabAutoOff: string;
   collabNeedTopup: string;
+  collabPeriodNeedTopup: string;
   collabNeedTopupCta: string;
+  collabUnlimited: string;
+  collabPeriodCap: string;
+  collabPeriodSpent: string;
+  collabPeriodAutoOff: string;
+  collabLoadFailed: string;
+  collabSaveFailed: string;
   accountWalletLoadFailed: string;
   accountWalletEmptyTx: string;
   accountWalletRecent: string;
@@ -1146,19 +1153,27 @@ const en: RanchMessages = {
   accountKeysWrittenTo: "Written to {name}",
   accountKeysNotWritten: "Not written to any agent",
   accountKeysOpenList: "View model quota",
-  collabBudget: "Collaboration budget",
+  collabBudget: "Chat spend cap",
   collabBudgetHint:
-    "Oil tank for multi-agent help. With remaining Credits, collaboration runs without asking each time.",
-  collabAccountCap: "Default tank size",
-  collabRemaining: "Remaining in this chat",
-  collabAdd: "Add to chat",
-  collabApplyDefault: "Fill from default",
-  collabRelease: "Refund unused",
+    "Cap on what this private chat or group can charge your wallet. The UTC-month total across all chats still applies. Unset means no cap.",
+  collabAccountCap: "Default cap per chat",
+  collabRemaining: "Used in this chat this month",
+  collabAdd: "Set cap",
+  collabApplyDefault: "Use my default",
+  collabRelease: "Clear chat cap",
   collabSave: "Save",
-  collabAutoOn: "Auto collaboration on",
-  collabAutoOff: "Empty — add Credits to allow collaboration",
-  collabNeedTopup: "Collaboration budget is empty. Add Credits to continue multi-agent help.",
-  collabNeedTopupCta: "Open collaboration budget",
+  collabAutoOn: "Within your spend cap",
+  collabAutoOff: "Cap reached — raise it to continue",
+  collabPeriodSpent: "Used across all chats this UTC month",
+  collabPeriodAutoOff: "Monthly cap reached — raise the UTC month total",
+  collabNeedTopup: "This chat's spend cap is used up. Raise it in Settings to continue.",
+  collabPeriodNeedTopup:
+    "This month's spend cap across all chats is used up. Raise it in Settings to continue.",
+  collabNeedTopupCta: "Open spend cap",
+  collabUnlimited: "No cap",
+  collabPeriodCap: "UTC month total",
+  collabLoadFailed: "Couldn’t load the spend cap.",
+  collabSaveFailed: "Couldn’t save the spend cap.",
   accountWalletLoadFailed: "Couldn’t load wallet.",
   accountWalletEmptyTx: "No transactions yet.",
   accountWalletRecent: "Recent activity",
@@ -2005,18 +2020,26 @@ const zh: RanchMessages = {
   accountKeysWrittenTo: "已写入 {name}",
   accountKeysNotWritten: "未写入任何智能体",
   accountKeysOpenList: "查看模型额度",
-  collabBudget: "协作预算",
-  collabBudgetHint: "多智能体协作用的额度油箱。有剩余时自动放行，不用每次点同意。",
-  collabAccountCap: "默认额度",
-  collabRemaining: "本会话剩余",
-  collabAdd: "加到本会话",
-  collabApplyDefault: "用默认额度填充",
-  collabRelease: "退回未用",
+  collabBudget: "本私聊/群消费限额",
+  collabBudgetHint:
+    "这个私聊或群能从你的钱包扣多少。所有私聊和群还受 UTC 自然月总额限制。不设置就是不限额。",
+  collabAccountCap: "每个私聊/群的默认限额",
+  collabRemaining: "本月本私聊/群已用",
+  collabAdd: "设置限额",
+  collabApplyDefault: "用我的默认",
+  collabRelease: "清除本私聊/群限额",
   collabSave: "保存",
-  collabAutoOn: "自动协作已开启",
-  collabAutoOff: "额度空 — 加星币后才可自动协作",
-  collabNeedTopup: "协作预算已用完。加上额度后才能继续多智能体协作。",
-  collabNeedTopupCta: "打开协作预算",
+  collabAutoOn: "仍在你的消费限额内",
+  collabAutoOff: "已到限额 — 提高后才能继续",
+  collabPeriodSpent: "本月所有私聊和群已用",
+  collabPeriodAutoOff: "本月总额已到 — 提高总额后才能继续",
+  collabNeedTopup: "这个私聊/群的消费限额已用完。请在设置里提高限额后再继续。",
+  collabPeriodNeedTopup: "本月所有私聊和群的消费总额已到上限。请在设置里提高限额后再继续。",
+  collabNeedTopupCta: "打开消费限额",
+  collabUnlimited: "不限额",
+  collabPeriodCap: "UTC 自然月总额",
+  collabLoadFailed: "限额加载失败。",
+  collabSaveFailed: "限额没有保存。",
   accountWalletLoadFailed: "无法加载钱包。",
   accountWalletEmptyTx: "暂无流水。",
   accountWalletRecent: "最近流水",
@@ -2571,7 +2594,6 @@ const OVERSEAS_ZH: Partial<Record<keyof RanchMessages, string>> = {
   screenConfirm: "打开电脑屏幕按每小时 {rate} credits 计费。",
   screenDock: "{label} · 每小时 {rate} credits",
   sendConfirm: "发送后电脑按每小时 {rate} credits 计费。不用的预扣会退回。",
-  collabAutoOff: "额度空。加 credit 后才可自动协作。",
   accountPlanFilesHint:
     "聊天里预览和交付件的空间。原片留在云端电脑或你自己的地方。超额只拒绝新上传，不扣 credit，也不会自动删除已有文件。",
   accountPlanProBlurb:
