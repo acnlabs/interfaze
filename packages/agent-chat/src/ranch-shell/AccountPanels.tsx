@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { createPortal } from "react-dom";
 import type {
   AccountKey,
-  ChatCollabBudget,
+  RoomSpendCaps,
+  RoomSpendStatus,
   GatewayClient,
   HumanWallet,
   InvoiceRequestRecord,
@@ -1518,50 +1519,124 @@ function fmtTxTime(iso: string | null | undefined): string {
 }
 
 /** Account default collab tank + optional per-chat remaining controls. */
+function capDraftFrom(set: boolean, value: number | null | undefined): string {
+  if (!set || value == null) return "";
+  return String(value);
+}
+
+function parsedCap(draft: string): number | null {
+  const trimmed = draft.trim();
+  if (trimmed === "" || !Number.isFinite(Number(trimmed))) return null;
+  return Math.max(0, Math.trunc(Number(trimmed)));
+}
+
+function spendCapState(status: RoomSpendStatus): "ok" | "room" | "period" {
+  const micros = 1_000_000;
+  const roomOver =
+    status.room_cap_credits != null &&
+    status.room_spent_micros >= status.room_cap_credits * micros;
+  const periodOver =
+    status.period_total_set &&
+    status.period_total_cap_credits != null &&
+    status.period_spent_micros >= status.period_total_cap_credits * micros;
+  if (periodOver) return "period";
+  if (roomOver) return "room";
+  return "ok";
+}
+
+function showCap(credits: number | null | undefined, unlimited: string): string {
+  if (credits == null) return unlimited;
+  return fmtCredits(credits);
+}
+
+/** User default room/period caps, plus an optional per-chat override. */
 export function ChatCollabBudgetSection({
   client,
   messages: t,
   chatId,
-  readOnly = false,
+  onUpdated,
 }: {
   client: GatewayClient;
   messages: RanchMessages;
   chatId?: string | null;
-  /** Show remaining Credits only. Hide the account cap and top-up controls. */
-  readOnly?: boolean;
+  onUpdated?: () => void;
 }) {
-  const [cap, setCap] = useState(0);
-  const [capDraft, setCapDraft] = useState("0");
-  const [budget, setBudget] = useState<ChatCollabBudget | null>(null);
-  const [addDraft, setAddDraft] = useState("20");
+  const [defaultDraft, setDefaultDraft] = useState("");
+  const [periodDraft, setPeriodDraft] = useState("");
+  const [status, setStatus] = useState<RoomSpendStatus | null>(null);
+  const [chatDraft, setChatDraft] = useState("");
+  const [capsLoaded, setCapsLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const viewGen = useRef(0);
+
+  const applyCaps = (next: RoomSpendCaps) => {
+    setDefaultDraft(capDraftFrom(next.default_set, next.default_cap_credits));
+    setPeriodDraft(capDraftFrom(next.period_total_set, next.period_total_cap_credits));
+  };
 
   const reload = () => {
+    const gen = ++viewGen.current;
     setErr(null);
-    if (!readOnly) {
-      void client
-        .getCollabCap()
-        .then((r) => {
-          setCap(r.cap_credits);
-          setCapDraft(String(r.cap_credits));
-        })
-        .catch(() => setErr(t.sendFailed));
-    }
-    if (chatId) {
-      void client
-        .getChatCollabBudget(chatId)
-        .then(setBudget)
-        .catch(() => setBudget(null));
-    } else {
-      setBudget(null);
-    }
+    setBusy(false);
+    setCapsLoaded(false);
+    setStatus(null);
+    void client
+      .getRoomSpendCaps()
+      .then((next) => {
+        if (gen !== viewGen.current) return;
+        applyCaps(next);
+        setCapsLoaded(true);
+      })
+      .catch(() => {
+        if (gen !== viewGen.current) return;
+        setErr(t.collabLoadFailed);
+      });
+    if (!chatId) return;
+    void client
+      .getChatRoomSpend(chatId)
+      .then((next) => {
+        if (gen !== viewGen.current) return;
+        setStatus(next);
+      })
+      .catch(() => {
+        if (gen !== viewGen.current) return;
+        setStatus(null);
+        setErr(t.collabLoadFailed);
+      });
+  };
+
+  const commitChatStatus = (gen: number, run: () => Promise<RoomSpendStatus>) => {
+    setErr(null);
+    setBusy(true);
+    void run()
+      .then((next) => {
+        if (gen !== viewGen.current) return;
+        setStatus(next);
+        setErr(null);
+        onUpdated?.();
+      })
+      .catch(() => {
+        if (gen !== viewGen.current) return;
+        setErr(t.collabSaveFailed);
+      })
+      .finally(() => {
+        if (gen !== viewGen.current) return;
+        setBusy(false);
+      });
   };
 
   useEffect(() => {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on chat/client
-  }, [client, chatId, readOnly]);
+  }, [client, chatId]);
+
+  const override = status?.room_cap_source === "user_chat";
+  const capInForce =
+    status != null &&
+    (status.room_cap_credits != null ||
+      (status.period_total_set && status.period_total_cap_credits != null));
+  const spendState = status ? spendCapState(status) : "ok";
 
   return (
     <div>
@@ -1570,89 +1645,128 @@ export function ChatCollabBudgetSection({
       {err ? (
         <p style={{ color: colors.danger, fontSize: 12, margin: "0 0 10px" }}>{err}</p>
       ) : null}
-      {readOnly ? null : (
-        <>
-          <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-            {t.collabAccountCap}
-          </label>
-          <div style={{ display: "flex", gap: 8, marginBottom: chatId ? 16 : 0 }}>
-            <input
-              type="number"
-              min={0}
-              value={capDraft}
-              onChange={(e) => setCapDraft(e.target.value)}
-              style={{ ...inputStyle, flex: 1, padding: "9px 12px", fontSize: 14 }}
-            />
-            <button
-              type="button"
-              style={btnPrimaryLg}
-              disabled={busy}
-              onClick={() => {
-                const n = Math.max(0, Math.trunc(Number(capDraft) || 0));
-                setBusy(true);
-                void client
-                  .putCollabCap(n)
-                  .then((r) => {
-                    setCap(r.cap_credits);
-                    setCapDraft(String(r.cap_credits));
-                  })
-                  .catch(() => setErr(t.sendFailed))
-                  .finally(() => setBusy(false));
-              }}
-            >
-              {t.collabSave}
-            </button>
-          </div>
-        </>
-      )}
-      {chatId ? (
-        <div
-          style={
-            readOnly
-              ? undefined
-              : { borderTop: `1px solid ${colors.border}`, paddingTop: 14 }
-          }
+      <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+        {t.collabAccountCap}
+      </label>
+      <input
+        type="number"
+        min={0}
+        placeholder={t.collabUnlimited}
+        value={defaultDraft}
+        disabled={!capsLoaded || busy}
+        onChange={(e) => setDefaultDraft(e.target.value)}
+        style={{ ...inputStyle, width: "100%", padding: "9px 12px", fontSize: 14, marginBottom: 12 }}
+      />
+      <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+        {t.collabPeriodCap}
+      </label>
+      <div style={{ display: "flex", gap: 8, marginBottom: chatId ? 16 : 0 }}>
+        <input
+          type="number"
+          min={0}
+          placeholder={t.collabUnlimited}
+          value={periodDraft}
+          disabled={!capsLoaded || busy}
+          onChange={(e) => setPeriodDraft(e.target.value)}
+          style={{ ...inputStyle, flex: 1, padding: "9px 12px", fontSize: 14 }}
+        />
+        <button
+          type="button"
+          style={btnPrimaryLg}
+          disabled={busy || !capsLoaded}
+          onClick={() => {
+            if (!capsLoaded) return;
+            const gen = viewGen.current;
+            const savedChatId = chatId;
+            const defaultCap = parsedCap(defaultDraft);
+            const periodCap = parsedCap(periodDraft);
+            setErr(null);
+            setBusy(true);
+            void client
+              .putRoomSpendCaps({
+                ...(defaultCap == null
+                  ? { clear_default: true }
+                  : { default_cap_credits: defaultCap }),
+                ...(periodCap == null
+                  ? { clear_period_total: true }
+                  : { period_total_cap_credits: periodCap }),
+              })
+              .then(async (next) => {
+                if (gen !== viewGen.current) return;
+                applyCaps(next);
+                setErr(null);
+                onUpdated?.();
+                if (!savedChatId) return;
+                try {
+                  const statusNext = await client.getChatRoomSpend(savedChatId);
+                  if (gen !== viewGen.current) return;
+                  setStatus(statusNext);
+                } catch {
+                  if (gen !== viewGen.current) return;
+                  setStatus(null);
+                }
+              })
+              .catch(() => {
+                if (gen !== viewGen.current) return;
+                setErr(t.collabSaveFailed);
+              })
+              .finally(() => {
+                if (gen !== viewGen.current) return;
+                setBusy(false);
+              });
+          }}
         >
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              flexWrap: "wrap",
-              marginBottom: readOnly ? 0 : 12,
-            }}
-          >
-            <StatChip
-              label={t.collabRemaining}
-              value={fmtCredits(budget?.remaining_credits ?? 0)}
-            />
-            {readOnly ? null : <StatChip label={t.collabAccountCap} value={fmtCredits(cap)} />}
-            <span style={{ alignSelf: "center" }}>
-              <Badge tone={budget?.can_auto ? "ok" : "neutral"}>
-                {budget?.can_auto ? t.collabAutoOn : t.collabAutoOff}
-              </Badge>
-            </span>
-          </div>
-          {readOnly ? null : (
+          {t.collabSave}
+        </button>
+      </div>
+      {status ? (
+        <p style={{ fontSize: 12, color: colors.muted, margin: "8px 0 0" }}>
+          {t.collabPeriodSpent} {fmtCredits(status.period_spent_credits)}
+        </p>
+      ) : null}
+      {chatId ? (
+        <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: 14 }}>
+          {status ? (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+              <StatChip
+                label={t.collabRemaining}
+                value={fmtCredits(status.room_spent_credits)}
+              />
+              <StatChip
+                label={t.collabBudget}
+                value={showCap(status.room_cap_credits, t.collabUnlimited)}
+              />
+              {spendState !== "ok" || capInForce ? (
+                <span style={{ alignSelf: "center" }}>
+                  <Badge tone={spendState === "ok" ? "ok" : "neutral"}>
+                    {spendState === "period"
+                      ? t.collabPeriodAutoOff
+                      : spendState === "room"
+                        ? t.collabAutoOff
+                        : t.collabAutoOn}
+                  </Badge>
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <input
               type="number"
-              min={1}
-              value={addDraft}
-              onChange={(e) => setAddDraft(e.target.value)}
+              min={0}
+              placeholder={t.collabUnlimited}
+              value={chatDraft}
+              disabled={!status || busy}
+              onChange={(e) => setChatDraft(e.target.value)}
               style={{ ...inputStyle, width: 96, padding: "9px 12px", fontSize: 14 }}
             />
             <button
               type="button"
               style={btnPrimaryLg}
-              disabled={busy}
+              disabled={busy || !status || chatDraft.trim() === ""}
               onClick={() => {
-                const n = Math.max(1, Math.trunc(Number(addDraft) || 0));
-                setBusy(true);
-                void client
-                  .addChatCollabBudget(chatId, n)
-                  .then(setBudget)
-                  .catch(() => setErr(t.sendFailed))
-                  .finally(() => setBusy(false));
+                const n = Math.max(0, Math.trunc(Number(chatDraft)));
+                if (!Number.isFinite(n)) return;
+                commitChatStatus(viewGen.current, () => client.putChatRoomSpend(chatId, n));
               }}
             >
               {t.collabAdd}
@@ -1660,14 +1774,9 @@ export function ChatCollabBudgetSection({
             <button
               type="button"
               style={btnGhostLg}
-              disabled={busy || cap <= 0}
+              disabled={busy || !status || !override}
               onClick={() => {
-                setBusy(true);
-                void client
-                  .ensureChatCollabDefault(chatId)
-                  .then(setBudget)
-                  .catch(() => setErr(t.sendFailed))
-                  .finally(() => setBusy(false));
+                commitChatStatus(viewGen.current, () => client.deleteChatRoomSpend(chatId));
               }}
             >
               {t.collabApplyDefault}
@@ -1675,20 +1784,14 @@ export function ChatCollabBudgetSection({
             <button
               type="button"
               style={btnGhostLg}
-              disabled={busy || !(budget && budget.remaining_credits > 0)}
+              disabled={busy || !status || status.room_cap_credits == null}
               onClick={() => {
-                setBusy(true);
-                void client
-                  .releaseChatCollabBudget(chatId)
-                  .then((r) => setBudget(r))
-                  .catch(() => setErr(t.sendFailed))
-                  .finally(() => setBusy(false));
+                commitChatStatus(viewGen.current, () => client.putChatRoomSpend(chatId, null));
               }}
             >
               {t.collabRelease}
             </button>
           </div>
-          )}
         </div>
       ) : null}
     </div>
@@ -2218,10 +2321,6 @@ export function AccountWalletPanel({
             >
               {t.walletRechargeExternalHint}
             </p>
-          </div>
-
-          <div style={card}>
-            <ChatCollabBudgetSection client={client} messages={t} />
           </div>
 
           <section>
