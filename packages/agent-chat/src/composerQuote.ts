@@ -45,14 +45,22 @@ function sameExactId(left: string | null | undefined, right: string | null | und
   return !!a && a === b;
 }
 
-/** Name after the provider prefix. A dated id does not match the undated one. */
-export function priceTail(modelId: string | null | undefined): string {
+/** Last segment, before a date stamp is removed. */
+function rawTail(modelId: string | null | undefined): string {
   let text = (modelId || "").trim().toLowerCase();
   if (text.startsWith("~")) text = text.slice(1);
   const colon = text.indexOf(":");
   if (colon >= 0) text = text.slice(0, colon);
   const slash = text.lastIndexOf("/");
   return slash >= 0 ? text.slice(slash + 1) : text;
+}
+
+/**
+ * Name used to find the price-book row.
+ * A compact date stamp (`-202605`) is the provider's spelling of the same model.
+ */
+export function priceTail(modelId: string | null | undefined): string {
+  return rawTail(modelId).replace(/-20\d{4}(?:\d{2})?$/, "");
 }
 
 /** Batch rows and ``~`` aliases are not a price of their own (backend `catalog_price_alias`). */
@@ -103,19 +111,18 @@ export function modelOptionHasPrice(
   );
 }
 
-/** Price-book rows whose name matches a model this agent reported. */
+/**
+ * Provider-reported ids that already have a price (book or agent quote).
+ * The menu lists these ids — never the price-book row name alone.
+ */
 export function agentProviderPricedIds(
   reported: Array<string | null | undefined>,
   modelOptions: ModelPriceOption[],
 ): string[] {
-  const tails = new Set(dedupe(reported).map(priceTail).filter(Boolean));
   const out: string[] = [];
   const seen = new Set<string>();
-  for (const row of modelOptions) {
-    if (!modelOptionHasPrice(row)) continue;
-    const id = row.model_id.trim();
-    const tail = priceTail(id);
-    if (!id || !tail || !tails.has(tail)) continue;
+  for (const id of dedupe(reported)) {
+    if (!pricedOptionForId(id, modelOptions)) continue;
     const key = id.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
@@ -125,32 +132,21 @@ export function agentProviderPricedIds(
 }
 
 /**
- * Models to show. Several name matches stay on those rows.
- * One current model does not hide the rest of a priced card.
+ * Models to show on a BYO card: only this agent's priced provider ids.
+ * Price-book rows supply the rate via ``pricedOptionForId``; they are not menu ids.
  */
 export function composerPricedMenuIds(
   reported: Array<string | null | undefined>,
   modelOptions: ModelPriceOption[],
 ): string[] {
-  const matched = agentProviderPricedIds(reported, modelOptions);
-  const priced: string[] = [];
-  const seen = new Set<string>();
-  for (const row of modelOptions) {
-    if (!modelOptionHasPrice(row)) continue;
-    const id = row.model_id.trim();
-    const key = id.toLowerCase();
-    if (!id || seen.has(key)) continue;
-    seen.add(key);
-    priced.push(id);
-  }
-  if (matched.length > 1) return matched;
-  if (priced.length > matched.length) return priced;
-  return matched;
+  return agentProviderPricedIds(reported, modelOptions);
 }
 
 /**
- * The id to send. The menu may hold the price-book row.
- * The agent runs its own id. A row with no matching report stays as it is.
+ * The id to send. The chip may still hold a price-book spelling; that only finds the rate.
+ * The call uses the provider's own id, including a dated spelling of the same name.
+ * Prefer the same vendor as the pick, then a dated report, then any same-name report.
+ * A pick with no matching report stays as it is.
  */
 export function agentModelIdForSend(
   selected: string | null | undefined,
@@ -159,11 +155,82 @@ export function agentModelIdForSend(
   const picked = (selected || "").trim();
   if (!picked) return null;
   const ids = dedupe(reported);
-  const exact = ids.find((id) => sameExactId(id, picked));
-  if (exact) return exact;
   const tail = priceTail(picked);
   const sameName = tail ? ids.filter((id) => priceTail(id) === tail) : [];
-  return sameName[0] || picked;
+  if (!sameName.length) {
+    return ids.find((id) => sameExactId(id, picked)) || picked;
+  }
+  const vendor = providerVendor(picked);
+  const sameVendor = vendor
+    ? sameName.filter((id) => providerVendor(id) === vendor)
+    : [];
+  const pool = sameVendor.length ? sameVendor : sameName;
+  // Dated OEM spelling beats a price-book row that happens to be listed too.
+  const dated = pool.filter((id) => rawTail(id) !== priceTail(id));
+  if (dated.length) return dated[0];
+  const exact = pool.find((id) => sameExactId(id, picked));
+  if (exact) return exact;
+  return pool[0] || picked;
+}
+
+function providerVendor(modelId: string | null | undefined): string {
+  const text = (modelId || "").trim().toLowerCase();
+  const slash = text.indexOf("/");
+  return slash > 0 ? text.slice(0, slash) : "";
+}
+
+/**
+ * A remembered model may stay on the current private chat.
+ * The price-book row and this provider's own id for that row both stay.
+ * Another provider's id does not stay just because the model name matches.
+ */
+export function storedModelStillListed(
+  selected: string | null | undefined,
+  menuIds: readonly string[],
+  currentIds: ReadonlyArray<string | null | undefined>,
+): boolean {
+  const picked = (selected || "").trim();
+  if (!picked) return false;
+  const current = currentIds.map((id) => (id || "").trim()).filter(Boolean);
+  if (
+    menuIds.some((id) => sameExactId(id, picked)) ||
+    current.some((id) => sameExactId(id, picked))
+  ) {
+    return true;
+  }
+  const vendor = providerVendor(picked);
+  const tail = priceTail(picked);
+  if (!tail || !menuIds.some((id) => priceTail(id) === tail)) return false;
+  if (!vendor) return true;
+  return current.some((id) => providerVendor(id) === vendor && priceTail(id) === tail);
+}
+
+/**
+ * The id to send for this private chat.
+ * A model still on the current provider stays. A different provider's id
+ * is replaced by the current path, and is not sent as itself.
+ */
+export function modelIdOnCurrentPath(
+  selected: string | null | undefined,
+  menuIds: readonly string[],
+  currentIds: ReadonlyArray<string | null | undefined>,
+  fallbackIds: ReadonlyArray<string | null | undefined>,
+): string | null {
+  if (storedModelStillListed(selected, menuIds, currentIds)) {
+    const picked = (selected || "").trim();
+    return picked || null;
+  }
+  const menuKnown = menuIds.some((id) => (id || "").trim());
+  const currentKnown = currentIds.some((id) => (id || "").trim());
+  if (!menuKnown && !currentKnown) {
+    const picked = (selected || "").trim();
+    return picked || null;
+  }
+  for (const id of fallbackIds) {
+    const next = (id || "").trim();
+    if (next) return next;
+  }
+  return null;
 }
 
 /** Ids that may rename a price-book row back to the agent's own model. */
