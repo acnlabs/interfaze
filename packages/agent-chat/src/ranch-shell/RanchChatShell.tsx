@@ -58,6 +58,7 @@ import {
   formatMenuSide,
   formatMenuSideShort,
 } from "../composerPrice";
+import { acceptsImageInput } from "../composerModality";
 import {
   agentModelIdForSend,
   composerCatalogForOffer,
@@ -3567,10 +3568,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [composerMenuQuery, setComposerMenuQuery] = useState("");
   const [composerMenuExpanded, setComposerMenuExpanded] = useState(false);
   const [composerCatalog, setComposerCatalog] = useState<
-    Array<{ id: string; in: number; out: number; currency?: string }>
-  >(
-    [],
-  );
+    Array<{
+      id: string;
+      in: number;
+      out: number;
+      currency?: string;
+      /** Catalog modality; used to gate image sends. */
+      modality?: string | null;
+    }>
+  >([]);
   const [composerCatalogLoading, setComposerCatalogLoading] = useState(false);
   /** How many times this chat asked the agent to price models the book missed. */
   const [quoteAttempts, setQuoteAttempts] = useState(0);
@@ -5848,7 +5854,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setComposerCatalogLoading(true);
     void (async () => {
       const page = 500;
-      const acc: Array<{ id: string; in: number; out: number; currency?: string }> = [];
+      const acc: Array<{
+        id: string;
+        in: number;
+        out: number;
+        currency?: string;
+        modality?: string | null;
+      }> = [];
       let offset = 0;
       let total = Number.POSITIVE_INFINITY;
       try {
@@ -5871,7 +5883,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
             if (!quote) continue;
             if (quote.input < 0 || quote.output < 0) continue;
             if (acc.some((item) => sameModelId(item.id, id))) continue;
-            acc.push({ id, in: quote.input, out: quote.output, currency: quote.currency });
+            acc.push({
+              id,
+              in: quote.input,
+              out: quote.output,
+              currency: quote.currency,
+              modality: row.modality ?? null,
+            });
           }
           if (!data.items.length) break;
           offset += data.items.length;
@@ -9059,6 +9077,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       }
                       const displayName = shortModelLabel(value) || t.composerModelUnknown;
                       const canPick = options.length > 0 || official || openRouterByo;
+                      const selectedModality =
+                        composerCatalog.find((row) => sameShownModel(row.id, value))
+                          ?.modality ??
+                        composerCatalog.find((row) => sameModelId(row.id, value))
+                          ?.modality ??
+                        null;
+                      const visionKnown = acceptsImageInput(selectedModality);
+                      // Cursor-style: no capability tags in the menu list. Only
+                      // annotate the selected chip when catalog modality is known.
+                      const visionNote =
+                        visionKnown === false
+                          ? t.composerModelTextOnly
+                          : visionKnown === true
+                            ? t.composerModelSeesImages
+                            : "";
                       return (
                         <>
                           <button
@@ -9067,10 +9100,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             aria-haspopup="listbox"
                             aria-expanded={composerMenuOpen}
                             aria-label={
-                              selectedPrice.title
-                                ? `${t.composerModelLabel}: ${displayName}. ${selectedPrice.title}`
-                                : `${t.composerModelLabel}: ${displayName}`
+                              [
+                                `${t.composerModelLabel}: ${displayName}`,
+                                selectedPrice.title,
+                                visionNote,
+                              ]
+                                .filter(Boolean)
+                                .join(". ")
                             }
+                            title={visionNote || undefined}
                             onClick={() => {
                               if (!canPick) return;
                               setComposerMenuOpen((open) => !open);
