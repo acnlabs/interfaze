@@ -27,10 +27,16 @@ describe("uniqueBookCatalogPair", () => {
     expect(hit?.in).toBe(0.091);
   });
 
-  it("does not price dated OEM ids absent from the book", () => {
+  it("prices a dated provider id from the undated book row", () => {
+    const hit = uniqueBookCatalogPair(
+      "tencenttokenplan/deepseek-v4-flash-202605",
+      book,
+    );
+    expect(hit?.id).toBe("deepseek/deepseek-v4-flash");
+    expect(hit?.in).toBe(0.091);
     expect(
-      uniqueBookCatalogPair("tencenttokenplan/deepseek-v4-flash-202605", book),
-    ).toBeNull();
+      uniqueBookCatalogPair("tencenttokenplan/deepseek-v4-pro-202606", book)?.id,
+    ).toBe("deepseek/deepseek-v4-pro");
   });
 
   it("ignores ~ and :batch aliases when counting hits", () => {

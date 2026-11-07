@@ -22,6 +22,8 @@ const {
   pricedOptionForId,
   quotedPricesFromOptions,
   reportedIdsForSend,
+  storedModelStillListed,
+  modelIdOnCurrentPath,
   unpricedOwnModelIds,
 } = moduleExports;
 
@@ -49,8 +51,8 @@ test("a priced provider shows its own models, not the OpenRouter shelf", () => {
     },
   ];
   assert.deepEqual(agentProviderPricedIds(reported, options), [
-    "moonshotai/kimi-k2.5",
-    "z-ai/glm-5",
+    "tencenttokenplan/kimi-k2.5",
+    "tencenttokenplan/glm-5",
   ]);
   assert.deepEqual(unpricedOwnModelIds(reported, options), [
     "tencenttokenplan/deepseek-v4-flash-202605",
@@ -60,10 +62,10 @@ test("a priced provider shows its own models, not the OpenRouter shelf", () => {
     "moonshotai/kimi-k2.5",
   );
   assert.equal(pricedOptionForId("deepseek/deepseek-v4-flash", options), null);
-  assert.deepEqual(
-    composerPricedMenuIds(["tencenttokenplan/kimi-k2.5"], options).map((id) => id.split("/").pop()),
-    ["kimi-k2.5", "glm-5", "deepseek-chat"],
-  );
+  // Menu keeps the provider id even when the rate comes from a book row.
+  assert.deepEqual(composerPricedMenuIds(["tencenttokenplan/kimi-k2.5"], options), [
+    "tencenttokenplan/kimi-k2.5",
+  ]);
   assert.deepEqual(
     composerCatalogForOffer({
       reportedIds: reported,
@@ -98,6 +100,58 @@ test("send uses the agent's provider id for a price-book row", () => {
         supported_models: ["tencenttokenplan/kimi-k2.5"],
       }),
     ),
+    "tencenttokenplan/kimi-k2.5",
+  );
+  assert.equal(
+    agentModelIdForSend("tencenttokenplan/deepseek/deepseek-v4-flash", reported),
+    "tencenttokenplan/deepseek-v4-flash-202605",
+  );
+  assert.equal(
+    agentModelIdForSend("deepseek/deepseek-v4-flash", [
+      "tencenttokenplan/deepseek/deepseek-v4-flash",
+      "tencenttokenplan/deepseek-v4-flash-202605",
+    ]),
+    "tencenttokenplan/deepseek-v4-flash-202605",
+  );
+  assert.equal(
+    agentModelIdForSend("deepseek/deepseek-v4-flash", [
+      "tencenttokenplan/deepseek-v4-pro-202606",
+    ]),
+    "deepseek/deepseek-v4-flash",
+  );
+  assert.equal(
+    agentModelIdForSend("tencenttokenplan/deepseek/deepseek-v4-flash", [
+      "oldvendor/deepseek-v4-flash-202605",
+      "tencenttokenplan/deepseek-v4-flash-202605",
+    ]),
+    "tencenttokenplan/deepseek-v4-flash-202605",
+  );
+});
+
+test("BYO menu lists provider ids, not price-book row names", () => {
+  const reported = [
+    "tencenttokenplan/kimi-k2.5",
+    "tencenttokenplan/deepseek-v4-flash-202605",
+  ];
+  const options = [
+    {
+      model_id: "moonshotai/kimi-k2.5",
+      input_price_per_million: 1,
+      output_price_per_million: 4,
+    },
+    {
+      model_id: "tencenttokenplan/deepseek-v4-flash-202605",
+      input_price_per_million: 0.2,
+      output_price_per_million: 0.4,
+      price_from: "agent",
+    },
+  ];
+  assert.deepEqual(composerPricedMenuIds(reported, options), [
+    "tencenttokenplan/kimi-k2.5",
+    "tencenttokenplan/deepseek-v4-flash-202605",
+  ]);
+  assert.equal(
+    agentModelIdForSend("moonshotai/kimi-k2.5", reported),
     "tencenttokenplan/kimi-k2.5",
   );
 });
@@ -142,10 +196,45 @@ test("a price the agent reports joins the menu and leaves the book price alone",
     0.2,
   );
   assert.deepEqual(unpricedOwnModelIds(reported, options), []);
-  assert.deepEqual(
-    composerPricedMenuIds(reported, options).map((id) => id.split("/").pop()),
-    ["kimi-k2.5", "deepseek-v4-flash-202605"],
+  assert.deepEqual(composerPricedMenuIds(reported, options), [
+    "tencenttokenplan/kimi-k2.5",
+    "tencenttokenplan/deepseek-v4-flash-202605",
+  ]);
+});
+
+test("a remembered model stays only on the current provider", () => {
+  const menu = ["deepseek/deepseek-v4-flash"];
+  const current = ["tencenttokenplan/deepseek/deepseek-v4-flash"];
+  assert.equal(
+    storedModelStillListed("tencenttokenplan/deepseek/deepseek-v4-flash", menu, current),
+    true,
   );
+  assert.equal(storedModelStillListed("deepseek/deepseek-v4-flash", menu, current), true);
+  assert.equal(storedModelStillListed("deepseek-v4-flash", menu, current), true);
+  assert.equal(
+    storedModelStillListed("oldvendor/deepseek-v4-flash", menu, current),
+    false,
+  );
+  assert.equal(storedModelStillListed("openai/gpt-4o", menu, current), false);
+});
+
+test("a send keeps the current provider and drops a different one", () => {
+  const menu = ["deepseek/deepseek-v4-flash"];
+  const current = ["tencenttokenplan/deepseek/deepseek-v4-flash"];
+  const fallback = ["deepseek/deepseek-v4-flash"];
+  assert.equal(
+    modelIdOnCurrentPath("tencenttokenplan/deepseek/deepseek-v4-flash", menu, current, fallback),
+    "tencenttokenplan/deepseek/deepseek-v4-flash",
+  );
+  assert.equal(
+    modelIdOnCurrentPath("deepseek/deepseek-v4-flash", menu, current, fallback),
+    "deepseek/deepseek-v4-flash",
+  );
+  assert.equal(
+    modelIdOnCurrentPath("oldvendor/deepseek-v4-flash", menu, current, fallback),
+    "deepseek/deepseek-v4-flash",
+  );
+  assert.equal(modelIdOnCurrentPath("oldvendor/gpt-4o", [], [], []), "oldvendor/gpt-4o");
 });
 
 test("a provider with no priced model uses the official shelf while a quote is open", () => {
