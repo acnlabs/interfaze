@@ -21,6 +21,7 @@ const {
   imageInputBlocked,
   mimeLooksLikeImage,
   modalityForSelectedModel,
+  ownerFileTypeAllowed,
 } = moduleExports;
 
 test("OpenRouter modality with image input is accepted", () => {
@@ -48,6 +49,18 @@ test("text-only modality blocks image attach; unknown does not", () => {
   assert.equal(fileLooksLikeImage({ type: "", name: "shot.png" }), true);
   assert.equal(dataTransferTypesIncludeFiles(["Files"]), true);
   assert.equal(dataTransferTypesIncludeFiles(["text/plain"]), false);
+});
+
+test("owner uploads accept images, pdf, text, audio, and video", () => {
+  assert.equal(ownerFileTypeAllowed({ type: "image/png", name: "a.png" }), true);
+  assert.equal(ownerFileTypeAllowed({ type: "application/pdf", name: "a.pdf" }), true);
+  assert.equal(ownerFileTypeAllowed({ type: "text/plain", name: "a.txt" }), true);
+  assert.equal(ownerFileTypeAllowed({ type: "audio/mpeg", name: "a.mp3" }), true);
+  assert.equal(ownerFileTypeAllowed({ type: "audio/mp4", name: "a.m4a" }), true);
+  assert.equal(ownerFileTypeAllowed({ type: "video/mp4", name: "a.mp4" }), true);
+  assert.equal(ownerFileTypeAllowed({ type: "video/webm", name: "a.webm" }), true);
+  assert.equal(ownerFileTypeAllowed({ type: "", name: "clip.wav" }), true);
+  assert.equal(ownerFileTypeAllowed({ type: "application/zip", name: "a.zip" }), false);
 });
 
 test("BYO reads agent modality and ignores catalog", () => {
