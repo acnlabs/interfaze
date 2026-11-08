@@ -3506,6 +3506,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [slashIndex, setSlashIndex] = useState(0);
   const [draft, setDraft] = useState("");
   type PendingOwnerFile = {
+    chatId: string;
     ref: string;
     attachmentId: string;
     filename: string;
@@ -3513,6 +3514,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     previewUrl?: string;
   };
   const [pendingOwnerFiles, setPendingOwnerFiles] = useState<PendingOwnerFile[]>([]);
+  const pendingOwnerFilesRef = useRef<PendingOwnerFile[]>([]);
+  const discardUnsentOwnerFilesRef = useRef<(rows: PendingOwnerFile[]) => void>(() => {});
   const [attachBusy, setAttachBusy] = useState(false);
   const composerFileInputRef = useRef<HTMLInputElement>(null);
   const composerFieldRef = useRef<HTMLTextAreaElement>(null);
@@ -4110,12 +4113,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setMentionIndex(0);
       if (!opts?.preserveDraft) {
         setDraft("");
-        setPendingOwnerFiles((prev) => {
-          for (const row of prev) {
-            if (row.previewUrl) URL.revokeObjectURL(row.previewUrl);
-          }
-          return [];
-        });
+        const leftover = pendingOwnerFilesRef.current;
+        pendingOwnerFilesRef.current = [];
+        setPendingOwnerFiles([]);
+        discardUnsentOwnerFilesRef.current(leftover);
       }
       setRecipientPickerOpen(false);
       setStickyMention(isGroupChat(chat) ? readStickyMention(chat.chat_id) : null);
@@ -4995,6 +4996,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     if (!incoming.length) return;
     setAttachBusy(true);
     setError(null);
+    let queued = pendingOwnerFilesRef.current.length;
     try {
       for (const file of incoming) {
         const reason = ownerAttachAllowed(file);
@@ -5002,40 +5004,31 @@ export function RanchChatShell(props: RanchChatShellProps) {
           setError(reason);
           continue;
         }
-        let slotOk = true;
-        setPendingOwnerFiles((prev) => {
-          if (prev.length >= OWNER_ATTACH_MAX_FILES) {
-            slotOk = false;
-            return prev;
-          }
-          return prev;
-        });
-        if (!slotOk) {
+        if (queued >= OWNER_ATTACH_MAX_FILES) {
           setError(t.composerAttachFailed);
           break;
         }
         try {
           const uploaded = await client.uploadOwnerFile(chatId, file);
+          if (queued >= OWNER_ATTACH_MAX_FILES) {
+            void client.deleteOwnerFile(chatId, uploaded.attachment_id).catch(() => {});
+            setError(t.composerAttachFailed);
+            break;
+          }
           const previewUrl = mimeLooksLikeImage(uploaded.content_type)
             ? URL.createObjectURL(file)
             : undefined;
-          setPendingOwnerFiles((prev) => {
-            if (prev.some((row) => row.ref === uploaded.ref)) return prev;
-            if (prev.length >= OWNER_ATTACH_MAX_FILES) {
-              if (previewUrl) URL.revokeObjectURL(previewUrl);
-              return prev;
-            }
-            return [
-              ...prev,
-              {
-                ref: uploaded.ref,
-                attachmentId: uploaded.attachment_id,
-                filename: uploaded.filename || file.name || "file",
-                contentType: uploaded.content_type,
-                previewUrl,
-              },
-            ];
-          });
+          const row: PendingOwnerFile = {
+            chatId,
+            ref: uploaded.ref,
+            attachmentId: uploaded.attachment_id,
+            filename: uploaded.filename || file.name || "file",
+            contentType: uploaded.content_type,
+            previewUrl,
+          };
+          queued += 1;
+          pendingOwnerFilesRef.current = [...pendingOwnerFilesRef.current, row];
+          setPendingOwnerFiles(pendingOwnerFilesRef.current);
         } catch {
           setError(t.composerAttachFailed);
         }
@@ -5045,16 +5038,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
     }
   };
 
+  const discardUnsentOwnerFiles = (rows: PendingOwnerFile[]) => {
+    for (const row of rows) {
+      if (row.previewUrl) URL.revokeObjectURL(row.previewUrl);
+      void client.deleteOwnerFile(row.chatId, row.attachmentId).catch(() => {});
+    }
+  };
+  discardUnsentOwnerFilesRef.current = discardUnsentOwnerFiles;
+
   const removePendingOwnerFile = (attachmentId: string) => {
-    setPendingOwnerFiles((prev) => {
-      const row = prev.find((item) => item.attachmentId === attachmentId);
-      if (row?.previewUrl) URL.revokeObjectURL(row.previewUrl);
-      return prev.filter((item) => item.attachmentId !== attachmentId);
-    });
-    if (!active) return;
-    void client.deleteOwnerFile(active.chat_id, attachmentId).catch(() => {
-      /* already unbound or gone */
-    });
+    const row = pendingOwnerFilesRef.current.find((item) => item.attachmentId === attachmentId);
+    pendingOwnerFilesRef.current = pendingOwnerFilesRef.current.filter(
+      (item) => item.attachmentId !== attachmentId,
+    );
+    setPendingOwnerFiles(pendingOwnerFilesRef.current);
+    if (row) discardUnsentOwnerFiles([row]);
   };
 
   const send = async (opts?: SendOpts) => {
@@ -5192,6 +5190,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         ...(attachmentRefs.length ? { attachments: attachmentRefs } : {}),
       });
       clearPendingOwnerFiles(pendingOwnerFiles);
+      pendingOwnerFilesRef.current = [];
       setPendingOwnerFiles([]);
       const used = sent.metadata?.requested_model;
       if (typeof used === "string" && used.trim() && !sameModelId(used, quotedModel)) {
@@ -8703,7 +8702,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 onDragOver={(e) => {
                   if (!dataTransferTypesIncludeFiles(e.dataTransfer?.types)) return;
                   e.preventDefault();
-                  e.dataTransfer.dropEffect = shownModelBlocksImages() ? "none" : "copy";
+                  e.dataTransfer.dropEffect = "copy";
                 }}
                 onDrop={(e) => {
                   if (!dataTransferTypesIncludeFiles(e.dataTransfer?.types)) return;
