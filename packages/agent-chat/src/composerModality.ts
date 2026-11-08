@@ -31,12 +31,33 @@ export function imageInputBlocked(modality: string | null | undefined): boolean 
   return acceptsImageInput(modality) === false;
 }
 
+const IMAGE_FILE_NAME = /\.(png|jpe?g|gif|webp|bmp|heic|heif|avif)$/i;
+
+export function fileLooksLikeImage(
+  file: { type?: string | null; name?: string | null } | null | undefined,
+): boolean {
+  if (!file) return false;
+  if (mimeLooksLikeImage(file.type)) return true;
+  return IMAGE_FILE_NAME.test((file.name || "").trim());
+}
+
 export function filesLookLikeImages(
-  files: Iterable<{ type?: string | null }> | null | undefined,
+  files: Iterable<{ type?: string | null; name?: string | null }> | null | undefined,
 ): boolean {
   if (!files) return false;
   for (const file of files) {
-    if (mimeLooksLikeImage(file?.type)) return true;
+    if (fileLooksLikeImage(file)) return true;
+  }
+  return false;
+}
+
+/** dragover hides the file list; "Files" is the signal that a drop can be accepted. */
+export function dataTransferTypesIncludeFiles(
+  types: Iterable<string> | null | undefined,
+): boolean {
+  if (!types) return false;
+  for (const type of types) {
+    if (type === "Files" || type === "application/x-moz-file") return true;
   }
   return false;
 }

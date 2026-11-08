@@ -60,8 +60,11 @@ import {
 } from "../composerPrice";
 import {
   acceptsImageInput,
+  dataTransferTypesIncludeFiles,
+  fileLooksLikeImage,
   filesLookLikeImages,
   imageInputBlocked,
+  mimeLooksLikeImage,
   modalityForSelectedModel,
 } from "../composerModality";
 import {
@@ -6664,13 +6667,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
     };
   }, [renewHostTicket]);
 
-  const composerImageBlocked = useMemo(() => {
-    if (!composerModel || !selectedModelId) return false;
+  // Chip writes the model it actually shows. Paste/drop read this, not a
+  // stale selectedModelId that the menu may have replaced with options[0].
+  const composerShownModelIdRef = useRef("");
+  composerShownModelIdRef.current = "";
+
+  const shownModelBlocksImages = (): boolean => {
+    const modelId = composerShownModelIdRef.current;
+    if (!modelId || !composerModel) return false;
     if (active && isGroupChat(active)) return false;
     const shelfOnly = Boolean(composerModel.shelf_only);
     const modality = modalityForSelectedModel({
       useCatalog: Boolean(composerModel.official_channel || shelfOnly),
-      modelId: selectedModelId,
+      modelId,
       agentRows: composerModel.model_options,
       catalogRows: composerCatalog,
       sameShown: (id, wanted) => {
@@ -6681,17 +6690,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
       sameId: (id, wanted) => sameModelId(id, wanted),
     });
     return imageInputBlocked(modality);
-  }, [active, composerCatalog, composerModel, selectedModelId]);
+  };
 
-  const rejectComposerImages = (
-    data: DataTransfer | null,
-  ): boolean => {
-    if (!composerImageBlocked || !data) return false;
-    const fromItems = Array.from(data.items)
-      .filter((item) => item.kind === "file")
-      .map((item) => item.getAsFile())
-      .filter((file): file is File => !!file);
-    return filesLookLikeImages([...Array.from(data.files), ...fromItems]);
+  const rejectComposerImages = (data: DataTransfer | null): boolean => {
+    if (!shownModelBlocksImages() || !data) return false;
+    if (filesLookLikeImages(data.files)) return true;
+    for (const item of Array.from(data.items)) {
+      if (item.kind !== "file") continue;
+      if (mimeLooksLikeImage(item.type)) return true;
+      const file = item.getAsFile();
+      if (file && fileLooksLikeImage(file)) return true;
+    }
+    return false;
   };
 
   const slashParsed = parseSlashDraft(draft);
@@ -8577,13 +8587,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
               <form
                 onDragOver={(e) => {
-                  if (!rejectComposerImages(e.dataTransfer)) return;
+                  if (!shownModelBlocksImages()) return;
+                  if (!dataTransferTypesIncludeFiles(e.dataTransfer?.types)) return;
                   e.preventDefault();
+                  e.dataTransfer.dropEffect = "none";
                 }}
                 onDrop={(e) => {
-                  if (!rejectComposerImages(e.dataTransfer)) return;
+                  if (!shownModelBlocksImages()) return;
+                  if (!dataTransferTypesIncludeFiles(e.dataTransfer?.types)) return;
                   e.preventDefault();
-                  setError(t.composerModelTextOnly);
+                  if (rejectComposerImages(e.dataTransfer)) {
+                    setError(t.composerModelTextOnly);
+                  }
                 }}
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -9050,6 +9065,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         options.find((id) => sameShownModel(id, listed)) ||
                         options[0] ||
                         "";
+                      composerShownModelIdRef.current = value;
                       const priceFor = (
                         id: string,
                       ): { menu: string; short: string; title: string } => {

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import {
   acceptsImageInput,
+  dataTransferTypesIncludeFiles,
+  fileLooksLikeImage,
   filesLookLikeImages,
   imageInputBlocked,
   mimeLooksLikeImage,
@@ -26,6 +28,9 @@ assert.equal(imageInputBlocked("text+image->text"), false);
 assert.equal(imageInputBlocked(null), false);
 assert.equal(filesLookLikeImages([{ type: "image/png" }, { type: "text/plain" }]), true);
 assert.equal(filesLookLikeImages([{ type: "application/pdf" }]), false);
+assert.equal(fileLooksLikeImage({ type: "", name: "shot.PNG" }), true);
+assert.equal(dataTransferTypesIncludeFiles(["Files"]), true);
+assert.equal(dataTransferTypesIncludeFiles(["text/plain"]), false);
 
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 assert.equal(

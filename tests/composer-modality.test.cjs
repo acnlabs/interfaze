@@ -15,6 +15,8 @@ const moduleExports = {};
 new Function("exports", js)(moduleExports);
 const {
   acceptsImageInput,
+  dataTransferTypesIncludeFiles,
+  fileLooksLikeImage,
   filesLookLikeImages,
   imageInputBlocked,
   mimeLooksLikeImage,
@@ -43,6 +45,9 @@ test("text-only modality blocks image attach; unknown does not", () => {
   assert.equal(imageInputBlocked("text->text"), true);
   assert.equal(imageInputBlocked(null), false);
   assert.equal(filesLookLikeImages([{ type: "image/jpeg" }]), true);
+  assert.equal(fileLooksLikeImage({ type: "", name: "shot.png" }), true);
+  assert.equal(dataTransferTypesIncludeFiles(["Files"]), true);
+  assert.equal(dataTransferTypesIncludeFiles(["text/plain"]), false);
 });
 
 test("BYO reads agent modality and ignores catalog", () => {
