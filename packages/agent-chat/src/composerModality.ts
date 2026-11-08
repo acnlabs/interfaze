@@ -33,6 +33,34 @@ export function imageInputBlocked(modality: string | null | undefined): boolean 
 
 const IMAGE_FILE_NAME = /\.(png|jpe?g|gif|webp|bmp|heic|heif|avif)$/i;
 
+const OWNER_FILE_NAME =
+  /\.(png|jpe?g|gif|webp|pdf|txt|wav|mp3|ogg|m4a|mp4|webm)$/i;
+
+const OWNER_FILE_MIME = new Set([
+  "application/pdf",
+  "text/plain",
+  "audio/wav",
+  "audio/wave",
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/x-m4a",
+  "video/mp4",
+  "video/webm",
+]);
+
+/** Person uploads the composer may send. Known text-only models still receive the file. */
+export function ownerFileTypeAllowed(
+  file: { type?: string | null; name?: string | null } | null | undefined,
+): boolean {
+  if (!file) return false;
+  const mime = (file.type || "").trim().toLowerCase();
+  if (mime.startsWith("image/")) return true;
+  if (OWNER_FILE_MIME.has(mime)) return true;
+  return OWNER_FILE_NAME.test((file.name || "").trim());
+}
+
 export function fileLooksLikeImage(
   file: { type?: string | null; name?: string | null } | null | undefined,
 ): boolean {
