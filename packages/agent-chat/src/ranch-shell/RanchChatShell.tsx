@@ -3505,6 +3505,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [agentRefIndex, setAgentRefIndex] = useState(0);
   const [slashIndex, setSlashIndex] = useState(0);
   const [draft, setDraft] = useState("");
+  type PendingOwnerFile = {
+    ref: string;
+    attachmentId: string;
+    filename: string;
+    contentType: string;
+    previewUrl?: string;
+  };
+  const [pendingOwnerFiles, setPendingOwnerFiles] = useState<PendingOwnerFile[]>([]);
+  const [attachBusy, setAttachBusy] = useState(false);
+  const composerFileInputRef = useRef<HTMLInputElement>(null);
   const composerFieldRef = useRef<HTMLTextAreaElement>(null);
   const [composerFocused, setComposerFocused] = useState(false);
   const [slashMenuDismissed, setSlashMenuDismissed] = useState(false);
@@ -4098,7 +4108,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setTitleDraft(isGroupChat(chat) ? (chat.title || "").trim() || chatTitle(chat) : chat.title?.trim() || "");
       setGroupDescDraft((chat.description || "").trim());
       setMentionIndex(0);
-      if (!opts?.preserveDraft) setDraft("");
+      if (!opts?.preserveDraft) {
+        setDraft("");
+        setPendingOwnerFiles((prev) => {
+          for (const row of prev) {
+            if (row.previewUrl) URL.revokeObjectURL(row.previewUrl);
+          }
+          return [];
+        });
+      }
       setRecipientPickerOpen(false);
       setStickyMention(isGroupChat(chat) ? readStickyMention(chat.chat_id) : null);
       clearReplySlot();
@@ -4947,9 +4965,102 @@ export function RanchChatShell(props: RanchChatShellProps) {
     bootAdmitted?: boolean;
   };
 
+  const clearPendingOwnerFiles = useCallback((rows: PendingOwnerFile[]) => {
+    for (const row of rows) {
+      if (row.previewUrl) URL.revokeObjectURL(row.previewUrl);
+    }
+  }, []);
+
+  const OWNER_ATTACH_MAX_BYTES = 4 * 1024 * 1024;
+  const OWNER_ATTACH_MAX_FILES = 8;
+  const ownerAttachAllowed = (file: File): string | null => {
+    if (file.size > OWNER_ATTACH_MAX_BYTES) return t.composerAttachTooLarge;
+    const mime = (file.type || "").toLowerCase();
+    const ok =
+      mime.startsWith("image/") ||
+      mime === "application/pdf" ||
+      mime === "text/plain" ||
+      /\.(png|jpe?g|gif|webp|pdf|txt)$/i.test(file.name || "");
+    if (!ok) return t.composerAttachTypeUnsupported;
+    if (mimeLooksLikeImage(mime) || fileLooksLikeImage(file)) {
+      if (shownModelBlocksImages()) return t.composerModelTextOnly;
+    }
+    return null;
+  };
+
+  const enqueueOwnerFiles = async (fileList: FileList | File[] | null) => {
+    if (!active || !fileList) return;
+    const chatId = active.chat_id;
+    const incoming = Array.from(fileList);
+    if (!incoming.length) return;
+    setAttachBusy(true);
+    setError(null);
+    try {
+      for (const file of incoming) {
+        const reason = ownerAttachAllowed(file);
+        if (reason) {
+          setError(reason);
+          continue;
+        }
+        let slotOk = true;
+        setPendingOwnerFiles((prev) => {
+          if (prev.length >= OWNER_ATTACH_MAX_FILES) {
+            slotOk = false;
+            return prev;
+          }
+          return prev;
+        });
+        if (!slotOk) {
+          setError(t.composerAttachFailed);
+          break;
+        }
+        try {
+          const uploaded = await client.uploadOwnerFile(chatId, file);
+          const previewUrl = mimeLooksLikeImage(uploaded.content_type)
+            ? URL.createObjectURL(file)
+            : undefined;
+          setPendingOwnerFiles((prev) => {
+            if (prev.some((row) => row.ref === uploaded.ref)) return prev;
+            if (prev.length >= OWNER_ATTACH_MAX_FILES) {
+              if (previewUrl) URL.revokeObjectURL(previewUrl);
+              return prev;
+            }
+            return [
+              ...prev,
+              {
+                ref: uploaded.ref,
+                attachmentId: uploaded.attachment_id,
+                filename: uploaded.filename || file.name || "file",
+                contentType: uploaded.content_type,
+                previewUrl,
+              },
+            ];
+          });
+        } catch {
+          setError(t.composerAttachFailed);
+        }
+      }
+    } finally {
+      setAttachBusy(false);
+    }
+  };
+
+  const removePendingOwnerFile = (attachmentId: string) => {
+    setPendingOwnerFiles((prev) => {
+      const row = prev.find((item) => item.attachmentId === attachmentId);
+      if (row?.previewUrl) URL.revokeObjectURL(row.previewUrl);
+      return prev.filter((item) => item.attachmentId !== attachmentId);
+    });
+    if (!active) return;
+    void client.deleteOwnerFile(active.chat_id, attachmentId).catch(() => {
+      /* already unbound or gone */
+    });
+  };
+
   const send = async (opts?: SendOpts) => {
     const text = (opts?.text ?? draft).trim();
-    if (!text || !active) return;
+    const attachmentRefs = pendingOwnerFiles.map((row) => row.ref);
+    if ((!text && !attachmentRefs.length) || !active) return;
     if (confirmDialog && !opts?.bootAdmitted) return;
     const chatId = active.chat_id;
     if (!opts?.bootAdmitted) {
@@ -5078,7 +5189,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
           : {}),
         decision_choice: opts?.decisionChoice ?? null,
         canvas_ref: pageRef,
+        ...(attachmentRefs.length ? { attachments: attachmentRefs } : {}),
       });
+      clearPendingOwnerFiles(pendingOwnerFiles);
+      setPendingOwnerFiles([]);
       const used = sent.metadata?.requested_model;
       if (typeof used === "string" && used.trim() && !sameModelId(used, quotedModel)) {
         setSelectedModelId(used);
@@ -8587,18 +8701,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
               <form
                 onDragOver={(e) => {
-                  if (!shownModelBlocksImages()) return;
                   if (!dataTransferTypesIncludeFiles(e.dataTransfer?.types)) return;
                   e.preventDefault();
-                  e.dataTransfer.dropEffect = "none";
+                  e.dataTransfer.dropEffect = shownModelBlocksImages() ? "none" : "copy";
                 }}
                 onDrop={(e) => {
-                  if (!shownModelBlocksImages()) return;
                   if (!dataTransferTypesIncludeFiles(e.dataTransfer?.types)) return;
                   e.preventDefault();
-                  if (rejectComposerImages(e.dataTransfer)) {
+                  if (shownModelBlocksImages() && rejectComposerImages(e.dataTransfer)) {
                     setError(t.composerModelTextOnly);
+                    return;
                   }
+                  void enqueueOwnerFiles(e.dataTransfer?.files ?? null);
                 }}
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -8652,6 +8766,89 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </button>
                       </div>
                     ) : null}
+                  </div>
+                ) : null}
+                <input
+                  ref={composerFileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,.jpg,.jpeg,.png,.gif,.webp,.pdf,.txt"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    e.target.value = "";
+                    void enqueueOwnerFiles(files);
+                  }}
+                />
+                {pendingOwnerFiles.length ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 8,
+                      alignItems: "center",
+                    }}
+                  >
+                    {pendingOwnerFiles.map((row) => (
+                      <div
+                        key={row.attachmentId}
+                        style={{
+                          position: "relative",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          maxWidth: 180,
+                          padding: row.previewUrl ? 0 : "4px 8px",
+                          borderRadius: 8,
+                          border: `1px solid ${colors.border}`,
+                          background: colors.panel,
+                          overflow: "hidden",
+                        }}
+                      >
+                        {row.previewUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={row.previewUrl}
+                            alt={row.filename}
+                            style={{ width: 56, height: 56, objectFit: "cover", display: "block" }}
+                          />
+                        ) : (
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: colors.text,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {row.filename}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          aria-label={t.composerAttachRemove}
+                          onClick={() => removePendingOwnerFile(row.attachmentId)}
+                          style={{
+                            position: row.previewUrl ? "absolute" : "static",
+                            top: 2,
+                            right: 2,
+                            border: 0,
+                            borderRadius: 999,
+                            width: 18,
+                            height: 18,
+                            background: "rgba(0,0,0,0.55)",
+                            color: "#fff",
+                            cursor: "pointer",
+                            fontSize: 12,
+                            lineHeight: "18px",
+                            padding: 0,
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 ) : null}
                 <div
@@ -8937,6 +9134,25 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       maxWidth: "100%",
                     }}
                   >
+                    <button
+                      type="button"
+                      aria-label={t.composerAttach}
+                      title={t.composerAttach}
+                      disabled={busy || attachBusy || healthOk === false}
+                      onClick={() => composerFileInputRef.current?.click()}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: colors.text,
+                        cursor: busy || attachBusy || healthOk === false ? "default" : "pointer",
+                        fontSize: 18,
+                        lineHeight: 1,
+                        padding: "2px 4px",
+                        opacity: busy || attachBusy || healthOk === false ? 0.45 : 1,
+                      }}
+                    >
+                      +
+                    </button>
                     <span
                       style={{
                         fontWeight: 600,
@@ -8981,6 +9197,25 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       maxWidth: "100%",
                     }}
                   >
+                    <button
+                      type="button"
+                      aria-label={t.composerAttach}
+                      title={t.composerAttach}
+                      disabled={busy || attachBusy || healthOk === false}
+                      onClick={() => composerFileInputRef.current?.click()}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: colors.text,
+                        cursor: busy || attachBusy || healthOk === false ? "default" : "pointer",
+                        fontSize: 18,
+                        lineHeight: 1,
+                        padding: "2px 4px",
+                        opacity: busy || attachBusy || healthOk === false ? 0.45 : 1,
+                      }}
+                    >
+                      +
+                    </button>
                     {(() => {
                       const listed = (composerModel.listed_model_id || "").trim();
                       const official = composerModel.official_channel;
@@ -9474,15 +9709,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           : undefined
                   }
                   onPaste={(e) => {
-                    if (!rejectComposerImages(e.clipboardData)) return;
-                    const text = e.clipboardData.getData("text/plain");
-                    e.preventDefault();
-                    setError(t.composerModelTextOnly);
-                    if (!text) return;
-                    const el = e.currentTarget;
-                    const start = el.selectionStart ?? draft.length;
-                    const end = el.selectionEnd ?? start;
-                    setDraft(draft.slice(0, start) + text + draft.slice(end));
+                    const files = e.clipboardData?.files;
+                    if (files && files.length > 0) {
+                      e.preventDefault();
+                      if (shownModelBlocksImages() && rejectComposerImages(e.clipboardData)) {
+                        setError(t.composerModelTextOnly);
+                        return;
+                      }
+                      void enqueueOwnerFiles(files);
+                      return;
+                    }
                   }}
                   onChange={(e) => {
                     setDraft(e.target.value);
@@ -9620,15 +9856,58 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     }
                   }}
                 />
+                {active &&
+                !(composerModel && !isGroupChat(active)) &&
+                !(!composerModel && !isGroupChat(active) && selectedModelId) ? (
+                  <div
+                    style={{
+                      gridArea: "tools",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      aria-label={t.composerAttach}
+                      title={t.composerAttach}
+                      disabled={busy || attachBusy || healthOk === false}
+                      onClick={() => composerFileInputRef.current?.click()}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: colors.text,
+                        cursor: busy || attachBusy || healthOk === false ? "default" : "pointer",
+                        fontSize: 18,
+                        lineHeight: 1,
+                        padding: "2px 4px",
+                        opacity: busy || attachBusy || healthOk === false ? 0.45 : 1,
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                ) : null}
                 <button
                   type="submit"
-                  disabled={busy || !draft.trim() || healthOk === false}
+                  disabled={
+                    busy ||
+                    attachBusy ||
+                    healthOk === false ||
+                    (!draft.trim() && pendingOwnerFiles.length === 0)
+                  }
                   style={{
                     ...btnPrimary,
                     gridArea: "send",
                     alignSelf: "center",
                     flexShrink: 0,
-                    opacity: busy || !draft.trim() || healthOk === false ? 0.45 : 1,
+                    opacity:
+                      busy ||
+                      attachBusy ||
+                      healthOk === false ||
+                      (!draft.trim() && pendingOwnerFiles.length === 0)
+                        ? 0.45
+                        : 1,
                   }}
                 >
                   {sendButtonLabel(chatPlace, draft, bootScreenIds(), {

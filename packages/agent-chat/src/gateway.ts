@@ -627,8 +627,24 @@ export type GatewayClient = {
       canvas_ref?: { block_key: string; rev: number } | null;
       seen_input_price_per_million?: number | null;
       seen_output_price_per_million?: number | null;
+      /** Owner-upload refs (``upl:…``) claimed on send. */
+      attachments?: string[] | null;
     },
   ) => Promise<ChatMessage>;
+  /** Person attaches a file before send. Capacity is the chat owner's plan. */
+  uploadOwnerFile: (
+    chatId: string,
+    file: File,
+  ) => Promise<{
+    attachment_id: string;
+    chat_id: string;
+    content_type: string;
+    byte_size: number;
+    filename?: string | null;
+    ref: string;
+  }>;
+  /** Remove an unsent owner upload. */
+  deleteOwnerFile: (chatId: string, attachmentId: string) => Promise<void>;
   patchChatDecision: (chatId: string, auto: boolean) => Promise<ChatSummary>;
   listThreads: (chatId: string) => Promise<ThreadSummary[]>;
   createThread: (
@@ -1638,8 +1654,41 @@ export function createGatewayClient(
                 seen_output_price_per_million: opts.seen_output_price_per_million,
               }
             : {}),
+          ...(opts?.attachments?.length
+            ? { attachments: opts.attachments }
+            : {}),
         }),
       }),
+    uploadOwnerFile: async (chatId, file) => {
+      const token = await getAccessToken();
+      if (!token) {
+        throw new ChatGatewayError(401, "not_authenticated", "Not authenticated");
+      }
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch(
+        joinUrl(gatewayBaseUrl, `/api/chats/${encodeURIComponent(chatId)}/owner-files`),
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body,
+        },
+      );
+      if (!res.ok) throw await parseError(res);
+      return (await res.json()) as {
+        attachment_id: string;
+        chat_id: string;
+        content_type: string;
+        byte_size: number;
+        filename?: string | null;
+        ref: string;
+      };
+    },
+    deleteOwnerFile: (chatId, attachmentId) =>
+      request<void>(
+        `/api/chats/${encodeURIComponent(chatId)}/owner-files/${encodeURIComponent(attachmentId)}`,
+        { method: "DELETE" },
+      ),
     patchChatDecision: (chatId, auto) =>
       request<ChatSummary>(`/api/chats/${encodeURIComponent(chatId)}/decision`, {
         method: "PATCH",
