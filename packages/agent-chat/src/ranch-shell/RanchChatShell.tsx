@@ -93,6 +93,7 @@ import {
 import { ComputerManagePanel } from "../ComputerManagePanel";
 import { ComputerScreenPanel } from "../ComputerScreenPanel";
 import { MailboxThumbs } from "../MailboxThumbs";
+import { OwnerFileThumbs } from "../OwnerFileThumbs";
 import { anchorAttachment } from "../anchorAttachment";
 import { HistoryFilesPanel } from "../HistoryFilesPanel";
 import { ManuscriptPanel } from "../ManuscriptPanel";
@@ -8480,6 +8481,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           unavailableLabel={t.attachmentUnavailable}
                           accessDeniedLabel={t.attachmentAccessDenied}
                           listedPriceLabel={t.pieceListed}
+                        />
+                        <OwnerFileThumbs
+                          chatId={m.chat_id || active?.chat_id || ""}
+                          attachments={m.attachments}
+                          gatewayBaseUrl={gatewayBaseUrl}
+                          getAccessToken={getAccessToken}
+                          loadFailedLabel={t.attachmentLoadFailed}
+                          loadingLabel={t.attachmentLoading}
+                          preparingDownloadLabel={t.attachmentPreparingDownload}
+                          downloadLabel={t.attachmentDownload}
+                          downloadFailedLabel={t.attachmentDownloadFailed}
+                          retryLabel={t.retry}
+                          unavailableLabel={t.attachmentUnavailable}
+                          accessDeniedLabel={t.attachmentAccessDenied}
                         />
                         {!isUser
                           ? (() => {

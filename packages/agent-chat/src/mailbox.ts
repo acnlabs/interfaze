@@ -1,6 +1,7 @@
 /** Chat mailbox refs: only ``mbx:{id}`` is renderable. Hotlinks never become img src. */
 
 export const MAILBOX_PREFIX = "mbx:";
+export const OWNER_UPLOAD_PREFIX = "upl:";
 
 export function parseMessageAttachments(raw: unknown): string[] {
   if (Array.isArray(raw)) {
@@ -60,6 +61,19 @@ export function filesFromMessages(
     }
   }
   return out;
+}
+
+/** Person files on a sent message. Same path rules as the owner-upload store. */
+export function ownerIdsFromAttachments(refs: string[]): string[] {
+  const ids: string[] = [];
+  for (const ref of refs) {
+    const t = ref.trim();
+    if (!t.startsWith(OWNER_UPLOAD_PREFIX)) continue;
+    const id = t.slice(OWNER_UPLOAD_PREFIX.length).trim();
+    if (!id || id.length > 100 || id.includes("/") || id.includes("..")) continue;
+    ids.push(id);
+  }
+  return ids;
 }
 
 export function normalizeChatMessage<T extends { attachments?: unknown }>(

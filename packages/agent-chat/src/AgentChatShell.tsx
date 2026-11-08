@@ -24,6 +24,7 @@ import { CHAT_OPEN_EVENT } from "./types";
 import { connectChatSocket, type ChatSocket } from "./ws";
 import { attachmentBilledRefs, attachmentListedPriceVisible } from "./attachmentListedPrice";
 import { MailboxThumbs } from "./MailboxThumbs";
+import { OwnerFileThumbs } from "./OwnerFileThumbs";
 import { parseMessageAttachments } from "./mailbox";
 
 const DEFAULT_ACCENT = "#10B981";
@@ -636,6 +637,12 @@ export function AgentChatShell(props: AgentChatShellProps) {
                         chargedMailboxIds={attachmentBilledRefs(m.metadata?.piece)}
                         listedPriceLabel={listedPriceLabel}
                       />
+                      <OwnerFileThumbs
+                        chatId={m.chat_id || chat?.chat_id || ""}
+                        attachments={m.attachments}
+                        gatewayBaseUrl={gatewayBaseUrl}
+                        getAccessToken={getAccessToken}
+                      />
                     </div>
                   </div>
                 );
@@ -956,6 +963,12 @@ export function AgentChatShell(props: AgentChatShellProps) {
                 showListedPrice={attachmentListedPriceVisible(m.metadata?.piece)}
                 chargedMailboxIds={attachmentBilledRefs(m.metadata?.piece)}
                 listedPriceLabel={listedPriceLabel}
+              />
+              <OwnerFileThumbs
+                chatId={m.chat_id || chat?.chat_id || ""}
+                attachments={m.attachments}
+                gatewayBaseUrl={gatewayBaseUrl}
+                getAccessToken={getAccessToken}
               />
             </div>
           ))}
