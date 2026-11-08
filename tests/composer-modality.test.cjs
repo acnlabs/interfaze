@@ -13,7 +13,13 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const moduleExports = {};
 new Function("exports", js)(moduleExports);
-const { acceptsImageInput, mimeLooksLikeImage } = moduleExports;
+const {
+  acceptsImageInput,
+  filesLookLikeImages,
+  imageInputBlocked,
+  mimeLooksLikeImage,
+  modalityForSelectedModel,
+} = moduleExports;
 
 test("OpenRouter modality with image input is accepted", () => {
   assert.equal(acceptsImageInput("text+image->text"), true);
@@ -31,4 +37,25 @@ test("bare TokenPlus text is unknown, not a hard no", () => {
 test("mimeLooksLikeImage", () => {
   assert.equal(mimeLooksLikeImage("image/png"), true);
   assert.equal(mimeLooksLikeImage("application/pdf"), false);
+});
+
+test("text-only modality blocks image attach; unknown does not", () => {
+  assert.equal(imageInputBlocked("text->text"), true);
+  assert.equal(imageInputBlocked(null), false);
+  assert.equal(filesLookLikeImages([{ type: "image/jpeg" }]), true);
+});
+
+test("BYO reads agent modality and ignores catalog", () => {
+  const same = (a, b) => a === b;
+  assert.equal(
+    modalityForSelectedModel({
+      useCatalog: false,
+      modelId: "vendor/m",
+      agentRows: [{ model_id: "vendor/m", modality: "text->text" }],
+      catalogRows: [{ id: "vendor/m", modality: "text+image->text" }],
+      sameShown: same,
+      sameId: same,
+    }),
+    "text->text",
+  );
 });

@@ -25,3 +25,44 @@ export function mimeLooksLikeImage(mime: string | null | undefined): boolean {
   const m = (mime || "").trim().toLowerCase();
   return m.startsWith("image/");
 }
+
+/** True only when modality is a known text-only input. Unknown stays open. */
+export function imageInputBlocked(modality: string | null | undefined): boolean {
+  return acceptsImageInput(modality) === false;
+}
+
+export function filesLookLikeImages(
+  files: Iterable<{ type?: string | null }> | null | undefined,
+): boolean {
+  if (!files) return false;
+  for (const file of files) {
+    if (mimeLooksLikeImage(file?.type)) return true;
+  }
+  return false;
+}
+
+/**
+ * Official / shelf-only: OpenRouter catalog modality.
+ * BYO: agent-reported rows only.
+ */
+export function modalityForSelectedModel(args: {
+  useCatalog: boolean;
+  modelId: string;
+  agentRows: Array<{ model_id: string; modality?: string | null }>;
+  catalogRows: Array<{ id: string; modality?: string | null }>;
+  sameShown: (id: string, wanted: string) => boolean;
+  sameId: (id: string, wanted: string) => boolean;
+}): string | null {
+  const wanted = args.modelId.trim();
+  if (!wanted) return null;
+  if (args.useCatalog) {
+    const row =
+      args.catalogRows.find((item) => args.sameShown(item.id, wanted)) ??
+      args.catalogRows.find((item) => args.sameId(item.id, wanted));
+    return row?.modality ?? null;
+  }
+  const row =
+    args.agentRows.find((item) => args.sameShown(item.model_id, wanted)) ??
+    args.agentRows.find((item) => args.sameId(item.model_id, wanted));
+  return row?.modality ?? null;
+}

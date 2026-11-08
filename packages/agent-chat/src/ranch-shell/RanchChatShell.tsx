@@ -58,7 +58,12 @@ import {
   formatMenuSide,
   formatMenuSideShort,
 } from "../composerPrice";
-import { acceptsImageInput } from "../composerModality";
+import {
+  acceptsImageInput,
+  filesLookLikeImages,
+  imageInputBlocked,
+  modalityForSelectedModel,
+} from "../composerModality";
 import {
   agentModelIdForSend,
   composerCatalogForOffer,
@@ -6659,6 +6664,36 @@ export function RanchChatShell(props: RanchChatShellProps) {
     };
   }, [renewHostTicket]);
 
+  const composerImageBlocked = useMemo(() => {
+    if (!composerModel || !selectedModelId) return false;
+    if (active && isGroupChat(active)) return false;
+    const shelfOnly = Boolean(composerModel.shelf_only);
+    const modality = modalityForSelectedModel({
+      useCatalog: Boolean(composerModel.official_channel || shelfOnly),
+      modelId: selectedModelId,
+      agentRows: composerModel.model_options,
+      catalogRows: composerCatalog,
+      sameShown: (id, wanted) => {
+        if (sameModelId(id, wanted)) return true;
+        if (shelfOnly) return false;
+        return !!priceTail(id) && priceTail(id) === priceTail(wanted);
+      },
+      sameId: (id, wanted) => sameModelId(id, wanted),
+    });
+    return imageInputBlocked(modality);
+  }, [active, composerCatalog, composerModel, selectedModelId]);
+
+  const rejectComposerImages = (
+    data: DataTransfer | null,
+  ): boolean => {
+    if (!composerImageBlocked || !data) return false;
+    const fromItems = Array.from(data.items)
+      .filter((item) => item.kind === "file")
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => !!file);
+    return filesLookLikeImages([...Array.from(data.files), ...fromItems]);
+  };
+
   const slashParsed = parseSlashDraft(draft);
   const slashMenuOpen = isSlashMenuDraft(draft) && !slashMenuDismissed;
   const slashCommands: SlashCmdDef[] = (
@@ -8541,6 +8576,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
               )}
 
               <form
+                onDragOver={(e) => {
+                  if (!rejectComposerImages(e.dataTransfer)) return;
+                  e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  if (!rejectComposerImages(e.dataTransfer)) return;
+                  e.preventDefault();
+                  setError(t.composerModelTextOnly);
+                }}
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (agentRefOpen) {
@@ -9080,27 +9124,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       }
                       const displayName = shortModelLabel(value) || t.composerModelUnknown;
                       const canPick = options.length > 0 || official || openRouterByo;
-                      // Official: Host OpenRouter catalog modality.
+                      // Official / shelf: Host OpenRouter catalog modality.
                       // BYO: agent-reported model_options.modality only —
                       // never Host TokenPlus/SiliconFlow price books.
-                      const fromAgent =
-                        composerModel.model_options.find((row) =>
-                          sameShownModel(row.model_id, value),
-                        )?.modality ??
-                        composerModel.model_options.find((row) =>
-                          sameModelId(row.model_id, value),
-                        )?.modality ??
-                        null;
-                      const fromCatalog = official
-                        ? composerCatalog.find((row) => sameShownModel(row.id, value))
-                            ?.modality ??
-                          composerCatalog.find((row) => sameModelId(row.id, value))
-                            ?.modality ??
-                          null
-                        : null;
-                      const selectedModality = official
-                        ? fromCatalog
-                        : fromAgent;
+                      const selectedModality = modalityForSelectedModel({
+                        useCatalog: Boolean(official || shelfOnly),
+                        modelId: value,
+                        agentRows: composerModel.model_options,
+                        catalogRows: composerCatalog,
+                        sameShown: (id, wanted) => sameShownModel(id, wanted),
+                        sameId: (id, wanted) => sameModelId(id, wanted),
+                      });
                       const visionKnown = acceptsImageInput(selectedModality);
                       // Cursor-style: no capability tags in the menu. Hint the
                       // chip only when modality is known.
@@ -9423,6 +9457,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               : undefined
                           : undefined
                   }
+                  onPaste={(e) => {
+                    if (!rejectComposerImages(e.clipboardData)) return;
+                    const text = e.clipboardData.getData("text/plain");
+                    e.preventDefault();
+                    setError(t.composerModelTextOnly);
+                    if (!text) return;
+                    const el = e.currentTarget;
+                    const start = el.selectionStart ?? draft.length;
+                    const end = el.selectionEnd ?? start;
+                    setDraft(draft.slice(0, start) + text + draft.slice(end));
+                  }}
                   onChange={(e) => {
                     setDraft(e.target.value);
                     fitComposerField(e.currentTarget);
