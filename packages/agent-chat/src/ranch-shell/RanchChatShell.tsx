@@ -59,6 +59,15 @@ import {
   formatMenuSideShort,
 } from "../composerPrice";
 import {
+  acceptsImageInput,
+  dataTransferTypesIncludeFiles,
+  fileLooksLikeImage,
+  filesLookLikeImages,
+  imageInputBlocked,
+  mimeLooksLikeImage,
+  modalityForSelectedModel,
+} from "../composerModality";
+import {
   agentModelIdForSend,
   composerCatalogForOffer,
   composerPricedMenuIds,
@@ -933,6 +942,8 @@ type ComposerStatusSnapshot = {
     free?: boolean;
     priceable?: boolean;
     price_from?: string;
+    /** Agent-reported from provider catalog (BYO). Not Host TokenPlus books. */
+    modality?: string | null;
   }>;
 };
 
@@ -968,6 +979,7 @@ function readComposerModelOptions(value: unknown): ComposerStatusSnapshot["model
       free: flag("free"),
       priceable: flag("priceable"),
       price_from: text("price_from"),
+      modality: text("modality") ?? null,
     });
   }
   return out;
@@ -3493,6 +3505,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [agentRefIndex, setAgentRefIndex] = useState(0);
   const [slashIndex, setSlashIndex] = useState(0);
   const [draft, setDraft] = useState("");
+  type PendingOwnerFile = {
+    chatId: string;
+    ref: string;
+    attachmentId: string;
+    filename: string;
+    contentType: string;
+    previewUrl?: string;
+  };
+  const [pendingOwnerFiles, setPendingOwnerFiles] = useState<PendingOwnerFile[]>([]);
+  const pendingOwnerFilesRef = useRef<PendingOwnerFile[]>([]);
+  const discardUnsentOwnerFilesRef = useRef<(rows: PendingOwnerFile[]) => void>(() => {});
+  const [attachBusy, setAttachBusy] = useState(false);
+  const composerFileInputRef = useRef<HTMLInputElement>(null);
   const composerFieldRef = useRef<HTMLTextAreaElement>(null);
   const [composerFocused, setComposerFocused] = useState(false);
   const [slashMenuDismissed, setSlashMenuDismissed] = useState(false);
@@ -3567,10 +3592,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [composerMenuQuery, setComposerMenuQuery] = useState("");
   const [composerMenuExpanded, setComposerMenuExpanded] = useState(false);
   const [composerCatalog, setComposerCatalog] = useState<
-    Array<{ id: string; in: number; out: number; currency?: string }>
-  >(
-    [],
-  );
+    Array<{
+      id: string;
+      in: number;
+      out: number;
+      currency?: string;
+      /** Catalog modality; used to gate image sends. */
+      modality?: string | null;
+    }>
+  >([]);
   const [composerCatalogLoading, setComposerCatalogLoading] = useState(false);
   /** How many times this chat asked the agent to price models the book missed. */
   const [quoteAttempts, setQuoteAttempts] = useState(0);
@@ -4081,7 +4111,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setTitleDraft(isGroupChat(chat) ? (chat.title || "").trim() || chatTitle(chat) : chat.title?.trim() || "");
       setGroupDescDraft((chat.description || "").trim());
       setMentionIndex(0);
-      if (!opts?.preserveDraft) setDraft("");
+      if (!opts?.preserveDraft) {
+        setDraft("");
+        const leftover = pendingOwnerFilesRef.current;
+        pendingOwnerFilesRef.current = [];
+        setPendingOwnerFiles([]);
+        discardUnsentOwnerFilesRef.current(leftover);
+      }
       setRecipientPickerOpen(false);
       setStickyMention(isGroupChat(chat) ? readStickyMention(chat.chat_id) : null);
       clearReplySlot();
@@ -4930,9 +4966,99 @@ export function RanchChatShell(props: RanchChatShellProps) {
     bootAdmitted?: boolean;
   };
 
+  const clearPendingOwnerFiles = useCallback((rows: PendingOwnerFile[]) => {
+    for (const row of rows) {
+      if (row.previewUrl) URL.revokeObjectURL(row.previewUrl);
+    }
+  }, []);
+
+  const OWNER_ATTACH_MAX_BYTES = 4 * 1024 * 1024;
+  const OWNER_ATTACH_MAX_FILES = 8;
+  const ownerAttachAllowed = (file: File): string | null => {
+    if (file.size > OWNER_ATTACH_MAX_BYTES) return t.composerAttachTooLarge;
+    const mime = (file.type || "").toLowerCase();
+    const ok =
+      mime.startsWith("image/") ||
+      mime === "application/pdf" ||
+      mime === "text/plain" ||
+      /\.(png|jpe?g|gif|webp|pdf|txt)$/i.test(file.name || "");
+    if (!ok) return t.composerAttachTypeUnsupported;
+    if (mimeLooksLikeImage(mime) || fileLooksLikeImage(file)) {
+      if (shownModelBlocksImages()) return t.composerModelTextOnly;
+    }
+    return null;
+  };
+
+  const enqueueOwnerFiles = async (fileList: FileList | File[] | null) => {
+    if (!active || !fileList) return;
+    const chatId = active.chat_id;
+    const incoming = Array.from(fileList);
+    if (!incoming.length) return;
+    setAttachBusy(true);
+    setError(null);
+    let queued = pendingOwnerFilesRef.current.length;
+    try {
+      for (const file of incoming) {
+        const reason = ownerAttachAllowed(file);
+        if (reason) {
+          setError(reason);
+          continue;
+        }
+        if (queued >= OWNER_ATTACH_MAX_FILES) {
+          setError(t.composerAttachFailed);
+          break;
+        }
+        try {
+          const uploaded = await client.uploadOwnerFile(chatId, file);
+          if (queued >= OWNER_ATTACH_MAX_FILES) {
+            void client.deleteOwnerFile(chatId, uploaded.attachment_id).catch(() => {});
+            setError(t.composerAttachFailed);
+            break;
+          }
+          const previewUrl = mimeLooksLikeImage(uploaded.content_type)
+            ? URL.createObjectURL(file)
+            : undefined;
+          const row: PendingOwnerFile = {
+            chatId,
+            ref: uploaded.ref,
+            attachmentId: uploaded.attachment_id,
+            filename: uploaded.filename || file.name || "file",
+            contentType: uploaded.content_type,
+            previewUrl,
+          };
+          queued += 1;
+          pendingOwnerFilesRef.current = [...pendingOwnerFilesRef.current, row];
+          setPendingOwnerFiles(pendingOwnerFilesRef.current);
+        } catch {
+          setError(t.composerAttachFailed);
+        }
+      }
+    } finally {
+      setAttachBusy(false);
+    }
+  };
+
+  const discardUnsentOwnerFiles = (rows: PendingOwnerFile[]) => {
+    for (const row of rows) {
+      if (row.previewUrl) URL.revokeObjectURL(row.previewUrl);
+      void client.deleteOwnerFile(row.chatId, row.attachmentId).catch(() => {});
+    }
+  };
+  discardUnsentOwnerFilesRef.current = discardUnsentOwnerFiles;
+
+  const removePendingOwnerFile = (attachmentId: string) => {
+    const row = pendingOwnerFilesRef.current.find((item) => item.attachmentId === attachmentId);
+    pendingOwnerFilesRef.current = pendingOwnerFilesRef.current.filter(
+      (item) => item.attachmentId !== attachmentId,
+    );
+    setPendingOwnerFiles(pendingOwnerFilesRef.current);
+    if (row) discardUnsentOwnerFiles([row]);
+  };
+
   const send = async (opts?: SendOpts) => {
     const text = (opts?.text ?? draft).trim();
-    if (!text || !active) return;
+    const attachmentRefs = pendingOwnerFiles.map((row) => row.ref);
+    if ((!text && !attachmentRefs.length) || !active) return;
     if (confirmDialog && !opts?.bootAdmitted) return;
     const chatId = active.chat_id;
     if (!opts?.bootAdmitted) {
@@ -5061,7 +5187,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
           : {}),
         decision_choice: opts?.decisionChoice ?? null,
         canvas_ref: pageRef,
+        ...(attachmentRefs.length ? { attachments: attachmentRefs } : {}),
       });
+      clearPendingOwnerFiles(pendingOwnerFiles);
+      pendingOwnerFilesRef.current = [];
+      setPendingOwnerFiles([]);
       const used = sent.metadata?.requested_model;
       if (typeof used === "string" && used.trim() && !sameModelId(used, quotedModel)) {
         setSelectedModelId(used);
@@ -5848,7 +5978,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setComposerCatalogLoading(true);
     void (async () => {
       const page = 500;
-      const acc: Array<{ id: string; in: number; out: number; currency?: string }> = [];
+      const acc: Array<{
+        id: string;
+        in: number;
+        out: number;
+        currency?: string;
+        modality?: string | null;
+      }> = [];
       let offset = 0;
       let total = Number.POSITIVE_INFINITY;
       try {
@@ -5871,7 +6007,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
             if (!quote) continue;
             if (quote.input < 0 || quote.output < 0) continue;
             if (acc.some((item) => sameModelId(item.id, id))) continue;
-            acc.push({ id, in: quote.input, out: quote.output, currency: quote.currency });
+            acc.push({
+              id,
+              in: quote.input,
+              out: quote.output,
+              currency: quote.currency,
+              modality: row.modality ?? null,
+            });
           }
           if (!data.items.length) break;
           offset += data.items.length;
@@ -6637,6 +6779,43 @@ export function RanchChatShell(props: RanchChatShellProps) {
       window.removeEventListener("focus", poke);
     };
   }, [renewHostTicket]);
+
+  // Chip writes the model it actually shows. Paste/drop read this, not a
+  // stale selectedModelId that the menu may have replaced with options[0].
+  const composerShownModelIdRef = useRef("");
+  composerShownModelIdRef.current = "";
+
+  const shownModelBlocksImages = (): boolean => {
+    const modelId = composerShownModelIdRef.current;
+    if (!modelId || !composerModel) return false;
+    if (active && isGroupChat(active)) return false;
+    const shelfOnly = Boolean(composerModel.shelf_only);
+    const modality = modalityForSelectedModel({
+      useCatalog: Boolean(composerModel.official_channel || shelfOnly),
+      modelId,
+      agentRows: composerModel.model_options,
+      catalogRows: composerCatalog,
+      sameShown: (id, wanted) => {
+        if (sameModelId(id, wanted)) return true;
+        if (shelfOnly) return false;
+        return !!priceTail(id) && priceTail(id) === priceTail(wanted);
+      },
+      sameId: (id, wanted) => sameModelId(id, wanted),
+    });
+    return imageInputBlocked(modality);
+  };
+
+  const rejectComposerImages = (data: DataTransfer | null): boolean => {
+    if (!shownModelBlocksImages() || !data) return false;
+    if (filesLookLikeImages(data.files)) return true;
+    for (const item of Array.from(data.items)) {
+      if (item.kind !== "file") continue;
+      if (mimeLooksLikeImage(item.type)) return true;
+      const file = item.getAsFile();
+      if (file && fileLooksLikeImage(file)) return true;
+    }
+    return false;
+  };
 
   const slashParsed = parseSlashDraft(draft);
   const slashMenuOpen = isSlashMenuDraft(draft) && !slashMenuDismissed;
@@ -8520,6 +8699,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
               )}
 
               <form
+                onDragOver={(e) => {
+                  if (!dataTransferTypesIncludeFiles(e.dataTransfer?.types)) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "copy";
+                }}
+                onDrop={(e) => {
+                  if (!dataTransferTypesIncludeFiles(e.dataTransfer?.types)) return;
+                  e.preventDefault();
+                  if (shownModelBlocksImages() && rejectComposerImages(e.dataTransfer)) {
+                    setError(t.composerModelTextOnly);
+                    return;
+                  }
+                  void enqueueOwnerFiles(e.dataTransfer?.files ?? null);
+                }}
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (agentRefOpen) {
@@ -8572,6 +8765,89 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </button>
                       </div>
                     ) : null}
+                  </div>
+                ) : null}
+                <input
+                  ref={composerFileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,.jpg,.jpeg,.png,.gif,.webp,.pdf,.txt"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    e.target.value = "";
+                    void enqueueOwnerFiles(files);
+                  }}
+                />
+                {pendingOwnerFiles.length ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 8,
+                      alignItems: "center",
+                    }}
+                  >
+                    {pendingOwnerFiles.map((row) => (
+                      <div
+                        key={row.attachmentId}
+                        style={{
+                          position: "relative",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          maxWidth: 180,
+                          padding: row.previewUrl ? 0 : "4px 8px",
+                          borderRadius: 8,
+                          border: `1px solid ${colors.border}`,
+                          background: colors.panel,
+                          overflow: "hidden",
+                        }}
+                      >
+                        {row.previewUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={row.previewUrl}
+                            alt={row.filename}
+                            style={{ width: 56, height: 56, objectFit: "cover", display: "block" }}
+                          />
+                        ) : (
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: colors.text,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {row.filename}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          aria-label={t.composerAttachRemove}
+                          onClick={() => removePendingOwnerFile(row.attachmentId)}
+                          style={{
+                            position: row.previewUrl ? "absolute" : "static",
+                            top: 2,
+                            right: 2,
+                            border: 0,
+                            borderRadius: 999,
+                            width: 18,
+                            height: 18,
+                            background: "rgba(0,0,0,0.55)",
+                            color: "#fff",
+                            cursor: "pointer",
+                            fontSize: 12,
+                            lineHeight: "18px",
+                            padding: 0,
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 ) : null}
                 <div
@@ -8857,6 +9133,25 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       maxWidth: "100%",
                     }}
                   >
+                    <button
+                      type="button"
+                      aria-label={t.composerAttach}
+                      title={t.composerAttach}
+                      disabled={busy || attachBusy || healthOk === false}
+                      onClick={() => composerFileInputRef.current?.click()}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: colors.text,
+                        cursor: busy || attachBusy || healthOk === false ? "default" : "pointer",
+                        fontSize: 18,
+                        lineHeight: 1,
+                        padding: "2px 4px",
+                        opacity: busy || attachBusy || healthOk === false ? 0.45 : 1,
+                      }}
+                    >
+                      +
+                    </button>
                     <span
                       style={{
                         fontWeight: 600,
@@ -8901,6 +9196,25 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       maxWidth: "100%",
                     }}
                   >
+                    <button
+                      type="button"
+                      aria-label={t.composerAttach}
+                      title={t.composerAttach}
+                      disabled={busy || attachBusy || healthOk === false}
+                      onClick={() => composerFileInputRef.current?.click()}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: colors.text,
+                        cursor: busy || attachBusy || healthOk === false ? "default" : "pointer",
+                        fontSize: 18,
+                        lineHeight: 1,
+                        padding: "2px 4px",
+                        opacity: busy || attachBusy || healthOk === false ? 0.45 : 1,
+                      }}
+                    >
+                      +
+                    </button>
                     {(() => {
                       const listed = (composerModel.listed_model_id || "").trim();
                       const official = composerModel.official_channel;
@@ -8985,6 +9299,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         options.find((id) => sameShownModel(id, listed)) ||
                         options[0] ||
                         "";
+                      composerShownModelIdRef.current = value;
                       const priceFor = (
                         id: string,
                       ): { menu: string; short: string; title: string } => {
@@ -9059,6 +9374,26 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       }
                       const displayName = shortModelLabel(value) || t.composerModelUnknown;
                       const canPick = options.length > 0 || official || openRouterByo;
+                      // Official / shelf: Host OpenRouter catalog modality.
+                      // BYO: agent-reported model_options.modality only —
+                      // never Host TokenPlus/SiliconFlow price books.
+                      const selectedModality = modalityForSelectedModel({
+                        useCatalog: Boolean(official || shelfOnly),
+                        modelId: value,
+                        agentRows: composerModel.model_options,
+                        catalogRows: composerCatalog,
+                        sameShown: (id, wanted) => sameShownModel(id, wanted),
+                        sameId: (id, wanted) => sameModelId(id, wanted),
+                      });
+                      const visionKnown = acceptsImageInput(selectedModality);
+                      // Cursor-style: no capability tags in the menu. Hint the
+                      // chip only when modality is known.
+                      const visionNote =
+                        visionKnown === false
+                          ? t.composerModelTextOnly
+                          : visionKnown === true
+                            ? t.composerModelSeesImages
+                            : "";
                       return (
                         <>
                           <button
@@ -9067,10 +9402,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             aria-haspopup="listbox"
                             aria-expanded={composerMenuOpen}
                             aria-label={
-                              selectedPrice.title
-                                ? `${t.composerModelLabel}: ${displayName}. ${selectedPrice.title}`
-                                : `${t.composerModelLabel}: ${displayName}`
+                              [
+                                `${t.composerModelLabel}: ${displayName}`,
+                                selectedPrice.title,
+                                visionNote,
+                              ]
+                                .filter(Boolean)
+                                .join(". ")
                             }
+                            title={visionNote || undefined}
                             onClick={() => {
                               if (!canPick) return;
                               setComposerMenuOpen((open) => !open);
@@ -9367,6 +9707,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               : undefined
                           : undefined
                   }
+                  onPaste={(e) => {
+                    const files = e.clipboardData?.files;
+                    if (files && files.length > 0) {
+                      e.preventDefault();
+                      if (shownModelBlocksImages() && rejectComposerImages(e.clipboardData)) {
+                        setError(t.composerModelTextOnly);
+                        return;
+                      }
+                      void enqueueOwnerFiles(files);
+                      return;
+                    }
+                  }}
                   onChange={(e) => {
                     setDraft(e.target.value);
                     fitComposerField(e.currentTarget);
@@ -9503,15 +9855,58 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     }
                   }}
                 />
+                {active &&
+                !(composerModel && !isGroupChat(active)) &&
+                !(!composerModel && !isGroupChat(active) && selectedModelId) ? (
+                  <div
+                    style={{
+                      gridArea: "tools",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      aria-label={t.composerAttach}
+                      title={t.composerAttach}
+                      disabled={busy || attachBusy || healthOk === false}
+                      onClick={() => composerFileInputRef.current?.click()}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: colors.text,
+                        cursor: busy || attachBusy || healthOk === false ? "default" : "pointer",
+                        fontSize: 18,
+                        lineHeight: 1,
+                        padding: "2px 4px",
+                        opacity: busy || attachBusy || healthOk === false ? 0.45 : 1,
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                ) : null}
                 <button
                   type="submit"
-                  disabled={busy || !draft.trim() || healthOk === false}
+                  disabled={
+                    busy ||
+                    attachBusy ||
+                    healthOk === false ||
+                    (!draft.trim() && pendingOwnerFiles.length === 0)
+                  }
                   style={{
                     ...btnPrimary,
                     gridArea: "send",
                     alignSelf: "center",
                     flexShrink: 0,
-                    opacity: busy || !draft.trim() || healthOk === false ? 0.45 : 1,
+                    opacity:
+                      busy ||
+                      attachBusy ||
+                      healthOk === false ||
+                      (!draft.trim() && pendingOwnerFiles.length === 0)
+                        ? 0.45
+                        : 1,
                   }}
                 >
                   {sendButtonLabel(chatPlace, draft, bootScreenIds(), {

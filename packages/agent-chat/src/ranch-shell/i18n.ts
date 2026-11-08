@@ -117,6 +117,16 @@ export type RanchMessages = {
   /** Show the rest of the ranked official menu after the preview slice. */
   composerModelShowAll: (n: number) => string;
   composerModelShowLess: string;
+  /** Known from catalog modality: model cannot take image input. */
+  composerModelTextOnly: string;
+  /** Known from catalog modality: model accepts image input. */
+  composerModelSeesImages: string;
+  /** Composer + control: attach a person file (owner-files). */
+  composerAttach: string;
+  composerAttachRemove: string;
+  composerAttachFailed: string;
+  composerAttachTooLarge: string;
+  composerAttachTypeUnsupported: string;
   sendFailed: string;
   expand: string;
   collapse: string;
@@ -928,6 +938,13 @@ const en: RanchMessages = {
     `Per 1M tokens · input ${input} · output ${output}`,
   composerModelShowAll: (n) => `Show all (${n})`,
   composerModelShowLess: "Show less",
+  composerModelTextOnly: "Text only — this model cannot see images",
+  composerModelSeesImages: "Can see images",
+  composerAttach: "Attach file",
+  composerAttachRemove: "Remove attachment",
+  composerAttachFailed: "Could not attach that file",
+  composerAttachTooLarge: "File is too large (max 4 MB)",
+  composerAttachTypeUnsupported: "Only images, PDF, or plain text",
   composerModelMismatch: (listed, runtime) =>
     `Listing ${listed} ≠ runtime ${runtime} (still billed at listing price)`,
   sendFailed: "Send failed",
@@ -1810,6 +1827,13 @@ const zh: RanchMessages = {
     `每百万 token · 输入 ${input} · 输出 ${output}`,
   composerModelShowAll: (n) => `展开全部（${n}）`,
   composerModelShowLess: "收起",
+  composerModelTextOnly: "仅文字 — 此模型不能看图",
+  composerModelSeesImages: "可以看图",
+  composerAttach: "添加附件",
+  composerAttachRemove: "移除附件",
+  composerAttachFailed: "附件上传失败",
+  composerAttachTooLarge: "文件太大（最大 4 MB）",
+  composerAttachTypeUnsupported: "仅支持图片、PDF 或纯文本",
   composerModelMismatch: (listed, runtime) =>
     `挂牌 ${listed} ≠ 运行 ${runtime}（仍按挂牌价结算）`,
   sendFailed: "发送失败",
