@@ -1,8 +1,10 @@
 /**
- * Whether a catalog `modality` string accepts image input.
+ * Whether a modality string accepts image input.
  *
- * OpenRouter uses `text+image->text` / `text->text`. Bare `"text"` from
- * TokenPlus/SiliconFlow sync is not trustworthy — treat as unknown.
+ * Trust OpenRouter-style `text+image->text` / `text->text` (Official shelf).
+ * BYO must not invent this from Host TokenPlus/SiliconFlow books — those are
+ * price feeds, not every agent's provider capability map. Bare `"text"` and
+ * missing values are unknown.
  *
  * @returns `true` / `false` when known; `null` when unknown.
  */

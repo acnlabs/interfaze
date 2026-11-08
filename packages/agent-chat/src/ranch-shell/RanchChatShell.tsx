@@ -934,6 +934,8 @@ type ComposerStatusSnapshot = {
     free?: boolean;
     priceable?: boolean;
     price_from?: string;
+    /** Agent-reported from provider catalog (BYO). Not Host TokenPlus books. */
+    modality?: string | null;
   }>;
 };
 
@@ -969,6 +971,7 @@ function readComposerModelOptions(value: unknown): ComposerStatusSnapshot["model
       free: flag("free"),
       priceable: flag("priceable"),
       price_from: text("price_from"),
+      modality: text("modality") ?? null,
     });
   }
   return out;
@@ -9077,15 +9080,30 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       }
                       const displayName = shortModelLabel(value) || t.composerModelUnknown;
                       const canPick = options.length > 0 || official || openRouterByo;
-                      const selectedModality =
-                        composerCatalog.find((row) => sameShownModel(row.id, value))
-                          ?.modality ??
-                        composerCatalog.find((row) => sameModelId(row.id, value))
-                          ?.modality ??
+                      // Official: Host OpenRouter catalog modality.
+                      // BYO: agent-reported model_options.modality only —
+                      // never Host TokenPlus/SiliconFlow price books.
+                      const fromAgent =
+                        composerModel.model_options.find((row) =>
+                          sameShownModel(row.model_id, value),
+                        )?.modality ??
+                        composerModel.model_options.find((row) =>
+                          sameModelId(row.model_id, value),
+                        )?.modality ??
                         null;
+                      const fromCatalog = official
+                        ? composerCatalog.find((row) => sameShownModel(row.id, value))
+                            ?.modality ??
+                          composerCatalog.find((row) => sameModelId(row.id, value))
+                            ?.modality ??
+                          null
+                        : null;
+                      const selectedModality = official
+                        ? fromCatalog
+                        : fromAgent;
                       const visionKnown = acceptsImageInput(selectedModality);
-                      // Cursor-style: no capability tags in the menu list. Only
-                      // annotate the selected chip when catalog modality is known.
+                      // Cursor-style: no capability tags in the menu. Hint the
+                      // chip only when modality is known.
                       const visionNote =
                         visionKnown === false
                           ? t.composerModelTextOnly
