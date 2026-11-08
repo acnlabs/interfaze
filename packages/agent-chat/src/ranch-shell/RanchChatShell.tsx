@@ -117,7 +117,6 @@ import {
   AccountWalletPanel,
   AccountBillingPanel,
   ChatCollabBudgetSection,
-  spendCapState,
 } from "./AccountPanels";
 import {
   accountPanelHref,
@@ -3158,6 +3157,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [roomSpendReloadKey, setRoomSpendReloadKey] = useState(0);
   const spendCapBanner =
     spendCapBlock ?? (muteCollabCapBanner ? null : collabCapBlock);
+  /** Hide the banner for this kind only after that cap was actually raised. */
+  const acknowledgeRaisedCap = (kind: "room" | "period") => {
+    setSpendCapBlock((block) => (block === kind ? null : block));
+    if (collabCapBlock === kind) setMuteCollabCapBanner(true);
+  };
   useEffect(() => {
     setSpendCapBlock(null);
     setMuteCollabCapBanner(false);
@@ -5103,7 +5107,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const pollGen = ++replyPollGenRef.current;
     setBusy(true);
     setError(null);
-    setSpendCapBlock(null);
     setRecipientPickerOpen(false);
     try {
       if (group && agentIdsRef.current.length === 0) {
@@ -5193,6 +5196,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
         canvas_ref: pageRef,
         ...(attachmentRefs.length ? { attachments: attachmentRefs } : {}),
       });
+      setSpendCapBlock(null);
+      setMuteCollabCapBanner(true);
       clearPendingOwnerFiles(pendingOwnerFiles);
       pendingOwnerFilesRef.current = [];
       setPendingOwnerFiles([]);
@@ -7065,20 +7070,29 @@ export function RanchChatShell(props: RanchChatShellProps) {
               .map((chat) => ({ agentId: chat.agent_id, name: chat.title })),
           ]}
           onClose={() => closeAccountPanel()}
-          onRoomSpendCapsSaved={() => {
+          onRoomSpendCapsSaved={(prev, next) => {
             setRoomSpendReloadKey((n) => n + 1);
+            const periodRaised =
+              !next.period_total_set
+                ? prev.period_total_set
+                : prev.period_total_set &&
+                  (next.period_total_cap_credits ?? 0) > (prev.period_total_cap_credits ?? 0);
+            const defaultRaised =
+              !next.default_set
+                ? prev.default_set
+                : prev.default_set &&
+                  (next.default_cap_credits ?? 0) > (prev.default_cap_credits ?? 0);
+            if (periodRaised) acknowledgeRaisedCap("period");
+            if (!defaultRaised) return;
             const chatId = activeChatIdRef.current;
-            if (!chatId) return;
+            if (!chatId) {
+              acknowledgeRaisedCap("room");
+              return;
+            }
             void client.getChatRoomSpend(chatId).then((status) => {
               if (activeChatIdRef.current !== chatId) return;
-              const block = spendCapState(status);
-              if (block === "ok") {
-                setSpendCapBlock(null);
-                setMuteCollabCapBanner(true);
-              } else {
-                setSpendCapBlock(block);
-                setMuteCollabCapBanner(false);
-              }
+              if (status.room_cap_source === "user_chat") return;
+              acknowledgeRaisedCap("room");
             });
           }}
         />
@@ -10532,15 +10546,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           client={client}
                           messages={t}
                           chatId={active.chat_id}
-                          onUpdated={(status) => {
-                          const block = spendCapState(status);
-                          if (block === "ok") {
-                            setSpendCapBlock(null);
-                            setMuteCollabCapBanner(true);
-                          } else {
-                            setSpendCapBlock(block);
-                            setMuteCollabCapBanner(false);
-                          }
+                          onUpdated={(prev, next) => {
+                          const prevCap = prev?.room_cap_credits ?? null;
+                          const nextCap = next.room_cap_credits ?? null;
+                          const raised =
+                            nextCap == null ? prevCap != null : prevCap != null && nextCap > prevCap;
+                          if (raised) acknowledgeRaisedCap("room");
                         }}
                         reloadKey={roomSpendReloadKey}
                         />
@@ -10614,15 +10625,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         client={client}
                         messages={t}
                         chatId={active.chat_id}
-                        onUpdated={(status) => {
-                          const block = spendCapState(status);
-                          if (block === "ok") {
-                            setSpendCapBlock(null);
-                            setMuteCollabCapBanner(true);
-                          } else {
-                            setSpendCapBlock(block);
-                            setMuteCollabCapBanner(false);
-                          }
+                        onUpdated={(prev, next) => {
+                          const prevCap = prev?.room_cap_credits ?? null;
+                          const nextCap = next.room_cap_credits ?? null;
+                          const raised =
+                            nextCap == null ? prevCap != null : prevCap != null && nextCap > prevCap;
+                          if (raised) acknowledgeRaisedCap("room");
                         }}
                         reloadKey={roomSpendReloadKey}
                       />

@@ -404,7 +404,7 @@ export function AccountPlanUsagePanel({
   agentLabels?: Array<{ agentId?: string | null; name?: string | null }>;
   onClose: () => void;
   /** Fired after account default / UTC-month caps are saved. */
-  onRoomSpendCapsSaved?: () => void;
+  onRoomSpendCapsSaved?: (prev: RoomSpendCaps, next: RoomSpendCaps) => void;
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1538,7 +1538,7 @@ export function AccountRoomSpendCapsSection({
 }: {
   client: GatewayClient;
   messages: RanchMessages;
-  onSaved?: () => void;
+  onSaved?: (prev: RoomSpendCaps, next: RoomSpendCaps) => void;
 }) {
   const [caps, setCaps] = useState<RoomSpendCaps | null>(null);
   const [defaultDraft, setDefaultDraft] = useState("");
@@ -1632,9 +1632,10 @@ export function AccountRoomSpendCapsSection({
       .putRoomSpendCaps(body)
       .then((next) => {
         if (gen !== viewGen.current) return;
+        const prev = caps;
         applyCaps(next);
         setEditOpen(false);
-        onSaved?.();
+        if (prev) onSaved?.(prev, next);
       })
       .catch(() => {
         if (gen !== viewGen.current) return;
@@ -1799,7 +1800,7 @@ export function ChatCollabBudgetSection({
   client: GatewayClient;
   messages: RanchMessages;
   chatId?: string | null;
-  onUpdated?: (status: RoomSpendStatus) => void;
+  onUpdated?: (prev: RoomSpendStatus | null, next: RoomSpendStatus) => void;
   /** Bump after account-level caps change so this chat reloads status. */
   reloadKey?: number;
 }) {
@@ -1822,7 +1823,6 @@ export function ChatCollabBudgetSection({
       .then((next) => {
         if (gen !== viewGen.current) return;
         setStatus(next);
-        onUpdated?.(next);
       })
       .catch(() => {
         if (gen !== viewGen.current) return;
@@ -1833,6 +1833,7 @@ export function ChatCollabBudgetSection({
 
   const commitChatStatus = (run: () => Promise<RoomSpendStatus>) => {
     const gen = viewGen.current;
+    const prev = status;
     setErr(null);
     setBusy(true);
     void run()
@@ -1840,7 +1841,7 @@ export function ChatCollabBudgetSection({
         if (gen !== viewGen.current) return;
         setStatus(next);
         setErr(null);
-        onUpdated?.(next);
+        onUpdated?.(prev, next);
       })
       .catch(() => {
         if (gen !== viewGen.current) return;
