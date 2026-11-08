@@ -25,7 +25,17 @@ import {
 import type { RanchChatAccount } from "../types";
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import type { RanchLocale, RanchMessages } from "./i18n";
-import { btnGhost, btnIcon, btnPrimary, colors, inputStyle } from "./styles";
+import {
+  btnGhost,
+  btnIcon,
+  btnPrimary,
+  colors,
+  inputStyle,
+  settingsFieldLabel,
+  settingsSectionCard,
+  settingsSectionHint,
+  settingsSectionTitle,
+} from "./styles";
 import { useModalA11y } from "./useModalA11y";
 import {
   buildWalletCheckoutUrl,
@@ -44,26 +54,9 @@ const card: CSSProperties = {
   padding: 16,
 };
 
-const sectionTitle: CSSProperties = {
-  marginTop: 0,
-  marginRight: 0,
-  marginBottom: 10,
-  marginLeft: 0,
-  fontSize: 13,
-  fontWeight: 650,
-  letterSpacing: "0.01em",
-  color: colors.text,
-};
+const sectionTitle: CSSProperties = settingsSectionTitle;
 
-const sectionHint: CSSProperties = {
-  marginTop: 0,
-  marginRight: 0,
-  marginBottom: 14,
-  marginLeft: 0,
-  fontSize: 12,
-  color: colors.muted,
-  lineHeight: 1.55,
-};
+const sectionHint: CSSProperties = settingsSectionHint;
 
 /** Panel actions are one size up from the compact shell chrome buttons. */
 const btnPrimaryLg: CSSProperties = {
@@ -175,28 +168,6 @@ function RowButton({
 
 function EmptyText({ children }: { children: ReactNode }) {
   return <p style={{ margin: 0, fontSize: 13, color: colors.muted, lineHeight: 1.55 }}>{children}</p>;
-}
-
-function StatChip({ label, value }: { label: string; value: string }) {
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        flexDirection: "column",
-        gap: 2,
-        padding: "8px 12px",
-        borderRadius: 10,
-        background: "rgba(255,255,255,0.04)",
-        border: `1px solid ${colors.border}`,
-        minWidth: 88,
-      }}
-    >
-      <span style={{ fontSize: 11, color: colors.muted }}>{label}</span>
-      <span style={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-        {value}
-      </span>
-    </span>
-  );
 }
 
 function PanelChrome({
@@ -421,6 +392,7 @@ export function AccountPlanUsagePanel({
   interfazeBaseUrl = "https://interfaze.io",
   agentLabels = [],
   onClose,
+  onRoomSpendCapsSaved,
 }: {
   client: GatewayClient;
   messages: RanchMessages;
@@ -431,6 +403,8 @@ export function AccountPlanUsagePanel({
   /** Names already known from the directory and direct chats. Owned agents are loaded here. */
   agentLabels?: Array<{ agentId?: string | null; name?: string | null }>;
   onClose: () => void;
+  /** Fired after account default / UTC-month caps are saved. */
+  onRoomSpendCapsSaved?: () => void;
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1092,6 +1066,8 @@ export function AccountPlanUsagePanel({
               )}
             </div>
           </section>
+
+          <AccountRoomSpendCapsSection client={client} messages={t} onSaved={onRoomSpendCapsSaved} />
         </div>
       )}
 
@@ -1524,13 +1500,18 @@ function capDraftFrom(set: boolean, value: number | null | undefined): string {
   return String(value);
 }
 
-function parsedCap(draft: string): number | null {
+/** Empty clears the cap. Non-numeric input is invalid and must not clear. */
+function readCapDraft(
+  draft: string,
+): { kind: "empty" } | { kind: "value"; value: number } | { kind: "invalid" } {
   const trimmed = draft.trim();
-  if (trimmed === "" || !Number.isFinite(Number(trimmed))) return null;
-  return Math.max(0, Math.trunc(Number(trimmed)));
+  if (trimmed === "") return { kind: "empty" };
+  const n = Number(trimmed);
+  if (!Number.isFinite(n)) return { kind: "invalid" };
+  return { kind: "value", value: Math.max(0, Math.trunc(n)) };
 }
 
-function spendCapState(status: RoomSpendStatus): "ok" | "room" | "period" {
+export function spendCapState(status: RoomSpendStatus): "ok" | "room" | "period" {
   const micros = 1_000_000;
   const roomOver =
     status.room_cap_credits != null &&
@@ -1549,72 +1530,111 @@ function showCap(credits: number | null | undefined, unlimited: string): string 
   return fmtCredits(credits);
 }
 
-/** User default room/period caps, plus an optional per-chat override. */
-export function ChatCollabBudgetSection({
+/** Account defaults: one-line summary + edit dialog (Plan & Usage). */
+export function AccountRoomSpendCapsSection({
   client,
   messages: t,
-  chatId,
-  onUpdated,
+  onSaved,
 }: {
   client: GatewayClient;
   messages: RanchMessages;
-  chatId?: string | null;
-  onUpdated?: () => void;
+  onSaved?: () => void;
 }) {
+  const [caps, setCaps] = useState<RoomSpendCaps | null>(null);
   const [defaultDraft, setDefaultDraft] = useState("");
   const [periodDraft, setPeriodDraft] = useState("");
-  const [status, setStatus] = useState<RoomSpendStatus | null>(null);
-  const [chatDraft, setChatDraft] = useState("");
-  const [capsLoaded, setCapsLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [loadTick, setLoadTick] = useState(0);
   const viewGen = useRef(0);
+  const editPanelRef = useRef<HTMLDivElement | null>(null);
+  useModalA11y({
+    open: editOpen,
+    onClose: () => {
+      if (busy) return;
+      setEditOpen(false);
+    },
+    containerRef: editPanelRef,
+  });
 
   const applyCaps = (next: RoomSpendCaps) => {
+    setCaps(next);
     setDefaultDraft(capDraftFrom(next.default_set, next.default_cap_credits));
     setPeriodDraft(capDraftFrom(next.period_total_set, next.period_total_cap_credits));
   };
 
-  const reload = () => {
+  useEffect(() => {
     const gen = ++viewGen.current;
     setErr(null);
-    setBusy(false);
-    setCapsLoaded(false);
-    setStatus(null);
+    setLoaded(false);
     void client
       .getRoomSpendCaps()
       .then((next) => {
         if (gen !== viewGen.current) return;
         applyCaps(next);
-        setCapsLoaded(true);
+        setLoaded(true);
       })
       .catch(() => {
         if (gen !== viewGen.current) return;
         setErr(t.collabLoadFailed);
       });
-    if (!chatId) return;
-    void client
-      .getChatRoomSpend(chatId)
-      .then((next) => {
-        if (gen !== viewGen.current) return;
-        setStatus(next);
-      })
-      .catch(() => {
-        if (gen !== viewGen.current) return;
-        setStatus(null);
-        setErr(t.collabLoadFailed);
-      });
+  }, [client, t.collabLoadFailed, loadTick]);
+
+  const defaultLabel = caps
+    ? showCap(caps.default_set ? caps.default_cap_credits : null, t.collabUnlimited)
+    : "…";
+  const periodLabel = caps
+    ? showCap(caps.period_total_set ? caps.period_total_cap_credits : null, t.collabUnlimited)
+    : "…";
+
+  const openEdit = () => {
+    if (caps) applyCaps(caps);
+    setErr(null);
+    setEditOpen(true);
   };
 
-  const commitChatStatus = (gen: number, run: () => Promise<RoomSpendStatus>) => {
+  const save = () => {
+    if (!loaded || !caps) return;
+    const gen = viewGen.current;
+    const defaultCap = readCapDraft(defaultDraft);
+    const periodCap = readCapDraft(periodDraft);
+    if (defaultCap.kind === "invalid" || periodCap.kind === "invalid") {
+      setErr(t.collabSaveFailed);
+      return;
+    }
+    const savedDefault = caps.default_set ? caps.default_cap_credits : null;
+    const savedPeriod = caps.period_total_set ? caps.period_total_cap_credits : null;
+    const nextDefault = defaultCap.kind === "empty" ? null : defaultCap.value;
+    const nextPeriod = periodCap.kind === "empty" ? null : periodCap.value;
+    const body: {
+      default_cap_credits?: number | null;
+      period_total_cap_credits?: number | null;
+      clear_default?: boolean;
+      clear_period_total?: boolean;
+    } = {};
+    if (nextDefault !== savedDefault) {
+      if (nextDefault == null) body.clear_default = true;
+      else body.default_cap_credits = nextDefault;
+    }
+    if (nextPeriod !== savedPeriod) {
+      if (nextPeriod == null) body.clear_period_total = true;
+      else body.period_total_cap_credits = nextPeriod;
+    }
+    if (Object.keys(body).length === 0) {
+      setEditOpen(false);
+      return;
+    }
     setErr(null);
     setBusy(true);
-    void run()
+    void client
+      .putRoomSpendCaps(body)
       .then((next) => {
         if (gen !== viewGen.current) return;
-        setStatus(next);
-        setErr(null);
-        onUpdated?.();
+        applyCaps(next);
+        setEditOpen(false);
+        onSaved?.();
       })
       .catch(() => {
         if (gen !== viewGen.current) return;
@@ -1626,10 +1646,211 @@ export function ChatCollabBudgetSection({
       });
   };
 
+  return (
+    <section>
+      <h3 style={planSectionLabel}>{t.accountRoomSpend}</h3>
+      <div style={planCard}>
+        <p style={{ margin: "0 0 10px", fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
+          {t.accountRoomSpendHint}
+        </p>
+        {err && !editOpen ? (
+          <div style={{ margin: "0 0 8px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <p style={{ margin: 0, fontSize: 12, color: colors.danger }}>{err}</p>
+            <button
+              type="button"
+              style={{ ...btnGhost, padding: "4px 8px", fontSize: 12 }}
+              onClick={() => setLoadTick((n) => n + 1)}
+            >
+              {t.retry}
+            </button>
+          </div>
+        ) : null}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: 13,
+              color: colors.text,
+              lineHeight: 1.45,
+              minWidth: 0,
+              flex: "1 1 200px",
+            }}
+          >
+            <span style={{ color: colors.muted }}>{t.collabAccountCap} </span>
+            <span style={{ fontWeight: 650, fontVariantNumeric: "tabular-nums" }}>{defaultLabel}</span>
+            <span style={{ color: colors.border }}> · </span>
+            <span style={{ color: colors.muted }}>{t.collabPeriodCap} </span>
+            <span style={{ fontWeight: 650, fontVariantNumeric: "tabular-nums" }}>{periodLabel}</span>
+          </p>
+          <button
+            type="button"
+            style={{ ...btnGhost, padding: "6px 10px", opacity: loaded ? 1 : 0.6 }}
+            disabled={!loaded}
+            onClick={openEdit}
+          >
+            {t.accountRoomSpendEdit}
+          </button>
+        </div>
+      </div>
+
+      {editOpen ? (
+        <ViewportOverlay
+          label={t.accountRoomSpend}
+          zIndex={10050}
+          onBackdrop={() => {
+            if (busy) return;
+            setEditOpen(false);
+          }}
+        >
+          <div
+            style={{
+              width: "min(420px, calc(100vw - 32px))",
+              background: colors.panelElevated,
+              borderRadius: 14,
+              border: `1px solid ${colors.border}`,
+              padding: "20px 18px 16px",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.45)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+            ref={editPanelRef}
+            tabIndex={-1}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 14,
+              }}
+            >
+              <strong style={{ fontSize: 15 }}>{t.accountRoomSpend}</strong>
+              <button
+                type="button"
+                style={{ ...btnGhost, width: 28, height: 28, padding: 0 }}
+                disabled={busy}
+                onClick={() => setEditOpen(false)}
+                aria-label={t.close}
+              >
+                ✕
+              </button>
+            </div>
+            <p style={{ margin: "0 0 14px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+              {t.accountRoomSpendHint}
+            </p>
+            {err ? (
+              <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.danger }}>{err}</p>
+            ) : null}
+            <label style={settingsFieldLabel}>{t.collabAccountCap}</label>
+            <input
+              type="number"
+              min={0}
+              placeholder={t.collabUnlimited}
+              value={defaultDraft}
+              disabled={busy}
+              onChange={(e) => setDefaultDraft(e.target.value)}
+              style={{ ...inputStyle, width: "100%", padding: "9px 12px", fontSize: 14, marginBottom: 12 }}
+            />
+            <label style={settingsFieldLabel}>{t.collabPeriodCap}</label>
+            <input
+              type="number"
+              min={0}
+              placeholder={t.collabUnlimited}
+              value={periodDraft}
+              disabled={busy}
+              onChange={(e) => setPeriodDraft(e.target.value)}
+              style={{ ...inputStyle, width: "100%", padding: "9px 12px", fontSize: 14, marginBottom: 16 }}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                type="button"
+                style={btnGhostLg}
+                disabled={busy}
+                onClick={() => setEditOpen(false)}
+              >
+                {t.close}
+              </button>
+              <button type="button" style={btnPrimaryLg} disabled={busy} onClick={save}>
+                {t.collabSave}
+              </button>
+            </div>
+          </div>
+        </ViewportOverlay>
+      ) : null}
+    </section>
+  );
+}
+
+/** Per-chat override only; account defaults live in Plan & Usage. */
+export function ChatCollabBudgetSection({
+  client,
+  messages: t,
+  chatId,
+  onUpdated,
+  reloadKey = 0,
+}: {
+  client: GatewayClient;
+  messages: RanchMessages;
+  chatId?: string | null;
+  onUpdated?: (status: RoomSpendStatus) => void;
+  /** Bump after account-level caps change so this chat reloads status. */
+  reloadKey?: number;
+}) {
+  const [status, setStatus] = useState<RoomSpendStatus | null>(null);
+  const [chatDraft, setChatDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [loadTick, setLoadTick] = useState(0);
+  const viewGen = useRef(0);
+
   useEffect(() => {
-    reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on chat/client
-  }, [client, chatId]);
+    const gen = ++viewGen.current;
+    setErr(null);
+    setStatus(null);
+    setChatDraft("");
+    setBusy(false);
+    if (!chatId) return;
+    void client
+      .getChatRoomSpend(chatId)
+      .then((next) => {
+        if (gen !== viewGen.current) return;
+        setStatus(next);
+        onUpdated?.(next);
+      })
+      .catch(() => {
+        if (gen !== viewGen.current) return;
+        setStatus(null);
+        setErr(t.collabLoadFailed);
+      });
+  }, [client, chatId, t.collabLoadFailed, reloadKey, loadTick]);
+
+  const commitChatStatus = (run: () => Promise<RoomSpendStatus>) => {
+    const gen = viewGen.current;
+    setErr(null);
+    setBusy(true);
+    void run()
+      .then((next) => {
+        if (gen !== viewGen.current) return;
+        setStatus(next);
+        setErr(null);
+        onUpdated?.(next);
+      })
+      .catch(() => {
+        if (gen !== viewGen.current) return;
+        setErr(t.collabSaveFailed);
+      })
+      .finally(() => {
+        if (gen !== viewGen.current) return;
+        setBusy(false);
+      });
+  };
 
   const override = status?.room_cap_source === "user_chat";
   const capInForce =
@@ -1637,163 +1858,139 @@ export function ChatCollabBudgetSection({
     (status.room_cap_credits != null ||
       (status.period_total_set && status.period_total_cap_credits != null));
   const spendState = status ? spendCapState(status) : "ok";
+  const linkBtn: CSSProperties = {
+    ...btnGhostLg,
+    padding: "4px 0",
+    border: "none",
+    background: "transparent",
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: 500,
+  };
+
+  if (!chatId) return null;
 
   return (
-    <div>
-      <h3 style={sectionTitle}>{t.collabBudget}</h3>
-      <p style={sectionHint}>{t.collabBudgetHint}</p>
+    <div style={{ ...settingsSectionCard, display: "flex", flexDirection: "column", gap: 10 }}>
+      <h3 style={{ ...sectionTitle, margin: 0 }}>{t.collabBudget}</h3>
+      <p style={{ ...sectionHint, margin: 0 }}>{t.collabBudgetHint}</p>
       {err ? (
-        <p style={{ color: colors.danger, fontSize: 12, margin: "0 0 10px" }}>{err}</p>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <p style={{ color: colors.danger, fontSize: 12, margin: 0 }}>{err}</p>
+          <button
+            type="button"
+            style={{ ...btnGhostLg, padding: "4px 8px" }}
+            disabled={busy}
+            onClick={() => setLoadTick((n) => n + 1)}
+          >
+            {t.retry}
+          </button>
+        </div>
       ) : null}
-      <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-        {t.collabAccountCap}
-      </label>
-      <input
-        type="number"
-        min={0}
-        placeholder={t.collabUnlimited}
-        value={defaultDraft}
-        disabled={!capsLoaded || busy}
-        onChange={(e) => setDefaultDraft(e.target.value)}
-        style={{ ...inputStyle, width: "100%", padding: "9px 12px", fontSize: 14, marginBottom: 12 }}
-      />
-      <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-        {t.collabPeriodCap}
-      </label>
-      <div style={{ display: "flex", gap: 8, marginBottom: chatId ? 16 : 0 }}>
+      {!status && !err ? (
+        <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>{t.loading}</p>
+      ) : null}
+      {status ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "6px 14px",
+              fontSize: 13,
+              color: colors.text,
+            }}
+          >
+            <span>
+              <span style={{ color: colors.muted }}>{t.collabRemaining} </span>
+              <span style={{ fontWeight: 650, fontVariantNumeric: "tabular-nums" }}>
+                {fmtCredits(status.room_spent_credits)}
+              </span>
+            </span>
+            <span style={{ color: colors.border }}>·</span>
+            <span>
+              <span style={{ color: colors.muted }}>{t.collabCurrentCap} </span>
+              <span style={{ fontWeight: 650, fontVariantNumeric: "tabular-nums" }}>
+                {showCap(status.room_cap_credits, t.collabUnlimited)}
+              </span>
+            </span>
+            {spendState !== "ok" || capInForce ? (
+              <Badge tone={spendState === "ok" ? "ok" : "neutral"}>
+                {spendState === "period"
+                  ? t.collabPeriodAutoOff
+                  : spendState === "room"
+                    ? t.collabAutoOff
+                    : t.collabAutoOn}
+              </Badge>
+            ) : null}
+          </div>
+          {status.period_total_set || status.period_spent_credits > 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+              {t.collabPeriodSpent}{" "}
+              <span style={{ fontWeight: 650, color: colors.text, fontVariantNumeric: "tabular-nums" }}>
+                {fmtCredits(status.period_spent_credits)}
+              </span>
+              {status.period_total_set && status.period_total_cap_credits != null ? (
+                <>
+                  {" / "}
+                  <span style={{ fontWeight: 650, color: colors.text, fontVariantNumeric: "tabular-nums" }}>
+                    {fmtCredits(status.period_total_cap_credits)}
+                  </span>
+                </>
+              ) : null}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <input
           type="number"
           min={0}
           placeholder={t.collabUnlimited}
-          value={periodDraft}
-          disabled={!capsLoaded || busy}
-          onChange={(e) => setPeriodDraft(e.target.value)}
-          style={{ ...inputStyle, flex: 1, padding: "9px 12px", fontSize: 14 }}
+          value={chatDraft}
+          disabled={!status || busy}
+          onChange={(e) => setChatDraft(e.target.value)}
+          style={{ ...inputStyle, width: 120, padding: "9px 12px", fontSize: 14 }}
         />
         <button
           type="button"
           style={btnPrimaryLg}
-          disabled={busy || !capsLoaded}
+          disabled={busy || !status || chatDraft.trim() === ""}
           onClick={() => {
-            if (!capsLoaded) return;
-            const gen = viewGen.current;
-            const savedChatId = chatId;
-            const defaultCap = parsedCap(defaultDraft);
-            const periodCap = parsedCap(periodDraft);
-            setErr(null);
-            setBusy(true);
-            void client
-              .putRoomSpendCaps({
-                ...(defaultCap == null
-                  ? { clear_default: true }
-                  : { default_cap_credits: defaultCap }),
-                ...(periodCap == null
-                  ? { clear_period_total: true }
-                  : { period_total_cap_credits: periodCap }),
-              })
-              .then(async (next) => {
-                if (gen !== viewGen.current) return;
-                applyCaps(next);
-                setErr(null);
-                onUpdated?.();
-                if (!savedChatId) return;
-                try {
-                  const statusNext = await client.getChatRoomSpend(savedChatId);
-                  if (gen !== viewGen.current) return;
-                  setStatus(statusNext);
-                } catch {
-                  if (gen !== viewGen.current) return;
-                  setStatus(null);
-                }
-              })
-              .catch(() => {
-                if (gen !== viewGen.current) return;
-                setErr(t.collabSaveFailed);
-              })
-              .finally(() => {
-                if (gen !== viewGen.current) return;
-                setBusy(false);
-              });
+            const n = Math.max(0, Math.trunc(Number(chatDraft)));
+            if (!Number.isFinite(n)) return;
+            commitChatStatus(() => client.putChatRoomSpend(chatId, n));
           }}
         >
-          {t.collabSave}
+          {t.collabAdd}
         </button>
       </div>
-      {status ? (
-        <p style={{ fontSize: 12, color: colors.muted, margin: "8px 0 0" }}>
-          {t.collabPeriodSpent} {fmtCredits(status.period_spent_credits)}
-        </p>
-      ) : null}
-      {chatId ? (
-        <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: 14 }}>
-          {status ? (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-              <StatChip
-                label={t.collabRemaining}
-                value={fmtCredits(status.room_spent_credits)}
-              />
-              <StatChip
-                label={t.collabBudget}
-                value={showCap(status.room_cap_credits, t.collabUnlimited)}
-              />
-              {spendState !== "ok" || capInForce ? (
-                <span style={{ alignSelf: "center" }}>
-                  <Badge tone={spendState === "ok" ? "ok" : "neutral"}>
-                    {spendState === "period"
-                      ? t.collabPeriodAutoOff
-                      : spendState === "room"
-                        ? t.collabAutoOff
-                        : t.collabAutoOn}
-                  </Badge>
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <input
-              type="number"
-              min={0}
-              placeholder={t.collabUnlimited}
-              value={chatDraft}
-              disabled={!status || busy}
-              onChange={(e) => setChatDraft(e.target.value)}
-              style={{ ...inputStyle, width: 96, padding: "9px 12px", fontSize: 14 }}
-            />
-            <button
-              type="button"
-              style={btnPrimaryLg}
-              disabled={busy || !status || chatDraft.trim() === ""}
-              onClick={() => {
-                const n = Math.max(0, Math.trunc(Number(chatDraft)));
-                if (!Number.isFinite(n)) return;
-                commitChatStatus(viewGen.current, () => client.putChatRoomSpend(chatId, n));
-              }}
-            >
-              {t.collabAdd}
-            </button>
-            <button
-              type="button"
-              style={btnGhostLg}
-              disabled={busy || !status || !override}
-              onClick={() => {
-                commitChatStatus(viewGen.current, () => client.deleteChatRoomSpend(chatId));
-              }}
-            >
-              {t.collabApplyDefault}
-            </button>
-            <button
-              type="button"
-              style={btnGhostLg}
-              disabled={busy || !status || status.room_cap_credits == null}
-              onClick={() => {
-                commitChatStatus(viewGen.current, () => client.putChatRoomSpend(chatId, null));
-              }}
-            >
-              {t.collabRelease}
-            </button>
-          </div>
-        </div>
-      ) : null}
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          style={linkBtn}
+          disabled={busy || !status || !override}
+          onClick={() => {
+            commitChatStatus(() => client.deleteChatRoomSpend(chatId));
+          }}
+        >
+          {t.collabApplyDefault}
+        </button>
+        <button
+          type="button"
+          style={linkBtn}
+          disabled={busy || !status || status.room_cap_credits == null}
+          onClick={() => {
+            commitChatStatus(() => client.putChatRoomSpend(chatId, null));
+          }}
+        >
+          {t.collabRelease}
+        </button>
+      </div>
+      <p style={{ margin: 0, fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
+        {t.collabAccountInPlan}
+      </p>
     </div>
   );
 }

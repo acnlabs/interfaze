@@ -351,6 +351,8 @@ export type RanchMessages = {
   accountKeysOpenList: string;
   collabBudget: string;
   collabBudgetHint: string;
+  collabAccountInPlan: string;
+  collabCurrentCap: string;
   collabAccountCap: string;
   collabRemaining: string;
   collabAdd: string;
@@ -362,12 +364,16 @@ export type RanchMessages = {
   collabNeedTopup: string;
   collabPeriodNeedTopup: string;
   collabNeedTopupCta: string;
+  collabPeriodNeedTopupCta: string;
   collabUnlimited: string;
   collabPeriodCap: string;
   collabPeriodSpent: string;
   collabPeriodAutoOff: string;
   collabLoadFailed: string;
   collabSaveFailed: string;
+  accountRoomSpend: string;
+  accountRoomSpendHint: string;
+  accountRoomSpendEdit: string;
   accountWalletLoadFailed: string;
   accountWalletEmptyTx: string;
   accountWalletRecent: string;
@@ -1172,9 +1178,12 @@ const en: RanchMessages = {
   accountKeysOpenList: "View model quota",
   collabBudget: "Chat spend cap",
   collabBudgetHint:
-    "Cap on what this private chat or group can charge your wallet. The UTC-month total across all chats still applies. Unset means no cap.",
+    "Limit what this private chat or group can charge your wallet. Unset means no cap.",
+  collabAccountInPlan:
+    "Account defaults (per-chat default and UTC month total) are in Plan & Usage.",
+  collabCurrentCap: "Current cap",
   collabAccountCap: "Default cap per chat",
-  collabRemaining: "Used in this chat this month",
+  collabRemaining: "Used this month",
   collabAdd: "Set cap",
   collabApplyDefault: "Use my default",
   collabRelease: "Clear chat cap",
@@ -1185,12 +1194,17 @@ const en: RanchMessages = {
   collabPeriodAutoOff: "Monthly cap reached — raise the UTC month total",
   collabNeedTopup: "This chat's spend cap is used up. Raise it in Settings to continue.",
   collabPeriodNeedTopup:
-    "This month's spend cap across all chats is used up. Raise it in Settings to continue.",
+    "This month's spend cap across all chats is used up. Raise the UTC month total in Plan & Usage to continue.",
   collabNeedTopupCta: "Open spend cap",
+  collabPeriodNeedTopupCta: "Open Plan & Usage",
   collabUnlimited: "No cap",
   collabPeriodCap: "UTC month total",
   collabLoadFailed: "Couldn’t load the spend cap.",
   collabSaveFailed: "Couldn’t save the spend cap.",
+  accountRoomSpend: "Chat spend caps",
+  accountRoomSpendHint:
+    "Limits on what private chats and groups can charge your wallet — not the on-demand monthly limit above. Unset means no cap. Override one chat in that chat’s Settings.",
+  accountRoomSpendEdit: "Edit",
   accountWalletLoadFailed: "Couldn’t load wallet.",
   accountWalletEmptyTx: "No transactions yet.",
   accountWalletRecent: "Recent activity",
@@ -2045,10 +2059,11 @@ const zh: RanchMessages = {
   accountKeysNotWritten: "未写入任何智能体",
   accountKeysOpenList: "查看模型额度",
   collabBudget: "本私聊/群消费限额",
-  collabBudgetHint:
-    "这个私聊或群能从你的钱包扣多少。所有私聊和群还受 UTC 自然月总额限制。不设置就是不限额。",
+  collabBudgetHint: "限制这个私聊或群能从你的钱包扣多少。不设置就是不限额。",
+  collabAccountInPlan: "账号默认（每个私聊/群默认、UTC 自然月总额）在「方案与用量」里设置。",
+  collabCurrentCap: "当前限额",
   collabAccountCap: "每个私聊/群的默认限额",
-  collabRemaining: "本月本私聊/群已用",
+  collabRemaining: "本月已用",
   collabAdd: "设置限额",
   collabApplyDefault: "用我的默认",
   collabRelease: "清除本私聊/群限额",
@@ -2058,12 +2073,17 @@ const zh: RanchMessages = {
   collabPeriodSpent: "本月所有私聊和群已用",
   collabPeriodAutoOff: "本月总额已到 — 提高总额后才能继续",
   collabNeedTopup: "这个私聊/群的消费限额已用完。请在设置里提高限额后再继续。",
-  collabPeriodNeedTopup: "本月所有私聊和群的消费总额已到上限。请在设置里提高限额后再继续。",
+  collabPeriodNeedTopup: "本月所有私聊和群的消费总额已到上限。请在「方案与用量」里提高 UTC 月总额后再继续。",
   collabNeedTopupCta: "打开消费限额",
+  collabPeriodNeedTopupCta: "打开方案与用量",
   collabUnlimited: "不限额",
   collabPeriodCap: "UTC 自然月总额",
   collabLoadFailed: "限额加载失败。",
   collabSaveFailed: "限额没有保存。",
+  accountRoomSpend: "私聊与群消费限额",
+  accountRoomSpendHint:
+    "限制私聊和群能从你的钱包扣多少——不是上面的按量月限额。不设置就是不限额。单条覆盖在对应聊天设置里改。",
+  accountRoomSpendEdit: "编辑",
   accountWalletLoadFailed: "无法加载钱包。",
   accountWalletEmptyTx: "暂无流水。",
   accountWalletRecent: "最近流水",

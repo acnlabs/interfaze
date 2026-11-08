@@ -36,7 +36,7 @@ import {
 } from "../composerQuote";
 import { formatCreditsFromLocal } from "../creditDisplay";
 import { chatSettleQuote, DEFAULT_CHAT_FEE_RATE } from "./settleQuote";
-import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
+import { btnGhost, btnPrimary, colors, inputStyle, settingsFieldLabel, settingsSectionCard, settingsSectionTitle } from "./styles";
 import { useModalA11y } from "./useModalA11y";
 
 /** Align with ACN / Gateway display-name rules (letter required). */
@@ -899,14 +899,7 @@ export function FieldHint({
   );
 }
 
-const sectionTitle: CSSProperties = {
-  margin: "0 0 8px",
-  fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  color: colors.muted,
-};
+const sectionTitle: CSSProperties = settingsSectionTitle;
 
 const rowStyle: CSSProperties = {
   display: "flex",
@@ -2406,7 +2399,7 @@ export function AgentOwnerSettings({
   });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, position: "relative" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, position: "relative" }}>
       {byoKeyInvalid ? (
         <div
           role="status"
@@ -2436,10 +2429,10 @@ export function AgentOwnerSettings({
           {t.myAgentsByoDegradedBanner}
         </div>
       ) : null}
-      <section>
+      <section style={settingsSectionCard}>
         <h3 style={sectionTitle}>{t.myAgentsSectionIdentity}</h3>
         <label style={{ display: "block", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+          <div style={settingsFieldLabel}>
             {t.myAgentsNameLabel}
           </div>
           <input
@@ -2456,7 +2449,7 @@ export function AgentOwnerSettings({
           ) : null}
         </label>
         <label style={{ display: "block", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+          <div style={settingsFieldLabel}>
             {t.myAgentsDescLabel}
           </div>
           <textarea
@@ -2513,7 +2506,7 @@ export function AgentOwnerSettings({
         ) : null}
       </section>
 
-      <section>
+      <section style={settingsSectionCard}>
         <h3
           style={{
             ...sectionTitle,
@@ -3077,7 +3070,7 @@ export function AgentOwnerSettings({
         ) : null}
       </section>
 
-      <section>
+      <section style={settingsSectionCard}>
         <h3 style={{ ...sectionTitle, display: "flex", alignItems: "center" }}>
           {t.myAgentsSectionPieceSku}
           <FieldHint label={t.fieldHintLabel} text={t.myAgentsPieceSkuHint} />
@@ -3086,7 +3079,7 @@ export function AgentOwnerSettings({
           {t.myAgentsPieceSkuOff}
         </p>
         <label style={{ display: "block", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+          <div style={settingsFieldLabel}>
             {t.myAgentsPieceSkuLabel}
           </div>
           <input
@@ -3121,7 +3114,7 @@ export function AgentOwnerSettings({
       </section>
 
       {showConnectSection ? (
-        <section>
+        <section style={settingsSectionCard}>
           <h3 style={sectionTitle}>{t.myAgentsSectionConnect}</h3>
           {!deliveryEditable ? (
             <p style={{ margin: "0 0 10px", fontSize: 12, color: colors.muted, lineHeight: 1.45 }}>
@@ -3160,7 +3153,7 @@ export function AgentOwnerSettings({
           </div>
           {deliveryDraft === "direct" ? (
             <label style={{ display: "block", marginTop: 10 }}>
-              <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>
+              <div style={settingsFieldLabel}>
                 {t.myAgentsEndpointInput}
                 <FieldHint label={t.fieldHintLabel} text={t.myAgentsEndpointHint} />
               </div>
@@ -3233,7 +3226,7 @@ export function AgentOwnerSettings({
         </section>
       ) : null}
 
-      <section>
+      <section style={settingsSectionCard}>
         <h3 style={{ ...sectionTitle, display: "flex", alignItems: "center" }}>
           {t.myAgentsSectionAccess}
           <FieldHint label={t.fieldHintLabel} text={t.myAgentsPolicyHint} />
@@ -3506,22 +3499,18 @@ export function AgentOwnerSettings({
           >
             {savingPricing ? t.myAgentsPricingSyncing : saving ? t.loading : t.save}
           </button>
-        ) : (
-          <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
-            {t.myAgentsSaveHint}
-          </p>
-        )}
+        ) : null}
       </div>
 
       <section
         aria-labelledby="agent-danger-zone"
         style={{
-          marginTop: 8,
-          paddingTop: 16,
-          borderTop: `1px solid ${colors.border}`,
+          ...settingsSectionCard,
+          marginTop: 0,
           display: "flex",
           flexDirection: "column",
           gap: 8,
+          borderColor: "rgba(248,113,113,0.25)",
         }}
       >
         <h3 id="agent-danger-zone" style={{ margin: 0, fontSize: 13, fontWeight: 650, color: colors.danger }}>
@@ -3945,7 +3934,7 @@ export function AgentOwnerSettings({
               {t.myAgentsDeleteConfirm}
             </p>
             <label style={{ display: "block", marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: colors.muted, marginBottom: 6 }}>
+              <div style={settingsFieldLabel}>
                 {t.myAgentsDeleteTypeHint}
               </div>
               <input
