@@ -62,6 +62,41 @@ export const shellRoot = (mode: "side" | "full"): CSSProperties =>
           'ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif',
       };
 
+
+/** Contained block for one settings topic (chat Settings / owner settings). */
+export const settingsSectionCard: CSSProperties = {
+  background: colors.panelAlt,
+  border: "1px solid rgba(255,255,255,0.10)",
+  borderRadius: 12,
+  padding: "14px 14px 16px",
+};
+
+/** Settings tab / account panel section heading (sentence case, not uppercase). */
+export const settingsSectionTitle: CSSProperties = {
+  margin: "0 0 8px",
+  fontSize: 13,
+  fontWeight: 650,
+  letterSpacing: "0.01em",
+  color: colors.text,
+};
+
+/** Supporting copy under a settings section title. */
+export const settingsSectionHint: CSSProperties = {
+  margin: "0 0 12px",
+  fontSize: 12,
+  color: colors.muted,
+  lineHeight: 1.45,
+};
+
+/** Label above a settings field. */
+export const settingsFieldLabel: CSSProperties = {
+  display: "block",
+  fontSize: 12,
+  fontWeight: 600,
+  color: colors.muted,
+  marginBottom: 6,
+};
+
 export const btnGhost: CSSProperties = {
   border: `1px solid ${colors.border}`,
   background: "transparent",

@@ -147,7 +147,7 @@ import {
   type RanchLocale,
   type RanchMessages,
 } from "./i18n";
-import { btnGhost, btnIcon, btnPrimary, colors, inputStyle, shellRoot } from "./styles";
+import { btnGhost, btnIcon, btnPrimary, colors, inputStyle, shellRoot, settingsSectionTitle, settingsSectionHint, settingsFieldLabel, settingsSectionCard } from "./styles";
 import { ChatWindowPane } from "./chat-window/ChatWindowPane";
 import { WorkDock, type WorkTab } from "./WorkDock";
 import { InteractionPanel } from "./InteractionPanel";
@@ -1486,11 +1486,9 @@ function ChatDecisionSettings({
   onToggle: (next: boolean) => void;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ fontSize: 13, fontWeight: 650, color: colors.text }}>{t.decisionAuto}</div>
-      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
-        {t.decisionAutoHint}
-      </p>
+    <div style={{ ...settingsSectionCard, display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ ...settingsSectionTitle, margin: 0 }}>{t.decisionAuto}</div>
+      <p style={{ ...settingsSectionHint, margin: 0 }}>{t.decisionAutoHint}</p>
       <label
         style={{
           display: "inline-flex",
@@ -3148,15 +3146,25 @@ export function RanchChatShell(props: RanchChatShellProps) {
       if (!settle || typeof settle !== "object") continue;
       if (settle.skipped === "period_spend_cap_exceeded") return "period";
       if (settle.skipped === "room_spend_cap_exceeded") return "room";
-      return null;
+      continue;
     }
     return null;
   }, [messages]);
   /** This send was blocked by the room cap or the UTC-month total. */
   const [spendCapBlock, setSpendCapBlock] = useState<"room" | "period" | null>(null);
-  const spendCapBanner = spendCapBlock ?? collabCapBlock;
+  /** After the user raises a cap, hide settlement-history banners until a new block. */
+  const [muteCollabCapBanner, setMuteCollabCapBanner] = useState(false);
+  const [roomSpendReloadKey, setRoomSpendReloadKey] = useState(0);
+  const spendCapBanner =
+    spendCapBlock ?? (muteCollabCapBanner ? null : collabCapBlock);
+  /** Hide the banner for this kind only after that cap was actually raised. */
+  const acknowledgeRaisedCap = (kind: "room" | "period") => {
+    setSpendCapBlock((block) => (block === kind ? null : block));
+    if (collabCapBlock === kind) setMuteCollabCapBanner(true);
+  };
   useEffect(() => {
     setSpendCapBlock(null);
+    setMuteCollabCapBanner(false);
   }, [active?.chat_id]);
   /** agent_id → display name (group chats). */
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
@@ -5099,7 +5107,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const pollGen = ++replyPollGenRef.current;
     setBusy(true);
     setError(null);
-    setSpendCapBlock(null);
     setRecipientPickerOpen(false);
     try {
       if (group && agentIdsRef.current.length === 0) {
@@ -5189,6 +5196,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
         canvas_ref: pageRef,
         ...(attachmentRefs.length ? { attachments: attachmentRefs } : {}),
       });
+      setSpendCapBlock(null);
+      setMuteCollabCapBanner(true);
       clearPendingOwnerFiles(pendingOwnerFiles);
       pendingOwnerFilesRef.current = [];
       setPendingOwnerFiles([]);
@@ -5329,17 +5338,24 @@ export function RanchChatShell(props: RanchChatShellProps) {
       }
       if (seq !== loadSeqRef.current || activeChatIdRef.current !== chatId) return;
       const fail = sendFailureCopy(e, t);
-      setError(fail.text);
-      setSpendCapBlock(
+      const capKind =
         e instanceof ChatGatewayError
           ? e.code === "period_spend_cap_exceeded"
             ? "period"
             : e.code === "room_spend_cap_exceeded"
               ? "room"
               : null
-          : null,
-      );
-      setStoreKeyPrompt(fail.offerStoreKey);
+          : null;
+      if (capKind) {
+        setError(null);
+        setStoreKeyPrompt(false);
+        setMuteCollabCapBanner(false);
+        setSpendCapBlock(capKind);
+      } else {
+        setError(fail.text);
+        setSpendCapBlock(null);
+        setStoreKeyPrompt(fail.offerStoreKey);
+      }
       try {
         await reloadMessages(chatId, seq);
       } catch {
@@ -7054,6 +7070,31 @@ export function RanchChatShell(props: RanchChatShellProps) {
               .map((chat) => ({ agentId: chat.agent_id, name: chat.title })),
           ]}
           onClose={() => closeAccountPanel()}
+          onRoomSpendCapsSaved={(prev, next) => {
+            setRoomSpendReloadKey((n) => n + 1);
+            const periodRaised =
+              !next.period_total_set
+                ? prev.period_total_set
+                : prev.period_total_set &&
+                  (next.period_total_cap_credits ?? 0) > (prev.period_total_cap_credits ?? 0);
+            const defaultRaised =
+              !next.default_set
+                ? prev.default_set
+                : prev.default_set &&
+                  (next.default_cap_credits ?? 0) > (prev.default_cap_credits ?? 0);
+            if (periodRaised) acknowledgeRaisedCap("period");
+            if (!defaultRaised) return;
+            const chatId = activeChatIdRef.current;
+            if (!chatId) {
+              acknowledgeRaisedCap("room");
+              return;
+            }
+            void client.getChatRoomSpend(chatId).then((status) => {
+              if (activeChatIdRef.current !== chatId) return;
+              if (status.room_cap_source === "user_chat") return;
+              acknowledgeRaisedCap("room");
+            });
+          }}
         />
       ) : null}
 
@@ -8657,6 +8698,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   <button
                     type="button"
                     onClick={() => {
+                      if (spendCapBanner === "period") {
+                        openAccountPanel("plan");
+                        return;
+                      }
                       setInfoTab("settings");
                       setShowAddMember(false);
                       setShowMembersPanel(true);
@@ -8673,7 +8718,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       flexShrink: 0,
                     }}
                   >
-                    {t.collabNeedTopupCta}
+                    {spendCapBanner === "period" ? t.collabPeriodNeedTopupCta : t.collabNeedTopupCta}
                   </button>
                 </div>
               ) : null}
@@ -10395,13 +10440,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           padding: 16,
                           display: "flex",
                           flexDirection: "column",
-                          gap: 20,
+                          gap: 14,
                         }}
                       >
                         {canEditGroup ? (
-                          <>
+                          <div style={{ ...settingsSectionCard, display: "flex", flexDirection: "column", gap: 12 }}>
                         <div>
-                          <label htmlFor="group-settings-name" style={metaLabel}>
+                          <label htmlFor="group-settings-name" style={settingsFieldLabel}>
                             {t.groupName}
                           </label>
                           <input
@@ -10416,7 +10461,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           />
                         </div>
                         <div>
-                          <label htmlFor="group-settings-desc" style={metaLabel}>
+                          <label htmlFor="group-settings-desc" style={settingsFieldLabel}>
                             {t.groupDescription}
                           </label>
                           <textarea
@@ -10473,17 +10518,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         >
                           {t.save}
                         </button>
-                          </>
+                          </div>
                         ) : (
-                          <>
+                          <div style={{ ...settingsSectionCard, display: "flex", flexDirection: "column", gap: 12 }}>
                             <div>
-                              <div style={metaLabel}>{t.groupName}</div>
+                              <div style={settingsFieldLabel}>{t.groupName}</div>
                               <div style={{ fontSize: 14, lineHeight: 1.4 }}>
                                 {(active.title || "").trim() || chatTitle(active)}
                               </div>
                             </div>
                             <div>
-                              <div style={metaLabel}>{t.groupDescription}</div>
+                              <div style={settingsFieldLabel}>{t.groupDescription}</div>
                               <div
                                 style={{
                                   fontSize: 13,
@@ -10495,13 +10540,20 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 {active.description?.trim() || t.groupNoDescription}
                               </div>
                             </div>
-                          </>
+                          </div>
                         )}
                         <ChatCollabBudgetSection
                           client={client}
                           messages={t}
                           chatId={active.chat_id}
-                          onUpdated={() => setSpendCapBlock(null)}
+                          onUpdated={(prev, next) => {
+                          const prevCap = prev?.room_cap_credits ?? null;
+                          const nextCap = next.room_cap_credits ?? null;
+                          const raised =
+                            nextCap == null ? prevCap != null : prevCap != null && nextCap > prevCap;
+                          if (raised) acknowledgeRaisedCap("room");
+                        }}
+                        reloadKey={roomSpendReloadKey}
                         />
                       </div>
                       {canEditGroup ? (
@@ -10558,7 +10610,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         padding: 16,
                         display: "flex",
                         flexDirection: "column",
-                        gap: 20,
+                        gap: 14,
                       }}
                     >
                       <ChatDecisionSettings
@@ -10573,7 +10625,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         client={client}
                         messages={t}
                         chatId={active.chat_id}
-                        onUpdated={() => setSpendCapBlock(null)}
+                        onUpdated={(prev, next) => {
+                          const prevCap = prev?.room_cap_credits ?? null;
+                          const nextCap = next.room_cap_credits ?? null;
+                          const raised =
+                            nextCap == null ? prevCap != null : prevCap != null && nextCap > prevCap;
+                          if (raised) acknowledgeRaisedCap("room");
+                        }}
+                        reloadKey={roomSpendReloadKey}
                       />
                       {activeIsOwned ? (
                         ownedAgentDetail ? (
