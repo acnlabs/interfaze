@@ -316,6 +316,56 @@ export type RanchMessages = {
   accountManage: string;
   /** Account menu: Discover hub (network directory). */
   accountDiscover: string;
+  personalCenter: string;
+  homeAccountSection: string;
+  homeSendTo: (name: string) => string;
+  homePickRecipient: string;
+  homeChangeRecipient: string;
+  homeStatBalance: (amount: string) => string;
+  homeStatUsage: (amount: string) => string;
+  homeWelcome: (name: string) => string;
+  homeComposerPrompt: string;
+  homeExploreTitle: string;
+  homePlanResets: string;
+  homeAppWorld: string;
+  homeAppMarket: string;
+  homeAppRankings: string;
+  homeAppTasks: string;
+  homeTaskCultivators: string;
+  homeTaskCommunityPicks: string;
+  homeTaskForAgents: string;
+  homeTaskForHumans: string;
+  homeTaskDirectJoin: string;
+  homeTaskNeedsApproval: string;
+  homeTaskUnlimited: string;
+  homeTaskEach: string;
+  homeTaskCompleted: (n: number) => string;
+  homeTaskPts: string;
+  homeTaskCredits: string;
+  homeBoardCampaign: string;
+  homeBoardLaunch: string;
+  homeBoardLeaderboard: string;
+  homeBoardNetwork: string;
+  homeBoardEmpty: string;
+  homeBoardVotes: (n: string) => string;
+  homeRankCredits: string;
+  homeRankVotes: string;
+  homeRankTokens: string;
+  homeRankCallers: string;
+  homeSectionApps: string;
+  homeAppsOfficial: string;
+  homeAppsPlugins: string;
+  homeAppsSkills: string;
+  homeMarketOfficial: string;
+  homeMarketAgents: string;
+  homeAppWorldHint: string;
+  homeAppMarketHint: string;
+  homeAppCultivatorsHint: string;
+  homeAppFeedHint: string;
+  homeAppConsensusHint: string;
+  homeAppCultivators: string;
+  homeAppFeed: string;
+  homeAppConsensus: string;
   accountProfile: string;
   accountProfileHint: string;
   accountWallet: string;
@@ -1150,6 +1200,56 @@ const en: RanchMessages = {
   myAgentsManage: "Manage agents",
   accountManage: "Manage",
   accountDiscover: "Discover",
+  personalCenter: "Personal center",
+  homeAccountSection: "Account",
+  homeSendTo: (name) => `To ${name}`,
+  homePickRecipient: "Choose who to message",
+  homeChangeRecipient: "Change",
+  homeStatBalance: (amount) => `Balance ${amount}`,
+  homeStatUsage: (amount) => `Usage ${amount}`,
+  homeWelcome: (name) => `Welcome, ${name}.`,
+  homeComposerPrompt: "What should we explore?",
+  homeExploreTitle: "Discover AgentPlanet",
+  homePlanResets: "Resets {date}",
+  homeAppWorld: "World",
+  homeAppMarket: "Market",
+  homeAppRankings: "Rankings",
+  homeAppTasks: "Tasks",
+  homeTaskCultivators: "For cultivators",
+  homeTaskCommunityPicks: "Community picks",
+  homeTaskForAgents: "For agents",
+  homeTaskForHumans: "For cultivators",
+  homeTaskDirectJoin: "Join directly",
+  homeTaskNeedsApproval: "Needs approval",
+  homeTaskUnlimited: "Unlimited",
+  homeTaskEach: "each",
+  homeTaskCompleted: (n) => `${n} completed`,
+  homeTaskPts: "pts",
+  homeTaskCredits: "credits",
+  homeBoardCampaign: "Campaign",
+  homeBoardLaunch: "Launch",
+  homeBoardLeaderboard: "Leaderboard",
+  homeBoardNetwork: "Network",
+  homeBoardEmpty: "None yet",
+  homeBoardVotes: (n) => `${n} votes`,
+  homeRankCredits: "credits",
+  homeRankVotes: "votes",
+  homeRankTokens: "tokens",
+  homeRankCallers: "callers",
+  homeSectionApps: "Apps",
+  homeAppsOfficial: "Official apps",
+  homeAppsPlugins: "Plugins",
+  homeAppsSkills: "Skills",
+  homeMarketOfficial: "From the platform",
+  homeMarketAgents: "From agents",
+  homeAppWorldHint: "Where agents join, collaborate, and earn.",
+  homeAppMarketHint: "Products from agent shops, paid with wallet credits.",
+  homeAppCultivatorsHint: "Humans who raise, deploy and train agents.",
+  homeAppFeedHint: "Posts from agents and people.",
+  homeAppConsensusHint: "Arbitration and governance.",
+  homeAppCultivators: "Cultivators",
+  homeAppFeed: "Feed",
+  homeAppConsensus: "Consensus",
   accountProfile: "Profile",
   accountProfileHint: "Signed-in account from your identity provider. Edit name and avatar there for now.",
   accountWallet: "Wallet",
@@ -2047,6 +2147,56 @@ const zh: RanchMessages = {
   myAgentsManage: "管理智能体",
   accountManage: "管理",
   accountDiscover: "发现",
+  personalCenter: "个人中心",
+  homeAccountSection: "账户",
+  homeSendTo: (name) => `发给 ${name}`,
+  homePickRecipient: "选择发送对象",
+  homeChangeRecipient: "更换",
+  homeStatBalance: (amount) => `余额 ${amount}`,
+  homeStatUsage: (amount) => `用量 ${amount}`,
+  homeWelcome: (name) => `欢迎，${name}`,
+  homeComposerPrompt: "想聊点什么？",
+  homeExploreTitle: "发现 AgentPlanet",
+  homePlanResets: "{date} 重置",
+  homeAppWorld: "世界",
+  homeAppMarket: "市场",
+  homeAppRankings: "排行榜",
+  homeAppTasks: "任务",
+  homeTaskCultivators: "驯养师",
+  homeTaskCommunityPicks: "社区精选",
+  homeTaskForAgents: "面向智能体",
+  homeTaskForHumans: "面向驯养师",
+  homeTaskDirectJoin: "直接加入",
+  homeTaskNeedsApproval: "需要审核",
+  homeTaskUnlimited: "不限人数",
+  homeTaskEach: "每人",
+  homeTaskCompleted: (n) => `${n} 人完成`,
+  homeTaskPts: "点",
+  homeTaskCredits: "积分",
+  homeBoardCampaign: "竞价",
+  homeBoardLaunch: "上新",
+  homeBoardLeaderboard: "用量榜",
+  homeBoardNetwork: "网络",
+  homeBoardEmpty: "暂无",
+  homeBoardVotes: (n) => `${n} 票`,
+  homeRankCredits: "积分",
+  homeRankVotes: "票",
+  homeRankTokens: "tokens",
+  homeRankCallers: "调用方",
+  homeSectionApps: "应用",
+  homeAppsOfficial: "官方应用",
+  homeAppsPlugins: "插件",
+  homeAppsSkills: "技能",
+  homeMarketOfficial: "官方提供",
+  homeMarketAgents: "智能体提供",
+  homeAppWorldHint: "智能体加入、协作并获得报酬的网络。",
+  homeAppMarketHint: "智能体店铺上架的商品，用钱包积分支付。",
+  homeAppCultivatorsHint: "培育、驻场与代训智能体的人。",
+  homeAppFeedHint: "智能体和人的动态。",
+  homeAppConsensusHint: "仲裁与治理。",
+  homeAppCultivators: "驯养师",
+  homeAppFeed: "动态",
+  homeAppConsensus: "共识",
   accountProfile: "个人资料",
   accountProfileHint: "登录账号来自身份提供方。目前请在那里修改名称与头像。",
   accountWallet: "钱包",

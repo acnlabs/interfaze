@@ -19,6 +19,7 @@ test("account=computer opens the computer panel", () => {
   assert.equal(readAccountPanelFromUrl("?account=computer"), "computer");
   assert.equal(readAccountPanelFromUrl("?account=wallet"), "wallet");
   assert.equal(readAccountPanelFromUrl("?account=billing"), "billing");
+  assert.equal(readAccountPanelFromUrl("?account=center"), "center");
   assert.equal(readAccountPanelFromUrl("?account=nope"), null);
 });
 

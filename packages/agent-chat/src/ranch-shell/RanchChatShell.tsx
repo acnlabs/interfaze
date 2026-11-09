@@ -4,7 +4,6 @@ import {
   Fragment,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -137,6 +136,8 @@ import {
   writePendingCreateJobId,
 } from "./watchAgentCreateJob";
 import { MyAgentsPanel } from "./MyAgentsPanel";
+import { ComposerTextField } from "./ComposerTextField";
+import { HomeRightPane } from "./HomePane";
 import { NewChatPicker } from "./NewChatPicker";
 import { NewComposeMenu } from "./NewComposeMenu";
 import { ConnectAgentModal } from "./ConnectAgentModal";
@@ -521,18 +522,6 @@ function deliveryStatusLabel(
   }
   if (delivery === "failed") return t.deliveryFailed;
   return t.delivered;
-}
-
-const COMPOSER_LINE_PX = 20;
-const COMPOSER_FIELD_PAD_PX = 8;
-const COMPOSER_MAX_LINES = 8;
-
-function fitComposerField(el: HTMLTextAreaElement | null) {
-  if (!el) return;
-  el.style.height = "0px";
-  const max = COMPOSER_MAX_LINES * COMPOSER_LINE_PX + COMPOSER_FIELD_PAD_PX;
-  const next = Math.min(Math.max(el.scrollHeight, COMPOSER_LINE_PX + COMPOSER_FIELD_PAD_PX), max);
-  el.style.height = `${next}px`;
 }
 
 function shortModelLabel(modelId: string | null | undefined): string {
@@ -1057,6 +1046,17 @@ function writeComposerListed(chatId: string, listed: string | null): void {
   } catch {
     /* ignore quota / private mode */
   }
+}
+
+/** Home can pick a model before the direct chat exists. Copy that pick onto the real chat. */
+function copyComposerBinding(fromId: string, toId: string): void {
+  if (!fromId || !toId || fromId === toId) return;
+  const pick = readComposerModelPick(fromId);
+  if (pick) writeComposerModelPick(toId, pick);
+  const listed = readComposerListed(fromId);
+  if (listed) writeComposerListed(toId, listed);
+  const hint = readComposerPriceHint(fromId);
+  if (hint) writeComposerPriceHint(toId, hint);
 }
 
 function hopUsageFromMessage(m: ChatMessage): {
@@ -3205,6 +3205,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showAccountPlan, setShowAccountPlan] = useState(false);
   const [showAccountBilling, setShowAccountBilling] = useState(false);
   const [showComputer, setShowComputer] = useState(false);
+  const [homeTargetId, setHomeTargetId] = useState<string | null>(null);
+  const pickHomeTargetRef = useRef(false);
+  const pendingHomeSendRef = useRef<{ chatId: string; text: string } | null>(null);
   const [screenComputer, setScreenComputer] = useState<{ id: string; label: string } | null>(null);
   const [cloudComputers, setCloudComputers] = useState<ComputerNameRow[]>([]);
   const [chatPlace, setChatPlace] = useState<ChatComputerPlace | null>(null);
@@ -3395,7 +3398,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const openAccountPanel = (panel: AccountDeepLinkPanel) => {
     setPickerMode(null);
     applyAccountPanel(panel);
-    writeAccountPanelToUrl(panel, "push");
+    writeAccountPanelToUrl(panel === "center" ? null : panel, "push");
   };
 
   const closeAccountPanel = () => {
@@ -3601,9 +3604,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
       cancelled = true;
     };
   }, [client, planViewer]);
-  useLayoutEffect(() => {
-    fitComposerField(composerFieldRef.current);
-  }, [draft]);
   /** Owned-agent ACN detail for Info (read-only) + Settings (manage). */
   const [ownedAgentDetail, setOwnedAgentDetail] = useState<MyAgentSummary | null>(null);
   const [composerModel, setComposerModel] = useState<ComposerStatusSnapshot | null>(null);
@@ -3611,16 +3611,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [composerForChat, setComposerForChat] = useState<string | null>(null);
   const composerPriceHintWritten = useRef("");
-  const composerChatKey = active && !isGroupChat(active) ? active.chat_id : null;
-  if (composerChatKey !== composerForChat) {
-    setComposerForChat(composerChatKey);
-    const bare =
-      composerChatKey && active?.agent_id
-        ? active.agent_id.replace(/^acn:/i, "").trim()
-        : "";
-    setComposerModel(bare && !bare.startsWith("sys:") ? readComposerStatus(bare) : null);
-    setSelectedModelId(composerChatKey ? readComposerModelPick(composerChatKey) : null);
-  }
   /** Models the live price page no longer lists. Hidden for this session. */
   const [droppedModelIds, setDroppedModelIds] = useState<string[]>([]);
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
@@ -4309,52 +4299,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
       cancelled = true;
     };
   }, [open, initialOpenAgentId, client, openConversation, loadingChats]);
-
-  const openedOfficialRef = useRef(false);
-  useEffect(() => {
-    const official = directoryAgents.find(
-      (a) => a.group === "recommended" && isAcnCatalogAgentId(a.agent_id),
-    );
-    if (!official) return;
-    const want = agentIdKey(official.agent_id);
-    if (!open || !want || openedOfficialRef.current || openedInitialAgentRef.current) return;
-    if (initialOpenAgentId || loadingChats || active) return;
-    if (typeof window !== "undefined" && chatIdFromSearch(window.location.search)) return;
-    const others = chats.filter((c) => !isGroupChat(c) && agentIdKey(c.agent_id) !== want);
-    if (others.length > 0) return;
-    openedOfficialRef.current = true;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const siblings = chats
-          .filter((c) => !isGroupChat(c) && agentIdKey(c.agent_id) === want)
-          .sort((a, b) => chatActivityTs(b) - chatActivityTs(a));
-        let found = siblings.find(isGlobalDirect) ?? siblings[0];
-        if (!found) {
-          found = await client.createOrGetDirectChat(official.agent_id);
-        }
-        if (cancelled || !found) {
-          openedOfficialRef.current = false;
-          return;
-        }
-        await openConversation(found);
-      } catch {
-        openedOfficialRef.current = false;
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    open,
-    directoryAgents,
-    initialOpenAgentId,
-    loadingChats,
-    active,
-    chats,
-    client,
-    openConversation,
-  ]);
 
   const loadTopics = useCallback(
     async (chatId: string) => {
@@ -5654,6 +5598,100 @@ export function RanchChatShell(props: RanchChatShellProps) {
     directoryAgents.find(
       (a) => a.group === "recommended" && isAcnCatalogAgentId(a.agent_id),
     ) ?? null;
+  const tempOfficialChat =
+    chats
+      .filter(
+        (c) =>
+          !isGroupChat(c) &&
+          isGlobalDirect(c) &&
+          (c.title || "").trim() === "Overseas Support" &&
+          !!(c.agent_id || "").trim(),
+      )
+      .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))[0] ?? null;
+  const homeRecipientId = homeTargetId || officialAgent?.agent_id || tempOfficialChat?.agent_id || "";
+  const homeRecipientName = (() => {
+    if (!homeRecipientId) return "";
+    const fromDirectory = directoryAgents.find(
+      (a) => agentIdKey(a.agent_id) === agentIdKey(homeRecipientId),
+    );
+    const named = (fromDirectory?.name || "").trim();
+    if (named) return named;
+    const fromChat = chats.find(
+      (c) => !isGroupChat(c) && agentIdKey(c.agent_id) === agentIdKey(homeRecipientId),
+    );
+    return (fromChat?.title || "").trim();
+  })();
+
+  const homeComposerChat = homeRecipientId
+    ? chats.find(
+        (c) =>
+          !isGroupChat(c) &&
+          isGlobalDirect(c) &&
+          agentIdKey(c.agent_id) === agentIdKey(homeRecipientId),
+      ) ?? null
+    : null;
+  const composerDirect: { chatId: string; agentId: string } | null =
+    active && !isGroupChat(active) && (active.agent_id || "").trim()
+      ? { chatId: active.chat_id, agentId: (active.agent_id || "").trim() }
+      : !active && homeRecipientId
+        ? {
+            chatId: homeComposerChat?.chat_id || `home:${agentIdKey(homeRecipientId)}`,
+            agentId: homeRecipientId,
+          }
+        : null;
+  if ((composerDirect?.chatId ?? null) !== composerForChat) {
+    const nextKey = composerDirect?.chatId ?? null;
+    setComposerForChat(nextKey);
+    const bare = composerDirect
+      ? composerDirect.agentId.replace(/^acn:/i, "").trim()
+      : "";
+    setComposerModel(bare && !bare.startsWith("sys:") ? readComposerStatus(bare) : null);
+    setSelectedModelId(nextKey ? readComposerModelPick(nextKey) : null);
+  }
+
+  const homeComposerReady =
+    !active &&
+    !(loadingChats && chats.length === 0) &&
+    !(chatsLoadError && chats.length === 0);
+
+  const sendHome = async () => {
+    const text = draft.trim();
+    const targetId = homeRecipientId.trim();
+    if (!text || !targetId || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const key = agentIdKey(targetId);
+      const existing = chats.find(
+        (c) => !isGroupChat(c) && agentIdKey(c.agent_id) === key && isGlobalDirect(c),
+      );
+      const chat = existing ?? (await client.createOrGetDirectChat(targetId));
+      if (!existing) copyComposerBinding(`home:${key}`, chat.chat_id);
+      pendingHomeSendRef.current = { chatId: chat.chat_id, text };
+      setDraft("");
+      await refreshChats();
+      await openConversation(chat);
+    } catch (e) {
+      pendingHomeSendRef.current = null;
+      setBusy(false);
+      setError(
+        e instanceof ChatGatewayError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Failed to start chat",
+      );
+    }
+  };
+
+  useEffect(() => {
+    const pending = pendingHomeSendRef.current;
+    if (!pending || active?.chat_id !== pending.chatId) return;
+    pendingHomeSendRef.current = null;
+    void send({ text: pending.text });
+    // send closes over the render where this chat became active.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.chat_id]);
 
   const isOwnedDirectAgent = (agentId?: string | null): boolean => {
     if (!agentId?.trim()) return false;
@@ -5696,21 +5734,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
     };
   }, [showMembersPanel, activeIsOwned, active?.agent_id, infoTab, client]);
 
-  // M1/M2: composer model picker (direct chats only).
+  // M1/M2: composer model picker. Home uses the pinned recipient before a chat is open.
   useEffect(() => {
-    if (!active || isGroupChat(active) || !active.agent_id) {
+    const modelChatId = composerDirect?.chatId ?? "";
+    const modelAgentId = composerDirect?.agentId ?? "";
+    if (!modelChatId || !modelAgentId) {
       setComposerModel(null);
       setSelectedModelId(null);
       return;
     }
-    const bare = active.agent_id.replace(/^acn:/i, "").trim();
+    const bare = modelAgentId.replace(/^acn:/i, "").trim();
     if (!bare || bare.startsWith("sys:")) {
       setComposerModel(null);
       setSelectedModelId(null);
       return;
     }
-    if (quotedMenuRef.current.chatId !== active.chat_id) {
-      quotedMenuRef.current = { chatId: active.chat_id, prices: [] };
+    if (quotedMenuRef.current.chatId !== modelChatId) {
+      quotedMenuRef.current = { chatId: modelChatId, prices: [] };
       quoteFlightRef.current = "";
       setQuoteAttempts(0);
     }
@@ -5728,7 +5768,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             : [];
           const serverOptions = Array.isArray(row.model_options) ? row.model_options : [];
           const keptQuotes =
-            quotedMenuRef.current.chatId === active.chat_id
+            quotedMenuRef.current.chatId === modelChatId
               ? quotedMenuRef.current.prices
               : [];
           const options = mergeQuotedPrices(serverOptions, keptQuotes);
@@ -5792,10 +5832,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
           if (!refresh) setComposerMenuExpanded(false);
           if (refresh && sameStatus) return;
           const fallback = supported;
-          const stored = readComposerModelPick(active.chat_id);
-          const storedListed = readComposerListed(active.chat_id);
+          const stored = readComposerModelPick(modelChatId);
+          const storedListed = readComposerListed(modelChatId);
           const prevFromRef =
-            composerListedRef.current?.chatId === active.chat_id
+            composerListedRef.current?.chatId === modelChatId
               ? composerListedRef.current.listed
               : null;
           const previousListed = prevFromRef || storedListed;
@@ -5807,9 +5847,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 : initializingListed && stored && !sameModelId(stored, listed)),
           );
           composerListedRef.current = listed
-            ? { chatId: active.chat_id, listed }
+            ? { chatId: modelChatId, listed }
             : null;
-          writeComposerListed(active.chat_id, listed);
+          writeComposerListed(modelChatId, listed);
           const catalogIds = listedOfficial || byoDegraded
             ? composerCatalogRef.current.map((row) => row.id)
             : [];
@@ -5842,7 +5882,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               officialDefault: recommended || officialDefault,
             });
             setSelectedModelId(chosen);
-            writeComposerModelPick(active.chat_id, chosen);
+            writeComposerModelPick(modelChatId, chosen);
           } else if (!listedOfficial && pricedMenu.length) {
             const wanted = listedChanged
               ? listed
@@ -5856,7 +5896,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 : undefined) ||
               pricedMenu[0];
             setSelectedModelId(chosen);
-            writeComposerModelPick(active.chat_id, chosen);
+            writeComposerModelPick(modelChatId, chosen);
           } else if (!listedOfficial) {
             const storedOnShelf =
               !!stored &&
@@ -5873,7 +5913,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             setSelectedModelId(stored);
           } else {
             setSelectedModelId(nextModel);
-            writeComposerModelPick(active.chat_id, nextModel);
+            writeComposerModelPick(modelChatId, nextModel);
           }
         })
         .catch(() => {
@@ -5891,7 +5931,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     // Owner profile is not read here. Those fields used to be deps, and each
     // time they arrived the cleanup dropped the in-flight model-status call
     // (several seconds) so the model row stayed blank until a later attempt.
-  }, [active?.chat_id, active?.agent_id, active?.type, client]);
+  }, [composerDirect?.chatId, composerDirect?.agentId, client]);
 
   const missingPriceKey = composerModel?.shelf_only
     ? ""
@@ -5902,18 +5942,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   useEffect(() => {
     if (
-      !active ||
-      isGroupChat(active) ||
+      !composerDirect ||
       composerModel?.official_channel ||
       composerModel?.shelf_only
     ) {
       return;
     }
     if (!missingPriceKey || quoteAttempts >= 2) return;
-    const bare = (active.agent_id || "").replace(/^acn:/i, "").trim();
+    const bare = composerDirect.agentId.replace(/^acn:/i, "").trim();
     if (!bare || bare.startsWith("sys:")) return;
     const missing = missingPriceKey.split("\u0001");
-    const flight = `${active.chat_id}:${bare}:${quoteAttempts}:${missingPriceKey}`;
+    const flight = `${composerDirect.chatId}:${bare}:${quoteAttempts}:${missingPriceKey}`;
     if (quoteFlightRef.current === flight) return;
     quoteFlightRef.current = flight;
     let cancelled = false;
@@ -5940,7 +5979,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             ? row.self_reported_models.filter((id): id is string => typeof id === "string" && !!id.trim())
             : prev.self_reported_models ?? [];
           quotedMenuRef.current = {
-            chatId: active.chat_id,
+            chatId: composerDirect.chatId,
             prices: quotedPricesFromOptions(options),
           };
           still = unpricedOwnModelIds(
@@ -5970,12 +6009,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
       cancelled = true;
       if (quoteFlightRef.current === flight) quoteFlightRef.current = "";
     };
-  }, [active?.agent_id, active?.chat_id, active?.type, client, composerModel?.official_channel, missingPriceKey, quoteAttempts]);
+  }, [composerDirect?.agentId, composerDirect?.chatId, client, composerModel?.official_channel, missingPriceKey, quoteAttempts]);
 
   useEffect(() => {
     setComposerMenuOpen(false);
     setComposerMenuQuery("");
-  }, [active?.chat_id]);
+  }, [active?.chat_id, composerDirect?.chatId]);
 
   useEffect(() => {
     if (!composerMenuOpen) {
@@ -6103,9 +6142,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
       null;
     if (!next || sameModelId(next, selectedModelId)) return;
     setSelectedModelId(next);
-    if (active?.chat_id) writeComposerModelPick(active.chat_id, next);
+    const pickChatId = composerDirect?.chatId;
+    if (pickChatId) writeComposerModelPick(pickChatId, next);
   }, [
-    active?.chat_id,
+    composerDirect?.chatId,
     composerCatalog,
     composerModel?.listed_model_id,
     composerModel?.official_channel,
@@ -6114,11 +6154,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
   ]);
 
   useEffect(() => {
-    if (!composerModel?.official_channel || !active?.chat_id) return;
+    const pickChatId = composerDirect?.chatId;
+    if (!composerModel?.official_channel || !pickChatId) return;
     if (composerCatalogLoading || composerCatalog.length === 0) return;
-    const stored = readComposerModelPick(active.chat_id);
+    const stored = readComposerModelPick(pickChatId);
     const listed = composerModel.listed_model_id ?? null;
-    const storedListed = readComposerListed(active.chat_id);
+    const storedListed = readComposerListed(pickChatId);
     const listedChanged = Boolean(
       listed && storedListed && !sameModelId(storedListed, listed),
     );
@@ -6136,9 +6177,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
     });
     if (!next || sameModelId(next, selectedModelId)) return;
     setSelectedModelId(next);
-    writeComposerModelPick(active.chat_id, next);
+    writeComposerModelPick(pickChatId, next);
   }, [
-    active?.chat_id,
+    composerDirect?.chatId,
     composerCatalog,
     composerCatalogLoading,
     composerModel?.listed_model_id,
@@ -6163,7 +6204,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
         menu[0];
       if (!next) return;
       setSelectedModelId(next);
-      if (active?.chat_id) writeComposerModelPick(active.chat_id, next);
+      if (composerDirect?.chatId) writeComposerModelPick(composerDirect.chatId, next);
       return;
     }
     if (!composerCatalog.length) return;
@@ -6178,8 +6219,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
       composerCatalog[0]?.id;
     if (!next) return;
     setSelectedModelId(next);
-    if (active?.chat_id) writeComposerModelPick(active.chat_id, next);
-  }, [active?.chat_id, composerCatalog, composerModel, selectedModelId]);
+    if (composerDirect?.chatId) writeComposerModelPick(composerDirect.chatId, next);
+  }, [composerDirect?.chatId, composerCatalog, composerModel, selectedModelId]);
 
   useEffect(() => {
     if (!composerMenuOpen) return;
@@ -6988,14 +7029,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
             });
           }}
           style={{
-            border: "none",
-            background: "transparent",
-            color: colors.text,
+            ...composerRoundPlus,
             cursor: disabled ? "default" : "pointer",
-            fontSize: 18,
-            lineHeight: 1,
-            padding: "2px 4px",
-            opacity: disabled ? 0.45 : 1,
+            opacity: disabled ? 0.4 : 1,
           }}
         >
           +
@@ -7233,6 +7269,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   // list column in narrow (side) mode. PanelChrome fills its positioned parent.
   const accountPanels = (
     <>
+
       {showAccountProfile && account ? (
         <AccountProfilePanel
           account={account}
@@ -7436,27 +7473,53 @@ export function RanchChatShell(props: RanchChatShellProps) {
         }}
       >
         <div style={listHeader}>
-          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 650, display: "flex", alignItems: "center", gap: 8 }}>
-            {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt={title}
-                width={28}
-                height={28}
-                style={{
-                  width: 28,
-                  height: 28,
-                  objectFit: "contain",
-                  borderRadius: 6,
-                  flexShrink: 0,
-                }}
-              />
-            ) : (
-              <span aria-hidden style={{ display: "inline-flex", color: colors.muted, flexShrink: 0 }}>
-                <IconChat />
-              </span>
-            )}
-            {title}
+          <h2 style={{ margin: 0 }}>
+            <button
+              type="button"
+              onClick={() => {
+                if (activeTopic) exitTopicFilter();
+                setPickerMode(null);
+                closeAccountSurfaces();
+                writeAccountPanelToUrl(null, "replace");
+                setView("list");
+                setActive(null);
+              }}
+              style={{
+                margin: 0,
+                padding: 0,
+                border: "none",
+                background: "transparent",
+                color: "inherit",
+                font: "inherit",
+                fontSize: 17,
+                fontWeight: 650,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                cursor: "pointer",
+              }}
+            >
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt=""
+                  width={28}
+                  height={28}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    objectFit: "contain",
+                    borderRadius: 6,
+                    flexShrink: 0,
+                  }}
+                />
+              ) : (
+                <span aria-hidden style={{ display: "inline-flex", color: colors.muted, flexShrink: 0 }}>
+                  <IconChat />
+                </span>
+              )}
+              {title}
+            </button>
           </h2>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <LanguageSwitcher locale={uiLocale} onChange={setLocale} t={t} />
@@ -7863,50 +7926,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   <p>{t.chatsLoadFailed}</p>
                   <button type="button" style={btnGhost} onClick={() => { void refreshChats(); }}>{t.retry}</button>
                 </div>
-              ) : hasMineAgents ? (
-                <div
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: colors.muted,
-                    flexDirection: "column",
-                    gap: 12,
-                  }}
-                >
-                  <p style={{ margin: 0 }}>{t.selectOrStart}</p>
-                  <button type="button" style={btnPrimary} onClick={() => setPickerMode("direct")}>
-                    {t.startChat}
-                  </button>
-                </div>
               ) : (
-                <div
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <NoAgentsEmpty
-                    client={client}
-                    connectGuideUrl={connectGuideUrl}
-                    interfazeBaseUrl={interfazeBaseUrl}
-                    locale={uiLocale}
-                    officialAgent={officialAgent}
-                    onStartOfficial={
-                      officialAgent
-                        ? () => {
-                            void startDirect(officialAgent.agent_id);
-                          }
-                        : undefined
-                    }
-                    onConnectExisting={() => setShowConnect(true)}
-                    onNewChat={() => setPickerMode("direct")}
-                    t={t}
-                  />
-                </div>
+                <HomeRightPane
+                  account={account ?? null}
+                  client={client}
+                  locale={uiLocale}
+                  cn={cnSite}
+                  agentPlanetBaseUrl={agentPlanetBaseUrl}
+                  gatewayBaseUrl={gatewayBaseUrl}
+                  messages={t}
+                  onOpenPlan={() => openAccountPanel("plan")}
+                  onOpenWallet={() => openAccountPanel("wallet")}
+                />
               )}
             </>
           ) : (
@@ -8994,6 +9025,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 </div>
               )}
 
+            </>
+          )}
+          {(active || homeComposerReady) && (
+            <>
               <form
                 onDragOver={(e) => {
                   if (!dataTransferTypesIncludeFiles(e.dataTransfer?.types)) return;
@@ -9018,6 +9053,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 }}
                 onSubmit={(e) => {
                   e.preventDefault();
+                  if (!active) {
+                    void sendHome();
+                    return;
+                  }
                   if (agentRefOpen) {
                     const pick =
                       agentRefCandidates[agentRefIndex] || agentRefCandidates[0];
@@ -9028,14 +9067,102 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   void send();
                 }}
                 style={{
-                  padding: 12,
-                  paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
+                  padding: "8px 28px 24px",
+                  paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))",
                   display: "flex",
                   flexDirection: "column",
                   gap: 8,
                   position: "relative",
+                  flexShrink: 0,
                 }}
               >
+                <div
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    right: 0,
+                    top: -40,
+                    height: 40,
+                    background: `linear-gradient(to bottom, transparent, ${colors.bg})`,
+                    pointerEvents: "none",
+                  }}
+                />
+                {!active ? (
+                  <div
+                    style={{
+                      position: "relative",
+                      display: "flex",
+                      alignItems: "center",
+                      minHeight: 24,
+                      margin: "2px 0 0",
+                    }}
+                  >
+                    {homeRecipientName ? (
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          minWidth: 0,
+                          maxWidth: "46%",
+                          position: "relative",
+                          zIndex: 1,
+                        }}
+                      >
+                        <span
+                          aria-hidden
+                          style={{
+                            width: 18,
+                            height: 18,
+                            borderRadius: 999,
+                            flexShrink: 0,
+                            background:
+                              avatarBackground(homeRecipientId) ||
+                              `linear-gradient(135deg,${colors.avatarFrom},${colors.avatarTo})`,
+                            color: "#fff",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 10,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {avatarGlyph(homeRecipientName)}
+                        </span>
+                        <span
+                          style={{
+                            minWidth: 0,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            fontSize: 12,
+                            fontWeight: 650,
+                            color: colors.text,
+                          }}
+                        >
+                          {homeRecipientName}
+                        </span>
+                      </span>
+                    ) : null}
+                    <p
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        right: 0,
+                        margin: 0,
+                        textAlign: "center",
+                        fontSize: 15,
+                        fontWeight: 500,
+                        letterSpacing: "-0.01em",
+                        color: colors.muted,
+                        pointerEvents: "none",
+                      }}
+                    >
+                      {t.homeComposerPrompt}
+                    </p>
+                  </div>
+                ) : null}
                 {(!activeTopic && composerTopic) || (stickyChipActive && stickyMention) ? (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {!activeTopic && composerTopic ? (
@@ -9219,14 +9346,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     position: "relative",
                     display: "grid",
                     gridTemplateColumns: "minmax(0, 1fr) auto",
-                    gridTemplateAreas: '"note note" "field field" "tools send"',
+                    gridTemplateAreas: pointedBlock?.block_key
+                      ? '"note note" "field field" "tools send"'
+                      : '"field field" "tools send"',
                     alignItems: "center",
                     columnGap: 8,
                     rowGap: 2,
-                    background: colors.inputBg,
-                    border: `1px solid ${composerFocused ? colors.accent : colors.border}`,
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
-                    borderRadius: 12,
+                    background: colors.panelAlt,
+                    border: `1px solid ${composerFocused ? colors.accent : "rgba(255,255,255,0.16)"}`,
+                    boxShadow: composerFocused
+                      ? "0 -10px 28px rgba(0,0,0,0.45), 0 18px 40px rgba(0,0,0,0.55), 0 0 0 1px rgba(59,130,246,0.28)"
+                      : "0 -12px 32px rgba(0,0,0,0.5), 0 18px 40px rgba(0,0,0,0.55)",
+                    borderRadius: 16,
                     padding: "6px 8px",
                   }}
                 >
@@ -9480,7 +9611,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     })}
                   </div>
                 ) : null}
-                {!composerModel && active && !isGroupChat(active) && selectedModelId ? (
+                {!composerModel && composerDirect && selectedModelId ? (
                   <div
                     style={{
                       gridArea: "tools",
@@ -9505,7 +9636,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       {shortModelLabel(selectedModelId)}
                     </span>
                     {(() => {
-                      const hint = readComposerPriceHint(active.chat_id);
+                      const hint = readComposerPriceHint(composerDirect.chatId);
                       if (!hint || !sameModelId(hint.model, selectedModelId)) return null;
                       return (
                         <span
@@ -9524,7 +9655,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     })()}
                   </div>
                 ) : null}
-                {composerModel && active && !isGroupChat(active) ? (
+                {composerModel && composerDirect ? (
                   <div
                     ref={composerMenuRef}
                     style={{
@@ -9682,11 +9813,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       const selectedPrice = value
                         ? priceFor(value)
                         : { menu: "", short: "", title: "" };
-                      if (active.chat_id && value && selectedPrice.short) {
-                        const hintKey = `${active.chat_id}\0${value}\0${selectedPrice.short}`;
+                      if (composerDirect.chatId && value && selectedPrice.short) {
+                        const hintKey = `${composerDirect.chatId}\0${value}\0${selectedPrice.short}`;
                         if (composerPriceHintWritten.current !== hintKey) {
                           composerPriceHintWritten.current = hintKey;
-                          writeComposerPriceHint(active.chat_id, {
+                          writeComposerPriceHint(composerDirect.chatId, {
                             model: value,
                             short: selectedPrice.short,
                             title: selectedPrice.title,
@@ -9853,9 +9984,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                             aria-selected={selected}
                                             onClick={() => {
                                               setSelectedModelId(id);
-                                              if (active?.chat_id) {
-                                                writeComposerModelPick(active.chat_id, id);
-                                              }
+                                              writeComposerModelPick(composerDirect.chatId, id);
                                               setComposerMenuOpen(false);
                                             }}
                                             style={{
@@ -9998,9 +10127,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     </button>
                   </div>
                 ) : null}
-                <textarea
+                <ComposerTextField
                   ref={composerFieldRef}
-                  className="ranch-composer-field ranch-thin-scroll"
                   value={draft}
                   role="combobox"
                   aria-expanded={Boolean(
@@ -10038,7 +10166,6 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   }}
                   onChange={(e) => {
                     setDraft(e.target.value);
-                    fitComposerField(e.currentTarget);
                     setMentionIndex(0);
                     setSlashIndex(0);
                     setSlashMenuDismissed(false);
@@ -10055,20 +10182,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         : t.messagePlaceholder
                   }
                   disabled={busy || healthOk === false}
-                  style={{
-                    ...inputStyle,
-                    gridArea: "field",
-                    resize: "none",
-                    border: "none",
-                    background: "transparent",
-                    width: "100%",
-                    minWidth: 0,
-                    boxSizing: "border-box",
-                    padding: "4px 4px",
-                    lineHeight: `${COMPOSER_LINE_PX}px`,
-                    overflowY: "auto",
-                    outline: "none",
-                  }}
+                  style={{ gridArea: "field" }}
                   onKeyDown={(e) => {
                     if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
                     if (plusOpen && e.key === "Escape") {
@@ -10174,14 +10288,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     }
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
+                      if (!active) {
+                        void sendHome();
+                        return;
+                      }
                       if (tryRunSlashFromDraft()) return;
                       void send();
                     }
                   }}
                 />
-                {active &&
-                !(composerModel && !isGroupChat(active)) &&
-                !(!composerModel && !isGroupChat(active) && selectedModelId) ? (
+                {!(
+                  (composerModel && composerDirect) ||
+                  (!composerModel && composerDirect && selectedModelId)
+                ) ? (
                   <div
                     style={{
                       gridArea: "tools",
@@ -10195,27 +10314,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 ) : null}
                 <button
                   type="submit"
-                  disabled={
-                    busy ||
-                    attachBusy ||
-                    healthOk === false ||
-                    (!draft.trim() && pendingOwnerFiles.length === 0 && stagedMailbox.length === 0)
-                  }
-                  style={{
-                    ...btnPrimary,
-                    gridArea: "send",
-                    alignSelf: "center",
-                    flexShrink: 0,
-                    opacity:
-                      busy ||
-                      attachBusy ||
-                      healthOk === false ||
-                      (!draft.trim() && pendingOwnerFiles.length === 0 && stagedMailbox.length === 0)
-                        ? 0.45
-                        : 1,
-                  }}
-                >
-                  {sendButtonLabel(
+                  aria-label={sendButtonLabel(
                     chatPlace,
                     draft,
                     bootScreenIds(),
@@ -10225,6 +10324,46 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     },
                     stagedMailbox.map((row) => `${MAILBOX_PREFIX}${row.attachmentId}`),
                   )}
+                  title={sendButtonLabel(
+                    chatPlace,
+                    draft,
+                    bootScreenIds(),
+                    {
+                      send: t.send,
+                      sendAt: t.sendAt,
+                    },
+                    stagedMailbox.map((row) => `${MAILBOX_PREFIX}${row.attachmentId}`),
+                  )}
+                  disabled={
+                    busy ||
+                    attachBusy ||
+                    healthOk === false ||
+                    (!active && !homeRecipientId) ||
+                    (!draft.trim() && pendingOwnerFiles.length === 0 && stagedMailbox.length === 0)
+                  }
+                  style={{
+                    ...composerRoundSend,
+                    gridArea: "send",
+                    alignSelf: "center",
+                    cursor:
+                      busy ||
+                      attachBusy ||
+                      healthOk === false ||
+                      (!active && !homeRecipientId) ||
+                      (!draft.trim() && pendingOwnerFiles.length === 0 && stagedMailbox.length === 0)
+                        ? "default"
+                        : "pointer",
+                    opacity:
+                      busy ||
+                      attachBusy ||
+                      healthOk === false ||
+                      (!active && !homeRecipientId) ||
+                      (!draft.trim() && pendingOwnerFiles.length === 0 && stagedMailbox.length === 0)
+                        ? 0.4
+                        : 1,
+                  }}
+                >
+                  ↑
                 </button>
                 </div>
               </form>
@@ -11533,8 +11672,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
           locale={uiLocale}
           messages={t}
           onSearchDiscover={searchDiscover}
-          onClose={() => setPickerMode(null)}
-          onOpenDirect={(id) => void startDirect(id)}
+          onClose={() => {
+            pickHomeTargetRef.current = false;
+            setPickerMode(null);
+          }}
+          onOpenDirect={(id) => {
+            if (pickHomeTargetRef.current) {
+              pickHomeTargetRef.current = false;
+              setHomeTargetId(id);
+              setPickerMode(null);
+              return;
+            }
+            void startDirect(id);
+          }}
           onCreateGroup={(titleText, ids) => void startGroup(titleText, ids)}
           createJoinInvite={() => client.createJoinInvite()}
           interfazeBaseUrl={interfazeBaseUrl}
@@ -11622,6 +11772,38 @@ const mentionRow: CSSProperties = {
 };
 
 /** Shared pill for composer context chips (topic / sticky mention). */
+const composerRoundPlus: CSSProperties = {
+  width: 28,
+  height: 28,
+  flexShrink: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "none",
+  borderRadius: 999,
+  background: "transparent",
+  color: colors.muted,
+  fontSize: 18,
+  lineHeight: 1,
+  padding: 0,
+};
+
+const composerRoundSend: CSSProperties = {
+  width: 32,
+  height: 32,
+  flexShrink: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "none",
+  borderRadius: 999,
+  background: colors.accent,
+  color: colors.onAccent,
+  fontSize: 16,
+  lineHeight: 1,
+  padding: 0,
+};
+
 const composerChip: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
