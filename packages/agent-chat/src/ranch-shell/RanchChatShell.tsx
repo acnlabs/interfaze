@@ -61,6 +61,7 @@ import {
 import {
   acceptsImageInput,
   dataTransferTypesIncludeFiles,
+  filesFromDataTransfer,
   mimeLooksLikeImage,
   modalityForSelectedModel,
   ownerFileTypeAllowed,
@@ -82,6 +83,7 @@ import {
 import {
   placeForDefaultComputer,
   screenAsksBeforeCharge,
+  omitSentRefs,
   sendAsksBeforeBoot,
   sendButtonLabel,
   sendNeedsDesk,
@@ -98,7 +100,12 @@ import { ManuscriptPanel } from "../ManuscriptPanel";
 import { blockLabel, pageOpLine, pageRefLine, type PageOpRecord, type PageRefRecord } from "../pageOpText";
 import { blockKeyFromSearch, chatIdFromSearch } from "../chatLink";
 import { visibleManuscriptBlocks } from "../manuscriptPage";
-import { mailboxIdsFromAttachments, parseMessageAttachments } from "../mailbox";
+import {
+  isReadableAttachmentName,
+  MAILBOX_PREFIX,
+  mailboxIdsFromAttachments,
+  parseMessageAttachments,
+} from "../mailbox";
 import { calleesFromMetadata, decideChipExpired, decideFromMetadata, labsTaskDescription, labsTaskTaken, orchLine, planFromMetadata, proposeGroupFromMetadata, proposeTaskFromMetadata, type MessageDecide, type MessagePlan, type OrchestrationCallee, type OrchestrationProposeGroup, type OrchestrationProposeTask } from "../orchestration";
 import { queuedStillWaiting, settleQueuedDelivery } from "./settleQueuedDelivery";
 import {
@@ -3524,6 +3531,27 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const pendingOwnerFilesRef = useRef<PendingOwnerFile[]>([]);
   const discardUnsentOwnerFilesRef = useRef<(rows: PendingOwnerFile[]) => void>(() => {});
   const [attachBusy, setAttachBusy] = useState(false);
+  type StagedMailboxFile = {
+    attachmentId: string;
+    filename: string;
+    listedCredits?: number;
+  };
+  const [stagedMailbox, setStagedMailbox] = useState<StagedMailboxFile[]>([]);
+  const [plusOpen, setPlusOpen] = useState(false);
+  const [plusPane, setPlusPane] = useState<"root" | "files" | "commands">("root");
+  const [chatFileRows, setChatFileRows] = useState<
+    Array<{
+      attachment_id: string;
+      content_type: string;
+      filename?: string | null;
+      listed_credits?: number;
+    }>
+  >([]);
+  const [chatFilesStatus, setChatFilesStatus] = useState<"idle" | "loading" | "ready" | "empty" | "error">(
+    "idle",
+  );
+  const chatFilesReqRef = useRef(0);
+  const plusMenuRef = useRef<HTMLDivElement>(null);
   const composerFileInputRef = useRef<HTMLInputElement>(null);
   const composerFieldRef = useRef<HTMLTextAreaElement>(null);
   const [composerFocused, setComposerFocused] = useState(false);
@@ -4124,7 +4152,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
         pendingOwnerFilesRef.current = [];
         setPendingOwnerFiles([]);
         discardUnsentOwnerFilesRef.current(leftover);
+        setStagedMailbox([]);
       }
+      setPlusOpen(false);
+      setPlusPane("root");
+      chatFilesReqRef.current += 1;
       setRecipientPickerOpen(false);
       setStickyMention(isGroupChat(chat) ? readStickyMention(chat.chat_id) : null);
       clearReplySlot();
@@ -5055,7 +5087,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   const send = async (opts?: SendOpts) => {
     const text = (opts?.text ?? draft).trim();
-    const attachmentRefs = pendingOwnerFiles.map((row) => row.ref);
+    const attachmentRefs = [
+      ...pendingOwnerFiles.map((row) => row.ref),
+      ...stagedMailbox.map((row) => `${MAILBOX_PREFIX}${row.attachmentId}`),
+    ];
     if ((!text && !attachmentRefs.length) || !active) return;
     if (confirmDialog && !opts?.bootAdmitted) return;
     const chatId = active.chat_id;
@@ -5074,7 +5109,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               computer_id?: string | null;
               resume_credits_per_hour?: number | null;
             };
-            if (sendAsksBeforeBoot(place, bootScreenIds(), sendNeedsDesk(text))) {
+            if (sendAsksBeforeBoot(place, bootScreenIds(), sendNeedsDesk(text, attachmentRefs))) {
               const rate = place.resume_credits_per_hour;
               setConfirmDialog({
                 message: t.sendConfirm.replace("{rate}", rate == null ? "—" : String(rate)),
@@ -5188,9 +5223,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
       });
       setSpendCapBlock(null);
       setMuteCollabCapBanner(true);
-      clearPendingOwnerFiles(pendingOwnerFiles);
-      pendingOwnerFilesRef.current = [];
-      setPendingOwnerFiles([]);
+      const keptOwner = omitSentRefs(pendingOwnerFilesRef.current, attachmentRefs);
+      clearPendingOwnerFiles(
+        pendingOwnerFilesRef.current.filter((row) => !keptOwner.includes(row)),
+      );
+      pendingOwnerFilesRef.current = keptOwner;
+      setPendingOwnerFiles(keptOwner);
+      setStagedMailbox((prev) =>
+        omitSentRefs(
+          prev.map((row) => ({ ...row, ref: `${MAILBOX_PREFIX}${row.attachmentId}` })),
+          attachmentRefs,
+        ).map(({ ref: _ref, ...row }) => row),
+      );
       const used = sent.metadata?.requested_model;
       if (typeof used === "string" && used.trim() && !sameModelId(used, quotedModel)) {
         setSelectedModelId(used);
@@ -6865,6 +6909,246 @@ export function RanchChatShell(props: RanchChatShellProps) {
       );
     })
     .map(([id, name]) => ({ id, name }));
+
+  useEffect(() => {
+    if (!plusOpen) return;
+    if (composerMenuOpen || slashMenuOpen || agentRefOpen || mentionOpen) setPlusOpen(false);
+  }, [plusOpen, composerMenuOpen, slashMenuOpen, agentRefOpen, mentionOpen]);
+
+  useEffect(() => {
+    if (!plusOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const el = plusMenuRef.current;
+      if (el && e.target instanceof Node && !el.contains(e.target)) setPlusOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setPlusOpen(false);
+      setPlusPane("root");
+      composerFieldRef.current?.focus();
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [plusOpen]);
+
+  const openChatFilesPane = () => {
+    setPlusPane("files");
+    const chatId = active?.chat_id;
+    if (!chatId) {
+      setChatFileRows([]);
+      setChatFilesStatus("empty");
+      return;
+    }
+    const ticket = ++chatFilesReqRef.current;
+    setChatFilesStatus("loading");
+    setChatFileRows([]);
+    void client
+      .listChatFiles(chatId)
+      .then((rows) => {
+        if (ticket !== chatFilesReqRef.current || activeChatIdRef.current !== chatId) return;
+        setChatFileRows(rows);
+        setChatFilesStatus(rows.length ? "ready" : "empty");
+      })
+      .catch(() => {
+        if (ticket !== chatFilesReqRef.current) return;
+        setChatFilesStatus("error");
+      });
+  };
+
+  const composerPlusControl = () => {
+    const disabled = busy || attachBusy || healthOk === false;
+    const itemStyle = {
+      ...mentionRow,
+      borderBottom: `1px solid ${colors.border}`,
+    };
+    return (
+      <div ref={plusMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+        <button
+          type="button"
+          aria-label={t.composerPlus}
+          aria-expanded={plusOpen}
+          aria-haspopup="menu"
+          title={t.composerPlus}
+          disabled={disabled}
+          onClick={() => {
+            if (disabled) return;
+            if (composerMenuOpen || slashMenuOpen || agentRefOpen || mentionOpen) {
+              setPlusOpen(false);
+              return;
+            }
+            setComposerMenuOpen(false);
+            setPlusOpen((open) => {
+              if (open) return false;
+              setPlusPane("root");
+              return true;
+            });
+          }}
+          style={{
+            border: "none",
+            background: "transparent",
+            color: colors.text,
+            cursor: disabled ? "default" : "pointer",
+            fontSize: 18,
+            lineHeight: 1,
+            padding: "2px 4px",
+            opacity: disabled ? 0.45 : 1,
+          }}
+        >
+          +
+        </button>
+        {plusOpen ? (
+          <div
+            role="menu"
+            aria-label={t.composerPlus}
+            className="ranch-thin-scroll"
+            style={{
+              position: "absolute",
+              left: 0,
+              bottom: "100%",
+              marginBottom: 8,
+              minWidth: 220,
+              maxWidth: 280,
+              background: colors.panel,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 12,
+              overflow: "hidden",
+              boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+              zIndex: 7,
+              maxHeight: 280,
+              overflowY: "auto",
+            }}
+          >
+            {plusPane === "files" || plusPane === "commands" ? (
+              <button
+                type="button"
+                onClick={() => setPlusPane("root")}
+                style={{ ...itemStyle, color: colors.muted, fontSize: 12 }}
+              >
+                {t.composerPlusBack}
+              </button>
+            ) : null}
+            {plusPane === "root" ? (
+              <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setPlusOpen(false);
+                    composerFileInputRef.current?.click();
+                  }}
+                  style={itemStyle}
+                >
+                  <span style={{ fontWeight: 600 }}>{t.composerAttach}</span>
+                </button>
+                <button type="button" role="menuitem" onClick={openChatFilesPane} style={itemStyle}>
+                  <span style={{ fontWeight: 600 }}>{t.composerPlusChatFiles}</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => setPlusPane("commands")}
+                  style={itemStyle}
+                >
+                  <span style={{ fontWeight: 600 }}>{t.composerPlusCommands}</span>
+                </button>
+                {groupActive ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setPlusOpen(false);
+                      setRecipientPickerOpen(true);
+                      setMentionIndex(0);
+                      composerFieldRef.current?.focus();
+                    }}
+                    style={itemStyle}
+                  >
+                    <span style={{ fontWeight: 600 }}>{t.composerPlusMention}</span>
+                  </button>
+                ) : null}
+              </>
+            ) : null}
+            {plusPane === "commands"
+              ? slashCommands.map((cmd) => (
+                  <button
+                    key={cmd.id}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setPlusOpen(false);
+                      void runSlashCommand(cmd.id);
+                      composerFieldRef.current?.focus();
+                    }}
+                    style={itemStyle}
+                  >
+                    <span style={{ fontWeight: 600 }}>{cmd.label}</span>
+                    <span style={{ fontSize: 11, color: colors.muted }}>{cmd.description}</span>
+                  </button>
+                ))
+              : null}
+            {plusPane === "files" && chatFilesStatus === "loading" ? (
+              <div style={{ padding: "10px 12px", fontSize: 12, color: colors.muted }}>
+                {t.composerPlusLoading}
+              </div>
+            ) : null}
+            {plusPane === "files" && chatFilesStatus === "empty" ? (
+              <div style={{ padding: "10px 12px", fontSize: 12, color: colors.muted }}>
+                {t.composerPlusNoFiles}
+              </div>
+            ) : null}
+            {plusPane === "files" && chatFilesStatus === "error" ? (
+              <div style={{ padding: "10px 12px", fontSize: 12, color: colors.muted }}>
+                {t.composerPlusFilesFailed}
+              </div>
+            ) : null}
+            {plusPane === "files" && chatFilesStatus === "ready"
+              ? chatFileRows.map((file) => {
+                  const name =
+                    file.filename && isReadableAttachmentName(file.filename, file.attachment_id)
+                      ? file.filename
+                      : t.composerPlusUnnamed;
+                  const price =
+                    typeof file.listed_credits === "number" ? t.pieceListed(file.listed_credits) : "";
+                  return (
+                    <button
+                      key={file.attachment_id}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setStagedMailbox((prev) =>
+                          prev.some((row) => row.attachmentId === file.attachment_id)
+                            ? prev
+                            : [
+                                ...prev,
+                                {
+                                  attachmentId: file.attachment_id,
+                                  filename: name,
+                                  listedCredits: file.listed_credits,
+                                },
+                              ],
+                        );
+                        setPlusOpen(false);
+                        composerFieldRef.current?.focus();
+                      }}
+                      style={itemStyle}
+                    >
+                      <span style={{ fontWeight: 600 }}>{name}</span>
+                      {price ? (
+                        <span style={{ fontSize: 11, color: colors.muted }}>{price}</span>
+                      ) : null}
+                    </button>
+                  );
+                })
+              : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   const tryRunSlashFromDraft = () => {
     // Menu dismissed with Escape — Enter sends the raw text instead.
@@ -8719,7 +9003,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 onDrop={(e) => {
                   if (!dataTransferTypesIncludeFiles(e.dataTransfer?.types)) return;
                   e.preventDefault();
-                  void enqueueOwnerFiles(e.dataTransfer?.files ?? null);
+                  const transfer = e.dataTransfer;
+                  if (!transfer) return;
+                  void filesFromDataTransfer(transfer).then((dropped) => {
+                    const files = dropped.expandedDirectory
+                      ? dropped.files.filter((file) => ownerFileTypeAllowed(file))
+                      : dropped.files;
+                    if (dropped.expandedDirectory && !files.length) {
+                      setError(t.composerAttachTypeUnsupported);
+                      return;
+                    }
+                    void enqueueOwnerFiles(files);
+                  });
                 }}
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -8787,7 +9082,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     void enqueueOwnerFiles(files);
                   }}
                 />
-                {pendingOwnerFiles.length ? (
+                {pendingOwnerFiles.length || stagedMailbox.length ? (
                   <div
                     style={{
                       display: "flex",
@@ -8840,6 +9135,61 @@ export function RanchChatShell(props: RanchChatShellProps) {
                             position: row.previewUrl ? "absolute" : "static",
                             top: 2,
                             right: 2,
+                            border: 0,
+                            borderRadius: 999,
+                            width: 18,
+                            height: 18,
+                            background: "rgba(0,0,0,0.55)",
+                            color: "#fff",
+                            cursor: "pointer",
+                            fontSize: 12,
+                            lineHeight: "18px",
+                            padding: 0,
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    {stagedMailbox.map((row) => (
+                      <div
+                        key={row.attachmentId}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          maxWidth: 220,
+                          padding: "4px 8px",
+                          borderRadius: 8,
+                          border: `1px solid ${colors.border}`,
+                          background: colors.panel,
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            minWidth: 0,
+                            fontSize: 11,
+                            color: colors.text,
+                          }}
+                        >
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {row.filename}
+                          </span>
+                          {typeof row.listedCredits === "number" ? (
+                            <span style={{ color: colors.muted }}>{t.pieceListed(row.listedCredits)}</span>
+                          ) : null}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={t.composerAttachRemove}
+                          onClick={() =>
+                            setStagedMailbox((prev) =>
+                              prev.filter((item) => item.attachmentId !== row.attachmentId),
+                            )
+                          }
+                          style={{
                             border: 0,
                             borderRadius: 999,
                             width: 18,
@@ -9141,25 +9491,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       maxWidth: "100%",
                     }}
                   >
-                    <button
-                      type="button"
-                      aria-label={t.composerAttach}
-                      title={t.composerAttach}
-                      disabled={busy || attachBusy || healthOk === false}
-                      onClick={() => composerFileInputRef.current?.click()}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        color: colors.text,
-                        cursor: busy || attachBusy || healthOk === false ? "default" : "pointer",
-                        fontSize: 18,
-                        lineHeight: 1,
-                        padding: "2px 4px",
-                        opacity: busy || attachBusy || healthOk === false ? 0.45 : 1,
-                      }}
-                    >
-                      +
-                    </button>
+                    {composerPlusControl()}
                     <span
                       style={{
                         fontWeight: 600,
@@ -9204,25 +9536,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       maxWidth: "100%",
                     }}
                   >
-                    <button
-                      type="button"
-                      aria-label={t.composerAttach}
-                      title={t.composerAttach}
-                      disabled={busy || attachBusy || healthOk === false}
-                      onClick={() => composerFileInputRef.current?.click()}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        color: colors.text,
-                        cursor: busy || attachBusy || healthOk === false ? "default" : "pointer",
-                        fontSize: 18,
-                        lineHeight: 1,
-                        padding: "2px 4px",
-                        opacity: busy || attachBusy || healthOk === false ? 0.45 : 1,
-                      }}
-                    >
-                      +
-                    </button>
+                    {composerPlusControl()}
                     {(() => {
                       const listed = (composerModel.listed_model_id || "").trim();
                       const official = composerModel.official_channel;
@@ -9757,6 +10071,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   }}
                   onKeyDown={(e) => {
                     if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
+                    if (plusOpen && e.key === "Escape") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setPlusOpen(false);
+                      setPlusPane("root");
+                      return;
+                    }
                     if (slashMenuOpen && slashCandidates.length > 0) {
                       const total = slashCandidates.length;
                       if (e.key === "ArrowDown") {
@@ -9869,25 +10190,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       gap: 8,
                     }}
                   >
-                    <button
-                      type="button"
-                      aria-label={t.composerAttach}
-                      title={t.composerAttach}
-                      disabled={busy || attachBusy || healthOk === false}
-                      onClick={() => composerFileInputRef.current?.click()}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        color: colors.text,
-                        cursor: busy || attachBusy || healthOk === false ? "default" : "pointer",
-                        fontSize: 18,
-                        lineHeight: 1,
-                        padding: "2px 4px",
-                        opacity: busy || attachBusy || healthOk === false ? 0.45 : 1,
-                      }}
-                    >
-                      +
-                    </button>
+                    {composerPlusControl()}
                   </div>
                 ) : null}
                 <button
@@ -9896,7 +10199,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     busy ||
                     attachBusy ||
                     healthOk === false ||
-                    (!draft.trim() && pendingOwnerFiles.length === 0)
+                    (!draft.trim() && pendingOwnerFiles.length === 0 && stagedMailbox.length === 0)
                   }
                   style={{
                     ...btnPrimary,
@@ -9907,15 +10210,21 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       busy ||
                       attachBusy ||
                       healthOk === false ||
-                      (!draft.trim() && pendingOwnerFiles.length === 0)
+                      (!draft.trim() && pendingOwnerFiles.length === 0 && stagedMailbox.length === 0)
                         ? 0.45
                         : 1,
                   }}
                 >
-                  {sendButtonLabel(chatPlace, draft, bootScreenIds(), {
-                    send: t.send,
-                    sendAt: t.sendAt,
-                  })}
+                  {sendButtonLabel(
+                    chatPlace,
+                    draft,
+                    bootScreenIds(),
+                    {
+                      send: t.send,
+                      sendAt: t.sendAt,
+                    },
+                    stagedMailbox.map((row) => `${MAILBOX_PREFIX}${row.attachmentId}`),
+                  )}
                 </button>
                 </div>
               </form>

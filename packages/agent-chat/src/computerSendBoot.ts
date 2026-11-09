@@ -15,9 +15,20 @@ export type ListedComputer = {
   resume_credits_per_hour?: number | null;
 };
 
-/** A send copies onto the desk only when this bubble cites a mailbox file. */
-export function sendNeedsDesk(text: string): boolean {
-  return /(^|\s)mbx:[^\s]+/.test(text);
+/** Composer rows still waiting after this send. Only refs that went out are removed. */
+export function omitSentRefs<T extends { ref: string }>(
+  rows: readonly T[],
+  sentRefs: readonly string[],
+): T[] {
+  if (!sentRefs.length) return [...rows];
+  const sent = new Set(sentRefs);
+  return rows.filter((row) => !sent.has(row.ref));
+}
+
+/** A send copies onto the desk when the bubble text or the attachment list cites a mailbox file. */
+export function sendNeedsDesk(text: string, attachments?: string[]): boolean {
+  if (/(^|\s)mbx:[^\s]+/.test(text)) return true;
+  return (attachments ?? []).some((ref) => ref.trim().startsWith("mbx:"));
 }
 
 export function sendAsksBeforeBoot(
@@ -39,8 +50,9 @@ export function sendButtonLabel(
   draft: string,
   openScreenIds: string[],
   labels: { send: string; sendAt: string },
+  attachments?: string[],
 ): string {
-  if (!place || !sendAsksBeforeBoot(place, openScreenIds, sendNeedsDesk(draft))) {
+  if (!place || !sendAsksBeforeBoot(place, openScreenIds, sendNeedsDesk(draft, attachments))) {
     return labels.send;
   }
   const rate = place.resume_credits_per_hour;
