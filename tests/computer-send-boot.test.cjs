@@ -17,6 +17,7 @@ const {
   sendAsksBeforeBoot,
   sendButtonLabel,
   sendNeedsDesk,
+  omitSentRefs,
   placeForDefaultComputer,
   screenAsksBeforeCharge,
 } = moduleExports;
@@ -43,8 +44,33 @@ test("a plain chat send does not ask just because the computer is idle", () => {
   );
 });
 
+test("a finished send drops only the refs that went out", () => {
+  const owner = [{ ref: "upl:sent" }, { ref: "upl:later" }];
+  const mailbox = [
+    { ref: "mbx:sent", attachmentId: "sent" },
+    { ref: "mbx:later", attachmentId: "later" },
+  ];
+  assert.deepEqual(omitSentRefs(owner, ["upl:sent", "mbx:sent"]), [{ ref: "upl:later" }]);
+  assert.deepEqual(omitSentRefs(mailbox, ["upl:sent", "mbx:sent"]), [
+    { ref: "mbx:later", attachmentId: "later" },
+  ]);
+  assert.deepEqual(omitSentRefs(owner, []), [{ ref: "upl:sent" }, { ref: "upl:later" }]);
+});
+
 test("copying a mailbox file onto an idle computer still asks before the hourly bill", () => {
   assert.equal(sendNeedsDesk("see mbx:abc"), true);
+  assert.equal(sendNeedsDesk("hi", ["upl:1"]), false);
+  assert.equal(sendNeedsDesk("hi", ["mbx:abc"]), true);
+  assert.equal(
+    sendButtonLabel(
+      { place: "cloud", status: "idle", computer_id: "pc", resume_credits_per_hour: 58 },
+      "hi",
+      [],
+      { send: "发送", sendAt: "发送 · {rate} 星币/小时" },
+      ["mbx:abc"],
+    ),
+    "发送 · 58 星币/小时",
+  );
   assert.equal(
     sendAsksBeforeBoot({ place: "cloud", status: "idle", computer_id: "pc" }, [], true),
     true,
@@ -93,12 +119,17 @@ test("the composer asks only when this send copies a file onto the desk", () => 
     path.join(__dirname, "../packages/agent-chat/src/ranch-shell/i18n.ts"),
     "utf8",
   );
-  assert.match(shell, /sendAsksBeforeBoot\(place, bootScreenIds\(\), sendNeedsDesk\(text\)\)/);
+  assert.match(
+    shell,
+    /sendAsksBeforeBoot\(place, bootScreenIds\(\), sendNeedsDesk\(text, attachmentRefs\)\)/,
+  );
+  assert.match(shell, /omitSentRefs\(pendingOwnerFilesRef\.current, attachmentRefs\)/);
+  assert.match(shell, /setStagedMailbox\(\(prev\) =>\s*omitSentRefs\(/);
   assert.match(shell, /t\.sendConfirm\.replace/);
   assert.match(shell, /retryLastUserMessage[\s\S]*void send\(\{ text \}\)/);
   assert.match(i18n, /sendConfirm: "发送后电脑按 \{rate\} 星币\/小时计费/);
   assert.match(shell, /onPlace=\{setChatPlace\}/);
-  assert.match(shell, /sendButtonLabel\(chatPlace, draft, bootScreenIds\(\)/);
+  assert.match(shell, /sendButtonLabel\(\s*chatPlace,\s*draft,\s*bootScreenIds\(\)/);
 });
 
 test("a new group lands on the idle default computer, but a text digest does not ask", () => {

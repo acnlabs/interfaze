@@ -22,6 +22,8 @@ const {
   mimeLooksLikeImage,
   modalityForSelectedModel,
   ownerFileTypeAllowed,
+  filesFromDataTransfer,
+  filesFromDroppedEntries,
 } = moduleExports;
 
 test("OpenRouter modality with image input is accepted", () => {
@@ -49,6 +51,50 @@ test("text-only modality blocks image attach; unknown does not", () => {
   assert.equal(fileLooksLikeImage({ type: "", name: "shot.png" }), true);
   assert.equal(dataTransferTypesIncludeFiles(["Files"]), true);
   assert.equal(dataTransferTypesIncludeFiles(["text/plain"]), false);
+});
+
+test("a dropped folder becomes the files inside it", async () => {
+  const png = new File(["x"], "shot.png", { type: "image/png" });
+  const zip = new File(["x"], "pack.zip", { type: "application/zip" });
+  const hidden = new File(["x"], ".DS_Store", { type: "" });
+  const fileEntry = (file) => ({
+    isFile: true,
+    isDirectory: false,
+    name: file.name,
+    file: (ok) => ok(file),
+  });
+  const folder = {
+    isFile: false,
+    isDirectory: true,
+    name: "album",
+    createReader: () => {
+      let listed = false;
+      return {
+        readEntries: (ok) => {
+          if (listed) {
+            ok([]);
+            return;
+          }
+          listed = true;
+          ok([fileEntry(png), fileEntry(zip), fileEntry(hidden)]);
+        },
+      };
+    },
+  };
+  const walked = await filesFromDroppedEntries([folder]);
+  assert.deepEqual(walked.map((file) => file.name), ["shot.png", "pack.zip"]);
+  const dropped = await filesFromDataTransfer({
+    files: [],
+    items: [{ webkitGetAsEntry: () => folder }],
+  });
+  assert.equal(dropped.expandedDirectory, true);
+  assert.deepEqual(dropped.files.map((file) => file.name), ["shot.png", "pack.zip"]);
+  const plain = await filesFromDataTransfer({
+    files: [png],
+    items: [{ webkitGetAsEntry: () => fileEntry(png) }],
+  });
+  assert.equal(plain.expandedDirectory, false);
+  assert.equal(plain.files[0], png);
 });
 
 test("owner uploads accept images, pdf, text, audio, and video", () => {

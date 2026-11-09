@@ -127,6 +127,16 @@ export type RanchMessages = {
   composerAttachFailed: string;
   composerAttachTooLarge: string;
   composerAttachTypeUnsupported: string;
+  /** Plus button: open the composer intent menu. */
+  composerPlus: string;
+  composerPlusChatFiles: string;
+  composerPlusNoFiles: string;
+  composerPlusFilesFailed: string;
+  composerPlusLoading: string;
+  composerPlusCommands: string;
+  composerPlusMention: string;
+  composerPlusUnnamed: string;
+  composerPlusBack: string;
   sendFailed: string;
   expand: string;
   collapse: string;
@@ -946,11 +956,20 @@ const en: RanchMessages = {
   composerModelShowLess: "Show less",
   composerModelTextOnly: "Text only — this model cannot see images",
   composerModelSeesImages: "Can see images",
-  composerAttach: "Attach file",
+  composerAttach: "Attach",
   composerAttachRemove: "Remove attachment",
   composerAttachFailed: "Could not attach that file",
   composerAttachTooLarge: "File is too large (max 4 MB)",
-  composerAttachTypeUnsupported: "Only images, PDF, or plain text",
+  composerAttachTypeUnsupported: "Only images, PDF, plain text, or short audio and video",
+  composerPlus: "Add",
+  composerPlusChatFiles: "Files in this chat",
+  composerPlusNoFiles: "No files in this chat yet",
+  composerPlusFilesFailed: "Couldn’t load files",
+  composerPlusLoading: "Loading…",
+  composerPlusCommands: "Commands",
+  composerPlusMention: "Mention someone",
+  composerPlusUnnamed: "File",
+  composerPlusBack: "Back",
   composerModelMismatch: (listed, runtime) =>
     `Listing ${listed} ≠ runtime ${runtime} (still billed at listing price)`,
   sendFailed: "Send failed",
@@ -1847,7 +1866,16 @@ const zh: RanchMessages = {
   composerAttachRemove: "移除附件",
   composerAttachFailed: "附件上传失败",
   composerAttachTooLarge: "文件太大（最大 4 MB）",
-  composerAttachTypeUnsupported: "仅支持图片、PDF 或纯文本",
+  composerAttachTypeUnsupported: "仅支持图片、PDF、纯文本，或较短的音频和视频",
+  composerPlus: "添加",
+  composerPlusChatFiles: "本对话里的文件",
+  composerPlusNoFiles: "这场对话还没有文件",
+  composerPlusFilesFailed: "文件列表没加载出来",
+  composerPlusLoading: "正在读取…",
+  composerPlusCommands: "命令",
+  composerPlusMention: "叫一个人",
+  composerPlusUnnamed: "文件",
+  composerPlusBack: "返回",
   composerModelMismatch: (listed, runtime) =>
     `挂牌 ${listed} ≠ 运行 ${runtime}（仍按挂牌价结算）`,
   sendFailed: "发送失败",

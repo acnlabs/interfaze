@@ -90,6 +90,93 @@ export function dataTransferTypesIncludeFiles(
   return false;
 }
 
+/** A dropped item. Directories are walked; the folder itself is not a file. */
+export type DroppedEntry = {
+  isFile: boolean;
+  isDirectory: boolean;
+  name: string;
+  file?: (ok: (file: File) => void, err?: () => void) => void;
+  createReader?: () => {
+    readEntries: (ok: (entries: DroppedEntry[]) => void, err?: () => void) => void;
+  };
+};
+
+const DROP_WALK_MAX_FILES = 32;
+const DROP_WALK_MAX_DEPTH = 8;
+
+function fileFromDroppedEntry(entry: DroppedEntry): Promise<File | null> {
+  return new Promise((resolve) => {
+    if (!entry.file) {
+      resolve(null);
+      return;
+    }
+    entry.file(
+      (file) => resolve(file),
+      () => resolve(null),
+    );
+  });
+}
+
+function readDroppedDirectory(entry: DroppedEntry): Promise<DroppedEntry[]> {
+  const reader = entry.createReader?.();
+  if (!reader) return Promise.resolve([]);
+  return new Promise((resolve) => {
+    const all: DroppedEntry[] = [];
+    const read = () => {
+      reader.readEntries(
+        (batch) => {
+          if (!batch.length) {
+            resolve(all);
+            return;
+          }
+          all.push(...batch);
+          read();
+        },
+        () => resolve(all),
+      );
+    };
+    read();
+  });
+}
+
+/** Files inside a drop. A folder contributes the files under it, not the folder. */
+export async function filesFromDroppedEntries(entries: readonly DroppedEntry[]): Promise<File[]> {
+  const out: File[] = [];
+  const walk = async (entry: DroppedEntry, depth: number) => {
+    if (out.length >= DROP_WALK_MAX_FILES) return;
+    if (entry.isFile) {
+      if (depth > 0 && entry.name.startsWith(".")) return;
+      const file = await fileFromDroppedEntry(entry);
+      if (file) out.push(file);
+      return;
+    }
+    if (!entry.isDirectory || depth >= DROP_WALK_MAX_DEPTH) return;
+    for (const child of await readDroppedDirectory(entry)) {
+      if (out.length >= DROP_WALK_MAX_FILES) return;
+      await walk(child, depth + 1);
+    }
+  };
+  for (const entry of entries) await walk(entry, 0);
+  return out;
+}
+
+/** Use the file list for a plain drop. Walk when the drop contains a folder. */
+export async function filesFromDataTransfer(data: {
+  files?: ArrayLike<File> | null;
+  items?: ArrayLike<{ webkitGetAsEntry?: () => DroppedEntry | null }> | null;
+}): Promise<{ files: File[]; expandedDirectory: boolean }> {
+  const items = data.items ? Array.from(data.items) : [];
+  const entries: DroppedEntry[] = [];
+  for (const item of items) {
+    const entry = item.webkitGetAsEntry?.() ?? null;
+    if (entry) entries.push(entry);
+  }
+  if (entries.some((entry) => entry.isDirectory)) {
+    return { files: await filesFromDroppedEntries(entries), expandedDirectory: true };
+  }
+  return { files: data.files ? Array.from(data.files) : [], expandedDirectory: false };
+}
+
 /**
  * Official / shelf-only: OpenRouter catalog modality.
  * BYO: agent-reported rows only.
