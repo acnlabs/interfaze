@@ -161,6 +161,8 @@ export type AgentEarnings = {
   /** Owned agents present at the end of each of those days, oldest first. */
   count_series: number[] | null;
   tasks_active: number | null;
+  /** Assignments completed in the same rolling 7 days. Null when the count cannot be read. */
+  tasks_completed: number | null;
 };
 
 /** Store model quota — never includes plaintext key material. */

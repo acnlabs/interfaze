@@ -589,17 +589,15 @@ function EarningsCurve({ earnings, up }: { earnings: number[] | null; up: boolea
   const height = 64;
   const empty = [0, 0, 0, 0, 0, 0, 0];
   const earnedLine = cumulative(earnings && earnings.length > 1 ? earnings : empty);
+  const peak = Math.max(...earnedLine, 0);
+  if (peak === 0) return null;
   const color = up ? "#3ddc97" : "#f87171";
   const points = curvePoints(earnedLine, width, height, 36);
   const path = linePath(points);
-  const peak = Math.max(...earnedLine, 0);
-  const area =
-    peak === 0
-      ? ""
-      : `${path} L${points[points.length - 1]?.x ?? width},${height} L${points[0]?.x ?? 0},${height} Z`;
+  const area = `${path} L${points[points.length - 1]?.x ?? width},${height} L${points[0]?.x ?? 0},${height} Z`;
   return (
     <svg aria-hidden viewBox={`0 0 ${width} ${height}`} width="100%" height="100%" preserveAspectRatio="none">
-      {area ? <path d={area} fill={color} opacity={0.18} /> : null}
+      <path d={area} fill={color} opacity={0.18} />
       <path
         d={path}
         fill="none"
@@ -622,6 +620,7 @@ const PREVIEW_AGENT_EARNINGS: AgentEarnings = {
   series: [40, 220, 80, 310, 90, 480, 640],
   count_series: [3, 5, 8, 7, 6, 6, 8],
   tasks_active: 3,
+  tasks_completed: 4,
 };
 
 function ColumnTitle({ href, children }: { href: string; children: string }) {
@@ -751,6 +750,7 @@ export function HomeRightPane({
             series: null,
             count_series: null,
             tasks_active: null,
+            tasks_completed: null,
           },
       );
     });
@@ -1046,7 +1046,7 @@ export function HomeRightPane({
                 display: "flex",
                 alignItems: "baseline",
                 gap: 8,
-                paddingRight: "44%",
+                paddingRight: agentEarnings?.series?.some((value) => value > 0) ? "44%" : 0,
               }}
             >
               <span style={{ ...cardFigure, fontSize: 28 }}>
@@ -1066,7 +1066,7 @@ export function HomeRightPane({
                   display: "flex",
                   alignItems: "baseline",
                   gap: 6,
-                  paddingRight: "44%",
+                  paddingRight: agentEarnings.series?.some((value) => value > 0) ? "44%" : 0,
                   fontSize: 12,
                 }}
               >
@@ -1088,15 +1088,17 @@ export function HomeRightPane({
                 )}
               </span>
             )}
-            <span
-              aria-hidden
-              style={{ position: "absolute", right: 10, top: 28, bottom: 14, width: "40%" }}
-            >
-              <EarningsCurve
-                earnings={agentEarnings?.series ?? null}
-                up={(agentEarnings?.delta_pct ?? 0) >= 0}
-              />
-            </span>
+            {agentEarnings?.series?.some((value) => value > 0) ? (
+              <span
+                aria-hidden
+                style={{ position: "absolute", right: 10, top: 28, bottom: 14, width: "40%" }}
+              >
+                <EarningsCurve
+                  earnings={agentEarnings.series}
+                  up={(agentEarnings.delta_pct ?? 0) >= 0}
+                />
+              </span>
+            ) : null}
           </a>
           <a
             href={planetHref(agentPlanetBaseUrl, "/tasks?view=mine")}
@@ -1104,9 +1106,9 @@ export function HomeRightPane({
             rel="noopener noreferrer"
             style={{ ...statCard, textDecoration: "none" }}
           >
-            <span style={cardLabel}>{t.homeTasksActive}</span>
+            <span style={cardLabel}>{t.homeTasksFinished(agentEarnings?.agent_count ?? null)}</span>
             <span style={cardFigure}>
-              {agentEarnings?.tasks_active == null ? "—" : String(agentEarnings.tasks_active)}
+              {agentEarnings?.tasks_completed == null ? "—" : String(agentEarnings.tasks_completed)}
             </span>
             <span style={cardFoot} />
           </a>
