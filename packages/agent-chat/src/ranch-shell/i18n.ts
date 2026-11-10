@@ -331,6 +331,10 @@ export type RanchMessages = {
   homeEarnedVersus: string;
   homeTasksActive: string;
   homeTasksFinished: (count: string) => string;
+  homeTaskNoticeCount: string;
+  homeTaskNotice: string;
+  homeChartWhen: (daysAgo: number) => string;
+  homeChartFinishedPoint: (count: string) => string;
   homeTaskProgress: string;
   homeAppWorld: string;
   homeAppMarket: string;
@@ -1220,9 +1224,13 @@ const en: RanchMessages = {
   homePlanResets: "Resets {date}",
   homeEarned: (count) =>
     count == null ? "Earned in 7 days" : `${count} ${count === 1 ? "agent" : "agents"} · 7-day earnings`,
-  homeEarnedVersus: "vs prior 7 days",
+  homeEarnedVersus: "vs the 7 days before",
   homeTasksActive: "in progress",
   homeTasksFinished: (count) => `${count} finished in 7 days`,
+  homeTaskNoticeCount: "2",
+  homeTaskNotice: "tasks need you",
+  homeChartWhen: (daysAgo) => (daysAgo === 0 ? "Now" : `${daysAgo}d ago`),
+  homeChartFinishedPoint: (count) => `${count} finished`,
   homeTaskProgress: "Task progress",
   homeAppWorld: "World",
   homeAppMarket: "Market",
@@ -2177,6 +2185,10 @@ const zh: RanchMessages = {
   homeEarnedVersus: "较上一个 7 天",
   homeTasksActive: "进行中",
   homeTasksFinished: (count) => `7 天完成 ${count}`,
+  homeTaskNoticeCount: "2",
+  homeTaskNotice: "个任务等你处理",
+  homeChartWhen: (daysAgo) => (daysAgo === 0 ? "现在" : `${daysAgo} 天前`),
+  homeChartFinishedPoint: (count) => `完成 ${count}`,
   homeTaskProgress: "任务进度",
   homeAppWorld: "世界",
   homeAppMarket: "市场",

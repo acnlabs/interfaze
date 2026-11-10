@@ -152,12 +152,18 @@ export type HumanWallet = {
 
 /** Owned-agent earnings and in-progress tasks from GET /api/chat/agent-earnings. */
 export type AgentEarnings = {
+  /** Whole credits, truncated. Prefer current_micros when the API sends it. */
   current: number | null;
   previous: number | null;
   delta_pct: number | null;
+  /** Same windows in micros. 1 credit = 1_000_000 micros. */
+  current_micros?: number | null;
+  previous_micros?: number | null;
   agent_count: number | null;
   /** Seven daily credit totals for the current window, oldest first. */
   series: number[] | null;
+  /** Same slices in micros, oldest first. */
+  series_micros?: number[] | null;
   /** Owned agents present at the end of each of those days, oldest first. */
   count_series: number[] | null;
   tasks_active: number | null;
