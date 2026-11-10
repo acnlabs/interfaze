@@ -7,7 +7,8 @@ export type AccountDeepLinkPanel =
   | "profile"
   | "keys"
   | "billing"
-  | "computer";
+  | "computer"
+  | "center";
 
 const PANELS = new Set<string>([
   "plan",
@@ -17,6 +18,7 @@ const PANELS = new Set<string>([
   "keys",
   "billing",
   "computer",
+  "center",
 ]);
 
 export function readAccountPanelFromUrl(

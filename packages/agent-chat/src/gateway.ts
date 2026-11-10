@@ -150,6 +150,19 @@ export type HumanWallet = {
   owner_id?: string | null;
 };
 
+/** Owned-agent earnings and in-progress tasks from GET /api/chat/agent-earnings. */
+export type AgentEarnings = {
+  current: number | null;
+  previous: number | null;
+  delta_pct: number | null;
+  agent_count: number | null;
+  /** Seven daily credit totals for the current window, oldest first. */
+  series: number[] | null;
+  /** Owned agents present at the end of each of those days, oldest first. */
+  count_series: number[] | null;
+  tasks_active: number | null;
+};
+
 /** Store model quota — never includes plaintext key material. */
 export type AccountKey = {
   order_id: string;
@@ -793,6 +806,8 @@ export type GatewayClient = {
   ) => Promise<MyAgentSummary>;
   /** Signed-in human Credits wallet. */
   getHumanWallet: () => Promise<HumanWallet>;
+  /** 7-day earnings and in-progress tasks across agents this human owns. */
+  getAgentEarnings: () => Promise<AgentEarnings>;
   /** Unified fiat payment orders (receipts/invoices source). */
   listPaymentOrders: () => Promise<PaymentOrder[]>;
   /** Authenticated receipt PDF download — returns a Blob for save-as. */
@@ -1305,6 +1320,7 @@ export function createGatewayClient(
         },
       ),
     getHumanWallet: () => request<HumanWallet>("/api/chat/wallet"),
+    getAgentEarnings: () => request<AgentEarnings>("/api/chat/agent-earnings"),
     listPaymentOrders: async () => {
       const data = await request<{ orders?: PaymentOrder[] }>(
         "/api/users/me/payment-orders",
