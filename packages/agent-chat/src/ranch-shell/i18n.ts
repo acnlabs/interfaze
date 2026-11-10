@@ -329,7 +329,9 @@ export type RanchMessages = {
   homePlanResets: string;
   homeEarned: (count: number | null) => string;
   homeEarnedVersus: string;
-  homeTasksFinished: (count: number | null) => string;
+  homeTasksActive: string;
+  homeTasksFinished: (count: string) => string;
+  homeTaskProgress: string;
   homeAppWorld: string;
   homeAppMarket: string;
   homeAppRankings: string;
@@ -1219,8 +1221,9 @@ const en: RanchMessages = {
   homeEarned: (count) =>
     count == null ? "Earned in 7 days" : `${count} ${count === 1 ? "agent" : "agents"} · 7-day earnings`,
   homeEarnedVersus: "vs prior 7 days",
-  homeTasksFinished: (count) =>
-    count == null ? "Finished in 7 days" : `${count} ${count === 1 ? "agent" : "agents"} · finished in 7 days`,
+  homeTasksActive: "in progress",
+  homeTasksFinished: (count) => `${count} finished in 7 days`,
+  homeTaskProgress: "Task progress",
   homeAppWorld: "World",
   homeAppMarket: "Market",
   homeAppRankings: "Rankings",
@@ -2172,7 +2175,9 @@ const zh: RanchMessages = {
   homePlanResets: "{date} 重置",
   homeEarned: (count) => (count == null ? "7 天收益" : `${count} 个智能体 · 7 天收益`),
   homeEarnedVersus: "较上一个 7 天",
-  homeTasksFinished: (count) => (count == null ? "7 天完成" : `${count} 个智能体 · 7 天完成`),
+  homeTasksActive: "进行中",
+  homeTasksFinished: (count) => `7 天完成 ${count}`,
+  homeTaskProgress: "任务进度",
   homeAppWorld: "世界",
   homeAppMarket: "市场",
   homeAppRankings: "排行榜",
