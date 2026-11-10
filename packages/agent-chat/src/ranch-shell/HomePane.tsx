@@ -2,12 +2,24 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { formatCreditBalance, formatWholeCredits } from "../creditDisplay";
-import type { GatewayClient, HumanWallet, PlanUsage } from "../gateway";
+import type { AgentEarnings, GatewayClient, HumanWallet, PlanUsage } from "../gateway";
 import type { RanchChatAccount } from "../types";
 import type { RanchLocale, RanchMessages } from "./i18n";
 import { colors } from "./styles";
 
 type AppId = "world" | "market" | "rankings" | "tasks" | "cultivators" | "feed" | "consensus";
+
+const MACHINE_LISTING_IDS = [
+  "svc-421e75dd-4ff4-4bc5-bec3--94eda60b3b32",
+  "svc-421e75dd-4ff4-4bc5-bec3--3c4846ad699d",
+];
+
+function isMachineListing(row: Record<string, unknown>): boolean {
+  const id = String(row.product_id || "");
+  if (MACHINE_LISTING_IDS.includes(id)) return true;
+  const machine = row.machine;
+  return !!machine && typeof machine === "object" && String((machine as { kind?: unknown }).kind || "") === "am_machine";
+}
 
 const HOME_APPS: { id: AppId; href: string; cn: boolean }[] = [
   { id: "world", href: "/world", cn: false },
@@ -48,7 +60,7 @@ type HomeBoards = {
   network: BoardSeat[];
 };
 
-type HomeOffering = { id: string; name: string; description: string };
+type HomeOffering = { id: string; name: string; description: string; catalog: "machine" | null };
 type HomeMarket = { official: HomeOffering[]; agents: HomeOffering[] };
 
 type HomeTask = {
@@ -542,6 +554,84 @@ const taskReward: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
+const columnTitle: CSSProperties = {
+  ...boardTitle,
+  display: "inline-block",
+  marginBottom: 8,
+  color: colors.muted,
+  textDecoration: "none",
+  cursor: "pointer",
+};
+
+function curvePoints(values: number[], width: number, height: number, flatY: number) {
+  const peak = Math.max(...values, 0);
+  return values.map((value, index) => {
+    const x = values.length === 1 ? width / 2 : (index / (values.length - 1)) * width;
+    const y = peak === 0 ? flatY : 4 + (1 - value / peak) * (height - 8);
+    return { x, y };
+  });
+}
+
+function linePath(points: { x: number; y: number }[]): string {
+  return points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ");
+}
+
+function cumulative(values: number[]): number[] {
+  let total = 0;
+  return values.map((value) => {
+    total += value;
+    return total;
+  });
+}
+
+function EarningsCurve({ earnings, up }: { earnings: number[] | null; up: boolean }) {
+  const width = 120;
+  const height = 64;
+  const empty = [0, 0, 0, 0, 0, 0, 0];
+  const earnedLine = cumulative(earnings && earnings.length > 1 ? earnings : empty);
+  const color = up ? "#3ddc97" : "#f87171";
+  const points = curvePoints(earnedLine, width, height, 36);
+  const path = linePath(points);
+  const peak = Math.max(...earnedLine, 0);
+  const area =
+    peak === 0
+      ? ""
+      : `${path} L${points[points.length - 1]?.x ?? width},${height} L${points[0]?.x ?? 0},${height} Z`;
+  return (
+    <svg aria-hidden viewBox={`0 0 ${width} ${height}`} width="100%" height="100%" preserveAspectRatio="none">
+      {area ? <path d={area} fill={color} opacity={0.18} /> : null}
+      <path
+        d={path}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.6}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
+/** Local preview until GET /api/chat/agent-earnings is deployed. Real payloads replace it. */
+const PREVIEW_AGENT_EARNINGS: AgentEarnings = {
+  current: 1860,
+  previous: 1240,
+  delta_pct: 50,
+  agent_count: 8,
+  series: [40, 220, 80, 310, 90, 480, 640],
+  count_series: [3, 5, 8, 7, 6, 6, 8],
+  tasks_active: 3,
+};
+
+function ColumnTitle({ href, children }: { href: string; children: string }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" style={columnTitle}>
+      {children}
+    </a>
+  );
+}
+
 function SectionLink({ href, children }: { href: string; children: string }) {
   return (
     <a
@@ -622,6 +712,7 @@ export function HomeRightPane({
 }) {
   const [wallet, setWallet] = useState<HumanWallet | null>(null);
   const [plan, setPlan] = useState<PlanUsage | null>(null);
+  const [agentEarnings, setAgentEarnings] = useState<AgentEarnings | null>(null);
   const [boards, setBoards] = useState<HomeBoards | null>(null);
   const [market, setMarket] = useState<HomeMarket | null>(null);
   const [taskColumns, setTaskColumns] = useState<HomeTaskColumns | null>(null);
@@ -643,10 +734,25 @@ export function HomeRightPane({
     void Promise.all([
       client.getHumanWallet().catch(() => null),
       client.getPlanUsage().catch(() => null),
-    ]).then(([nextWallet, nextPlan]) => {
+      client.getAgentEarnings().catch(() => null),
+    ]).then(([nextWallet, nextPlan, nextEarnings]) => {
       if (cancelled) return;
       setWallet(nextWallet);
       setPlan(nextPlan);
+      const preview =
+        process.env.NODE_ENV === "development" && nextEarnings == null ? PREVIEW_AGENT_EARNINGS : null;
+      setAgentEarnings(
+        nextEarnings ??
+          preview ?? {
+            current: null,
+            previous: null,
+            delta_pct: null,
+            agent_count: null,
+            series: null,
+            count_series: null,
+            tasks_active: null,
+          },
+      );
     });
     return () => {
       cancelled = true;
@@ -789,6 +895,7 @@ export function HomeRightPane({
             id: String(row.product_id || ""),
             name: String(row.name || "").trim(),
             description: oneLine(row.description),
+            catalog: isMachineListing(row) ? ("machine" as const) : null,
           }))
           .filter((row) => row.id && row.name)
           .slice(0, HOME_SLOTS);
@@ -861,7 +968,7 @@ export function HomeRightPane({
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-      <div className="ranch-thin-scroll" style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "18px 16px 8px" }}>
+      <div className="ranch-thin-scroll" style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "18px 16px 56px" }}>
         {account ? (
           <h2
             style={{
@@ -915,6 +1022,95 @@ export function HomeRightPane({
             </span>
           </button>
         </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gap: 12,
+            marginTop: 12,
+          }}
+        >
+          <a
+            href={planetHref(agentPlanetBaseUrl, "/agents?tab=my")}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ ...statCard, position: "relative", minHeight: 108, overflow: "hidden", textDecoration: "none" }}
+          >
+            <span style={{ ...cardLabel, position: "relative", zIndex: 1 }}>
+              {t.homeEarned(agentEarnings?.agent_count ?? null)}
+            </span>
+            <span
+              style={{
+                position: "relative",
+                zIndex: 1,
+                display: "flex",
+                alignItems: "baseline",
+                gap: 8,
+                paddingRight: "44%",
+              }}
+            >
+              <span style={{ ...cardFigure, fontSize: 28 }}>
+                {agentEarnings?.current == null ? "—" : formatWholeCredits(agentEarnings.current)}
+              </span>
+              {agentEarnings?.current == null ? null : (
+                <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 500, color: colors.muted }}>
+                  {t.homeRankCredits}
+                </span>
+              )}
+            </span>
+            {agentEarnings?.delta_pct == null ? null : (
+              <span
+                style={{
+                  position: "relative",
+                  zIndex: 1,
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: 6,
+                  paddingRight: "44%",
+                  fontSize: 12,
+                }}
+              >
+                {locale === "zh" ? (
+                  <span style={{ color: colors.muted }}>{t.homeEarnedVersus}</span>
+                ) : null}
+                <span
+                  style={{
+                    flexShrink: 0,
+                    fontWeight: 650,
+                    color: agentEarnings.delta_pct >= 0 ? "#3ddc97" : "#f87171",
+                  }}
+                >
+                  {agentEarnings.delta_pct >= 0 ? "↑" : "↓"}
+                  {Math.abs(agentEarnings.delta_pct)}%
+                </span>
+                {locale === "zh" ? null : (
+                  <span style={{ color: colors.muted }}>{t.homeEarnedVersus}</span>
+                )}
+              </span>
+            )}
+            <span
+              aria-hidden
+              style={{ position: "absolute", right: 10, top: 28, bottom: 14, width: "40%" }}
+            >
+              <EarningsCurve
+                earnings={agentEarnings?.series ?? null}
+                up={(agentEarnings?.delta_pct ?? 0) >= 0}
+              />
+            </span>
+          </a>
+          <a
+            href={planetHref(agentPlanetBaseUrl, "/tasks?view=mine")}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ ...statCard, textDecoration: "none" }}
+          >
+            <span style={cardLabel}>{t.homeTasksActive}</span>
+            <span style={cardFigure}>
+              {agentEarnings?.tasks_active == null ? "—" : String(agentEarnings.tasks_active)}
+            </span>
+            <span style={cardFoot} />
+          </a>
+        </div>
         <h3
           style={{
             margin: "28px 0 18px",
@@ -937,12 +1133,17 @@ export function HomeRightPane({
           >
             {(
               [
-                ["cultivator", t.homeTaskCultivators, taskColumns?.cultivator ?? []],
-                ["community", t.homeTaskCommunityPicks, taskColumns?.community ?? []],
+                [
+                  "cultivator",
+                  t.homeTaskCultivators,
+                  taskColumns?.cultivator ?? [],
+                  `/tasks?board=${cn ? "tb_official_cultivator_cn" : "tb_official_cultivator_global"}`,
+                ],
+                ["community", t.homeTaskCommunityPicks, taskColumns?.community ?? [], "/tasks"],
               ] as const
-            ).map(([key, title, rows]) => (
+            ).map(([key, title, rows, path]) => (
               <div key={key} style={{ minWidth: 0 }}>
-                <div style={{ ...boardTitle, marginBottom: 8 }}>{title}</div>
+                <ColumnTitle href={planetHref(agentPlanetBaseUrl, path)}>{title}</ColumnTitle>
                 <div style={taskStack}>
                   {withSlots(rows).map((row, index) =>
                     row ? (
@@ -1025,14 +1226,7 @@ export function HomeRightPane({
             const href = planetHref(agentPlanetBaseUrl, path);
             return (
               <div key={key} style={{ minWidth: 0 }}>
-                <a
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ ...boardTitle, display: "inline-block", marginBottom: 4, textDecoration: "none" }}
-                >
-                  {title}
-                </a>
+                <ColumnTitle href={href}>{title}</ColumnTitle>
                 {rows.map((row, index) =>
                   row ? (
                     <a
@@ -1145,8 +1339,8 @@ export function HomeRightPane({
                           agentPlanetBaseUrl,
                           `/market/listings/${encodeURIComponent(row.id)}`,
                         )}
-                        name={row.name}
-                        description={row.description}
+                        name={row.catalog === "machine" ? t.homeMarketMachineName : row.name}
+                        description={row.catalog === "machine" ? t.homeMarketMachineBlurb : row.description}
                       />
                     ) : (
                       <AppSlot key={`${key}-slot-${index}`} index={index} />

@@ -8513,7 +8513,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                 style={{
                   flex: 1,
                   overflow: "auto",
-                  padding: 16,
+                  padding: "16px 16px 56px",
                   display: "flex",
                   flexDirection: "column",
                   gap: 10,
@@ -9067,7 +9067,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   void send();
                 }}
                 style={{
-                  padding: "8px 28px 24px",
+                  paddingTop: 8,
+                  paddingLeft: 16,
+                  paddingRight: 16,
                   paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))",
                   display: "flex",
                   flexDirection: "column",

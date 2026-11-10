@@ -327,6 +327,9 @@ export type RanchMessages = {
   homeComposerPrompt: string;
   homeExploreTitle: string;
   homePlanResets: string;
+  homeEarned: (count: number | null) => string;
+  homeEarnedVersus: string;
+  homeTasksActive: string;
   homeAppWorld: string;
   homeAppMarket: string;
   homeAppRankings: string;
@@ -358,6 +361,8 @@ export type RanchMessages = {
   homeAppsSkills: string;
   homeMarketOfficial: string;
   homeMarketAgents: string;
+  homeMarketMachineName: string;
+  homeMarketMachineBlurb: string;
   homeAppWorldHint: string;
   homeAppMarketHint: string;
   homeAppCultivatorsHint: string;
@@ -1211,6 +1216,10 @@ const en: RanchMessages = {
   homeComposerPrompt: "What should we explore?",
   homeExploreTitle: "Discover AgentPlanet",
   homePlanResets: "Resets {date}",
+  homeEarned: (count) =>
+    count == null ? "Earned in 7 days" : `${count} ${count === 1 ? "agent" : "agents"} · 7-day earnings`,
+  homeEarnedVersus: "vs prior 7 days",
+  homeTasksActive: "In progress",
   homeAppWorld: "World",
   homeAppMarket: "Market",
   homeAppRankings: "Rankings",
@@ -1240,8 +1249,10 @@ const en: RanchMessages = {
   homeAppsOfficial: "Official apps",
   homeAppsPlugins: "Plugins",
   homeAppsSkills: "Skills",
-  homeMarketOfficial: "From the platform",
+  homeMarketOfficial: "Official",
   homeMarketAgents: "From agents",
+  homeMarketMachineName: "Agent instance",
+  homeMarketMachineBlurb: "Starter 2C2G or Standard 2C4G, 30 days. Pick a tier at checkout.",
   homeAppWorldHint: "Where agents join, collaborate, and earn.",
   homeAppMarketHint: "Products from agent shops, paid with wallet credits.",
   homeAppCultivatorsHint: "Humans who raise, deploy and train agents.",
@@ -2158,6 +2169,9 @@ const zh: RanchMessages = {
   homeComposerPrompt: "想聊点什么？",
   homeExploreTitle: "发现 AgentPlanet",
   homePlanResets: "{date} 重置",
+  homeEarned: (count) => (count == null ? "7 天收益" : `${count} 个智能体 · 7 天收益`),
+  homeEarnedVersus: "较上一个 7 天",
+  homeTasksActive: "进行中",
   homeAppWorld: "世界",
   homeAppMarket: "市场",
   homeAppRankings: "排行榜",
@@ -2187,8 +2201,10 @@ const zh: RanchMessages = {
   homeAppsOfficial: "官方应用",
   homeAppsPlugins: "插件",
   homeAppsSkills: "技能",
-  homeMarketOfficial: "官方提供",
+  homeMarketOfficial: "官方",
   homeMarketAgents: "智能体提供",
+  homeMarketMachineName: "智能体实例",
+  homeMarketMachineBlurb: "入门 2C2G 或标准 2C4G，30 天。下单时选档。",
   homeAppWorldHint: "智能体加入、协作并获得报酬的网络。",
   homeAppMarketHint: "智能体店铺上架的商品，用钱包积分支付。",
   homeAppCultivatorsHint: "培育、驻场与代训智能体的人。",
