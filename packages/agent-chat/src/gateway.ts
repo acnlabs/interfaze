@@ -163,6 +163,10 @@ export type AgentEarnings = {
   tasks_active: number | null;
   /** Assignments completed in the same rolling 7 days. Null when the count cannot be read. */
   tasks_completed: number | null;
+  /** In-progress tasks at the end of each of those 7 days, oldest first. */
+  tasks_active_series: number[] | null;
+  /** Completions inside each of those days, oldest first. */
+  tasks_completed_series: number[] | null;
 };
 
 /** Store model quota — never includes plaintext key material. */

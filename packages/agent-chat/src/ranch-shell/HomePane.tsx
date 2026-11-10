@@ -563,8 +563,7 @@ const columnTitle: CSSProperties = {
   cursor: "pointer",
 };
 
-function curvePoints(values: number[], width: number, height: number, flatY: number) {
-  const peak = Math.max(...values, 0);
+function curvePoints(values: number[], width: number, height: number, flatY: number, peak = Math.max(...values, 0)) {
   return values.map((value, index) => {
     const x = values.length === 1 ? width / 2 : (index / (values.length - 1)) * width;
     const y = peak === 0 ? flatY : 4 + (1 - value / peak) * (height - 8);
@@ -582,6 +581,55 @@ function cumulative(values: number[]): number[] {
     total += value;
     return total;
   });
+}
+
+function TaskProgressCurve({ active, finished }: { active: number[] | null; finished: number[] | null }) {
+  const width = 120;
+  const height = 64;
+  const activeLine = active && active.length > 1 ? active : null;
+  const finishedLine = finished && finished.length > 1 ? finished : null;
+  if (!activeLine && !finishedLine) return null;
+  const activeValues = activeLine ?? [0, 0, 0, 0, 0, 0, 0];
+  const finishedValues = finishedLine ?? [0, 0, 0, 0, 0, 0, 0];
+  const peak = Math.max(...activeValues, ...finishedValues, 0);
+  if (peak === 0) return null;
+  const activePoints = curvePoints(activeValues, width, height, 36, peak);
+  const finishedPoints = curvePoints(finishedValues, width, height, 36, peak);
+  const activePath = linePath(activePoints);
+  const finishedPath = linePath(finishedPoints);
+  const activePeak = Math.max(...activeValues, 0);
+  const finishedPeak = Math.max(...finishedValues, 0);
+  const area =
+    activePeak === 0
+      ? ""
+      : `${activePath} L${activePoints[activePoints.length - 1]?.x ?? width},${height} L${activePoints[0]?.x ?? 0},${height} Z`;
+  return (
+    <svg aria-hidden viewBox={`0 0 ${width} ${height}`} width="100%" height="100%" preserveAspectRatio="none">
+      {area ? <path d={area} fill="#3b82f6" opacity={0.18} /> : null}
+      {activePeak === 0 ? null : (
+        <path
+          d={activePath}
+          fill="none"
+          stroke="#3b82f6"
+          strokeWidth={1.6}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      )}
+      {finishedPeak === 0 ? null : (
+        <path
+          d={finishedPath}
+          fill="none"
+          stroke="#3ddc97"
+          strokeWidth={1.6}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      )}
+    </svg>
+  );
 }
 
 function EarningsCurve({ earnings, up }: { earnings: number[] | null; up: boolean }) {
@@ -621,6 +669,8 @@ const PREVIEW_AGENT_EARNINGS: AgentEarnings = {
   count_series: [3, 5, 8, 7, 6, 6, 8],
   tasks_active: 3,
   tasks_completed: 4,
+  tasks_active_series: [2, 2, 3, 3, 3, 3, 3],
+  tasks_completed_series: [0, 1, 0, 2, 0, 1, 0],
 };
 
 function ColumnTitle({ href, children }: { href: string; children: string }) {
@@ -751,6 +801,8 @@ export function HomeRightPane({
             count_series: null,
             tasks_active: null,
             tasks_completed: null,
+            tasks_active_series: null,
+            tasks_completed_series: null,
           },
       );
     });
@@ -1104,13 +1156,58 @@ export function HomeRightPane({
             href={planetHref(agentPlanetBaseUrl, "/tasks?view=mine")}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ ...statCard, textDecoration: "none" }}
+            style={{ ...statCard, position: "relative", minHeight: 108, overflow: "hidden", textDecoration: "none" }}
           >
-            <span style={cardLabel}>{t.homeTasksFinished(agentEarnings?.agent_count ?? null)}</span>
-            <span style={cardFigure}>
-              {agentEarnings?.tasks_completed == null ? "—" : String(agentEarnings.tasks_completed)}
+            <span style={{ ...cardLabel, position: "relative", zIndex: 1 }}>{t.homeTaskProgress}</span>
+            <span
+              style={{
+                position: "relative",
+                zIndex: 1,
+                display: "flex",
+                alignItems: "baseline",
+                gap: 8,
+                paddingRight: agentEarnings?.tasks_active_series?.some((value) => value > 0) ||
+                  agentEarnings?.tasks_completed_series?.some((value) => value > 0)
+                  ? "44%"
+                  : 0,
+              }}
+            >
+              <span style={cardFigure}>
+                {agentEarnings?.tasks_active == null ? "—" : String(agentEarnings.tasks_active)}
+              </span>
+              {agentEarnings?.tasks_active == null ? null : (
+                <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 500, color: colors.muted }}>
+                  {t.homeTasksActive}
+                </span>
+              )}
             </span>
-            <span style={cardFoot} />
+            <span
+              style={{
+                ...cardFoot,
+                position: "relative",
+                zIndex: 1,
+                paddingRight:
+                  agentEarnings?.tasks_active_series?.some((value) => value > 0) ||
+                  agentEarnings?.tasks_completed_series?.some((value) => value > 0)
+                    ? "44%"
+                    : 0,
+              }}
+            >
+              <span>
+                {t.homeTasksFinished(
+                  agentEarnings?.tasks_completed == null ? "—" : String(agentEarnings.tasks_completed),
+                )}
+              </span>
+            </span>
+            {agentEarnings?.tasks_active_series?.some((value) => value > 0) ||
+            agentEarnings?.tasks_completed_series?.some((value) => value > 0) ? (
+              <span aria-hidden style={{ position: "absolute", right: 10, top: 28, bottom: 14, width: "40%" }}>
+                <TaskProgressCurve
+                  active={agentEarnings.tasks_active_series}
+                  finished={agentEarnings.tasks_completed_series}
+                />
+              </span>
+            ) : null}
           </a>
         </div>
         <h3
