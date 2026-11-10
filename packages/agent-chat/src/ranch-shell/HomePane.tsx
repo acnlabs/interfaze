@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
-import { formatCreditBalance, formatWholeCredits } from "../creditDisplay";
+import { formatCreditBalance, formatLedgerAmount, formatWholeCredits } from "../creditDisplay";
 import type { AgentEarnings, GatewayClient, HumanWallet, PlanUsage } from "../gateway";
 import type { RanchChatAccount } from "../types";
 import type { RanchLocale, RanchMessages } from "./i18n";
@@ -583,95 +583,201 @@ function cumulative(values: number[]): number[] {
   });
 }
 
-function TaskProgressCurve({ active, finished }: { active: number[] | null; finished: number[] | null }) {
-  const width = 120;
-  const height = 64;
-  const activeLine = active && active.length > 1 ? active : null;
-  const finishedLine = finished && finished.length > 1 ? finished : null;
-  if (!activeLine && !finishedLine) return null;
-  const activeValues = activeLine ?? [0, 0, 0, 0, 0, 0, 0];
-  const finishedValues = finishedLine ?? [0, 0, 0, 0, 0, 0, 0];
-  const peak = Math.max(...activeValues, ...finishedValues, 0);
-  if (peak === 0) return null;
-  const activePoints = curvePoints(activeValues, width, height, 36, peak);
-  const finishedPoints = curvePoints(finishedValues, width, height, 36, peak);
-  const activePath = linePath(activePoints);
-  const finishedPath = linePath(finishedPoints);
-  const activePeak = Math.max(...activeValues, 0);
-  const finishedPeak = Math.max(...finishedValues, 0);
-  const area =
-    activePeak === 0
-      ? ""
-      : `${activePath} L${activePoints[activePoints.length - 1]?.x ?? width},${height} L${activePoints[0]?.x ?? 0},${height} Z`;
-  return (
-    <svg aria-hidden viewBox={`0 0 ${width} ${height}`} width="100%" height="100%" preserveAspectRatio="none">
-      {area ? <path d={area} fill="#3b82f6" opacity={0.18} /> : null}
-      {activePeak === 0 ? null : (
-        <path
-          d={activePath}
-          fill="none"
-          stroke="#3b82f6"
-          strokeWidth={1.6}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      )}
-      {finishedPeak === 0 ? null : (
-        <path
-          d={finishedPath}
-          fill="none"
-          stroke="#3ddc97"
-          strokeWidth={1.6}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      )}
-    </svg>
-  );
-}
+type ChartTip = { value: string; when: string };
 
-function EarningsCurve({ earnings, up }: { earnings: number[] | null; up: boolean }) {
+function AreaChart({
+  values,
+  color,
+  tip,
+}: {
+  values: number[];
+  color: string;
+  tip: (index: number, value: number) => ChartTip;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
   const width = 120;
   const height = 64;
-  const empty = [0, 0, 0, 0, 0, 0, 0];
-  const earnedLine = cumulative(earnings && earnings.length > 1 ? earnings : empty);
-  const peak = Math.max(...earnedLine, 0);
-  if (peak === 0) return null;
-  const color = up ? "#3ddc97" : "#f87171";
-  const points = curvePoints(earnedLine, width, height, 36);
+  const peak = Math.max(...values, 0);
+  if (values.length < 2 || peak === 0) return null;
+  const points = curvePoints(values, width, height, 36, peak);
   const path = linePath(points);
   const area = `${path} L${points[points.length - 1]?.x ?? width},${height} L${points[0]?.x ?? 0},${height} Z`;
+  const point = hover == null ? null : points[hover];
+  const shown = hover == null ? null : tip(hover, values[hover] ?? 0);
+  const translateX = hover == null || hover === 0 ? "0" : hover === values.length - 1 ? "-100%" : "-50%";
+  const placeAbove = point != null && point.y > 24;
   return (
-    <svg aria-hidden viewBox={`0 0 ${width} ${height}`} width="100%" height="100%" preserveAspectRatio="none">
-      <path d={area} fill={color} opacity={0.18} />
-      <path
-        d={path}
-        fill="none"
-        stroke={color}
-        strokeWidth={1.6}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
+    <div
+      onMouseMove={(event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        if (rect.width <= 0) return;
+        const ratio = (event.clientX - rect.left) / rect.width;
+        const next = Math.round(ratio * (values.length - 1));
+        setHover(Math.min(values.length - 1, Math.max(0, next)));
+      }}
+      onMouseLeave={() => setHover(null)}
+      style={{ position: "relative", width: "100%", height: "100%" }}
+    >
+      <svg
+        aria-hidden
+        viewBox={`0 0 ${width} ${height}`}
+        width="100%"
+        height="100%"
+        preserveAspectRatio="none"
+        style={{ display: "block", pointerEvents: "none" }}
+      >
+        <path d={area} fill={color} opacity={0.18} />
+        <path
+          d={path}
+          fill="none"
+          stroke={color}
+          strokeWidth={1.6}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+      {point && shown ? (
+        <>
+          <span
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: `${(point.x / width) * 100}%`,
+              top: 0,
+              bottom: 0,
+              width: 1,
+              background: color,
+              opacity: 0.45,
+              transform: "translateX(-50%)",
+              pointerEvents: "none",
+            }}
+          />
+          <span
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: `${(point.x / width) * 100}%`,
+              top: `${(point.y / height) * 100}%`,
+              width: 7,
+              height: 7,
+              borderRadius: 999,
+              background: color,
+              border: `1.5px solid ${colors.bg}`,
+              transform: "translate(-50%, -50%)",
+              pointerEvents: "none",
+            }}
+          />
+          <span
+            style={{
+              position: "absolute",
+              left: `${(point.x / width) * 100}%`,
+              top: `${(point.y / height) * 100}%`,
+              transform: placeAbove ? `translate(${translateX}, calc(-100% - 8px))` : `translate(${translateX}, 8px)`,
+              zIndex: 2,
+              padding: "4px 6px",
+              borderRadius: 6,
+              background: colors.panelAlt,
+              border: "1px solid rgba(255,255,255,0.16)",
+              pointerEvents: "none",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span style={{ display: "block", fontSize: 12, fontWeight: 650, color, lineHeight: 1.2 }}>{shown.value}</span>
+            <span style={{ display: "block", marginTop: 2, fontSize: 11, color: colors.muted, lineHeight: 1.2 }}>
+              {shown.when}
+            </span>
+          </span>
+        </>
+      ) : null}
+    </div>
   );
 }
 
-/** Local preview until GET /api/chat/agent-earnings is deployed. Real payloads replace it. */
-const PREVIEW_AGENT_EARNINGS: AgentEarnings = {
-  current: 1860,
-  previous: 1240,
-  delta_pct: 50,
-  agent_count: 8,
-  series: [40, 220, 80, 310, 90, 480, 640],
-  count_series: [3, 5, 8, 7, 6, 6, 8],
-  tasks_active: 3,
-  tasks_completed: 4,
-  tasks_active_series: [2, 2, 3, 3, 3, 3, 3],
-  tasks_completed_series: [0, 1, 0, 2, 0, 1, 0],
-};
+function RateHint({ up, pct, label }: { up: boolean; pct: number; label: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      style={{
+        position: "relative",
+        flexShrink: 0,
+        fontWeight: 650,
+        color: up ? "#3ddc97" : "#f87171",
+      }}
+    >
+      {up ? "↑" : "↓"}
+      {Math.abs(pct)}%
+      {open ? (
+        <span
+          style={{
+            position: "absolute",
+            left: "calc(100% + 8px)",
+            top: "50%",
+            transform: "translateY(-50%)",
+            zIndex: 3,
+            padding: "4px 6px",
+            borderRadius: 6,
+            background: colors.panelAlt,
+            border: "1px solid rgba(255,255,255,0.16)",
+            color: colors.text,
+            fontSize: 11,
+            fontWeight: 500,
+            lineHeight: 1.2,
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+          }}
+        >
+          {label}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function TaskProgressCurve({
+  finished,
+  tip,
+}: {
+  finished: number[] | null;
+  tip: (index: number, value: number) => ChartTip;
+}) {
+  const finishedLine = finished && finished.length > 1 ? finished : null;
+  if (!finishedLine || Math.max(...finishedLine, 0) === 0) return null;
+  return <AreaChart values={finishedLine} color="#3b82f6" tip={tip} />;
+}
+
+function EarningsCurve({
+  earnings,
+  up,
+  tip,
+}: {
+  earnings: number[] | null;
+  up: boolean;
+  tip: (index: number, value: number) => ChartTip;
+}) {
+  const empty = [0, 0, 0, 0, 0, 0, 0];
+  const earnedLine = cumulative(earnings && earnings.length > 1 ? earnings : empty);
+  if (Math.max(...earnedLine, 0) === 0) return null;
+  return <AreaChart values={earnedLine} color={up ? "#3ddc97" : "#f87171"} tip={tip} />;
+}
+
+const MICROS_PER_CREDIT = 1_000_000;
+
+function earnedMicros(earnings: AgentEarnings | null): number | null {
+  if (!earnings) return null;
+  if (earnings.current_micros != null) return earnings.current_micros;
+  if (earnings.current == null) return null;
+  return Math.trunc(earnings.current) * MICROS_PER_CREDIT;
+}
+
+function earnedSeriesMicros(earnings: AgentEarnings | null): number[] | null {
+  if (!earnings) return null;
+  if (earnings.series_micros) return earnings.series_micros;
+  if (!earnings.series) return null;
+  return earnings.series.map((value) => Math.trunc(value) * MICROS_PER_CREDIT);
+}
 
 function ColumnTitle({ href, children }: { href: string; children: string }) {
   return (
@@ -776,6 +882,9 @@ export function HomeRightPane({
       : t.accountPlanUsedOfLimit
           .replace("{used}", formatWholeCredits(demand.spent_credits))
           .replace("{limit}", formatWholeCredits(demand.limit_credits));
+  const earnedNow = earnedMicros(agentEarnings);
+  const earnedLine = earnedSeriesMicros(agentEarnings);
+  const showEarnedChart = earnedLine?.some((value) => value > 0) ?? false;
 
   useEffect(() => {
     if (!account) return;
@@ -788,11 +897,8 @@ export function HomeRightPane({
       if (cancelled) return;
       setWallet(nextWallet);
       setPlan(nextPlan);
-      const preview =
-        process.env.NODE_ENV === "development" && nextEarnings == null ? PREVIEW_AGENT_EARNINGS : null;
       setAgentEarnings(
-        nextEarnings ??
-          preview ?? {
+        nextEarnings ?? {
             current: null,
             previous: null,
             delta_pct: null,
@@ -1065,8 +1171,15 @@ export function HomeRightPane({
               <span style={cardLabel}>{t.accountWallet}</span>
               <span style={pill}>{t.walletTopup}</span>
             </span>
-            <span style={cardFigure}>
-              {wallet ? formatCreditBalance(wallet.balance, wallet.balance_micros) : "—"}
+            <span style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span style={cardFigure}>
+                {wallet ? formatCreditBalance(wallet.balance, wallet.balance_micros) : "—"}
+              </span>
+              {wallet ? (
+                <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 500, color: colors.muted }}>
+                  {t.homeRankCredits}
+                </span>
+              ) : null}
             </span>
             <span style={cardFoot}>
               <span style={{ minWidth: 0 }}>{t.accountPlanOnDemand}</span>
@@ -1098,13 +1211,13 @@ export function HomeRightPane({
                 display: "flex",
                 alignItems: "baseline",
                 gap: 8,
-                paddingRight: agentEarnings?.series?.some((value) => value > 0) ? "44%" : 0,
+                paddingRight: showEarnedChart ? "44%" : 0,
               }}
             >
-              <span style={{ ...cardFigure, fontSize: 28 }}>
-                {agentEarnings?.current == null ? "—" : formatWholeCredits(agentEarnings.current)}
+              <span style={cardFigure}>
+                {earnedNow == null ? "—" : formatLedgerAmount(earnedNow, "micros")}
               </span>
-              {agentEarnings?.current == null ? null : (
+              {earnedNow == null ? null : (
                 <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 500, color: colors.muted }}>
                   {t.homeRankCredits}
                 </span>
@@ -1114,40 +1227,25 @@ export function HomeRightPane({
               <span
                 style={{
                   position: "relative",
-                  zIndex: 1,
+                  zIndex: 3,
                   display: "flex",
                   alignItems: "baseline",
-                  gap: 6,
-                  paddingRight: agentEarnings.series?.some((value) => value > 0) ? "44%" : 0,
-                  fontSize: 12,
+                  paddingRight: showEarnedChart ? "44%" : 0,
+                  fontSize: 11,
                 }}
               >
-                {locale === "zh" ? (
-                  <span style={{ color: colors.muted }}>{t.homeEarnedVersus}</span>
-                ) : null}
-                <span
-                  style={{
-                    flexShrink: 0,
-                    fontWeight: 650,
-                    color: agentEarnings.delta_pct >= 0 ? "#3ddc97" : "#f87171",
-                  }}
-                >
-                  {agentEarnings.delta_pct >= 0 ? "↑" : "↓"}
-                  {Math.abs(agentEarnings.delta_pct)}%
-                </span>
-                {locale === "zh" ? null : (
-                  <span style={{ color: colors.muted }}>{t.homeEarnedVersus}</span>
-                )}
+                <RateHint up={agentEarnings.delta_pct >= 0} pct={agentEarnings.delta_pct} label={t.homeEarnedVersus} />
               </span>
             )}
-            {agentEarnings?.series?.some((value) => value > 0) ? (
-              <span
-                aria-hidden
-                style={{ position: "absolute", right: 10, top: 28, bottom: 14, width: "40%" }}
-              >
+            {showEarnedChart && earnedLine ? (
+              <span style={{ position: "absolute", right: 10, top: 28, bottom: 14, width: "40%", zIndex: 2 }}>
                 <EarningsCurve
-                  earnings={agentEarnings.series}
-                  up={(agentEarnings.delta_pct ?? 0) >= 0}
+                  earnings={earnedLine}
+                  up={(agentEarnings?.delta_pct ?? 0) >= 0}
+                  tip={(index, value) => ({
+                    value: `${formatLedgerAmount(value, "micros")} ${t.homeRankCredits}`,
+                    when: t.homeChartWhen(earnedLine.length - 1 - index),
+                  })}
                 />
               </span>
             ) : null}
@@ -1166,10 +1264,7 @@ export function HomeRightPane({
                 display: "flex",
                 alignItems: "baseline",
                 gap: 8,
-                paddingRight: agentEarnings?.tasks_active_series?.some((value) => value > 0) ||
-                  agentEarnings?.tasks_completed_series?.some((value) => value > 0)
-                  ? "44%"
-                  : 0,
+                paddingRight: agentEarnings?.tasks_completed_series?.some((value) => value > 0) ? "44%" : 0,
               }}
             >
               <span style={cardFigure}>
@@ -1181,30 +1276,30 @@ export function HomeRightPane({
                 </span>
               )}
             </span>
-            <span
-              style={{
-                ...cardFoot,
-                position: "relative",
-                zIndex: 1,
-                paddingRight:
-                  agentEarnings?.tasks_active_series?.some((value) => value > 0) ||
-                  agentEarnings?.tasks_completed_series?.some((value) => value > 0)
-                    ? "44%"
-                    : 0,
-              }}
-            >
-              <span>
-                {t.homeTasksFinished(
-                  agentEarnings?.tasks_completed == null ? "—" : String(agentEarnings.tasks_completed),
-                )}
+            {process.env.NODE_ENV === "development" ? (
+              <span
+                style={{
+                  position: "relative",
+                  zIndex: 1,
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: 6,
+                  paddingRight: agentEarnings?.tasks_completed_series?.some((value) => value > 0) ? "44%" : 0,
+                  fontSize: 11,
+                }}
+              >
+                <span style={{ flexShrink: 0, fontWeight: 650, color: "#3b82f6" }}>{t.homeTaskNoticeCount}</span>
+                <span style={{ color: colors.muted }}>{t.homeTaskNotice}</span>
               </span>
-            </span>
-            {agentEarnings?.tasks_active_series?.some((value) => value > 0) ||
-            agentEarnings?.tasks_completed_series?.some((value) => value > 0) ? (
-              <span aria-hidden style={{ position: "absolute", right: 10, top: 28, bottom: 14, width: "40%" }}>
+            ) : null}
+            {agentEarnings?.tasks_completed_series?.some((value) => value > 0) ? (
+              <span style={{ position: "absolute", right: 10, top: 28, bottom: 14, width: "40%", zIndex: 2 }}>
                 <TaskProgressCurve
-                  active={agentEarnings.tasks_active_series}
                   finished={agentEarnings.tasks_completed_series}
+                  tip={(index, value) => ({
+                    value: t.homeChartFinishedPoint(String(value)),
+                    when: t.homeChartWhen((agentEarnings.tasks_completed_series?.length ?? 1) - 1 - index),
+                  })}
                 />
               </span>
             ) : null}
