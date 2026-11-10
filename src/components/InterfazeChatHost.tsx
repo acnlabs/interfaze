@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import {
   RanchChatShell,
+  clearComposerUnsent,
   readAccountPanelFromUrl,
   type AccountDeepLinkPanel,
   type AgentDirectoryItem,
@@ -173,6 +174,8 @@ function CnChatHost() {
   const tokenGetter = useCallback(async () => getCnSessionToken(), []);
 
   const handleLogout = useCallback(() => {
+    clearComposerUnsent(window.sessionStorage);
+    clearComposerUnsent(window.localStorage);
     clearCnSession();
     window.location.href = "/";
   }, []);
@@ -297,6 +300,8 @@ function GlobalChatHost() {
   }, [isAuthenticated]);
 
   const handleLogout = useCallback(() => {
+    clearComposerUnsent(window.sessionStorage);
+    clearComposerUnsent(window.localStorage);
     clearAuth0ClientCache();
     logout({
       logoutParams: {

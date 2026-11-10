@@ -286,6 +286,7 @@ export type RanchMessages = {
   deleteChatConfirm: string;
   noAgentsToAdd: string;
   noMessagesYet: string;
+  composerDraftPreview: (text: string) => string;
   pickerTitle: string;
   pickerTitleDirect: string;
   pickerTitleGroup: string;
@@ -1180,6 +1181,7 @@ const en: RanchMessages = {
   deleteChatConfirm: "Delete this chat and all its messages? This cannot be undone.",
   noAgentsToAdd: "No more agents to add. Search Discover or connect a new agent first.",
   noMessagesYet: "No messages yet",
+  composerDraftPreview: (text) => `Draft: ${text}`,
   pickerTitle: "New chat",
   pickerTitleDirect: "New direct message",
   pickerTitleGroup: "New group",
@@ -2145,6 +2147,7 @@ const zh: RanchMessages = {
   deleteChatConfirm: "确定删除此对话及全部消息？此操作不可撤销。",
   noAgentsToAdd: "没有更多可添加的智能体。去发现里搜，或先接上新的智能体。",
   noMessagesYet: "暂无消息",
+  composerDraftPreview: (text) => `草稿：${text}`,
   pickerTitle: "新建聊天",
   pickerTitleDirect: "新建私聊",
   pickerTitleGroup: "新建群聊",
