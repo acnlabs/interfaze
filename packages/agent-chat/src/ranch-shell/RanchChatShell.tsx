@@ -163,6 +163,13 @@ import { MessageBody } from "../MessageBody";
 import { groupRoster } from "../groupRoster";
 import { openEmbodyHost, openStudioTalk } from "./chat-window/studioTalk";
 import { bodyIdFromHostPath, type ChatWindow, type ChatWindowKind } from "./chat-window/types";
+import {
+  composerDraftAfterSend,
+  composerDraftFromStore,
+  composerDraftStorageKey,
+  composerDraftToStore,
+  pickInboxDraft,
+} from "../composerDraft";
 
 
 /** Inbox preview line without Markdown punctuation. */
@@ -175,6 +182,11 @@ function plainListPreview(text: string | null | undefined): string {
     .replace(/[*_~#>]+/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** List line for an unsent draft. Spaces stay in the box, but do not show here. */
+function visibleComposerDraft(raw: string): string {
+  return plainListPreview(raw) || raw.trim();
 }
 
 function chatTitle(c: ChatSummary): string {
@@ -858,6 +870,14 @@ function readComposerModelPick(chatId: string): string | null {
   } catch {
     return null;
   }
+}
+
+function readComposerDraft(chatId: string): string {
+  return composerDraftFromStore(readBrowserItem(composerDraftStorageKey(chatId)));
+}
+
+function writeComposerDraft(chatId: string, text: string): void {
+  writeBrowserItem(composerDraftStorageKey(chatId), composerDraftToStore(text));
 }
 
 function writeComposerModelPick(chatId: string, modelId: string | null): void {
@@ -3522,6 +3542,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [agentRefIndex, setAgentRefIndex] = useState(0);
   const [slashIndex, setSlashIndex] = useState(0);
   const [draft, setDraft] = useState("");
+  /** Latest composer text. Updated in the same turn as a chat switch, before React re-renders. */
+  const draftRef = useRef(draft);
+  /** Chat id the current composer text belongs to. Null until a chat is opened. */
+  const draftChatRef = useRef<string | null>(null);
+  draftRef.current = draft;
   type PendingOwnerFile = {
     chatId: string;
     ref: string;
@@ -3557,6 +3582,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const plusMenuRef = useRef<HTMLDivElement>(null);
   const composerFileInputRef = useRef<HTMLInputElement>(null);
   const composerFieldRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const id = draftChatRef.current;
+    if (!id) return;
+    // A switch already saved the chat we left. Don't write this text onto the other id.
+    if (active?.chat_id && active.chat_id !== id) return;
+    writeComposerDraft(id, draft);
+  }, [draft, active?.chat_id]);
   const [composerFocused, setComposerFocused] = useState(false);
   const [slashMenuDismissed, setSlashMenuDismissed] = useState(false);
   /** Group: continue with last @'d agent for 15m (chip above composer). */
@@ -4137,7 +4169,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setGroupDescDraft((chat.description || "").trim());
       setMentionIndex(0);
       if (!opts?.preserveDraft) {
-        setDraft("");
+        const nextId = chat.chat_id;
+        const leaving = draftChatRef.current;
+        if (leaving && leaving !== nextId) writeComposerDraft(leaving, draftRef.current);
+        if (leaving !== nextId) {
+          const next = readComposerDraft(nextId);
+          draftChatRef.current = nextId;
+          draftRef.current = next;
+          setDraft(next);
+        }
         const leftover = pendingOwnerFilesRef.current;
         pendingOwnerFilesRef.current = [];
         setPendingOwnerFiles([]);
@@ -5226,9 +5266,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
           clearStickyMention(chatId);
         }
       }
-      if (!opts?.decisionChoice && seq === loadSeqRef.current) {
-        setDraft((current) => current === draft ? "" : current);
-        setPointedBlock(null);
+      if (!opts?.decisionChoice) {
+        // Leaving mid-send already stored this snapshot. Drop that copy even
+        // when the box on screen belongs to another chat. Keep newer typing.
+        if (draftChatRef.current === chatId) {
+          if (draftRef.current === draft) draftRef.current = "";
+          setDraft((current) => composerDraftAfterSend(draft, current));
+          writeComposerDraft(chatId, draftRef.current);
+        } else if (readComposerDraft(chatId) === draft) {
+          writeComposerDraft(chatId, "");
+        }
+        if (seq === loadSeqRef.current) setPointedBlock(null);
       }
       await reloadMessages(chatId, seq);
       await refreshChats();
@@ -7686,10 +7734,29 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     ),
                   )
                 : "";
-              const preview =
-                pageOpPreview ||
-                plainListPreview(c.last_message_content) ||
-                (isGroupChat(c) ? t.groupChat : t.noMessagesYet);
+              const rowChatIds = isGroupChat(c)
+                ? [c.chat_id]
+                : inboxChats
+                    .filter(
+                      (row) =>
+                        !isGroupChat(row) &&
+                        agentIdKey(row.agent_id) === agentIdKey(c.agent_id),
+                    )
+                    .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))
+                    .map((row) => row.chat_id);
+              const pickedDraft = pickInboxDraft({
+                chatIds: rowChatIds,
+                openChatId: active?.chat_id ?? null,
+                openDraft: draft,
+                stored: readComposerDraft,
+                visible: visibleComposerDraft,
+              });
+              const draftLine = pickedDraft?.text ?? "";
+              const preview = draftLine
+                ? t.composerDraftPreview(draftLine)
+                : pageOpPreview ||
+                  plainListPreview(c.last_message_content) ||
+                  (isGroupChat(c) ? t.groupChat : t.noMessagesYet);
               const listBroken = !!deliveryBrokenByChat[c.chat_id];
               const listPresence = presenceForDot(c.agent_status, listBroken);
               const listTitle = presenceTitle(c.agent_status, listBroken, t);
@@ -10993,6 +11060,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     setActive(null);
                                     setView("list");
                                     setMessages([]);
+                                    writeComposerDraft(chatId, "");
+                                    if (draftChatRef.current === chatId) {
+                                      draftChatRef.current = null;
+                                      draftRef.current = "";
+                                    }
+                                    setDraft("");
                                     setChats((prev) => prev.filter((c) => c.chat_id !== chatId));
                                   } catch (e) {
                                     setError(e instanceof Error ? e.message : t.sendFailed);
@@ -11268,6 +11341,11 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     setActive(null);
                                     setView("list");
                                     setMessages([]);
+                                    writeComposerDraft(chatId, "");
+                                    if (draftChatRef.current === chatId) {
+                                      draftChatRef.current = null;
+                                      draftRef.current = "";
+                                    }
                                     setDraft("");
                                     clearReplySlot();
                                     setChats((prev) => prev.filter((c) => c.chat_id !== chatId));
