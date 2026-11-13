@@ -8204,6 +8204,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       openCloudScreen(id, label, rate, hint);
                     }}
                     onPlace={setChatPlace}
+                    refreshToken={messages.length}
                   />
                   {!compactHeader && canOpenTalk ? (
                     <button

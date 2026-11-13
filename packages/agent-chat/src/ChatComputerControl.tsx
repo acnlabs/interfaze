@@ -3,6 +3,16 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import type { RanchLocale } from "./ranch-shell/i18n";
 import { btnGhost, colors } from "./ranch-shell/styles";
+import {
+  computerName,
+  computerRunStatus,
+  computerStatusWord,
+  extraIndex,
+  type ComputerNameRow,
+  type ComputerRunStatus,
+} from "./computerLabel";
+import { screenAsksBeforeCharge, type ScreenChargeHint } from "./computerSendBoot";
+import { hourlyCreditCopy } from "./hourlyCreditCopy";
 
 function IconMonitor() {
   return (
@@ -16,6 +26,7 @@ function IconMonitor() {
 function headerIconStyle(on: boolean): CSSProperties {
   return {
     ...btnGhost,
+    position: "relative",
     width: 28,
     height: 28,
     padding: 0,
@@ -26,9 +37,12 @@ function headerIconStyle(on: boolean): CSSProperties {
     borderColor: on ? colors.accent : colors.border,
   };
 }
-import { chatComputerLabel, extraIndex, type ComputerNameRow } from "./computerLabel";
-import { screenAsksBeforeCharge, type ScreenChargeHint } from "./computerSendBoot";
-import { hourlyCreditCopy } from "./hourlyCreditCopy";
+
+function statusDotColor(mark: ComputerRunStatus): string {
+  if (mark === "running") return colors.online;
+  if (mark === "paused") return colors.busy;
+  return colors.offline;
+}
 
 type ChatPlace = {
   place: "agent" | "cloud";
@@ -65,6 +79,7 @@ export function ChatComputerControl({
   openScreenIds,
   onOpenScreen,
   onPlace,
+  refreshToken = 0,
 }: {
   chatId: string;
   gatewayBaseUrl: string;
@@ -74,6 +89,7 @@ export function ChatComputerControl({
   openScreenIds: string[];
   onOpenScreen: (computerId: string, label: string, rate?: number, hint?: ScreenChargeHint) => void;
   onPlace?: (place: ChatPlace | null) => void;
+  refreshToken?: number;
 }) {
   const [place, setPlace] = useState<ChatPlace | null>(null);
   const [computers, setComputers] = useState<ComputerNameRow[]>([]);
@@ -103,7 +119,7 @@ export function ChatComputerControl({
     return () => {
       gone = true;
     };
-  }, [load]);
+  }, [load, refreshToken]);
 
   useEffect(() => {
     onPlace?.(place);
@@ -111,25 +127,30 @@ export function ChatComputerControl({
 
   useEffect(() => () => onPlace?.(null), [onPlace]);
 
-  if (!place) return null;
-
-  const nth = place.computer_id ? extraIndex(computers, place.computer_id) : 0;
-  const label = chatComputerLabel(place.place, place.is_default, nth, locale);
-  const openable = place.place === "cloud" && !!place.computer_id;
-  const on = openable && !!place.computer_id && openScreenIds.includes(place.computer_id);
-  const row = place.computer_id
-    ? computers.find((item) => item.computer_id === place.computer_id)
+  const bound = place?.place === "cloud" && place.computer_id ? place : null;
+  const fallback = computers.find((item) => item.is_default) ?? computers[0];
+  const computerId = bound?.computer_id ?? fallback?.computer_id ?? null;
+  const row = computerId
+    ? computers.find((item) => item.computer_id === computerId) ?? fallback
     : undefined;
-  const screen = row?.screen_credits_per_hour ?? place.screen_credits_per_hour ?? undefined;
+  const nth = computerId ? extraIndex(computers, computerId) : 0;
+  const label = computerName(bound ? bound.is_default !== false : (row?.is_default ?? true), nth, locale);
+  const openable = computerId != null;
+  const on = computerId != null && openScreenIds.includes(computerId);
+  const screen = row?.screen_credits_per_hour ?? bound?.screen_credits_per_hour ?? undefined;
   const hint: ScreenChargeHint = {
-    status: row?.status ?? place.status,
-    resumeCreditsPerHour: row?.resume_credits_per_hour ?? place.resume_credits_per_hour,
+    status: row?.status ?? bound?.status,
+    resumeCreditsPerHour: row?.resume_credits_per_hour ?? bound?.resume_credits_per_hour,
     screenCreditsPerHour: screen,
   };
   const asks = openable && !on && screenAsksBeforeCharge(hint) && screen != null;
-  const caption = asks
+  const base = asks
     ? hourlyCreditCopy(locale, cn).screenAt.replace("{rate}", String(screen))
     : label;
+  const machineStatus = row?.status ?? bound?.status ?? null;
+  const mark = computerRunStatus(machineStatus);
+  const statusWord = computerStatusWord(machineStatus, locale);
+  const caption = statusWord ? `${base} · ${statusWord}` : base;
 
   return (
     <button
@@ -139,12 +160,29 @@ export function ChatComputerControl({
       aria-label={caption}
       title={caption}
       onClick={() => {
-        if (openable && place.computer_id) {
-          onOpenScreen(place.computer_id, label, screen, hint);
+        if (computerId) {
+          onOpenScreen(computerId, label, screen, hint);
         }
       }}
     >
       <IconMonitor />
+      {mark ? (
+        <span
+          aria-hidden
+          data-computer-status={mark}
+          style={{
+            position: "absolute",
+            right: -1,
+            bottom: -1,
+            width: 10,
+            height: 10,
+            borderRadius: 999,
+            background: statusDotColor(mark),
+            border: `2px solid ${colors.bg}`,
+            pointerEvents: "none",
+          }}
+        />
+      ) : null}
     </button>
   );
 }
