@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import type { RanchLocale } from "./ranch-shell/i18n";
 import { btnGhost, colors } from "./ranch-shell/styles";
 import {
-  chatComputerLabel,
+  computerName,
   computerRunStatus,
   computerStatusWord,
   extraIndex,
@@ -127,26 +127,27 @@ export function ChatComputerControl({
 
   useEffect(() => () => onPlace?.(null), [onPlace]);
 
-  if (!place || place.place !== "cloud" || !place.computer_id) return null;
-
-  const nth = place.computer_id ? extraIndex(computers, place.computer_id) : 0;
-  const label = chatComputerLabel(place.place, place.is_default, nth, locale);
-  const openable = place.place === "cloud" && !!place.computer_id;
-  const on = openable && !!place.computer_id && openScreenIds.includes(place.computer_id);
-  const row = place.computer_id
-    ? computers.find((item) => item.computer_id === place.computer_id)
+  const bound = place?.place === "cloud" && place.computer_id ? place : null;
+  const fallback = computers.find((item) => item.is_default) ?? computers[0];
+  const computerId = bound?.computer_id ?? fallback?.computer_id ?? null;
+  const row = computerId
+    ? computers.find((item) => item.computer_id === computerId) ?? fallback
     : undefined;
-  const screen = row?.screen_credits_per_hour ?? place.screen_credits_per_hour ?? undefined;
+  const nth = computerId ? extraIndex(computers, computerId) : 0;
+  const label = computerName(bound ? bound.is_default !== false : (row?.is_default ?? true), nth, locale);
+  const openable = computerId != null;
+  const on = computerId != null && openScreenIds.includes(computerId);
+  const screen = row?.screen_credits_per_hour ?? bound?.screen_credits_per_hour ?? undefined;
   const hint: ScreenChargeHint = {
-    status: row?.status ?? place.status,
-    resumeCreditsPerHour: row?.resume_credits_per_hour ?? place.resume_credits_per_hour,
+    status: row?.status ?? bound?.status,
+    resumeCreditsPerHour: row?.resume_credits_per_hour ?? bound?.resume_credits_per_hour,
     screenCreditsPerHour: screen,
   };
   const asks = openable && !on && screenAsksBeforeCharge(hint) && screen != null;
   const base = asks
     ? hourlyCreditCopy(locale, cn).screenAt.replace("{rate}", String(screen))
     : label;
-  const machineStatus = place.place === "cloud" ? (row?.status ?? place.status ?? null) : null;
+  const machineStatus = row?.status ?? bound?.status ?? null;
   const mark = computerRunStatus(machineStatus);
   const statusWord = computerStatusWord(machineStatus, locale);
   const caption = statusWord ? `${base} · ${statusWord}` : base;
@@ -159,8 +160,8 @@ export function ChatComputerControl({
       aria-label={caption}
       title={caption}
       onClick={() => {
-        if (openable && place.computer_id) {
-          onOpenScreen(place.computer_id, label, screen, hint);
+        if (computerId) {
+          onOpenScreen(computerId, label, screen, hint);
         }
       }}
     >
