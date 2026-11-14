@@ -173,12 +173,12 @@ test("every screen path asks in the shell before the hourly bill starts", () => 
     "utf8",
   );
   assert.match(shell, /setConfirmDialog\(\{/);
-  assert.match(shell, /t\.screenConfirm\.replace/);
+  assert.match(shell, /screenConfirmMessage\(/);
   assert.match(shell, /screenAsksBeforeCharge/);
   assert.match(shell, /onOpenComputer=\{openCloudScreen\}/);
   assert.match(shell, /onOpenScreen=\{openCloudScreen\}/);
   assert.match(shell, /openCloudScreen\(id, label, rate, hint\)/);
-  assert.match(i18n, /screenConfirm: "打开电脑屏幕按 \{rate\} 星币\/小时计费/);
+  assert.match(i18n, /screenConfirm: "打开屏幕会按每小时 \{rate\} 星币计费，30 分钟后暂停。"/);
   assert.match(i18n, /openScreen: "打开电脑屏幕"/);
   assert.match(panel, /onOpenScreen\(row\.computer_id, label, row\.screen_credits_per_hour/);
   assert.doesNotMatch(panel, /kind: "screen"/);
@@ -201,7 +201,8 @@ test("a billed confirm button prints the hourly rate", () => {
   assert.match(panel, /withRate\(t\.resumeAt, pending\.rate\)/);
   assert.match(i18n, /openScreenAt: "打开电脑屏幕 · \{rate\} 星币\/小时"/);
   assert.match(i18n, /sendAt: "发送 · \{rate\} 星币\/小时"/);
-  assert.match(shell, /t\.openScreenAt\.replace\("\{rate\}", String\(billed\)\)/);
+  assert.match(shell, /screenConfirmMessage\(billed, row\?\.paused_credits_per_hour, t\)/);
+  assert.match(shell, /confirmLabel: t\.screenOpen/);
   assert.match(shell, /t\.sendAt\.replace\("\{rate\}", String\(rate\)\)/);
 });
 

@@ -52,5 +52,6 @@ test("a fallback picture uses the same 1024×768 box so a click maps onto the de
     path.join(__dirname, "../packages/agent-chat/src/ComputerScreenPanel.tsx"),
     "utf8",
   );
-  assert.match(panel, /deskBox\(false\)/);
+  assert.match(panel, /screenLiveBox\(pane, false\)/);
+  assert.match(panel, /style=\{\{ \.\.\.deskBox\(\), objectFit: "contain"/);
 });

@@ -3,13 +3,27 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
-import { screenFitRemounts, screenLiveNeedsRefresh, screenStreamRetries } from "./computerScreenLive";
+import {
+  SCREEN_AWAY_PAUSE_MS,
+  holdScreenAway,
+  screenAwayHeld,
+  screenLiveNeedsRefresh,
+  screenMinutesLeft,
+  screenSliceEnded,
+  screenStayAwake,
+  screenStreamRetries,
+  subscribeScreenAway,
+} from "./computerScreenLive";
 import { screenLiveBox, screenPoint } from "./computerScreenPoint";
 
 const copy = {
   en: {
     close: "Close",
     loadFailed: "Couldn’t load this computer.",
+    unpaid: "Computer time is unpaid. Add credits, then open the screen again.",
+    sliceEnded: "These 30 minutes are up.",
+    pausedAway: "The screen paused.",
+    minutesLeft: "{min} min left",
     open: "Open computer screen",
     opening: "Opening…",
     screen: "Screen",
@@ -18,6 +32,10 @@ const copy = {
   zh: {
     close: "关闭",
     loadFailed: "这台电脑暂时读不出来。",
+    unpaid: "这台电脑的使用时间没付上。充进星币后再打开。",
+    sliceEnded: "这 30 分钟用完了。",
+    pausedAway: "画面已暂停。",
+    minutesLeft: "还剩 {min} 分钟",
     open: "打开电脑屏幕",
     opening: "正在打开…",
     screen: "画面",
@@ -40,13 +58,37 @@ async function authed(
   return fetch(`${base}${path}`, { ...init, headers });
 }
 
+const pauseAfter = new Map<string, number>();
+
+function armScreenPause(
+  computerId: string,
+  gatewayBaseUrl: string,
+  getAccessToken: () => Promise<string | null>,
+) {
+  const previous = pauseAfter.get(computerId);
+  if (previous) window.clearTimeout(previous);
+  const timer = window.setTimeout(() => {
+    pauseAfter.delete(computerId);
+    holdScreenAway(computerId);
+    void authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/pause`, {
+      method: "POST",
+    }).catch(() => undefined);
+  }, SCREEN_AWAY_PAUSE_MS);
+  pauseAfter.set(computerId, timer);
+}
+
+function disarmScreenPause(computerId: string) {
+  const previous = pauseAfter.get(computerId);
+  if (previous) window.clearTimeout(previous);
+  pauseAfter.delete(computerId);
+}
+
 async function streamScreen(
   gatewayBaseUrl: string,
   getAccessToken: () => Promise<string | null>,
   computerId: string,
-  query: string,
 ): Promise<Response> {
-  const path = `/api/computers/${computerId}/screen/stream${query}`;
+  const path = `/api/computers/${computerId}/screen/stream`;
   const first = await authed(gatewayBaseUrl, getAccessToken, path);
   if (!screenStreamRetries(first.status, 0)) return first;
   return authed(gatewayBaseUrl, getAccessToken, path);
@@ -61,6 +103,8 @@ export function ComputerScreenPanel({
   onClose,
   chatId,
   embedded = false,
+  onUnpaid,
+  onRequestOpen,
 }: {
   computerId: string;
   label: string;
@@ -70,25 +114,27 @@ export function ComputerScreenPanel({
   onClose: () => void;
   chatId?: string | null;
   embedded?: boolean;
+  onUnpaid?: () => void;
+  onRequestOpen?: (run: () => void) => void;
 }) {
   const t = copy[locale] ?? copy.en;
   const frameRef = useRef<HTMLDivElement>(null);
-  const fittedRef = useRef<{ width: number; height: number } | null>(null);
-  const fitLock = useRef(false);
-  const pendingFit = useRef<{ width: number; height: number } | null>(null);
   const [picture, setPicture] = useState<string | null>(null);
   const [live, setLive] = useState<string | null>(null);
   const [frameKey, setFrameKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [pane, setPane] = useState<{ width: number; height: number } | null>(null);
-  const [fillPane, setFillPane] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [secondsMarkedAt, setSecondsMarkedAt] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
-  const paneSize = (rect: DOMRect | undefined) => {
-    const width = Math.round(rect?.width ?? 0);
-    const height = Math.round(rect?.height ?? 0);
-    if (width < 320 || height < 240 || width > 1600 || height > 1200) return null;
-    return { width, height };
+  const rememberLeft = (seconds: unknown) => {
+    if (typeof seconds !== "number" || !Number.isFinite(seconds)) return;
+    const marked = Date.now();
+    setSecondsLeft(Math.max(0, Math.floor(seconds)));
+    setSecondsMarkedAt(marked);
+    setNowMs(marked);
   };
 
   useEffect(() => {
@@ -99,28 +145,66 @@ export function ComputerScreenPanel({
 
   useEffect(() => {
     setLive(null);
-    setFillPane(false);
+    setSecondsLeft(null);
   }, [computerId]);
+
+  useEffect(() => {
+    disarmScreenPause(computerId);
+    return () => {
+      armScreenPause(computerId, gatewayBaseUrl, getAccessToken);
+    };
+  }, [computerId, gatewayBaseUrl, getAccessToken]);
+
+  useEffect(() => {
+    return subscribeScreenAway(() => {
+      if (!screenAwayHeld(computerId)) return;
+      setLive(null);
+      setSecondsLeft(null);
+      setNote(t.pausedAway);
+    });
+  }, [computerId, t.pausedAway]);
+
+  useEffect(() => {
+    if (secondsLeft == null) return;
+    const timer = window.setInterval(() => setNowMs(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, [secondsLeft]);
 
   useEffect(() => {
     if (!live) return;
     let stopped = false;
     const waking = { current: false };
     const wake = async () => {
-      if (waking.current || stopped) return;
+      if (waking.current || stopped || screenAwayHeld(computerId) || !screenStayAwake(document.visibilityState)) return;
       waking.current = true;
       try {
         const kept = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/keep`, {
           method: "POST",
         });
-        if (!kept.ok || stopped) return;
-        const keptBody = (await kept.json()) as { screen?: boolean };
         if (stopped) return;
+        if (kept.status === 402) {
+          setLive(null);
+          setSecondsLeft(null);
+          setNote(t.unpaid);
+          onUnpaid?.();
+          return;
+        }
+        if (kept.status === 409) {
+          const detail = (await kept.json().catch(() => null)) as { detail?: unknown } | null;
+          if (screenSliceEnded(kept.status, detail?.detail)) {
+            holdScreenAway(computerId);
+            setLive(null);
+            setSecondsLeft(null);
+            setNote(t.sliceEnded);
+          }
+          return;
+        }
+        if (!kept.ok) return;
+        const keptBody = (await kept.json()) as { screen?: boolean; seconds_left?: unknown };
+        if (stopped) return;
+        rememberLeft(keptBody.seconds_left);
         if (keptBody.screen !== false && !screenLiveNeedsRefresh(live)) return;
-        const rect = frameRef.current?.getBoundingClientRect();
-        const sized = paneSize(rect);
-        const query = sized ? `?width=${sized.width}&height=${sized.height}` : "";
-        const res = await streamScreen(gatewayBaseUrl, getAccessToken, computerId, query);
+        const res = await streamScreen(gatewayBaseUrl, getAccessToken, computerId);
         if (stopped) return;
         if (!res.ok) {
           setLive(null);
@@ -130,7 +214,6 @@ export function ComputerScreenPanel({
         const body = (await res.json()) as { url?: string };
         const url = typeof body.url === "string" ? body.url : "";
         if (url.startsWith("https://") && !/\s/.test(url) && url.includes("password=")) {
-          fittedRef.current = sized;
           setLive(url);
           setFrameKey((key) => key + 1);
           return;
@@ -147,7 +230,18 @@ export function ComputerScreenPanel({
       void wake();
     }, 60_000);
     const onVisible = () => {
-      if (document.visibilityState === "visible") void wake();
+      if (!screenStayAwake(document.visibilityState)) {
+        armScreenPause(computerId, gatewayBaseUrl, getAccessToken);
+        return;
+      }
+      if (screenAwayHeld(computerId)) {
+        setLive(null);
+        setSecondsLeft(null);
+        setNote(t.pausedAway);
+        return;
+      }
+      disarmScreenPause(computerId);
+      void wake();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
@@ -155,16 +249,17 @@ export function ComputerScreenPanel({
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [computerId, gatewayBaseUrl, getAccessToken, live, t.loadFailed]);
+  }, [computerId, gatewayBaseUrl, getAccessToken, live, onUnpaid, t.loadFailed, t.pausedAway, t.sliceEnded, t.unpaid]);
 
   const showPicture = useCallback(async () => {
     const res = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen`);
     if (res.status === 409) {
+      const detail = (await res.json().catch(() => null)) as { detail?: unknown } | null;
       setPicture((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
       });
-      setNote(t.noScreen);
+      setNote(screenSliceEnded(res.status, detail?.detail) ? t.sliceEnded : t.noScreen);
       return;
     }
     if (!res.ok) throw new Error(String(res.status));
@@ -175,7 +270,7 @@ export function ComputerScreenPanel({
       return url;
     });
     setNote(null);
-  }, [computerId, gatewayBaseUrl, getAccessToken, t.noScreen]);
+  }, [computerId, gatewayBaseUrl, getAccessToken, t.noScreen, t.sliceEnded]);
 
   const openScreen = useCallback(async () => {
     setBusy(true);
@@ -184,16 +279,30 @@ export function ComputerScreenPanel({
       const opened = await authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen`, {
         method: "POST",
       });
+      if (opened.status === 402) {
+        onUnpaid?.();
+        setNote(t.unpaid);
+        return;
+      }
+      if (opened.status === 409) {
+        const detail = (await opened.json().catch(() => null)) as { detail?: unknown } | null;
+        if (screenSliceEnded(opened.status, detail?.detail)) {
+          holdScreenAway(computerId);
+          setLive(null);
+          setSecondsLeft(null);
+          setNote(t.sliceEnded);
+          return;
+        }
+        throw new Error(String(opened.status));
+      }
       if (!opened.ok) throw new Error(String(opened.status));
-      const rect = frameRef.current?.getBoundingClientRect();
-      const sized = paneSize(rect);
-      const query = sized ? `?width=${sized.width}&height=${sized.height}` : "";
-      const res = await streamScreen(gatewayBaseUrl, getAccessToken, computerId, query);
+      const openedBody = (await opened.json().catch(() => null)) as { seconds_left?: unknown } | null;
+      rememberLeft(openedBody?.seconds_left);
+      const res = await streamScreen(gatewayBaseUrl, getAccessToken, computerId);
       if (res.ok) {
         const body = (await res.json()) as { url?: string };
         const url = typeof body.url === "string" ? body.url : "";
         if (url.startsWith("https://") && !/\s/.test(url) && url.includes("password=")) {
-          fittedRef.current = sized;
           setLive(url);
           if (chatId) {
             void authed(gatewayBaseUrl, getAccessToken, `/api/chats/${chatId}/computer/folder`, {
@@ -211,11 +320,17 @@ export function ComputerScreenPanel({
     } finally {
       setBusy(false);
     }
-  }, [chatId, computerId, gatewayBaseUrl, getAccessToken, showPicture, t.loadFailed]);
+  }, [chatId, computerId, gatewayBaseUrl, getAccessToken, onUnpaid, showPicture, t.loadFailed, t.sliceEnded, t.unpaid]);
 
   useEffect(() => {
+    if (screenAwayHeld(computerId)) {
+      setLive(null);
+      setSecondsLeft(null);
+      setNote(t.pausedAway);
+      return;
+    }
     void openScreen();
-  }, [openScreen]);
+  }, [openScreen, computerId, t.pausedAway]);
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -234,74 +349,6 @@ export function ComputerScreenPanel({
     return () => paneWatch.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (!live) return;
-    const frame = frameRef.current;
-    if (!frame) return;
-    let timer = 0;
-    const follow = (next: { width: number; height: number }) => {
-      const prev = fittedRef.current;
-      if (prev && Math.abs(prev.width - next.width) < 32 && Math.abs(prev.height - next.height) < 32) return;
-      if (fitLock.current) {
-        pendingFit.current = next;
-        return;
-      }
-      fitLock.current = true;
-      const recover = async () => {
-        const rect = frameRef.current?.getBoundingClientRect();
-        const sized = paneSize(rect);
-        const query = sized ? `?width=${sized.width}&height=${sized.height}` : "";
-        const res = await streamScreen(gatewayBaseUrl, getAccessToken, computerId, query);
-        if (!res.ok) {
-          setLive(null);
-          setNote(t.loadFailed);
-          return;
-        }
-        const body = (await res.json()) as { url?: string };
-        const url = typeof body.url === "string" ? body.url : "";
-        if (url.startsWith("https://") && !/\s/.test(url) && url.includes("password=")) {
-          fittedRef.current = sized;
-          setLive(url);
-          setFrameKey((key) => key + 1);
-          return;
-        }
-        setLive(null);
-        setNote(t.loadFailed);
-      };
-      void authed(gatewayBaseUrl, getAccessToken, `/api/computers/${computerId}/screen/fit`, {
-        method: "POST",
-        body: JSON.stringify(next),
-      })
-        .then(async (res) => {
-          if (!res.ok) return recover();
-          const body = (await res.json()) as { fitted?: unknown };
-          fittedRef.current = next;
-          const fitted = screenFitRemounts(body);
-          setFillPane(fitted);
-          if (fitted) setFrameKey((key) => key + 1);
-        })
-        .catch(() => recover())
-        .finally(() => {
-          fitLock.current = false;
-          const pending = pendingFit.current;
-          pendingFit.current = null;
-          if (pending && (pending.width !== next.width || pending.height !== next.height)) follow(pending);
-        });
-    };
-    const observer = new ResizeObserver(() => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        const next = paneSize(frame.getBoundingClientRect());
-        if (next) follow(next);
-      }, 600);
-    });
-    observer.observe(frame);
-    return () => {
-      window.clearTimeout(timer);
-      observer.disconnect();
-    };
-  }, [computerId, gatewayBaseUrl, getAccessToken, live]);
-
   const sendPointer = async (next: { x: number; y: number }) => {
     setBusy(true);
     try {
@@ -318,8 +365,8 @@ export function ComputerScreenPanel({
     }
   };
 
-  const deskBox = (fill: boolean) => {
-    const box = screenLiveBox(pane, fill);
+  const deskBox = () => {
+    const box = screenLiveBox(pane, false);
     return box
       ? {
           position: "absolute" as const,
@@ -331,6 +378,9 @@ export function ComputerScreenPanel({
         }
       : { position: "absolute" as const, inset: 0, width: "100%", height: "100%", background: "#000" };
   };
+
+  const minutesLeft =
+    live && secondsLeft != null ? screenMinutesLeft(secondsLeft, secondsMarkedAt, nowMs) : null;
 
   return (
     <div
@@ -366,7 +416,7 @@ export function ComputerScreenPanel({
             src={live}
             title={t.screen}
             referrerPolicy="no-referrer"
-            style={{ ...deskBox(fillPane), border: 0 }}
+            style={{ ...deskBox(), border: 0 }}
           />
         ) : picture ? (
           <img
@@ -377,7 +427,7 @@ export function ComputerScreenPanel({
               const next = screenPoint(event.clientX - rect.left, event.clientY - rect.top, rect.width, rect.height);
               if (next) void sendPointer(next);
             }}
-            style={{ ...deskBox(false), objectFit: "contain", cursor: "crosshair" }}
+            style={{ ...deskBox(), objectFit: "contain", cursor: "crosshair" }}
           />
         ) : (
           <div
@@ -394,12 +444,38 @@ export function ComputerScreenPanel({
           >
             <p style={{ margin: 0 }}>{busy ? t.opening : note}</p>
             {!busy && note ? (
-              <button type="button" onClick={() => void openScreen()}>
+              <button
+                type="button"
+                onClick={() => {
+                  const run = () => void openScreen();
+                  if (onRequestOpen) onRequestOpen(run);
+                  else run();
+                }}
+              >
                 {t.open}
               </button>
             ) : null}
           </div>
         )}
+        {minutesLeft != null ? (
+          <div
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              zIndex: 2,
+              padding: "4px 8px",
+              borderRadius: 999,
+              background: "rgba(0,0,0,0.55)",
+              color: "#fff",
+              fontSize: 12,
+              lineHeight: "16px",
+              pointerEvents: "none",
+            }}
+          >
+            {t.minutesLeft.replace("{min}", String(minutesLeft))}
+          </div>
+        ) : null}
       </div>
     </div>
   );

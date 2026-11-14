@@ -385,7 +385,13 @@ export type RanchMessages = {
   openScreen: string;
   /** Confirm button when opening a screen would start or raise the hourly bill. */
   openScreenAt: string;
+  /** Short confirm button. The price stays in the message. */
+  screenOpen: string;
   screenConfirm: string;
+  /** Shown when the hourly screen price is not known yet. */
+  screenConfirmStart: string;
+  /** Added when leaving the screen starts a priced pause. Overseas pause is free. */
+  screenConfirmPause: string;
   /** Dock tab while a billed screen is open. */
   screenDock: string;
   sendConfirm: string;
@@ -1281,7 +1287,10 @@ const en: RanchMessages = {
   accountComputer: "Manage computers",
   openScreen: "Open computer screen",
   openScreenAt: "Open computer screen · {rate} credits/hr",
-  screenConfirm: "Open computer screen bills {rate} credits per hour.",
+  screenOpen: "Open",
+  screenConfirm: "Opening the screen bills {rate} credits per hour for 30 minutes, then it pauses.",
+  screenConfirmStart: "Opening the screen runs for 30 minutes, then it pauses.",
+  screenConfirmPause: "Pause bills {pause} credits per hour.",
   screenDock: "{label} · {rate} credits/hr",
   sendConfirm: "Sending starts this computer at {rate} credits per hour. Unused prepaid is returned.",
   manuscript: "Canvas",
@@ -2240,7 +2249,10 @@ const zh: RanchMessages = {
   accountComputer: "管理电脑",
   openScreen: "打开电脑屏幕",
   openScreenAt: "打开电脑屏幕 · {rate} 星币/小时",
-  screenConfirm: "打开电脑屏幕按 {rate} 星币/小时计费。",
+  screenOpen: "打开",
+  screenConfirm: "打开屏幕会按每小时 {rate} 星币计费，30 分钟后暂停。",
+  screenConfirmStart: "打开屏幕会先计 30 分钟，然后暂停。",
+  screenConfirmPause: "暂停后按每小时 {pause} 星币计费。",
   screenDock: "{label} · {rate} 星币/小时",
   sendConfirm: "发送后电脑按 {rate} 星币/小时计费。不用的预扣会退回。",
   manuscript: "画布",
@@ -2850,7 +2862,9 @@ const OVERSEAS_ZH: Partial<Record<keyof RanchMessages, string>> = {
   orchProposeOpenExistingAt: "打开已有群 · 每小时 {rate} credits",
   sendAt: "发送 · 每小时 {rate} credits",
   openScreenAt: "打开电脑屏幕 · 每小时 {rate} credits",
-  screenConfirm: "打开电脑屏幕按每小时 {rate} credits 计费。",
+  screenConfirm: "打开屏幕会按每小时 {rate} credits 计费，30 分钟后暂停。",
+  screenConfirmStart: "打开屏幕会先计 30 分钟，然后暂停。",
+  screenConfirmPause: "暂停后按每小时 {pause} credits 计费。",
   screenDock: "{label} · 每小时 {rate} credits",
   sendConfirm: "发送后电脑按每小时 {rate} credits 计费。不用的预扣会退回。",
   accountPlanFilesHint:
