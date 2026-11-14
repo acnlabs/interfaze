@@ -82,6 +82,7 @@ import {
 import {
   placeForDefaultComputer,
   screenAsksBeforeCharge,
+  screenConfirmMessage,
   omitSentRefs,
   sendAsksBeforeBoot,
   sendButtonLabel,
@@ -91,6 +92,7 @@ import {
 } from "../computerSendBoot";
 import { ComputerManagePanel } from "../ComputerManagePanel";
 import { ComputerScreenPanel } from "../ComputerScreenPanel";
+import { releaseScreenAway, screenAwayHeld } from "../computerScreenLive";
 import { MailboxThumbs } from "../MailboxThumbs";
 import { OwnerFileThumbs } from "../OwnerFileThumbs";
 import { anchorAttachment } from "../anchorAttachment";
@@ -3292,6 +3294,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const row = cloudComputers.find((item) => item.computer_id === id);
     const billed = rate ?? hint?.screenCreditsPerHour ?? row?.screen_credits_per_hour;
     const openNow = () => {
+      releaseScreenAway(id);
       setConfirmDialog(null);
       closeAccountSurfaces();
       setScreenComputer({ id, label });
@@ -3303,6 +3306,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setActiveDockId(tabId);
     };
     if (
+      !screenAwayHeld(id) &&
       !screenAsksBeforeCharge({
         status: hint?.status ?? row?.status,
         resumeCreditsPerHour: hint?.resumeCreditsPerHour ?? row?.resume_credits_per_hour,
@@ -3313,9 +3317,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
       return;
     }
     setConfirmDialog({
-      message: t.screenConfirm.replace("{rate}", billed == null ? "—" : String(billed)),
-      confirmLabel:
-        billed == null ? t.openScreen : t.openScreenAt.replace("{rate}", String(billed)),
+      message: screenConfirmMessage(billed, row?.paused_credits_per_hour, t),
+      confirmLabel: t.screenOpen,
       onConfirm: openNow,
     });
   };
@@ -6850,6 +6853,19 @@ export function RanchChatShell(props: RanchChatShellProps) {
             locale={uiLocale}
             chatId={active?.chat_id ?? null}
             embedded
+            onRequestOpen={(run) => {
+              const id = activeDock.id.slice("computer:".length);
+              const row = cloudComputers.find((item) => item.computer_id === id);
+              setConfirmDialog({
+                message: screenConfirmMessage(row?.screen_credits_per_hour, row?.paused_credits_per_hour, t),
+                confirmLabel: t.screenOpen,
+                onConfirm: () => {
+                  releaseScreenAway(id);
+                  setConfirmDialog(null);
+                  run();
+                },
+              });
+            }}
             onClose={() => closeTab(activeDock.id)}
           />
         ) : activeWindow && windowHostOrigin ? (

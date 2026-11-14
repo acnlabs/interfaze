@@ -20,6 +20,7 @@ const {
   omitSentRefs,
   placeForDefaultComputer,
   screenAsksBeforeCharge,
+  screenConfirmMessage,
 } = moduleExports;
 
 test("the send button prints the hourly rate only when this send would start a bill", () => {
@@ -226,6 +227,26 @@ test("the header screen button uses the chat place rates when the list has not l
   assert.match(panel, /aria-label=\{caption\}/);
   assert.doesNotMatch(panel, /asks \? caption : null/);
   assert.doesNotMatch(panel, /headerIconStyle\(on, asks\)/);
+});
+
+test("a priced pause is named in the screen confirm and a free pause is not", () => {
+  const copy = {
+    screenConfirm: "Opening the screen bills {rate} credits per hour for 30 minutes, then it pauses.",
+    screenConfirmStart: "Opening the screen runs for 30 minutes, then it pauses.",
+    screenConfirmPause: "Pause bills {pause} credits per hour.",
+  };
+  assert.equal(
+    screenConfirmMessage(85, 0, copy),
+    "Opening the screen bills 85 credits per hour for 30 minutes, then it pauses.",
+  );
+  assert.equal(
+    screenConfirmMessage(85, 11, copy),
+    "Opening the screen bills 85 credits per hour for 30 minutes, then it pauses. Pause bills 11 credits per hour.",
+  );
+  assert.equal(
+    screenConfirmMessage(null, 11, copy),
+    "Opening the screen runs for 30 minutes, then it pauses. Pause bills 11 credits per hour.",
+  );
 });
 
 test("opening a screen asks when it would raise the hourly rate", () => {

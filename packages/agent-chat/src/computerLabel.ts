@@ -4,6 +4,7 @@ export type ComputerNameRow = {
   status?: string | null;
   resume_credits_per_hour?: number;
   screen_credits_per_hour?: number;
+  paused_credits_per_hour?: number;
 };
 
 export function computerName(
@@ -36,4 +37,25 @@ export function chatComputerLabel(
     return locale === "zh" ? "Agent 的机器" : "Agent machine";
   }
   return computerName(isDefault, nthExtra, locale);
+}
+
+export type ComputerRunStatus = "running" | "paused" | "idle";
+
+/** Cloud computers report one of these. Anything else has no status mark. */
+export function computerRunStatus(status: string | null | undefined): ComputerRunStatus | null {
+  if (status === "running" || status === "paused" || status === "idle") return status;
+  return null;
+}
+
+const STATUS_WORD: Record<"en" | "zh", Record<ComputerRunStatus, string>> = {
+  en: { running: "On", paused: "Paused", idle: "Idle" },
+  zh: { running: "开着", paused: "暂停", idle: "空闲" },
+};
+
+export function computerStatusWord(
+  status: string | null | undefined,
+  locale: "en" | "zh",
+): string | null {
+  const mark = computerRunStatus(status);
+  return mark ? STATUS_WORD[locale][mark] : null;
 }

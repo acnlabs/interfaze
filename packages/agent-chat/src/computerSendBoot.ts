@@ -75,6 +75,17 @@ export function screenAsksBeforeCharge(hint: ScreenChargeHint): boolean {
   return screen > resume;
 }
 
+/** Confirm copy for a screen open. A priced pause adds its own sentence. */
+export function screenConfirmMessage(
+  rate: number | null | undefined,
+  pauseRate: number | null | undefined,
+  copy: { screenConfirm: string; screenConfirmStart: string; screenConfirmPause: string },
+): string {
+  const message = rate == null ? copy.screenConfirmStart : copy.screenConfirm.replace("{rate}", String(rate));
+  if ((pauseRate ?? 0) <= 0) return message;
+  return `${message} ${copy.screenConfirmPause.replace("{pause}", String(pauseRate))}`;
+}
+
 /** New group chats land on the default computer, not an extra one. */
 export function placeForDefaultComputer(computers: ListedComputer[]): ChatComputerPlace {
   const row = computers.find((item) => item.is_default) ?? computers[0];
