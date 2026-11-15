@@ -4715,18 +4715,56 @@ export function RanchChatShell(props: RanchChatShellProps) {
     const scroller = listRef.current;
     const content = listContentRef.current;
     if (!scroller || !content) return;
-    const onScroll = () => {
-      if (ignoreListScrollRef.current) return;
+    // Pictures load after the first pin and make the list taller. That scroll is
+    // not the user leaving the latest message, so only a real gesture counts.
+    // The gesture stays armed for the whole drag or wheel, not just the first pixel.
+    let pointer = false;
+    let touch = false;
+    let wheelUntil = 0;
+    const gesturing = () => pointer || touch || performance.now() < wheelUntil;
+    const armPointer = (event: Event) => {
+      if (event.target !== scroller) return;
+      pointer = true;
+    };
+    const disarmPointer = () => {
+      pointer = false;
+    };
+    const armTouch = () => {
+      touch = true;
+    };
+    const disarmTouch = () => {
+      touch = false;
+      wheelUntil = performance.now() + 700;
+    };
+    const armWheel = () => {
+      wheelUntil = performance.now() + 700;
+    };
+    const onUserScroll = () => {
+      if (ignoreListScrollRef.current || !gesturing()) return;
       const distance = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
       followBottomRef.current = distance < 64;
     };
-    scroller.addEventListener("scroll", onScroll, { passive: true });
+    scroller.addEventListener("scroll", onUserScroll, { passive: true });
+    scroller.addEventListener("wheel", armWheel, { passive: true });
+    scroller.addEventListener("touchmove", armTouch, { passive: true });
+    scroller.addEventListener("touchend", disarmTouch);
+    scroller.addEventListener("touchcancel", disarmTouch);
+    scroller.addEventListener("pointerdown", armPointer);
+    window.addEventListener("pointerup", disarmPointer);
+    window.addEventListener("pointercancel", disarmPointer);
     const observer = new ResizeObserver(() => {
       pinListToBottom();
     });
     observer.observe(content);
     return () => {
-      scroller.removeEventListener("scroll", onScroll);
+      scroller.removeEventListener("scroll", onUserScroll);
+      scroller.removeEventListener("wheel", armWheel);
+      scroller.removeEventListener("touchmove", armTouch);
+      scroller.removeEventListener("touchend", disarmTouch);
+      scroller.removeEventListener("touchcancel", disarmTouch);
+      scroller.removeEventListener("pointerdown", armPointer);
+      window.removeEventListener("pointerup", disarmPointer);
+      window.removeEventListener("pointercancel", disarmPointer);
       observer.disconnect();
     };
   }, [pinListToBottom, view, active?.chat_id]);
