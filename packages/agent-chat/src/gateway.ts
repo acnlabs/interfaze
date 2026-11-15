@@ -175,7 +175,7 @@ export type AgentEarnings = {
   tasks_completed_series: number[] | null;
 };
 
-/** Store model quota — never includes plaintext key material. */
+/** Store OpenRouter key. Never includes the plaintext secret. */
 export type AccountKey = {
   order_id: string;
   product_id?: string | null;
@@ -184,6 +184,16 @@ export type AccountKey = {
   created_at: string;
   written_agent_id?: string | null;
   written_agent_name?: string | null;
+  /** OpenRouter key name, or a masked label. */
+  label?: string | null;
+  /** Seller of this quota. Empty on older payloads; those rows are OpenRouter. */
+  provider?: string | null;
+  /** USD already consumed on this key. */
+  usage?: number | null;
+  /** USD cap on this key. */
+  limit?: number | null;
+  /** ISO expiry. Empty means the key does not expire. */
+  expires_at?: string | null;
 };
 
 export type AccountKeyList = {
@@ -1405,6 +1415,11 @@ export function createGatewayClient(
             created_at: row.created_at || "",
             written_agent_id: null,
             written_agent_name: null,
+            label: row.or_key_label ?? null,
+            provider: "OpenRouter",
+            usage: null,
+            limit: null,
+            expires_at: null,
           }));
         return { keys };
       }

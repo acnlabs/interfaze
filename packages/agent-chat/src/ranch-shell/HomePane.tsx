@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { formatCreditBalance, formatLedgerAmount, formatWholeCredits } from "../creditDisplay";
 import type { AgentEarnings, GatewayClient, HumanWallet, PlanUsage } from "../gateway";
 import type { RanchChatAccount } from "../types";
+import { copyText, subnetJoinPrompt } from "./connectPrompt";
 import type { RanchLocale, RanchMessages } from "./i18n";
-import { colors } from "./styles";
+import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
+import { useModalA11y } from "./useModalA11y";
 
 type AppId = "world" | "market" | "rankings" | "tasks" | "cultivators" | "feed" | "consensus";
 
@@ -21,10 +24,10 @@ function isMachineListing(row: Record<string, unknown>): boolean {
   return !!machine && typeof machine === "object" && String((machine as { kind?: unknown }).kind || "") === "am_machine";
 }
 
-const HOME_APPS: { id: AppId; href: string; cn: boolean }[] = [
-  { id: "world", href: "/world", cn: false },
-  { id: "cultivators", href: "/cultivators", cn: false },
-  { id: "feed", href: "/feed", cn: false },
+const HOME_APPS: { id: AppId; href: string }[] = [
+  { id: "world", href: "/world" },
+  { id: "cultivators", href: "/cultivators" },
+  { id: "feed", href: "/feed" },
 ];
 
 /** Same smoke/e2e names AgentPlanet hides on the public boards. */
@@ -45,13 +48,25 @@ const TEST_AGENT = [
 
 const HOME_SLOTS = 3;
 
-type BoardSeat = { id: string; name: string; note: string; metric: string; delta: number | null };
-
-function withSlots<T>(rows: T[]): Array<T | null> {
+function padSlots<T>(rows: T[]): Array<T | null> {
   const next: Array<T | null> = rows.slice(0, HOME_SLOTS);
   while (next.length < HOME_SLOTS) next.push(null);
   return next;
 }
+
+type BoardSeat = {
+  id: string;
+  name: string;
+  note: string;
+  metric: string;
+  delta: number | null;
+  launchId?: string;
+  voted?: boolean;
+  trial?: string;
+  tickets?: number;
+  owner?: boolean;
+  subnetId?: string;
+};
 
 type HomeBoards = {
   campaign: BoardSeat[];
@@ -81,12 +96,88 @@ type HomeTask = {
 
 type HomeTaskColumns = {
   cultivator: HomeTask[];
-  community: HomeTask[];
 };
 
+type HomeCommunityBoard = {
+  id: string;
+  name: string;
+  description: string;
+  categories: string[];
+  active: number;
+  credits: number;
+  pts: number;
+};
+
+const CULTIVATOR_BOARD_IDS = new Set(["tb_official_cultivator_cn", "tb_official_cultivator_global"]);
+
+function collapse(value: unknown): string {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function subnetSeats(body: unknown): BoardSeat[] {
+  const rows = Array.isArray((body as { subnets?: unknown } | null)?.subnets)
+    ? (body as { subnets: Array<Record<string, unknown>> }).subnets
+    : [];
+  const seats: BoardSeat[] = [];
+  for (const row of rows) {
+    const id = String(row.slug || "").trim();
+    const name = String(row.name || "").trim();
+    if (!id || !name) continue;
+    const agents = Number(row.agents);
+    seats.push({
+      id,
+      subnetId: id,
+      name,
+      note: collapse(row.description),
+      metric: formatWholeCredits(Number.isFinite(agents) ? agents : 0),
+      delta: null,
+    });
+    if (seats.length >= HOME_SLOTS) break;
+  }
+  return seats;
+}
+
 function oneLine(value: unknown): string {
-  const text = String(value || "").replace(/\s+/g, " ").trim();
+  const text = collapse(value);
   return text.length > 72 ? `${text.slice(0, 71)}…` : text;
+}
+
+const ACTIVE_TASK_STATUS = new Set(["open", "in_progress", "assigned", "submitted"]);
+
+function taskBounty(row: Record<string, unknown>): { credits: number; pts: number } {
+  const meta = row.metadata;
+  const display =
+    meta && typeof meta === "object" && typeof (meta as { reward_display?: unknown }).reward_display === "number"
+      ? (meta as { reward_display: number }).reward_display
+      : null;
+  const currency = String(row.reward_currency || "").toLowerCase();
+  const seats = Number(row.max_participants);
+  const multiplier = Number.isFinite(seats) && seats > 1 ? seats : 1;
+  if ((currency === "ap_points" || currency === "pts") && display != null && display > 0) {
+    return { credits: 0, pts: display * multiplier };
+  }
+  const budget = Number(row.total_budget);
+  if (Number.isFinite(budget) && budget > 0) return { credits: budget, pts: 0 };
+  const amount = Number(row.reward);
+  if (Number.isFinite(amount) && amount > 0 && (!currency || currency === "credits")) {
+    return { credits: amount * multiplier, pts: 0 };
+  }
+  return { credits: 0, pts: 0 };
+}
+
+function boardTaskStats(rows: Array<Record<string, unknown>>): Pick<HomeCommunityBoard, "active" | "credits" | "pts"> {
+  let active = 0;
+  let credits = 0;
+  let pts = 0;
+  for (const row of rows) {
+    const status = String(row.status || "").toLowerCase();
+    if (status === "cancelled" || status === "canceled") continue;
+    const bounty = taskBounty(row);
+    credits += bounty.credits;
+    pts += bounty.pts;
+    if (ACTIVE_TASK_STATUS.has(status) && row.is_expired !== true) active += 1;
+  }
+  return { active, credits, pts };
 }
 
 function isPublicAgent(id: string, name?: string | null): boolean {
@@ -99,6 +190,63 @@ function isNoisyTask(row: Record<string, unknown>): boolean {
   const title = String(row.title || "");
   const creator = String(row.creator_name || row.creator_display_name || "");
   return /\[QA TEST\]|smoke task/i.test(title) || !isPublicAgent(title, creator);
+}
+
+function communityBoards(rows: Array<Record<string, unknown>>): Array<Omit<HomeCommunityBoard, "active" | "credits" | "pts">> {
+  const boards: Array<Omit<HomeCommunityBoard, "active" | "credits" | "pts">> = [];
+  for (const row of rows) {
+    const id = String(row.board_id || "");
+    const name = String(row.name || "").trim();
+    const slug = String(row.slug || "");
+    const creatorId = String(row.creator_id || "");
+    if (!id || !name) continue;
+    if (row.status && String(row.status) !== "active") continue;
+    if (CULTIVATOR_BOARD_IDS.has(id) || (slug === "cultivator-tasks" && creatorId === "platform")) continue;
+    if (!isPublicAgent(name, String(row.creator_display_name || creatorId))) continue;
+    const categories = Array.isArray(row.allowed_task_types)
+      ? row.allowed_task_types.map((item) => collapse(item)).filter(Boolean)
+      : [];
+    boards.push({ id, name, description: collapse(row.theme), categories });
+    if (boards.length >= HOME_SLOTS) break;
+  }
+  return boards;
+}
+
+async function listBoardTasks(api: string, boardId: string): Promise<Array<Record<string, unknown>>> {
+  const rows: Array<Record<string, unknown>> = [];
+  let offset = 0;
+  for (let page = 0; page < 5; page += 1) {
+    const body = await readJson(
+      `${api}/api/labs/tasks?board_id=${encodeURIComponent(boardId)}&limit=100&offset=${offset}`,
+    );
+    const tasks = Array.isArray((body as { tasks?: unknown } | null)?.tasks)
+      ? (body as { tasks: Array<Record<string, unknown>> }).tasks
+      : [];
+    rows.push(...tasks);
+    const total = Number((body as { total?: unknown } | null)?.total);
+    const hasMore = (body as { has_more?: unknown } | null)?.has_more === true;
+    offset += tasks.length;
+    if (!hasMore || tasks.length === 0 || (Number.isFinite(total) && offset >= total)) break;
+  }
+  return rows;
+}
+
+function boardMainReward(row: Pick<HomeCommunityBoard, "credits" | "pts">, t: { homeTaskCredits: string; homeTaskPts: string }): string {
+  if (row.credits > 0) return `${formatWholeCredits(row.credits)} ${t.homeTaskCredits}`;
+  if (row.pts > 0) return `${formatWholeCredits(row.pts)} ${t.homeTaskPts}`;
+  return `0 ${t.homeTaskCredits}`;
+}
+
+function boardExtraReward(row: Pick<HomeCommunityBoard, "credits" | "pts">, t: { homeTaskPts: string }): string {
+  if (row.credits > 0 && row.pts > 0) return `${formatWholeCredits(row.pts)} ${t.homeTaskPts}`;
+  return "";
+}
+
+function taskMainReward(row: HomeTask, t: { homeTaskCredits: string; homeTaskPts: string }): string {
+  if (!row.reward) return `0 ${t.homeTaskPts}`;
+  if (row.rewardKind === "pts") return `${row.reward} ${t.homeTaskPts}`;
+  if (row.rewardKind === "credits") return `${row.reward} ${t.homeTaskCredits}`;
+  return row.reward;
 }
 
 function regionToday(cn: boolean): string {
@@ -157,13 +305,26 @@ function shortId(id: string): string {
   return bare.length > 12 ? `${bare.slice(0, 8)}…` : bare;
 }
 
-async function readJson(url: string): Promise<unknown | null> {
+async function readJson(url: string, token?: string | null): Promise<unknown | null> {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
     if (!res.ok) return null;
     return await res.json();
   } catch {
     return null;
+  }
+}
+
+async function writeJson(url: string, token: string, method: "POST" | "DELETE", body?: unknown): Promise<boolean> {
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return res.ok;
+  } catch {
+    return false;
   }
 }
 
@@ -395,15 +556,54 @@ const rankMetric: CSSProperties = {
 };
 
 const rankUnit: CSSProperties = {
-  gridColumn: 4,
-  gridRow: 2,
-  textAlign: "right",
   fontSize: 11,
   lineHeight: 1.35,
   fontWeight: 500,
   color: colors.muted,
   whiteSpace: "nowrap",
 };
+
+const rankActions: CSSProperties = {
+  gridColumn: 4,
+  gridRow: 2,
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "center",
+  gap: 8,
+  whiteSpace: "nowrap",
+};
+
+const rankAction: CSSProperties = {
+  border: 0,
+  background: "transparent",
+  padding: 0,
+  fontSize: 11,
+  fontWeight: 650,
+  color: "#3ddc97",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+function taskSlot(index: number) {
+  return (
+    <div style={taskLink} aria-hidden>
+      <span style={{ ...taskMark, background: "rgba(232,238,245,0.08)" }} />
+      <span style={taskCopy}>
+        <span style={taskNameLine}>
+          <span style={slotBar(index === 1 ? 96 : 128, 10)} />
+          <span style={{ flex: 1 }} />
+          <span style={slotBar(44, 10)} />
+        </span>
+        <span style={taskDetail}>
+          <span style={slotBar(index === 0 ? 176 : 148, 8)} />
+        </span>
+        <span style={taskMetaLine}>
+          <span style={slotBar(72, 8)} />
+        </span>
+      </span>
+    </div>
+  );
+}
 
 function slotBar(width: number | string, height = 8): CSSProperties {
   return {
@@ -498,13 +698,15 @@ const taskStack: CSSProperties = {
 
 const taskLink: CSSProperties = {
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: 10,
   minWidth: 0,
+  height: 72,
   padding: "8px 4px",
   borderRadius: 8,
   color: colors.text,
   textDecoration: "none",
+  boxSizing: "border-box",
 };
 
 const taskMark: CSSProperties = {
@@ -544,6 +746,40 @@ const taskDesc: CSSProperties = {
   lineHeight: 1.35,
   color: colors.muted,
   whiteSpace: "nowrap",
+};
+
+const taskNameLine: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  minWidth: 0,
+  height: 20,
+};
+
+const taskDetail: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  minWidth: 0,
+  height: 16,
+  overflow: "hidden",
+  fontSize: 11,
+  lineHeight: "16px",
+  color: colors.muted,
+  whiteSpace: "nowrap",
+};
+
+const taskDetailText: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const taskMetaLine: CSSProperties = {
+  ...taskDesc,
+  height: 16,
+  overflow: "hidden",
 };
 
 const taskReward: CSSProperties = {
@@ -779,6 +1015,23 @@ function earnedSeriesMicros(earnings: AgentEarnings | null): number[] | null {
   return earnings.series.map((value) => Math.trunc(value) * MICROS_PER_CREDIT);
 }
 
+function windowMicros(micros: number | null | undefined, whole: number | null): number | null {
+  if (micros != null) return micros;
+  if (whole == null) return null;
+  return Math.trunc(whole) * MICROS_PER_CREDIT;
+}
+
+/** Percent vs the previous 7 days. Both windows at 0 is a flat 0, not a hidden rate. */
+function earnedDeltaPct(earnings: AgentEarnings | null): number | null {
+  if (!earnings) return null;
+  if (earnings.delta_pct != null) return earnings.delta_pct;
+  const current = windowMicros(earnings.current_micros, earnings.current);
+  const previous = windowMicros(earnings.previous_micros, earnings.previous);
+  if (current == null || previous == null) return null;
+  if (previous === 0 && current === 0) return 0;
+  return null;
+}
+
 function ColumnTitle({ href, children }: { href: string; children: string }) {
   return (
     <a href={href} target="_blank" rel="noopener noreferrer" style={columnTitle}>
@@ -854,6 +1107,8 @@ export function HomeRightPane({
   messages: t,
   onOpenPlan,
   onOpenWallet,
+  onStartChat,
+  getAccessToken,
 }: {
   account: RanchChatAccount | null;
   client: GatewayClient;
@@ -864,14 +1119,20 @@ export function HomeRightPane({
   messages: RanchMessages;
   onOpenPlan: () => void;
   onOpenWallet: () => void;
+  onStartChat: (agentId: string) => void;
+  getAccessToken: () => Promise<string | null>;
 }) {
   const [wallet, setWallet] = useState<HumanWallet | null>(null);
   const [plan, setPlan] = useState<PlanUsage | null>(null);
   const [agentEarnings, setAgentEarnings] = useState<AgentEarnings | null>(null);
   const [boards, setBoards] = useState<HomeBoards | null>(null);
+  const [networkRows, setNetworkRows] = useState<BoardSeat[] | null>(null);
   const [market, setMarket] = useState<HomeMarket | null>(null);
   const [taskColumns, setTaskColumns] = useState<HomeTaskColumns | null>(null);
-  const apps = withSlots(HOME_APPS.filter((app) => (cn ? app.cn : true)));
+  const [community, setCommunity] = useState<HomeCommunityBoard[] | null>(null);
+  const [rankBusy, setRankBusy] = useState<string | null>(null);
+  const [joinPrompt, setJoinPrompt] = useState<{ name: string; text: string } | null>(null);
+  const apps = HOME_APPS;
   const label = (account?.name || account?.email || t.account).trim();
   const pct = plan ? usedPercent(plan) : null;
   const resets = plan ? resetDate(plan, locale) : "";
@@ -884,6 +1145,7 @@ export function HomeRightPane({
           .replace("{limit}", formatWholeCredits(demand.limit_credits));
   const earnedNow = earnedMicros(agentEarnings);
   const earnedLine = earnedSeriesMicros(agentEarnings);
+  const earnedDelta = earnedDeltaPct(agentEarnings);
   const showEarnedChart = earnedLine?.some((value) => value > 0) ?? false;
 
   useEffect(() => {
@@ -926,11 +1188,12 @@ export function HomeRightPane({
     let cancelled = false;
     const day = regionToday(cn);
     void (async () => {
-      const [campaignBody, launchBody, rankBody, networkBody] = await Promise.all([
-        readJson(`${api}/api/rankings/campaigns`),
-        readJson(`${api}/api/launches?date=${day}&until=${day}&board=human`),
+      const token = await getAccessToken().catch(() => null);
+      if (cancelled) return;
+      const [campaignBody, launchBody, rankBody] = await Promise.all([
+        readJson(`${api}/api/rankings/campaigns`, token),
+        readJson(`${api}/api/launches?date=${day}&until=${day}&board=human`, token),
         readJson(`${api}/api/rankings/agents?window=7d&limit=20`),
-        readJson(`${api}/api/rankings/agents?window=7d&limit=20&sort=unique_callers`),
       ]);
       const campaignRows = Array.isArray((campaignBody as { agents?: unknown } | null)?.agents)
         ? (campaignBody as { agents: Array<Record<string, unknown>> }).agents
@@ -941,11 +1204,6 @@ export function HomeRightPane({
       const rankRows = Array.isArray((rankBody as { agents?: unknown } | null)?.agents)
         ? (rankBody as { agents: Array<Record<string, unknown>> }).agents
         : [];
-      const networkRows =
-        (networkBody as { sort?: unknown } | null)?.sort === "unique_callers" &&
-        Array.isArray((networkBody as { agents?: unknown } | null)?.agents)
-          ? (networkBody as { agents: Array<Record<string, unknown>> }).agents
-          : [];
       const launches = [...launchRows].sort((a, b) => {
         const votes = Number(b.human_vote_count || 0) - Number(a.human_vote_count || 0);
         if (votes) return votes;
@@ -962,8 +1220,7 @@ export function HomeRightPane({
       const campaignHead = head(campaignRows);
       const launchHead = head(launches, (row) => String(row.agent_name || ""));
       const rankHead = head(rankRows, (row) => String(row.name || ""));
-      const networkHead = head(networkRows, (row) => String(row.name || ""));
-      const picked = [...campaignHead, ...launchHead, ...rankHead, ...networkHead]
+      const picked = [...campaignHead, ...launchHead, ...rankHead]
         .map(idOf)
         .filter((id, index, all) => id && all.indexOf(id) === index);
       const profiles = new Map<string, { name: string; note: string }>();
@@ -979,17 +1236,22 @@ export function HomeRightPane({
         metric: string,
         delta: number | null,
         fallback?: string,
+        extra?: Pick<BoardSeat, "launchId" | "voted" | "trial" | "tickets" | "owner">,
       ): BoardSeat | null => {
         const profile = profiles.get(id);
         const name = (profile?.name || fallback || "").trim();
         if (!id || !isPublicAgent(id, name)) return null;
-        return { id, name: name || shortId(id), note: profile?.note || "", metric, delta };
+        return { id, name: name || shortId(id), note: profile?.note || "", metric, delta, ...extra };
       };
       const take = (rows: Array<BoardSeat | null>) => rows.filter((row): row is BoardSeat => !!row).slice(0, HOME_SLOTS);
       setBoards({
         campaign: take(
           campaignHead.map((row) =>
-            seat(String(row.agent_id || ""), formatWholeCredits(Number(row.vault_balance || 0)), null),
+            seat(String(row.agent_id || ""), formatWholeCredits(Number(row.vault_balance || 0)), null, undefined, {
+              trial: String(row.trial_status || "none"),
+              tickets: Number(row.tickets_remaining || 0),
+              owner: row.is_owner === true,
+            }),
           ),
         ),
         launch: take(
@@ -999,6 +1261,10 @@ export function HomeRightPane({
               formatWholeCredits(Number(row.human_vote_count || 0)),
               null,
               String(row.agent_name || ""),
+              {
+                launchId: String(row.launch_id || ""),
+                voted: row.voted === true,
+              },
             ),
           ),
         ),
@@ -1013,23 +1279,24 @@ export function HomeRightPane({
             );
           }),
         ),
-        network: take(
-          networkHead.map((row) => {
-            const wow = row.wow_pct;
-            return seat(
-              String(row.agent_id || ""),
-              compactCount(Number(row.unique_callers || 0)),
-              typeof wow === "number" && Number.isFinite(wow) ? wow : null,
-              String(row.name || ""),
-            );
-          }),
-        ),
+        network: [],
       });
     })();
     return () => {
       cancelled = true;
     };
-  }, [cn, gatewayBaseUrl]);
+  }, [cn, gatewayBaseUrl, getAccessToken]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setNetworkRows(null);
+    void readJson(`/api/subnets?region=${cn ? "cn" : "global"}`).then((body) => {
+      if (!cancelled) setNetworkRows(subnetSeats(body));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [cn]);
 
   useEffect(() => {
     const api = (gatewayBaseUrl || "").replace(/\/+$/, "");
@@ -1052,7 +1319,7 @@ export function HomeRightPane({
           .map((row) => ({
             id: String(row.product_id || ""),
             name: String(row.name || "").trim(),
-            description: oneLine(row.description),
+            description: collapse(row.description),
             catalog: isMachineListing(row) ? ("machine" as const) : null,
           }))
           .filter((row) => row.id && row.name)
@@ -1067,17 +1334,19 @@ export function HomeRightPane({
   useEffect(() => {
     const api = (gatewayBaseUrl || "").replace(/\/+$/, "");
     if (!api) {
-      setTaskColumns({ cultivator: [], community: [] });
+      setTaskColumns({ cultivator: [] });
+      setCommunity([]);
       return;
     }
     let cancelled = false;
     const market = cn ? "cn" : "global";
     void (async () => {
-      const [taskBody, boardBody] = await Promise.all([
+      const [taskBody, boardBody, communityBody] = await Promise.all([
         readJson(`${api}/api/labs/tasks?status=open&limit=50`),
         readJson(
           `${api}/api/labs/boards?market=${market}&status=active&official=true&xp_eligible=true&limit=20`,
         ),
+        readJson(`${api}/api/labs/boards?market=${market}&status=active&official=false&limit=20`),
       ]);
       if (cancelled) return;
       const listed = (body: unknown) =>
@@ -1116,17 +1385,67 @@ export function HomeRightPane({
           .filter((row) => row.id && row.title);
       setTaskColumns({
         cultivator: seats(rows.filter((row) => row.cultivator_work === true)),
-        community: seats(rows.filter((row) => row.cultivator_work !== true)),
       });
+      const picked = communityBoards(
+        Array.isArray(communityBody) ? (communityBody as Array<Record<string, unknown>>) : [],
+      );
+      const withStats = (
+        await Promise.all(
+          picked.map(async (board) => ({ ...board, ...boardTaskStats(await listBoardTasks(api, board.id)) })),
+        )
+      ).filter((board) => board.description || board.active > 0 || board.credits > 0 || board.pts > 0);
+      if (cancelled) return;
+      setCommunity(withStats);
     })();
     return () => {
       cancelled = true;
     };
   }, [cn, gatewayBaseUrl]);
 
+  const apiBase = (gatewayBaseUrl || "").replace(/\/+$/, "");
+
+  async function claimTicket(id: string) {
+    const token = await getAccessToken().catch(() => null);
+    if (!token || !apiBase) return;
+    setRankBusy(`claim:${id}`);
+    const ok = await writeJson(`${apiBase}/api/campaigns/tickets/claim`, token, "POST", { agent_id: id });
+    setRankBusy(null);
+    if (!ok) return;
+    setBoards((prev) =>
+      prev && {
+        ...prev,
+        campaign: prev.campaign.map((row) => (row.id === id ? { ...row, trial: "issued" } : row)),
+      },
+    );
+  }
+
+  async function toggleVote(row: BoardSeat) {
+    if (!row.launchId) return;
+    const token = await getAccessToken().catch(() => null);
+    if (!token || !apiBase) return;
+    setRankBusy(`vote:${row.id}`);
+    const ok = await writeJson(
+      `${apiBase}/api/launches/${encodeURIComponent(row.launchId)}/vote`,
+      token,
+      row.voted ? "DELETE" : "POST",
+    );
+    setRankBusy(null);
+    if (!ok) return;
+    const next = !row.voted;
+    const count = Math.max(0, Number(String(row.metric).replace(/,/g, "")) + (next ? 1 : -1));
+    setBoards((prev) =>
+      prev && {
+        ...prev,
+        launch: prev.launch.map((item) =>
+          item.id === row.id ? { ...item, voted: next, metric: formatWholeCredits(count) } : item,
+        ),
+      },
+    );
+  }
+
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-      <div className="ranch-thin-scroll" style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "18px 16px 56px" }}>
+      <div className="ranch-thin-scroll" style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "18px 16px 120px" }}>
         {account ? (
           <h2
             style={{
@@ -1223,7 +1542,7 @@ export function HomeRightPane({
                 </span>
               )}
             </span>
-            {agentEarnings?.delta_pct == null ? null : (
+            {earnedDelta == null ? null : (
               <span
                 style={{
                   position: "relative",
@@ -1234,7 +1553,7 @@ export function HomeRightPane({
                   fontSize: 11,
                 }}
               >
-                <RateHint up={agentEarnings.delta_pct >= 0} pct={agentEarnings.delta_pct} label={t.homeEarnedVersus} />
+                <RateHint up={earnedDelta >= 0} pct={earnedDelta} label={t.homeEarnedVersus} />
               </span>
             )}
             {showEarnedChart && earnedLine ? (
@@ -1276,7 +1595,7 @@ export function HomeRightPane({
                 </span>
               )}
             </span>
-            {process.env.NODE_ENV === "development" ? (
+            {agentEarnings?.tasks_active == null ? null : (
               <span
                 style={{
                   position: "relative",
@@ -1288,10 +1607,10 @@ export function HomeRightPane({
                   fontSize: 11,
                 }}
               >
-                <span style={{ flexShrink: 0, fontWeight: 650, color: "#3b82f6" }}>{t.homeTaskNoticeCount}</span>
+                <span style={{ flexShrink: 0, fontWeight: 650, color: "#3b82f6" }}>0</span>
                 <span style={{ color: colors.muted }}>{t.homeTaskNotice}</span>
               </span>
-            ) : null}
+            )}
             {agentEarnings?.tasks_completed_series?.some((value) => value > 0) ? (
               <span style={{ position: "absolute", right: 10, top: 28, bottom: 14, width: "40%", zIndex: 2 }}>
                 <TaskProgressCurve
@@ -1307,10 +1626,11 @@ export function HomeRightPane({
         </div>
         <h3
           style={{
-            margin: "28px 0 18px",
-            fontSize: 15,
+            margin: "40px 0 18px",
+            fontSize: 22,
             fontWeight: 650,
-            letterSpacing: "-0.01em",
+            letterSpacing: "-0.02em",
+            textAlign: "center",
           }}
         >
           {t.homeExploreTitle}
@@ -1333,13 +1653,12 @@ export function HomeRightPane({
                   taskColumns?.cultivator ?? [],
                   `/tasks?board=${cn ? "tb_official_cultivator_cn" : "tb_official_cultivator_global"}`,
                 ],
-                ["community", t.homeTaskCommunityPicks, taskColumns?.community ?? [], "/tasks"],
               ] as const
             ).map(([key, title, rows, path]) => (
               <div key={key} style={{ minWidth: 0 }}>
                 <ColumnTitle href={planetHref(agentPlanetBaseUrl, path)}>{title}</ColumnTitle>
                 <div style={taskStack}>
-                  {withSlots(rows).map((row, index) =>
+                  {padSlots(rows).map((row, index) =>
                     row ? (
                       <a
                         key={row.id}
@@ -1352,48 +1671,71 @@ export function HomeRightPane({
                           {(row.title.trim().slice(0, 1) || "?").toUpperCase()}
                         </span>
                         <span style={taskCopy}>
-                          <span style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+                          <span style={taskNameLine}>
                             <span style={{ ...boardName, flex: 1, minWidth: 0 }}>{row.title}</span>
-                            {row.reward ? (
-                              <span style={taskReward}>
-                                {row.reward}{" "}
-                                {row.rewardKind === "pts" ? t.homeTaskPts : row.rewardKind === "credits" ? t.homeTaskCredits : ""}
-                              </span>
-                            ) : null}
+                            <span style={taskReward}>{taskMainReward(row, t)}</span>
                           </span>
-                          {row.type || row.description ? (
-                            <span style={taskDesc}>
-                              {row.type ? <span style={taskType}>{row.type}</span> : null}
-                              {row.type && row.description ? (
-                                <span aria-hidden style={{ flexShrink: 0 }}>
-                                  ·
-                                </span>
-                              ) : null}
-                              {row.description ? (
-                                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-                                  {row.description}
-                                </span>
-                              ) : null}
-                            </span>
-                          ) : null}
+                          <span style={taskDetail}>
+                            <span style={taskDetailText}>{row.description || "\u00a0"}</span>
+                          </span>
+                          <span style={taskMetaLine}>
+                            {row.type ? <span style={taskType}>{row.type}</span> : "\u00a0"}
+                          </span>
                         </span>
                       </a>
                     ) : (
-                      <div key={`${key}-slot-${index}`} style={taskLink} aria-hidden>
-                        <span style={{ ...taskMark, background: "rgba(232,238,245,0.08)" }} />
-                        <span style={taskCopy}>
-                          <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                            <span style={slotBar(index === 1 ? 96 : 128, 10)} />
-                            <span style={slotBar(44, 10)} />
-                          </span>
-                          <span style={slotBar(index === 0 ? 176 : 148)} />
-                        </span>
-                      </div>
+                      <div key={`${key}-slot-${index}`}>{taskSlot(index)}</div>
                     ),
                   )}
                 </div>
               </div>
             ))}
+            <div style={{ minWidth: 0 }}>
+              <ColumnTitle href={planetHref(agentPlanetBaseUrl, "/tasks")}>{t.homeTaskCommunityPicks}</ColumnTitle>
+              <div style={taskStack}>
+                {padSlots(community ?? []).map((row, index) =>
+                  row ? (
+                    <a
+                      key={row.id}
+                      href={planetHref(agentPlanetBaseUrl, `/tasks?board=${encodeURIComponent(row.id)}`)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={taskLink}
+                    >
+                      <span style={{ ...taskMark, background: TASK_MARKS[index % TASK_MARKS.length] }} aria-hidden>
+                        {(row.name.trim().slice(0, 1) || "?").toUpperCase()}
+                      </span>
+                      <span style={taskCopy}>
+                        <span style={taskNameLine}>
+                          <span style={{ ...boardName, flex: 1, minWidth: 0 }}>{row.name}</span>
+                          <span style={taskReward}>{boardMainReward(row, t)}</span>
+                        </span>
+                        <span style={taskDetail}>
+                          <span style={taskDetailText}>{row.description || "\u00a0"}</span>
+                        </span>
+                        <span style={taskMetaLine}>
+                          <span style={taskType}>{row.categories.length ? row.categories.join(", ") : t.homeBoardAny}</span>
+                          <span aria-hidden style={{ flexShrink: 0 }}>
+                            ·
+                          </span>
+                          <span style={{ flexShrink: 0 }}>{t.homeBoardActive(row.active)}</span>
+                          {boardExtraReward(row, t) ? (
+                            <>
+                              <span aria-hidden style={{ flexShrink: 0 }}>
+                                ·
+                              </span>
+                              <span style={{ flexShrink: 0 }}>{boardExtraReward(row, t)}</span>
+                            </>
+                          ) : null}
+                        </span>
+                      </span>
+                    </a>
+                  ) : (
+                    <div key={`community-slot-${index}`}>{taskSlot(index)}</div>
+                  ),
+                )}
+              </div>
+            </div>
           </div>
         </div>
         <div style={sectionBlock}>
@@ -1413,47 +1755,112 @@ export function HomeRightPane({
               ["campaign", t.homeBoardCampaign, "/rankings?view=campaign", t.homeRankCredits],
               ["launch", t.homeBoardLaunch, "/rankings?view=launch", t.homeRankVotes],
               ["leaderboard", t.homeBoardLeaderboard, "/rankings?view=leaderboard", t.homeRankTokens],
-              ["network", t.homeBoardNetwork, "/rankings?view=network", t.homeRankCallers],
+              ["network", t.homeBoardNetwork, "/world", t.homeRankAgents],
             ] as const
           ).map(([key, title, path, unit]) => {
-            const rows = withSlots(boards?.[key] ?? []);
+            const rows = key === "network" ? networkRows : boards ? boards[key] : null;
             const href = planetHref(agentPlanetBaseUrl, path);
             return (
               <div key={key} style={{ minWidth: 0 }}>
                 <ColumnTitle href={href}>{title}</ColumnTitle>
-                {rows.map((row, index) =>
+                {padSlots(rows ?? []).map((row, index) =>
                   row ? (
-                    <a
-                      key={row.id}
-                      href={planetHref(agentPlanetBaseUrl, `/agents/${encodeURIComponent(row.id)}`)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={rankRow}
-                    >
+                    <div key={row.id} style={rankRow}>
                       <span style={rankNum}>{index + 1}</span>
                       <span style={rankMark} aria-hidden>
                         {(row.name.trim().slice(0, 1) || "?").toUpperCase()}
                       </span>
-                      <span style={rankName}>{row.name}</span>
-                      <span style={rankMetric}>{row.metric}</span>
-                      <span style={rankNote}>{row.note}</span>
-                      {row.delta != null ? (
-                        <span style={{ ...rankUnit, fontWeight: 650, color: row.delta >= 0 ? "#3ddc97" : "#f87171" }}>
-                          {row.delta >= 0 ? "↑" : "↓"}
-                          {Math.abs(Math.round(row.delta))}%
-                        </span>
+                      {row.subnetId ? (
+                        <span style={rankName}>{row.name}</span>
                       ) : (
-                        <span style={rankUnit}>{unit}</span>
+                        <a
+                          href={planetHref(agentPlanetBaseUrl, `/agents/${encodeURIComponent(row.id)}`)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ ...rankName, color: "inherit", textDecoration: "none" }}
+                        >
+                          {row.name}
+                        </a>
                       )}
-                    </a>
+                      <span style={rankMetric}>
+                        {row.metric}
+                        <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 500, color: colors.muted }}>
+                          {row.subnetId ? t.homeRankAgents : unit}
+                        </span>
+                      </span>
+                      {row.subnetId ? (
+                        <span style={rankNote}>{row.note || "\u00a0"}</span>
+                      ) : (
+                        <a
+                          href={planetHref(agentPlanetBaseUrl, `/agents/${encodeURIComponent(row.id)}`)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ ...rankNote, color: colors.muted, textDecoration: "none" }}
+                        >
+                          {row.note || "\u00a0"}
+                        </a>
+                      )}
+                      <span style={rankActions}>
+                        {row.delta != null ? (
+                          <span style={{ ...rankUnit, fontWeight: 650, color: row.delta >= 0 ? "#3ddc97" : "#f87171" }}>
+                            {row.delta >= 0 ? "↑" : "↓"}
+                            {Math.abs(Math.round(row.delta))}%
+                          </span>
+                        ) : null}
+                        {row.subnetId ? (
+                          <button
+                            type="button"
+                            style={rankAction}
+                            onClick={() =>
+                              setJoinPrompt({
+                                name: row.name,
+                                text: subnetJoinPrompt(locale, row.name, row.subnetId || ""),
+                              })
+                            }
+                          >
+                            {t.homeRankJoin}
+                          </button>
+                        ) : (
+                          <button type="button" style={rankAction} onClick={() => onStartChat(row.id)}>
+                            {t.homeRankChat}
+                          </button>
+                        )}
+                        {key === "campaign" && !row.owner ? (
+                          <button
+                            type="button"
+                            style={{
+                              ...rankAction,
+                              color: row.trial === "none" && row.tickets ? "#3ddc97" : colors.muted,
+                            }}
+                            disabled={row.trial !== "none" || !row.tickets || rankBusy === `claim:${row.id}`}
+                            onClick={() => void claimTicket(row.id)}
+                          >
+                            {row.trial === "redeemed"
+                              ? t.homeRankClaimUsed
+                              : row.trial === "issued"
+                                ? t.homeRankClaimed
+                                : t.homeRankClaim}
+                          </button>
+                        ) : null}
+                        {key === "launch" && row.launchId ? (
+                          <button
+                            type="button"
+                            style={rankAction}
+                            disabled={rankBusy === `vote:${row.id}`}
+                            onClick={() => void toggleVote(row)}
+                          >
+                            {row.voted ? t.homeRankVoted : t.homeRankVote}
+                          </button>
+                        ) : null}
+                      </span>
+                    </div>
                   ) : (
                     <div key={`${key}-slot-${index}`} style={rankRow} aria-hidden>
                       <span style={rankNum}>{index + 1}</span>
                       <span style={{ ...rankMark, background: "rgba(232,238,245,0.08)" }} />
                       <span style={{ ...slotBar(index === 1 ? 96 : 128, 10), gridColumn: 3, gridRow: 1, alignSelf: "center" }} />
-                      <span style={{ ...slotBar(36, 10), gridColumn: 4, gridRow: 1, justifySelf: "end", alignSelf: "center" }} />
+                      <span style={{ ...slotBar(72, 10), gridColumn: 4, gridRow: 1, justifySelf: "end", alignSelf: "center" }} />
                       <span style={{ ...slotBar(index === 0 ? 176 : 148), gridColumn: 3, gridRow: 2, alignSelf: "center" }} />
-                      <span style={{ ...slotBar(44), gridColumn: 4, gridRow: 2, justifySelf: "end", alignSelf: "center" }} />
                     </div>
                   ),
                 )}
@@ -1467,7 +1874,7 @@ export function HomeRightPane({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
               gap: 16,
               alignItems: "start",
             }}
@@ -1475,35 +1882,24 @@ export function HomeRightPane({
             <div style={{ minWidth: 0 }}>
               <div style={{ ...boardTitle, marginBottom: 8 }}>{t.homeAppsOfficial}</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                {apps.map((app, index) =>
-                  app ? (
-                    <AppRow
-                      key={app.id}
-                      href={planetHref(agentPlanetBaseUrl, app.href)}
-                      name={appLabel(app.id, t)}
-                      description={appHint(app.id, t)}
-                    />
-                  ) : (
-                    <AppSlot key={`official-slot-${index}`} index={index} />
-                  ),
-                )}
+                {apps.map((app) => (
+                  <AppRow
+                    key={app.id}
+                    href={planetHref(agentPlanetBaseUrl, app.href)}
+                    name={appLabel(app.id, t)}
+                    description={appHint(app.id, t)}
+                  />
+                ))}
               </div>
             </div>
-            {(
-              [
-                ["plugins", t.homeAppsPlugins],
-                ["skills", t.homeAppsSkills],
-              ] as const
-            ).map(([key, title]) => (
-              <div key={key} style={{ minWidth: 0 }}>
-                <div style={{ ...boardTitle, marginBottom: 8 }}>{title}</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  {Array.from({ length: HOME_SLOTS }, (_, index) => (
-                    <AppSlot key={`${key}-slot-${index}`} index={index} />
-                  ))}
-                </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ ...boardTitle, marginBottom: 8 }}>{t.homeAppsSkills}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                {Array.from({ length: HOME_SLOTS }, (_, index) => (
+                  <AppSlot key={`skills-slot-${index}`} index={index} />
+                ))}
               </div>
-            ))}
+            </div>
           </div>
         </div>
         <div style={sectionBlock}>
@@ -1518,14 +1914,14 @@ export function HomeRightPane({
           >
             {(
               [
-                ["official", t.homeMarketOfficial, market?.official ?? []],
-                ["agents", t.homeMarketAgents, market?.agents ?? []],
+                ["official", t.homeMarketOfficial, market ? market.official : null],
+                ["agents", t.homeMarketAgents, market ? market.agents : null],
               ] as const
             ).map(([key, title, rows]) => (
               <div key={key} style={{ minWidth: 0 }}>
                 <div style={{ ...boardTitle, marginBottom: 8 }}>{title}</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  {withSlots(rows).map((row, index) =>
+                  {padSlots(rows ?? []).map((row, index) =>
                     row ? (
                       <AppRow
                         key={row.id}
@@ -1546,6 +1942,117 @@ export function HomeRightPane({
           </div>
         </div>
       </div>
+      {joinPrompt ? (
+        <SubnetJoinDialog
+          name={joinPrompt.name}
+          prompt={joinPrompt.text}
+          t={t}
+          onClose={() => setJoinPrompt(null)}
+        />
+      ) : null}
     </div>
   );
 }
+
+function SubnetJoinDialog({
+  name,
+  prompt,
+  t,
+  onClose,
+}: {
+  name: string;
+  prompt: string;
+  t: RanchMessages;
+  onClose: () => void;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
+  useModalA11y({ open: true, onClose, containerRef: cardRef });
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={name}
+      style={joinOverlay}
+      onClick={onClose}
+    >
+      <div ref={cardRef} tabIndex={-1} style={joinCard} onClick={(event) => event.stopPropagation()}>
+        <div style={joinHeader}>
+          <strong style={{ fontSize: 16 }}>{name}</strong>
+          <button type="button" onClick={onClose} style={btnGhost} aria-label={t.close}>
+            ✕
+          </button>
+        </div>
+        <div style={joinBody}>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: colors.muted }}>{t.homeSubnetJoinHint}</p>
+          <textarea readOnly value={prompt} style={joinPromptBox} />
+          <button
+            type="button"
+            style={{ ...btnPrimary, width: "100%" }}
+            onClick={() => {
+              void copyText(prompt).then((ok) => {
+                if (!ok) return;
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1600);
+              });
+            }}
+          >
+            {copied ? t.promptCopied : t.copyPromptForAgent}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+const joinOverlay: CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 10050,
+  background: "rgba(0,0,0,0.55)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 16,
+};
+
+const joinCard: CSSProperties = {
+  width: "min(440px, 100%)",
+  maxHeight: "85%",
+  background: colors.panel,
+  border: `1px solid ${colors.border}`,
+  borderRadius: 16,
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+  boxShadow: "0 25px 50px rgba(0,0,0,0.45)",
+};
+
+const joinHeader: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "14px 16px",
+  borderBottom: `1px solid ${colors.border}`,
+  flexShrink: 0,
+};
+
+const joinBody: CSSProperties = {
+  overflow: "auto",
+  padding: 16,
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+};
+
+const joinPromptBox: CSSProperties = {
+  ...inputStyle,
+  minHeight: 160,
+  resize: "vertical",
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+  fontSize: 12,
+  lineHeight: 1.45,
+  color: colors.text,
+};

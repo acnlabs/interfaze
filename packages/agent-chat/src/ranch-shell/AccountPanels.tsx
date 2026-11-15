@@ -1,6 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import type {
   AccountKey,
@@ -36,6 +47,7 @@ import {
   settingsSectionHint,
   settingsSectionTitle,
 } from "./styles";
+import { ListFoldButton, useListPreview } from "./listPreview";
 import { useModalA11y } from "./useModalA11y";
 import {
   buildWalletCheckoutUrl,
@@ -45,6 +57,7 @@ import {
   resolveInterfazeOrigin,
 } from "./interfazeHost";
 import { fmtTxTimeShort, txDetailLine, txTypeLabel } from "./txDisplay";
+import { accountPanelHref, type AccountDeepLinkPanel } from "./accountDeepLink";
 
 /** Shared card container for all account panel sections. */
 const card: CSSProperties = {
@@ -133,10 +146,12 @@ function AvatarDot({ label, size = 34 }: { label: string; size?: number }) {
 function RowButton({
   onClick,
   disabled = false,
+  expanded,
   children,
 }: {
   onClick?: () => void;
   disabled?: boolean;
+  expanded?: boolean;
   children: ReactNode;
 }) {
   const [hover, hoverProps] = useHover();
@@ -145,6 +160,7 @@ function RowButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-expanded={expanded}
       {...hoverProps}
       style={{
         width: "100%",
@@ -175,21 +191,62 @@ function PanelChrome({
   onClose,
   closeLabel,
   children,
+  chrome = "overlay",
+  divided = true,
+  titleSize = "page",
 }: {
   title: string;
   onClose: () => void;
   closeLabel: string;
   children: ReactNode;
+  /** overlay: own full-pane page. bare: a block in the account scroll. back: drill-in that covers the pane. flow-back: drill-in that stays in the scroll. */
+  chrome?: "overlay" | "bare" | "back" | "flow-back";
+  /** When false, this block runs into the next one. Used so model quota stays inside Plan. */
+  divided?: boolean;
+  /** page: section heading. sub: a heading inside a section. */
+  titleSize?: "page" | "sub";
 }) {
+  if (chrome === "bare" || chrome === "flow-back") {
+    const headingStyle: CSSProperties =
+      titleSize === "sub"
+        ? { margin: "0 0 14px", fontSize: 13, fontWeight: 650, letterSpacing: "0.01em" }
+        : { margin: "0 0 14px", fontSize: 16, fontWeight: 650, letterSpacing: "-0.01em" };
+    return (
+      <div
+        style={{
+          padding: titleSize === "sub" ? "4px 20px 36px" : "22px 20px 36px",
+          borderBottom: divided ? "1px solid rgba(255,255,255,0.12)" : "none",
+        }}
+      >
+        <div style={{ maxWidth: 680, width: "100%", margin: "0 auto" }}>
+          {chrome === "flow-back" ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <button type="button" style={btnIcon} onClick={onClose} aria-label={closeLabel}>
+                ←
+              </button>
+              <h2 style={{ ...headingStyle, margin: 0 }}>{title}</h2>
+            </div>
+          ) : titleSize === "sub" ? (
+            <h3 style={headingStyle}>{title}</h3>
+          ) : (
+            <h2 style={headingStyle}>{title}</h2>
+          )}
+          {children}
+        </div>
+      </div>
+    );
+  }
+  const inShell = chrome !== "overlay";
   return (
     <div
       style={{
         position: "absolute",
         inset: 0,
-        zIndex: 40,
+        zIndex: inShell ? 1 : 40,
         background: colors.bg,
         display: "flex",
         flexDirection: "column",
+        minHeight: 0,
       }}
     >
       <div
@@ -204,16 +261,332 @@ function PanelChrome({
           backdropFilter: "blur(8px)",
         }}
       >
-        <button type="button" style={btnIcon} onClick={onClose} aria-label={closeLabel}>
-          ←
-        </button>
-        <strong style={{ fontSize: 16, fontWeight: 650, flex: 1, letterSpacing: "-0.01em" }}>
-          {title}
-        </strong>
-        <span style={{ width: 28 }} />
-      </div>
-      <div style={{ flex: 1, overflow: "auto", padding: "20px 20px 32px" }}>
+          <button type="button" style={btnIcon} onClick={onClose} aria-label={closeLabel}>
+            ←
+          </button>
+          <strong style={{ fontSize: 16, fontWeight: 650, flex: 1, letterSpacing: "-0.01em" }}>
+            {title}
+          </strong>
+          <span style={{ width: 28 }} />
+        </div>
+      <div
+        style={{
+          flex: 1,
+          overflow: "auto",
+          padding: "20px 20px 32px",
+        }}
+      >
         <div style={{ maxWidth: 680, width: "100%", margin: "0 auto" }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export type AccountShellSection = "profile" | "manage" | "wallet" | "billing" | "plan" | "keys";
+
+const ACCOUNT_NAV: Array<{ id: AccountShellSection; panel: AccountDeepLinkPanel }> = [
+  { id: "profile", panel: "profile" },
+  { id: "wallet", panel: "wallet" },
+  { id: "manage", panel: "manage" },
+  { id: "plan", panel: "plan" },
+  { id: "keys", panel: "keys" },
+  { id: "billing", panel: "billing" },
+];
+
+export type AccountNavChild = {
+  id: string;
+  label: string;
+  href?: string;
+  active?: boolean;
+  disabled?: boolean;
+  badge?: string;
+  onSelect?: () => void;
+};
+
+export type AccountSubnav = {
+  section: AccountShellSection;
+  items: AccountNavChild[];
+};
+
+function AccountNavLink({
+  href,
+  label,
+  active,
+  quiet = false,
+  nested = false,
+  disabled = false,
+  badge,
+  onSelect,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+  quiet?: boolean;
+  nested?: boolean;
+  disabled?: boolean;
+  badge?: string;
+  onSelect: () => void;
+}) {
+  const [hover, hoverProps] = useHover();
+  const style: CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    flexShrink: 0,
+    gap: 6,
+    padding: nested ? "7px 12px 7px 22px" : "9px 12px",
+    borderRadius: 8,
+    textDecoration: "none",
+    color: disabled ? colors.muted : active || quiet ? colors.text : colors.muted,
+    background: active ? colors.panel : !disabled && hover ? colors.hover : "transparent",
+    fontSize: 13,
+    fontWeight: active || quiet ? 600 : 500,
+    lineHeight: 1.3,
+    whiteSpace: "nowrap",
+    opacity: disabled ? 0.7 : 1,
+    cursor: disabled ? "default" : "pointer",
+  };
+  const body = (
+    <>
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
+      {badge ? (
+        <span style={{ fontSize: 10, fontWeight: 600, color: colors.muted }}>{badge}</span>
+      ) : null}
+    </>
+  );
+  if (disabled) {
+    return <span style={style}>{body}</span>;
+  }
+  return (
+    <a
+      href={href}
+      aria-current={active ? "page" : undefined}
+      onClick={(e: ReactMouseEvent<HTMLAnchorElement>) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        onSelect();
+      }}
+      {...hoverProps}
+      style={style}
+    >
+      {body}
+    </a>
+  );
+}
+
+function accountScrollHint(id: string | undefined): string | null {
+  switch (id) {
+    case "account-profile":
+      return "profile";
+    case "account-wallet":
+      return "wallet";
+    case "account-agents":
+      return "agents";
+    case "account-computers":
+      return "computers";
+    case "account-plan":
+      return "plan";
+    case "account-keys":
+      return "keys";
+    case "account-billing":
+      return "billing";
+    default:
+      return null;
+  }
+}
+
+/** One account page: sections stack in a scroller. The rail stays put and scrolls to a section. */
+export function AccountShell({
+  section,
+  placement,
+  messages: t,
+  onClose,
+  onSelect,
+  subnav,
+  scrollRequest,
+  onActiveSection,
+  children,
+}: {
+  section: AccountShellSection;
+  placement: "side" | "top";
+  messages: RanchMessages;
+  onClose: () => void;
+  onSelect: (section: AccountShellSection) => void;
+  /** Sub-items stay visible. They scroll to a block; they do not swap the page. */
+  subnav?: AccountSubnav | null;
+  /** Ask the scroller to bring this block to the top. `nonce` repeats a scroll to the same id. */
+  scrollRequest?: { id: string; nonce: number } | null;
+  /** The block nearest the top of the scroll. Does not remount the page. */
+  onActiveSection?: (id: string) => void;
+  children: ReactNode;
+}) {
+  const top = placement === "top";
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const reportedRef = useRef<string | null>(null);
+  const onActiveRef = useRef(onActiveSection);
+  onActiveRef.current = onActiveSection;
+  const shown = activeId ?? accountScrollHint(scrollRequest?.id) ?? section;
+  const manageChildActive = shown === "agents" || shown === "computers";
+  const markActive = (id: string | null) => {
+    if (!id || id === reportedRef.current) return;
+    reportedRef.current = id;
+    setActiveId(id);
+    onActiveRef.current?.(id);
+  };
+
+  useLayoutEffect(() => {
+    const request = scrollRequest;
+    const scroller = scrollerRef.current;
+    if (!request || !scroller) return;
+    let follow = true;
+    const scroll = () => {
+      if (!follow) return;
+      const el = scroller.querySelector<HTMLElement>(`#${request.id}`);
+      if (!el) return;
+      const y = Math.max(0, el.offsetTop - (top ? 0 : 34));
+      if (Math.abs(scroller.scrollTop - y) > 2) scroller.scrollTo({ top: y });
+      const marker =
+        el.closest("[data-account-section]")?.getAttribute("data-account-section") ??
+        el.getAttribute("data-account-section");
+      if (marker) markActive(marker);
+    };
+    scroll();
+    const observer = new ResizeObserver(scroll);
+    scroller.querySelectorAll<HTMLElement>("[data-account-section], #account-keys").forEach((el) => {
+      observer.observe(el);
+    });
+    const stop = () => {
+      follow = false;
+    };
+    scroller.addEventListener("wheel", stop, { passive: true });
+    scroller.addEventListener("touchstart", stop, { passive: true });
+    scroller.addEventListener("pointerdown", stop);
+    const timer = window.setTimeout(stop, 1500);
+    return () => {
+      follow = false;
+      observer.disconnect();
+      window.clearTimeout(timer);
+      scroller.removeEventListener("wheel", stop);
+      scroller.removeEventListener("touchstart", stop);
+      scroller.removeEventListener("pointerdown", stop);
+    };
+  }, [scrollRequest?.id, scrollRequest?.nonce]);
+
+  useEffect(() => {
+    const root = scrollerRef.current;
+    if (!root) return;
+    const onScroll = () => {
+      const line = root.scrollTop + (top ? 28 : 48);
+      let current: string | null = null;
+      root.querySelectorAll<HTMLElement>("[data-account-section]").forEach((el) => {
+        if (el.offsetTop <= line) current = el.getAttribute("data-account-section");
+      });
+      if (current) markActive(current);
+    };
+    root.addEventListener("scroll", onScroll, { passive: true });
+    return () => root.removeEventListener("scroll", onScroll);
+  }, []);
+  const labels: Record<AccountShellSection, string> = {
+    profile: t.accountProfile,
+    manage: t.accountManage,
+    wallet: t.accountWallet,
+    billing: t.accountBilling,
+    plan: t.accountPlanUsage,
+    keys: t.accountKeys,
+  };
+  const links = ACCOUNT_NAV.map((item) => (
+    <Fragment key={item.id}>
+      <AccountNavLink
+        href={accountPanelHref(item.panel)}
+        label={labels[item.id]}
+        active={shown === item.id}
+        quiet={item.id === "manage" && manageChildActive}
+        onSelect={() => onSelect(item.id)}
+      />
+      {subnav?.section === item.id
+        ? subnav.items.map((child) => (
+            <AccountNavLink
+              key={child.id}
+              href={child.href || accountPanelHref(item.panel)}
+              label={child.label}
+              active={shown === child.id}
+              disabled={child.disabled}
+              badge={child.badge}
+              nested
+              onSelect={() => child.onSelect?.()}
+            />
+          ))
+        : null}
+    </Fragment>
+  ));
+  const closeButton = (
+    <button
+      type="button"
+      style={{ ...btnIcon, flexShrink: 0, alignSelf: top ? undefined : "flex-start", marginBottom: top ? 0 : 8 }}
+      onClick={onClose}
+      aria-label={t.close}
+    >
+      ←
+    </button>
+  );
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 40,
+        background: colors.bg,
+        display: "flex",
+        flexDirection: top ? "column" : "row",
+        minHeight: 0,
+      }}
+    >
+      <nav
+        aria-label={t.account}
+        style={
+          top
+            ? {
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                flexShrink: 0,
+                minWidth: 0,
+                padding: "8px 10px",
+                borderBottom: `1px solid ${colors.border}`,
+                overflowX: "auto",
+                overflowY: "hidden",
+              }
+            : {
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "stretch",
+                gap: 2,
+                flexShrink: 0,
+                width: 220,
+                minWidth: 220,
+                padding: "12px 10px 20px",
+                overflowY: "auto",
+              }
+        }
+      >
+        {closeButton}
+        {links}
+      </nav>
+      <div
+        ref={scrollerRef}
+        className="ranch-thin-scroll"
+        style={{
+          position: "relative",
+          flex: 1,
+          minWidth: 0,
+          minHeight: 0,
+          overflow: "auto",
+          paddingBottom: "30vh",
+          paddingTop: top ? 0 : 34,
+        }}
+      >
+        {children}
       </div>
     </div>
   );
@@ -269,7 +642,7 @@ export function AccountProfilePanel({
   const initial = (name || email || t.account).slice(0, 1).toUpperCase() || "?";
 
   return (
-    <PanelChrome title={t.accountProfile} onClose={onClose} closeLabel={t.close}>
+    <PanelChrome title={t.accountProfile} onClose={onClose} closeLabel={t.close} chrome="bare">
       <div style={{ ...card, display: "flex", alignItems: "center", gap: 16, padding: 20 }}>
         {account.picture ? (
           <img
@@ -392,6 +765,7 @@ export function AccountPlanUsagePanel({
   interfazeBaseUrl = "https://interfaze.io",
   agentLabels = [],
   onClose,
+  divided = true,
   onRoomSpendCapsSaved,
 }: {
   client: GatewayClient;
@@ -403,6 +777,8 @@ export function AccountPlanUsagePanel({
   /** Names already known from the directory and direct chats. Owned agents are loaded here. */
   agentLabels?: Array<{ agentId?: string | null; name?: string | null }>;
   onClose: () => void;
+  /** When false, Plan runs into the model-quota block instead of closing the section. */
+  divided?: boolean;
   /** Fired after account default / UTC-month caps are saved. */
   onRoomSpendCapsSaved?: (prev: RoomSpendCaps, next: RoomSpendCaps) => void;
 }) {
@@ -602,6 +978,7 @@ export function AccountPlanUsagePanel({
       : data?.plan.label || "—";
   const used = data?.usage.dialog_credits ?? 0;
   const byAgent = data?.usage.by_agent ?? [];
+  const byAgentList = useListPreview(byAgent);
   const { dateLabel, daysLeft } = periodMeta(data?.period.end, locale);
   const paidUntilMeta = periodMeta(data?.plan.paid_until ?? undefined, locale);
   const odSpent = data?.on_demand?.spent_credits ?? used;
@@ -767,7 +1144,7 @@ export function AccountPlanUsagePanel({
   const currentCode = (data?.plan.code || "free").toLowerCase();
 
   return (
-    <PanelChrome title={t.accountPlanUsage} onClose={onClose} closeLabel={t.close}>
+    <PanelChrome title={t.accountPlanUsage} onClose={onClose} closeLabel={t.close} chrome="bare" divided={divided}>
       {loading ? (
         <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
       ) : error ? (
@@ -884,8 +1261,7 @@ export function AccountPlanUsagePanel({
                   const near = files.remaining_bytes <= quota * 0.1;
                   return (
                     <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600 }}>{t.accountPlanFiles}</span>
+                      <div style={{ display: "flex", justifyContent: "flex-end" }}>
                         <span
                           style={{
                             fontSize: 13,
@@ -924,8 +1300,7 @@ export function AccountPlanUsagePanel({
             <h3 style={planSectionLabel}>{t.accountPlanOnDemand}</h3>
             <div style={{ ...planCard, display: "flex", flexDirection: "column", gap: 18 }}>
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{t.accountPlanDialogUsage}</span>
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
                   <span
                     style={{
                       fontSize: 13,
@@ -1010,7 +1385,7 @@ export function AccountPlanUsagePanel({
                 <div>
                   <p style={{ ...sectionTitle, marginBottom: 6 }}>{t.accountPlanByAgent}</p>
                   <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                    {byAgent.map((row) => {
+                    {byAgentList.shown.map((row) => {
                       const share = odSpent > 0 ? row.credits / odSpent : 0;
                       const shown = usageAgentLabel(
                         row.agent_id,
@@ -1062,6 +1437,13 @@ export function AccountPlanUsagePanel({
                       );
                     })}
                   </ul>
+                  <ListFoldButton
+                    hidden={byAgentList.hidden}
+                    open={byAgentList.open}
+                    onToggle={byAgentList.toggle}
+                    moreLabel={fmtTpl(t.listShowMore, { n: byAgentList.hidden })}
+                    lessLabel={t.listShowLess}
+                  />
                 </div>
               )}
             </div>
@@ -2061,6 +2443,7 @@ function WalletBillingDocsSection({
   }, [client]);
 
   const paidOrders = orders.filter((o) => o.status === "paid");
+  const paidOrderList = useListPreview(paidOrders);
   const reqByOrder = new Map(requests.map((r) => [r.payment_order_id, r]));
 
   const downloadReceipt = (orderId: string) => {
@@ -2118,7 +2501,7 @@ function WalletBillingDocsSection({
         <EmptyText>{t.walletBillingDocsEmpty}</EmptyText>
       ) : (
         <div style={{ ...card, padding: 6 }}>
-          {paidOrders.map((order) => {
+          {paidOrderList.shown.map((order) => {
             const req = reqByOrder.get(order.order_id);
             const formOpen = formOrderId === order.order_id;
             const typeLabel =
@@ -2265,6 +2648,13 @@ function WalletBillingDocsSection({
               </div>
             );
           })}
+          <ListFoldButton
+            hidden={paidOrderList.hidden}
+            open={paidOrderList.open}
+            onToggle={paidOrderList.toggle}
+            moreLabel={fmtTpl(t.listShowMore, { n: paidOrderList.hidden })}
+            lessLabel={t.listShowLess}
+          />
         </div>
       )}
     </section>
@@ -2283,7 +2673,7 @@ export function AccountBillingPanel({
   onClose: () => void;
 }) {
   return (
-    <PanelChrome title={t.accountBilling} onClose={onClose} closeLabel={t.close}>
+    <PanelChrome title={t.accountBilling} onClose={onClose} closeLabel={t.close} chrome="bare">
       <WalletBillingDocsSection
         client={client}
         messages={t}
@@ -2294,6 +2684,23 @@ export function AccountBillingPanel({
   );
 }
 
+function agentWalletTotalLabel(
+  rows: { balance: number | null; balanceMicros: number }[],
+  unit: string,
+): string {
+  let micros = 0;
+  let known = 0;
+  for (const row of rows) {
+    if (row.balance == null) continue;
+    known += 1;
+    const whole = Math.trunc(row.balance);
+    const fraction = Math.round((row.balance - whole) * 1_000_000);
+    micros += whole * 1_000_000 + fraction + Math.trunc(row.balanceMicros || 0);
+  }
+  if (rows.length > 0 && known === 0) return `— ${unit}`;
+  return `${formatCreditBalance(0, micros)} ${unit}`;
+}
+
 export function AccountWalletPanel({
   client,
   messages: t,
@@ -2301,6 +2708,7 @@ export function AccountWalletPanel({
   locale = "en",
   onClose,
   onOpenBilling,
+  homeEpoch = 0,
 }: {
   client: GatewayClient;
   messages: RanchMessages;
@@ -2308,6 +2716,8 @@ export function AccountWalletPanel({
   locale?: RanchLocale;
   onClose: () => void;
   onOpenBilling?: () => void;
+  /** Bump to leave an agent wallet and return to the wallet home. */
+  homeEpoch?: number;
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2321,6 +2731,10 @@ export function AccountWalletPanel({
   >([]);
   const [agentWalletsLoading, setAgentWalletsLoading] = useState(true);
   const [agentWalletId, setAgentWalletId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAgentWalletId(null);
+  }, [homeEpoch]);
 
   const reload = useCallback(async () => {
     const [w, list] = await Promise.all([
@@ -2379,9 +2793,8 @@ export function AccountWalletPanel({
     };
   }, [reloadAgentWallets]);
 
-  // Detail view may have changed a balance (top-up / withdraw) — refresh on return.
-  function closeAgentWalletDetail() {
-    setAgentWalletId(null);
+  function toggleAgentWallet(agentId: string) {
+    setAgentWalletId((current) => (current === agentId ? null : agentId));
     void reloadAgentWallets().catch(() => undefined);
   }
 
@@ -2447,24 +2860,11 @@ export function AccountWalletPanel({
     return () => window.clearInterval(id);
   }, [checkoutEmbedUrl, client, reload]);
 
-  if (agentWalletId) {
-    const row = agentRows.find((r) => r.agent.agent_id === agentWalletId);
-    const label = (row?.agent.name || "").trim() || t.accountWalletAgentWallets;
-    return (
-      <PanelChrome title={label} onClose={closeAgentWalletDetail} closeLabel={t.close}>
-        <AgentOwnerWallet
-          client={client}
-          agentId={agentWalletId}
-          messages={t}
-          locale={locale}
-          interfazeBaseUrl={interfazeBaseUrl}
-        />
-      </PanelChrome>
-    );
-  }
+  const agentWalletList = useListPreview(agentRows);
+  const recentTxList = useListPreview(txs);
 
   return (
-    <PanelChrome title={t.accountWallet} onClose={onClose} closeLabel={t.close}>
+    <PanelChrome title={t.accountWallet} onClose={onClose} closeLabel={t.close} chrome="bare">
       <p style={sectionHint}>{t.accountWalletHint}</p>
       {loading ? (
         <EmptyText>{t.loading}</EmptyText>
@@ -2522,50 +2922,105 @@ export function AccountWalletPanel({
           </div>
 
           <section>
-            <h3 style={sectionTitle}>{t.accountWalletAgentWallets}</h3>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                justifyContent: "space-between",
+                gap: 12,
+                marginBottom: 8,
+              }}
+            >
+              <h3 style={{ ...sectionTitle, margin: 0 }}>{t.accountWalletAgentWallets}</h3>
+              {agentWalletsLoading ? null : (
+                <span
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 650,
+                    fontVariantNumeric: "tabular-nums",
+                    flexShrink: 0,
+                  }}
+                >
+                  {agentWalletTotalLabel(agentRows, t.walletBalance)}
+                </span>
+              )}
+            </div>
             {agentWalletsLoading ? (
               <EmptyText>{t.loading}</EmptyText>
             ) : agentRows.length === 0 ? (
               <EmptyText>{t.accountWalletNoAgents}</EmptyText>
             ) : (
               <div style={{ ...card, padding: 6 }}>
-                {agentRows.map(({ agent, balance, balanceMicros }) => {
+                {agentWalletList.shown.map(({ agent, balance, balanceMicros }) => {
                   const name = (agent.name || "").trim() || agent.agent_id;
+                  const open = agentWalletId === agent.agent_id;
                   return (
-                    <RowButton
-                      key={agent.agent_id}
-                      onClick={() => setAgentWalletId(agent.agent_id)}
-                    >
-                      <AvatarDot label={name.slice(0, 1).toUpperCase()} />
-                      <span
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          fontSize: 14,
-                          fontWeight: 600,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
+                    <div key={agent.agent_id}>
+                      <RowButton
+                        expanded={open}
+                        onClick={() => toggleAgentWallet(agent.agent_id)}
                       >
-                        {name}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 700,
-                          fontVariantNumeric: "tabular-nums",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {balance == null ? "—" : formatCreditBalance(balance, balanceMicros)}
-                      </span>
-                      <span aria-hidden style={{ color: colors.muted, fontSize: 15 }}>
-                        ›
-                      </span>
-                    </RowButton>
+                        <AvatarDot label={name.slice(0, 1).toUpperCase()} />
+                        <span
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            fontSize: 14,
+                            fontWeight: 600,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {name}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 700,
+                            fontVariantNumeric: "tabular-nums",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {balance == null ? "—" : formatCreditBalance(balance, balanceMicros)}
+                        </span>
+                        <span
+                          aria-hidden
+                          style={{
+                            color: colors.muted,
+                            fontSize: 15,
+                            transform: open ? "rotate(90deg)" : undefined,
+                          }}
+                        >
+                          ›
+                        </span>
+                      </RowButton>
+                      {open ? (
+                        <div
+                          style={{
+                            padding: "4px 8px 14px",
+                            borderTop: `1px solid ${colors.border}`,
+                          }}
+                        >
+                          <AgentOwnerWallet
+                            client={client}
+                            agentId={agent.agent_id}
+                            messages={t}
+                            locale={locale}
+                            interfazeBaseUrl={interfazeBaseUrl}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
                   );
                 })}
+                <ListFoldButton
+                  hidden={agentWalletList.hidden}
+                  open={agentWalletList.open}
+                  onToggle={agentWalletList.toggle}
+                  moreLabel={fmtTpl(t.listShowMore, { n: agentWalletList.hidden })}
+                  lessLabel={t.listShowLess}
+                />
               </div>
             )}
           </section>
@@ -2576,7 +3031,7 @@ export function AccountWalletPanel({
               <EmptyText>{t.accountWalletEmptyTx}</EmptyText>
             ) : (
               <div style={{ ...card, padding: 6 }}>
-                {txs.map((tx) => {
+                {recentTxList.shown.map((tx) => {
                   const inbound = tx.direction === "in" || (tx.direction !== "out" && tx.amount > 0);
                   const outbound = tx.direction === "out" || (tx.direction !== "in" && tx.amount < 0);
                   return (
@@ -2632,6 +3087,13 @@ export function AccountWalletPanel({
                     </div>
                   );
                 })}
+                <ListFoldButton
+                  hidden={recentTxList.hidden}
+                  open={recentTxList.open}
+                  onToggle={recentTxList.toggle}
+                  moreLabel={fmtTpl(t.listShowMore, { n: recentTxList.hidden })}
+                  lessLabel={t.listShowLess}
+                />
               </div>
             )}
           </section>
@@ -2681,6 +3143,108 @@ export function AccountWalletPanel({
   );
 }
 
+function formatKeyUsd(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  if (Math.abs(n) < 0.0005) return "$0.000";
+  if (Math.abs(n) >= 1 && Math.abs(n - Math.round(n)) < 1e-6) return `$${Math.round(n)}`;
+  return `$${n.toFixed(3)}`;
+}
+
+function keyQuotaLine(
+  usage: number | null | undefined,
+  limit: number | null | undefined,
+): { used: string; limit: string } | null {
+  const hasUsage = typeof usage === "number" && Number.isFinite(usage);
+  const hasLimit = typeof limit === "number" && Number.isFinite(limit);
+  if (!hasUsage && !hasLimit) return null;
+  return {
+    used: hasUsage ? formatKeyUsd(usage as number) : "—",
+    limit: hasLimit ? formatKeyUsd(limit as number) : "—",
+  };
+}
+
+const keyTableGrid: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) 74px 46px 68px 54px",
+  columnGap: 6,
+  alignItems: "center",
+};
+
+const keyTableHead: CSSProperties = {
+  ...keyTableGrid,
+  padding: "8px 10px",
+  color: colors.muted,
+  fontSize: 11,
+  fontWeight: 600,
+};
+
+const keyTableRow: CSSProperties = {
+  ...keyTableGrid,
+  padding: "11px 10px",
+  borderTop: `1px solid ${colors.border}`,
+  fontSize: 13,
+};
+
+const keyTableName: CSSProperties = {
+  minWidth: 0,
+  fontWeight: 600,
+};
+
+const keyTableSource: CSSProperties = {
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  fontSize: 11,
+  color: colors.muted,
+};
+
+const keyTableUsage: CSSProperties = {
+  textAlign: "right",
+  fontVariantNumeric: "tabular-nums",
+};
+
+const keyTableExpires: CSSProperties = {
+  textAlign: "right",
+  whiteSpace: "nowrap",
+  fontSize: 12,
+};
+
+const keyTableLimit: CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "center",
+  gap: 6,
+  fontVariantNumeric: "tabular-nums",
+};
+
+const keyTotalPill: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.22)",
+  borderRadius: 999,
+  padding: "1px 6px",
+  fontSize: 10,
+  fontWeight: 650,
+  letterSpacing: "0.04em",
+  color: colors.muted,
+  lineHeight: 1.4,
+};
+
+function keySourceLabel(key: AccountKey): string {
+  const named = (key.provider || "").trim();
+  if (named) return named;
+  return "OpenRouter";
+}
+
+function formatKeyExpiry(value: string | null | undefined, neverLabel: string): string {
+  const text = (value || "").trim();
+  if (!text) return neverLabel;
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return neverLabel;
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function storeOpenRouterUrl(base?: string): string {
   return `${(base || "https://agentplanet.org").replace(/\/+$/, "")}/store/openrouter`;
 }
@@ -2690,11 +3254,13 @@ export function AccountKeysPanel({
   messages: t,
   agentPlanetBaseUrl = "https://agentplanet.org",
   onClose,
+  titleSize = "page",
 }: {
   client: GatewayClient;
   messages: RanchMessages;
   agentPlanetBaseUrl?: string;
   onClose: () => void;
+  titleSize?: "page" | "sub";
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2721,93 +3287,124 @@ export function AccountKeysPanel({
     };
   }, [client, t.accountKeysLoadFailed]);
 
+  const visibleKeys = keys.filter((key) => (key.status || "").toLowerCase() !== "refunded");
+  const keyList = useListPreview(visibleKeys);
+  const sellOpenRouter = !isCnInterfazeOrigin(resolveInterfazeOrigin());
   const storeUrl = storeOpenRouterUrl(agentPlanetBaseUrl);
 
   return (
-    <PanelChrome title={t.accountKeys} onClose={onClose} closeLabel={t.close}>
+    <PanelChrome
+      title={t.accountKeys}
+      onClose={onClose}
+      closeLabel={t.myAgentsBack}
+      chrome="bare"
+      titleSize={titleSize}
+    >
       <p style={sectionHint}>{t.accountKeysHint}</p>
       {loading ? (
         <EmptyText>{t.loading}</EmptyText>
       ) : error ? (
         <p style={{ color: colors.danger, fontSize: 13 }}>{error}</p>
-      ) : keys.length === 0 ? (
+      ) : visibleKeys.length === 0 ? (
         <div style={{ marginBottom: 16 }}>
           <EmptyText>{t.accountKeysEmpty}</EmptyText>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-          {keys.map((key) => {
-            const written = key.written_agent_name || key.written_agent_id;
+        <div
+          style={{
+            marginBottom: 20,
+            border: `1px solid ${colors.border}`,
+            borderRadius: 12,
+            overflow: "hidden",
+            background: colors.panel,
+          }}
+        >
+          <div style={keyTableHead}>
+            <span>{t.accountKeysColKey}</span>
+            <span style={keyTableSource}>{t.accountKeysColSource}</span>
+            <span style={keyTableUsage}>{t.accountKeysColUsage}</span>
+            <span style={keyTableLimit}>{t.accountKeysColLimit}</span>
+            <span style={keyTableExpires}>{t.accountKeysColExpires}</span>
+          </div>
+          {keyList.shown.map((key) => {
+            const name = (key.label || "").trim() || t.accountKeysUntitled;
+            const quota = keyQuotaLine(key.usage, key.limit);
             return (
-              <div
-                key={key.order_id}
-                style={{ ...card, display: "flex", gap: 12, alignItems: "flex-start" }}
-              >
-                <span
-                  aria-hidden
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 10,
-                    flexShrink: 0,
-                    background: colors.accentSoft,
-                    color: colors.accentBright,
-                    display: "grid",
-                    placeItems: "center",
-                    fontSize: 12,
-                    fontWeight: 800,
-                    letterSpacing: "0.02em",
-                  }}
-                >
-                  OR
-                </span>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 14, fontWeight: 650 }}>OpenRouter</span>
-                    {key.status ? <Badge>{key.status}</Badge> : null}
-                  </span>
+              <div key={key.order_id} style={keyTableRow}>
+                <span style={keyTableName}>
                   <span
-                    style={{ display: "block", marginTop: 5, fontSize: 12, color: colors.muted }}
+                    style={{
+                      display: "block",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
                   >
-                    {fmtTpl(t.accountPlanPriceCredits, { n: fmtCredits(key.credits_spent) })}
+                    {name}
                   </span>
-                  <span
-                    style={{ display: "block", marginTop: 3, fontSize: 12, color: colors.muted }}
-                  >
-                    {written
-                      ? fmtTpl(t.accountKeysWrittenTo, { name: written })
-                      : t.accountKeysNotWritten}
-                  </span>
-                  {key.created_at ? (
+                  {key.written_agent_name ? (
                     <span
-                      style={{ display: "block", marginTop: 3, fontSize: 11, color: colors.muted }}
+                      style={{
+                        display: "block",
+                        marginTop: 2,
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: colors.muted,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
                     >
-                      {fmtTxTime(key.created_at)}
+                      {key.written_agent_name}
                     </span>
                   ) : null}
                 </span>
+                <span style={keyTableSource}>{keySourceLabel(key)}</span>
+                <span style={keyTableUsage}>{quota ? quota.used : "—"}</span>
+                <span style={keyTableLimit}>
+                  <span>{quota ? quota.limit : "—"}</span>
+                  {quota && quota.limit !== "—" ? (
+                    <span style={keyTotalPill}>{t.accountKeysTotal}</span>
+                  ) : null}
+                </span>
+                <span style={keyTableExpires}>{formatKeyExpiry(key.expires_at, t.accountKeysNever)}</span>
               </div>
             );
           })}
+          {keyList.hidden > 0 ? (
+            <div style={{ borderTop: `1px solid ${colors.border}` }}>
+              <ListFoldButton
+                hidden={keyList.hidden}
+                open={keyList.open}
+                onToggle={keyList.toggle}
+                moreLabel={fmtTpl(t.listShowMore, { n: keyList.hidden })}
+                lessLabel={t.listShowLess}
+              />
+            </div>
+          ) : null}
         </div>
       )}
-      <a
-        href={storeUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          ...btnPrimaryLg,
-          display: "inline-block",
-          textDecoration: "none",
-          textAlign: "center",
-          marginBottom: 12,
-        }}
-      >
-        {t.accountKeysBuy}
-      </a>
-      <p style={{ margin: 0, fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
-        {t.accountKeysBuyHint}
-      </p>
+      {sellOpenRouter ? (
+        <>
+          <a
+            href={storeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              ...btnPrimaryLg,
+              display: "inline-block",
+              textDecoration: "none",
+              textAlign: "center",
+              marginBottom: 12,
+            }}
+          >
+            {t.accountKeysBuy}
+          </a>
+          <p style={{ margin: 0, fontSize: 11, color: colors.muted, lineHeight: 1.45 }}>
+            {t.accountKeysBuyHint}
+          </p>
+        </>
+      ) : null}
     </PanelChrome>
   );
 }
@@ -2817,10 +3414,12 @@ export function AccountManagePanel({
   messages: t,
   onClose,
   onOpenAgents,
+  onOpenComputers,
 }: {
   messages: RanchMessages;
   onClose: () => void;
   onOpenAgents: () => void;
+  onOpenComputers: () => void;
 }) {
   const items: Array<{
     key: string;
@@ -2834,6 +3433,12 @@ export function AccountManagePanel({
       label: t.hubAgents,
       hint: t.hubAgentsManageHint,
       onSelect: onOpenAgents,
+    },
+    {
+      key: "computers",
+      label: t.hubComputers,
+      hint: t.hubComputersManageHint,
+      onSelect: onOpenComputers,
     },
     {
       key: "subnets",
@@ -2850,7 +3455,7 @@ export function AccountManagePanel({
   ];
 
   return (
-    <PanelChrome title={t.accountManage} onClose={onClose} closeLabel={t.close}>
+    <PanelChrome title={t.accountManage} onClose={onClose} closeLabel={t.close} chrome="bare">
       <p style={sectionHint}>{t.hubManageIntro}</p>
       <div style={{ ...card, padding: 6 }}>
         {items.map((item) => {

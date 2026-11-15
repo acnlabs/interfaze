@@ -218,9 +218,9 @@ test("the header screen button uses the chat place rates when the list has not l
     path.join(__dirname, "../packages/agent-chat/src/ChatComputerControl.tsx"),
     "utf8",
   );
-  assert.match(panel, /row\?\.screen_credits_per_hour \?\? place\.screen_credits_per_hour/);
-  assert.match(panel, /row\?\.status \?\? place\.status/);
-  assert.match(panel, /row\?\.resume_credits_per_hour \?\? place\.resume_credits_per_hour/);
+  assert.match(panel, /row\?\.screen_credits_per_hour \?\? bound\?\.screen_credits_per_hour/);
+  assert.match(panel, /row\?\.status \?\? bound\?\.status/);
+  assert.match(panel, /row\?\.resume_credits_per_hour \?\? bound\?\.resume_credits_per_hour/);
   assert.match(panel, /screenAsksBeforeCharge/);
   assert.match(panel, /hourlyCreditCopy\(locale, cn\)\.screenAt/);
   assert.match(panel, /title=\{caption\}/);

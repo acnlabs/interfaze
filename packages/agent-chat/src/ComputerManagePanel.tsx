@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import type { RanchLocale } from "./ranch-shell/i18n";
 import { colors } from "./ranch-shell/styles";
 import { computerName, type ComputerNameRow } from "./computerLabel";
@@ -8,6 +8,7 @@ import { computerManageCta, computerStatusLine, extraAsksBeforeCreate, pauseAsks
 import { hourlyCreditCopy } from "./hourlyCreditCopy";
 import { screenAsksBeforeCharge, type ScreenChargeHint } from "./computerSendBoot";
 import { ConfirmDialog } from "./ranch-shell/ConfirmDialog";
+import { fillCount, ListFoldButton, useListPreview } from "./ranch-shell/listPreview";
 
 type ComputerRow = ComputerNameRow & {
   status: string;
@@ -24,7 +25,7 @@ type PendingAction =
 const copy = {
   en: {
     title: "Manage computers",
-    close: "Close",
+    back: "Back",
     hint: "New chats use the default computer. Another computer is charged for the time it runs, and does not take new chats on its own.",
     empty: "No computer yet. Creating the record is free. New chats still use the default.",
     create: "Create computer",
@@ -51,10 +52,12 @@ const copy = {
     extraConfirm:
       "Opening another is free. New chats still use the default; this one does not take new chats on its own.",
     cancel: "Cancel",
+    showMore: "Show {n} more",
+    showLess: "Show less",
   },
   zh: {
     title: "管理电脑",
-    close: "关闭",
+    back: "返回",
     hint: "新对话进默认电脑。再开一台也按跑动时间收费，不会自动接新对话。",
     empty: "还没有电脑。创建档案免费。新对话仍落在默认电脑上。",
     create: "创建云电脑",
@@ -80,6 +83,8 @@ const copy = {
     resumeFailed: "没有恢复。",
     extraConfirm: "再开一台免费。新对话仍进默认电脑，这台不会自动接新对话。",
     cancel: "取消",
+    showMore: "展开其余 {n} 条",
+    showLess: "收起",
   },
 } as const;
 
@@ -114,6 +119,9 @@ export function ComputerManagePanel({
   locale,
   cn,
   onClose,
+  showBack = true,
+  embedded = false,
+  heading,
   onOpenScreen,
 }: {
   chatId: string | null;
@@ -122,6 +130,12 @@ export function ComputerManagePanel({
   locale: RanchLocale;
   cn: boolean;
   onClose: () => void;
+  /** When false, the list has no back control. The account nav owns that step. */
+  showBack?: boolean;
+  /** Sit in the account scroll instead of covering the pane. */
+  embedded?: boolean;
+  /** Section title when this list sits in the account scroll. */
+  heading?: string;
   onOpenScreen: (computerId: string, label: string, rate?: number, hint?: ScreenChargeHint) => void;
 }) {
   const spoken = copy[locale] ?? copy.en;
@@ -169,6 +183,8 @@ export function ComputerManagePanel({
       gone = true;
     };
   }, [loadList, t.failed]);
+
+  const computerList = useListPreview(computers);
 
   const useForChat = async (computerId: string) => {
     if (!chatId) return;
@@ -264,39 +280,73 @@ export function ComputerManagePanel({
   const cta = computerManageCta(computers.length);
   const hasComputer = cta === "extra";
 
+  const actionBtn: CSSProperties = {
+    background: "transparent",
+    color: colors.text,
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 8,
+    padding: "6px 10px",
+    fontSize: 12,
+    cursor: busy ? "default" : "pointer",
+    opacity: busy ? 0.6 : 1,
+  };
+
   return (
     <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 40,
-        background: colors.bg,
-        color: colors.text,
-        display: "flex",
-        flexDirection: "column",
-      }}
+      style={
+        embedded
+          ? {
+              padding: "22px 20px 36px",
+              borderBottom: "1px solid rgba(255,255,255,0.12)",
+            }
+          : {
+              position: "absolute",
+              inset: 0,
+              zIndex: 40,
+              background: colors.bg,
+              color: colors.text,
+              display: "flex",
+              flexDirection: "column",
+            }
+      }
     >
+      <div style={embedded ? { maxWidth: 680, width: "100%", margin: "0 auto" } : { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "12px 14px",
-          borderBottom: `1px solid ${colors.border}`,
-        }}
+        style={
+          embedded
+            ? { marginBottom: 14 }
+            : {
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "12px 14px",
+                borderBottom: `1px solid ${colors.border}`,
+              }
+        }
       >
-        <strong style={{ flex: 1 }}>{t.title}</strong>
-        <button type="button" onClick={onClose} style={{ background: "transparent", color: colors.muted, border: 0 }}>
-          {t.close}
-        </button>
+        {showBack ? (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t.back}
+            style={{ background: "transparent", color: colors.text, border: 0, cursor: "pointer", fontSize: 16, padding: 0 }}
+          >
+            ←
+          </button>
+        ) : null}
+        {embedded ? (
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 650, letterSpacing: "-0.01em" }}>{heading || t.title}</h2>
+        ) : (
+          <strong style={{ flex: 1 }}>{t.title}</strong>
+        )}
       </div>
-      <div style={{ padding: 14, overflow: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ padding: embedded ? 0 : 14, overflow: embedded ? "visible" : "auto", display: "flex", flexDirection: "column", gap: 12 }}>
         {!listReady ? null : hasComputer ? (
           <p style={{ margin: 0, color: colors.muted, fontSize: 13 }}>{t.hint}</p>
         ) : (
           <p style={{ margin: 0 }}>{t.empty}</p>
         )}
-        {computers.map((row) => {
+        {computerList.shown.map((row) => {
           const nth = row.is_default ? 0 : extraCount++;
           const label = computerName(row.is_default, nth, locale);
           return (
@@ -304,28 +354,33 @@ export function ComputerManagePanel({
               key={row.computer_id}
               style={{
                 border: `1px solid ${colors.border}`,
-                borderRadius: 8,
-                padding: "10px 12px",
+                borderRadius: 12,
+                padding: "12px 14px",
                 display: "flex",
-                justifyContent: "space-between",
-                gap: 8,
+                flexDirection: "column",
+                gap: 10,
+                background: colors.panel,
               }}
             >
-              <strong>
-                {label}
-                {place?.computer_id === row.computer_id ? (
-                  <span style={{ color: colors.muted, fontWeight: 400, fontSize: 12 }}> · {t.current}</span>
-                ) : null}
-              </strong>
-              <span style={{ color: colors.muted, fontSize: 12, display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+                <strong>
+                  {label}
+                  {place?.computer_id === row.computer_id ? (
+                    <span style={{ color: colors.muted, fontWeight: 400, fontSize: 12 }}> · {t.current}</span>
+                  ) : null}
+                </strong>
+                <span style={{ color: colors.muted, fontSize: 12, flexShrink: 0 }}>{computerStatusLine(row, t)}</span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {place?.can_bind && place.computer_id !== row.computer_id ? (
-                  <button type="button" disabled={busy} onClick={() => void useForChat(row.computer_id)}>
+                  <button type="button" disabled={busy} style={actionBtn} onClick={() => void useForChat(row.computer_id)}>
                     {t.use}
                   </button>
                 ) : null}
                 <button
                   type="button"
                   disabled={busy}
+                  style={actionBtn}
                   onClick={() =>
                     onOpenScreen(row.computer_id, label, row.screen_credits_per_hour, {
                       status: row.status,
@@ -346,6 +401,7 @@ export function ComputerManagePanel({
                   <button
                     type="button"
                     disabled={busy}
+                    style={actionBtn}
                     onClick={() => {
                       if (pauseAsksBeforeCharge(row.paused_credits_per_hour)) {
                         setPending({
@@ -369,6 +425,7 @@ export function ComputerManagePanel({
                   <button
                     type="button"
                     disabled={busy}
+                    style={actionBtn}
                     onClick={() =>
                       setPending({
                         kind: "resume",
@@ -384,15 +441,22 @@ export function ComputerManagePanel({
                         : t.resume}
                   </button>
                 ) : null}
-                {computerStatusLine(row, t)}
-              </span>
+              </div>
             </div>
           );
         })}
+        <ListFoldButton
+          hidden={computerList.hidden}
+          open={computerList.open}
+          onToggle={computerList.toggle}
+          moreLabel={fillCount(t.showMore, computerList.hidden)}
+          lessLabel={t.showLess}
+        />
         {listReady ? (
           <button
             type="button"
             disabled={busy}
+            style={{ ...actionBtn, alignSelf: "flex-start" }}
             onClick={() => {
               if (extraAsksBeforeCreate(computers.length)) {
                 setPending({ kind: "extra" });
@@ -405,6 +469,7 @@ export function ComputerManagePanel({
           </button>
         ) : null}
         {note ? <p style={{ margin: 0, color: colors.danger, fontSize: 13 }}>{note}</p> : null}
+      </div>
       </div>
       {pending ? (
         <ConfirmDialog
