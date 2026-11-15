@@ -16,6 +16,7 @@ import type { RanchLocale, RanchMessages } from "./i18n";
 import { buildWalletCheckoutUrl, isCnInterfazeOrigin, resolveInterfazeOrigin } from "./interfazeHost";
 import { txDetailLine, txTypeLabel } from "./txDisplay";
 import { btnGhost, btnPrimary, colors, inputStyle } from "./styles";
+import { ListFoldButton, useListPreview } from "./listPreview";
 import { useModalA11y } from "./useModalA11y";
 
 /** Match Gateway ``MyAgentWalletAmount.amount`` upper bound. */
@@ -235,6 +236,8 @@ export function AgentOwnerWallet({
     },
     containerRef: approvalsDialogRef,
   });
+
+  const txList = useListPreview(txs);
 
   const openPolicy = async () => {
     setShowPolicy(true);
@@ -574,6 +577,7 @@ export function AgentOwnerWallet({
         {txs.length === 0 ? (
           <p style={{ margin: 0, fontSize: 12, color: colors.muted }}>{t.walletTxEmpty}</p>
         ) : (
+          <>
           <ul
             style={{
               listStyle: "none",
@@ -584,7 +588,7 @@ export function AgentOwnerWallet({
               gap: 8,
             }}
           >
-            {txs.map((tx) => {
+            {txList.shown.map((tx) => {
               const detail = txDetailLine(tx.subject, tx.created_at, t, locale);
               return (
                 <li
@@ -620,6 +624,14 @@ export function AgentOwnerWallet({
               );
             })}
           </ul>
+          <ListFoldButton
+            hidden={txList.hidden}
+            open={txList.open}
+            onToggle={txList.toggle}
+            moreLabel={t.listShowMore.replace("{n}", String(txList.hidden))}
+            lessLabel={t.listShowLess}
+          />
+          </>
         )}
       </section>
 

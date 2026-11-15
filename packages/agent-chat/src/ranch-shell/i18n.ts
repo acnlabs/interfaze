@@ -65,6 +65,8 @@ export type RanchMessages = {
   /** Agent bubble footer: this hop's token burn, in/out separately. */
   agentHopUsage: (input: number, output: number) => string;
   agentHopDetails: string;
+  messageCopy: string;
+  messageCopied: string;
   /** Agent bubble: who this hop invoked (completed). */
   orchCalled: (name: string) => string;
   /** Agent bubble: invoke accepted, waiting on callee. */
@@ -165,6 +167,7 @@ export type RanchMessages = {
   newChat: string;
   newDirectChat: string;
   newGroupChat: string;
+  newAgentMenu: string;
   gatewayUnavailable: string;
   gatewayReconnecting: string;
   chatsLoadFailed: string;
@@ -251,6 +254,7 @@ export type RanchMessages = {
   slashAgentDesc: string;
   slashMembersDesc: string;
   slashInfoDesc: string;
+  slashNewDesc: string;
   slashUnknown: (cmd: string) => string;
   agentRefPickerTitle: string;
   noAgentsToRef: string;
@@ -332,7 +336,6 @@ export type RanchMessages = {
   homeEarnedVersus: string;
   homeTasksActive: string;
   homeTasksFinished: (count: string) => string;
-  homeTaskNoticeCount: string;
   homeTaskNotice: string;
   homeChartWhen: (daysAgo: number) => string;
   homeChartFinishedPoint: (count: string) => string;
@@ -352,6 +355,8 @@ export type RanchMessages = {
   homeTaskCompleted: (n: number) => string;
   homeTaskPts: string;
   homeTaskCredits: string;
+  homeBoardAny: string;
+  homeBoardActive: (n: number) => string;
   homeBoardCampaign: string;
   homeBoardLaunch: string;
   homeBoardLeaderboard: string;
@@ -359,6 +364,15 @@ export type RanchMessages = {
   homeBoardEmpty: string;
   homeBoardVotes: (n: string) => string;
   homeRankCredits: string;
+  homeRankChat: string;
+  homeRankClaim: string;
+  homeRankClaimed: string;
+  homeRankClaimUsed: string;
+  homeRankVote: string;
+  homeRankVoted: string;
+  homeRankAgents: string;
+  homeRankJoin: string;
+  homeSubnetJoinHint: string;
   homeRankVotes: string;
   homeRankTokens: string;
   homeRankCallers: string;
@@ -420,6 +434,14 @@ export type RanchMessages = {
   /** Account menu: Store model quota (not API keys, not Wallet Credits). */
   accountKeys: string;
   accountKeysHint: string;
+  accountKeysUntitled: string;
+  accountKeysColKey: string;
+  accountKeysColSource: string;
+  accountKeysColUsage: string;
+  accountKeysColLimit: string;
+  accountKeysColExpires: string;
+  accountKeysNever: string;
+  accountKeysTotal: string;
   accountKeysLoadFailed: string;
   accountKeysEmpty: string;
   accountKeysBuy: string;
@@ -457,6 +479,8 @@ export type RanchMessages = {
   accountWalletRecent: string;
   accountWalletAgentWallets: string;
   accountWalletNoAgents: string;
+  listShowMore: string;
+  listShowLess: string;
   accountPlanUsage: string;
   accountPlanUsageLoadFailed: string;
   accountPlanCurrent: string;
@@ -518,6 +542,8 @@ export type RanchMessages = {
   accountPlanPriceFiatCny: string;
   accountPlanIncludedPack: string;
   hubAgents: string;
+  hubComputers: string;
+  hubComputersManageHint: string;
   hubManageSection: string;
   hubDiscoverSection: string;
   hubManageIntro: string;
@@ -641,7 +667,9 @@ export type RanchMessages = {
   myAgentsOfficialHostHint: string;
   myAgentsNeedStoreKey: string;
   myAgentsOpenRouterRuntimeRequired: string;
+  myAgentsOpenRouterCopyBefore: string;
   myAgentsBuyStoreKey: string;
+  myAgentsOpenRouterCopyAfter: string;
   myAgentsRefreshRuntime: string;
   myAgentsListingStaleHint: string;
   myAgentsOfficialSectionHint: string;
@@ -981,6 +1009,8 @@ const en: RanchMessages = {
   pricingMismatch: (listed, observed) =>
     `Listed ${listed} ≠ ran ${observed} (billed at listing price)`,
   agentHopDetails: "Usage",
+  messageCopy: "Copy",
+  messageCopied: "Copied",
   agentHopUsage: (input, output) =>
     `in ${input.toLocaleString("en-US")} · out ${output.toLocaleString("en-US")}`,
   orchCalled: (name) => `Called ${name}`,
@@ -1066,6 +1096,7 @@ const en: RanchMessages = {
   newChat: "New",
   newDirectChat: "Direct message",
   newGroupChat: "Group",
+  newAgentMenu: "New agent",
   gatewayUnavailable: "Gateway unavailable",
   gatewayReconnecting: "Connection temporarily unavailable. Retrying automatically…",
   chatsLoadFailed: "Could not load conversations. Please retry.",
@@ -1154,6 +1185,7 @@ const en: RanchMessages = {
   slashAgentDesc: "Insert an agent reference (does not notify)",
   slashMembersDesc: "Open group members",
   slashInfoDesc: "Open chat info",
+  slashNewDesc: "Start a new chat with this agent",
   slashUnknown: (cmd) => `Unknown command: /${cmd}`,
   agentRefPickerTitle: "Reference an agent",
   noAgentsToRef: "No agents to reference yet",
@@ -1235,7 +1267,6 @@ const en: RanchMessages = {
   homeEarnedVersus: "vs the 7 days before",
   homeTasksActive: "in progress",
   homeTasksFinished: (count) => `${count} finished in 7 days`,
-  homeTaskNoticeCount: "2",
   homeTaskNotice: "tasks need you",
   homeChartWhen: (daysAgo) => (daysAgo === 0 ? "Now" : `${daysAgo}d ago`),
   homeChartFinishedPoint: (count) => `${count} finished`,
@@ -1245,7 +1276,7 @@ const en: RanchMessages = {
   homeAppRankings: "Rankings",
   homeAppTasks: "Tasks",
   homeTaskCultivators: "For cultivators",
-  homeTaskCommunityPicks: "Community picks",
+  homeTaskCommunityPicks: "Task boards",
   homeTaskForAgents: "For agents",
   homeTaskForHumans: "For cultivators",
   homeTaskDirectJoin: "Join directly",
@@ -1255,6 +1286,8 @@ const en: RanchMessages = {
   homeTaskCompleted: (n) => `${n} completed`,
   homeTaskPts: "pts",
   homeTaskCredits: "credits",
+  homeBoardAny: "Any",
+  homeBoardActive: (n) => `${n} active`,
   homeBoardCampaign: "Campaign",
   homeBoardLaunch: "Launch",
   homeBoardLeaderboard: "Leaderboard",
@@ -1262,6 +1295,15 @@ const en: RanchMessages = {
   homeBoardEmpty: "None yet",
   homeBoardVotes: (n) => `${n} votes`,
   homeRankCredits: "credits",
+  homeRankChat: "Chat",
+  homeRankClaim: "Claim",
+  homeRankClaimed: "Claimed",
+  homeRankClaimUsed: "Used",
+  homeRankVote: "Vote",
+  homeRankVoted: "Voted",
+  homeRankAgents: "agents",
+  homeRankJoin: "Join",
+  homeSubnetJoinHint: "Paste this to your own agent. It joins the subnet for you.",
   homeRankVotes: "votes",
   homeRankTokens: "tokens",
   homeRankCallers: "callers",
@@ -1319,8 +1361,15 @@ const en: RanchMessages = {
   accountBilling: "Receipts & invoices",
   accountWalletHint: "Your human Credits balance. Agent wallets stay under each agent.",
   accountKeys: "Model quota",
-  accountKeysHint:
-    "Model quota you bought in Store. A standalone buy is yours to use anywhere — it does not attach to an existing agent.",
+  accountKeysHint: "Quota bought in the Store.",
+  accountKeysUntitled: "Model key",
+  accountKeysColKey: "Key",
+  accountKeysColSource: "Source",
+  accountKeysColUsage: "Usage",
+  accountKeysColLimit: "Limit",
+  accountKeysColExpires: "Expires",
+  accountKeysNever: "Never",
+  accountKeysTotal: "TOTAL",
   accountKeysLoadFailed: "Couldn’t load model quota.",
   accountKeysEmpty: "No model quota yet.",
   accountKeysBuy: "Buy in Store",
@@ -1363,6 +1412,8 @@ const en: RanchMessages = {
   accountWalletRecent: "Recent activity",
   accountWalletAgentWallets: "Agent wallets",
   accountWalletNoAgents: "No agents yet.",
+  listShowMore: "Show {n} more",
+  listShowLess: "Show less",
   accountPlanUsage: "Plan & Usage",
   accountPlanUsageLoadFailed: "Couldn’t load plan & usage.",
   accountPlanCurrent: "Current plan",
@@ -1431,9 +1482,11 @@ const en: RanchMessages = {
   accountPlanPriceFiatCny: "¥{n}/月",
   accountPlanIncludedPack: "{n} included dialog usage",
   hubAgents: "Agents",
+  hubComputers: "Computers",
+  hubComputersManageHint: "Cloud computers for your chats",
   hubManageSection: "Yours",
   hubDiscoverSection: "On the network",
-  hubManageIntro: "Agents, subnets, and orgs you created — open a category to manage them.",
+  hubManageIntro: "Agents, computers, subnets, and orgs you created — open a category to manage them.",
   hubDiscoverIntro: "Find agents and (later) public subnets and orgs on ACN.",
   hubAgentsManageHint: "Agents you created or claimed",
   hubAgentsDiscoverHint: "Search discoverable agents and start a chat",
@@ -1567,10 +1620,13 @@ const en: RanchMessages = {
   myAgentsOfficialHostHint:
     "Machine default stays on the agent’s own key.",
   myAgentsNeedStoreKey:
-    "OpenRouter needs a key on this agent. Host cannot see the key — we only read the heartbeat model. If it doesn’t have one yet, buy Store credits, write the key into the runtime, then Refresh status.",
+    "This machine is using its own key. Host cannot see the key, only the model in the heartbeat.",
   myAgentsOpenRouterRuntimeRequired:
-    "Runtime is still this agent’s own vendor. Host cannot see whether an OpenRouter key is installed. Write a Store key into the runtime, then Refresh status. OpenRouter can be saved only after the agent reports an OpenRouter model.",
-  myAgentsBuyStoreKey: "Buy in Store",
+    "This machine has no OpenRouter key, and a key cannot be pasted here.",
+  myAgentsOpenRouterCopyBefore: "Buy one in the ",
+  myAgentsBuyStoreKey: "Store",
+  myAgentsOpenRouterCopyAfter:
+    ", copy it when it appears, and put it on the machine yourself.",
   myAgentsRefreshRuntime: "Refresh status",
   myAgentsListingStaleHint:
     "The published listing still says OpenRouter, but this agent is running its own key. That’s leftover — not a real OpenRouter setup. OpenRouter can be saved only after the agent reports an OpenRouter model.",
@@ -1953,6 +2009,8 @@ const zh: RanchMessages = {
   pricingMismatch: (listed, observed) =>
     `挂牌 ${listed} ≠ 运行 ${observed}（按挂牌价结算）`,
   agentHopDetails: "用量",
+  messageCopy: "复制",
+  messageCopied: "已复制",
   agentHopUsage: (input, output) =>
     `入 ${input.toLocaleString("zh-CN")} · 出 ${output.toLocaleString("zh-CN")}`,
   orchCalled: (name) => `调用了 ${name}`,
@@ -2038,6 +2096,7 @@ const zh: RanchMessages = {
   newChat: "新建",
   newDirectChat: "私聊",
   newGroupChat: "群聊",
+  newAgentMenu: "新建智能体",
   gatewayUnavailable: "Gateway 不可用",
   gatewayReconnecting: "连接暂时不可用，正在自动重试…",
   chatsLoadFailed: "会话列表加载失败，请重试。",
@@ -2123,6 +2182,7 @@ const zh: RanchMessages = {
   slashAgentDesc: "插入智能体引用（不会通知对方）",
   slashMembersDesc: "打开群成员",
   slashInfoDesc: "打开会话资料",
+  slashNewDesc: "和这个智能体新开一条对话",
   slashUnknown: (cmd) => `未知命令：/${cmd}`,
   agentRefPickerTitle: "引用智能体",
   noAgentsToRef: "还没有可引用的智能体",
@@ -2197,7 +2257,6 @@ const zh: RanchMessages = {
   homeEarnedVersus: "较上一个 7 天",
   homeTasksActive: "进行中",
   homeTasksFinished: (count) => `7 天完成 ${count}`,
-  homeTaskNoticeCount: "2",
   homeTaskNotice: "个任务等你处理",
   homeChartWhen: (daysAgo) => (daysAgo === 0 ? "现在" : `${daysAgo} 天前`),
   homeChartFinishedPoint: (count) => `完成 ${count}`,
@@ -2207,7 +2266,7 @@ const zh: RanchMessages = {
   homeAppRankings: "排行榜",
   homeAppTasks: "任务",
   homeTaskCultivators: "驯养师",
-  homeTaskCommunityPicks: "社区精选",
+  homeTaskCommunityPicks: "任务板",
   homeTaskForAgents: "面向智能体",
   homeTaskForHumans: "面向驯养师",
   homeTaskDirectJoin: "直接加入",
@@ -2217,6 +2276,8 @@ const zh: RanchMessages = {
   homeTaskCompleted: (n) => `${n} 人完成`,
   homeTaskPts: "点",
   homeTaskCredits: "积分",
+  homeBoardAny: "不限",
+  homeBoardActive: (n) => `${n} 个活跃`,
   homeBoardCampaign: "竞价",
   homeBoardLaunch: "上新",
   homeBoardLeaderboard: "用量榜",
@@ -2224,6 +2285,15 @@ const zh: RanchMessages = {
   homeBoardEmpty: "暂无",
   homeBoardVotes: (n) => `${n} 票`,
   homeRankCredits: "积分",
+  homeRankChat: "开聊",
+  homeRankClaim: "领取",
+  homeRankClaimed: "已领",
+  homeRankClaimUsed: "已用完",
+  homeRankVote: "投票",
+  homeRankVoted: "已投",
+  homeRankAgents: "智能体",
+  homeRankJoin: "加入",
+  homeSubnetJoinHint: "把这段提示贴给你自己的智能体，它会替你加入这个子网。",
   homeRankVotes: "票",
   homeRankTokens: "tokens",
   homeRankCallers: "调用方",
@@ -2277,7 +2347,15 @@ const zh: RanchMessages = {
   accountBilling: "收据与发票",
   accountWalletHint: "你本人的星币余额。智能体钱包在各自智能体详情里。",
   accountKeys: "模型额度",
-  accountKeysHint: "Store 买的模型额度。自己买 = 拿到哪都能用，不会自动写进已有机。不是智能体的 API key。",
+  accountKeysHint: "在 Store 买下的模型额度。",
+  accountKeysUntitled: "模型额度",
+  accountKeysColKey: "Key",
+  accountKeysColSource: "来源",
+  accountKeysColUsage: "已用",
+  accountKeysColLimit: "上限",
+  accountKeysColExpires: "有效期",
+  accountKeysNever: "永不过期",
+  accountKeysTotal: "总额",
   accountKeysLoadFailed: "无法加载模型额度。",
   accountKeysEmpty: "还没有模型额度。",
   accountKeysBuy: "去 Store 买",
@@ -2316,6 +2394,8 @@ const zh: RanchMessages = {
   accountWalletRecent: "最近流水",
   accountWalletAgentWallets: "智能体钱包",
   accountWalletNoAgents: "还没有智能体。",
+  listShowMore: "展开其余 {n} 条",
+  listShowLess: "收起",
   accountPlanUsage: "方案与用量",
   accountPlanUsageLoadFailed: "无法加载方案与用量。",
   accountPlanCurrent: "当前方案",
@@ -2382,9 +2462,11 @@ const zh: RanchMessages = {
   accountPlanPriceFiatCny: "¥{n}/月",
   accountPlanIncludedPack: "含对话用量 {n}",
   hubAgents: "智能体",
+  hubComputers: "电脑",
+  hubComputersManageHint: "对话用的云电脑",
   hubManageSection: "我的",
   hubDiscoverSection: "网络上",
-  hubManageIntro: "你创建的智能体、子网与组织——点开某一类再管理。",
+  hubManageIntro: "你创建的智能体、电脑、子网与组织——点开某一类再管理。",
   hubDiscoverIntro: "在 ACN 上发现可聊的智能体，以及（后续）公开子网与组织。",
   hubAgentsManageHint: "你创建或认领的智能体",
   hubAgentsDiscoverHint: "搜索可发现的智能体并开聊",
@@ -2514,11 +2596,11 @@ const zh: RanchMessages = {
   myAgentsProviderOfficialNamed: "官方 · ${name}",
   myAgentsProviderOpenRouter: "OpenRouter",
   myAgentsOfficialHostHint: "机器默认型号仍用智能体自己的钥匙。",
-  myAgentsNeedStoreKey:
-    "OpenRouter 需要这只智能体自己的钥匙。Host 看不见钥匙，只认心跳型号。还没有的话，去 Store 买额度、写入运行环境，再点「刷新状态」。",
-  myAgentsOpenRouterRuntimeRequired:
-    "运行时仍是这只智能体自己的厂家。Host 看不见钥匙是否装上——请先把 Store 钥匙写进运行环境，再点「刷新状态」。只有它自报了 OpenRouter 型号才能保存。",
-  myAgentsBuyStoreKey: "去 Store 购买",
+  myAgentsNeedStoreKey: "这台机器在用自己的 key。Host 看不到密钥，只认心跳里的模型。",
+  myAgentsOpenRouterRuntimeRequired: "这台机器还没有 OpenRouter key，这里也不能粘贴。",
+  myAgentsOpenRouterCopyBefore: "去 ",
+  myAgentsBuyStoreKey: "Store",
+  myAgentsOpenRouterCopyAfter: " 买一把，当场复制，自己配到机器上。",
   myAgentsRefreshRuntime: "刷新状态",
   myAgentsListingStaleHint:
     "挂牌还写着 OpenRouter，但这只智能体正在用自己的钥匙。那是旧挂牌，不是真的 OpenRouter。只有它自报了 OpenRouter 型号才能保存。",

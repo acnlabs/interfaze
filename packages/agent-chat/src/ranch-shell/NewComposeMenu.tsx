@@ -30,13 +30,15 @@ export function NewComposeMenu({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const entries: MenuEntry[] = [
-    ...(showCreateHosted && onCreateHosted
-      ? [{ key: "create", label: t.createAgentTitle, action: onCreateHosted }]
-      : []),
-    { key: "connect", label: t.connectExisting, action: onConnectExisting },
+  const chatEntries: MenuEntry[] = [
     { key: "direct", label: t.newDirectChat, action: onDirect },
     ...(allowGroupChat ? [{ key: "group", label: t.newGroupChat, action: onGroup }] : []),
+  ];
+  const agentEntries: MenuEntry[] = [
+    { key: "connect", label: t.connectExisting, action: onConnectExisting },
+    ...(showCreateHosted && onCreateHosted
+      ? [{ key: "create", label: t.newAgentMenu, action: onCreateHosted }]
+      : []),
   ];
 
   useEffect(() => {
@@ -99,22 +101,24 @@ export function NewComposeMenu({
       <button
         ref={triggerRef}
         type="button"
-        style={btnPrimary}
+        style={trigger}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={t.newChat}
         onClick={() => setOpen((v) => !v)}
       >
-        + {t.newChat}
+        <PlusIcon />
       </button>
       {open ? (
         <div ref={menuRef} role="menu" style={menu} onKeyDown={onMenuKeyDown}>
-          {entries.map((entry, i) => (
-            <MenuItem
-              key={entry.key}
-              label={entry.label}
-              onClick={() => pick(entry.action)}
-              showDividerAbove={entry.key === "connect" && i > 0}
-            />
+          {chatEntries.map((entry) => (
+            <MenuItem key={entry.key} label={entry.label} onClick={() => pick(entry.action)} />
+          ))}
+          {chatEntries.length > 0 && agentEntries.length > 0 ? (
+            <div aria-hidden style={divider} />
+          ) : null}
+          {agentEntries.map((entry) => (
+            <MenuItem key={entry.key} label={entry.label} onClick={() => pick(entry.action)} />
           ))}
         </div>
       ) : null}
@@ -122,32 +126,47 @@ export function NewComposeMenu({
   );
 }
 
-function MenuItem({
-  label,
-  onClick,
-  showDividerAbove,
-}: {
-  label: string;
-  onClick: () => void;
-  showDividerAbove?: boolean;
-}) {
+function MenuItem({ label, onClick }: { label: string; onClick: () => void }) {
   const [hover, setHover] = useState(false);
   return (
-    <>
-      {showDividerAbove ? <div aria-hidden style={divider} /> : null}
-      <button
-        type="button"
-        role="menuitem"
-        style={{ ...item, background: hover ? colors.hover : "transparent" }}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-        onFocus={() => setHover(true)}
-        onBlur={() => setHover(false)}
-        onClick={onClick}
-      >
-        {label}
-      </button>
-    </>
+    <button
+      type="button"
+      role="menuitem"
+      style={{ ...item, background: hover ? colors.hover : "transparent" }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onFocus={() => setHover(true)}
+      onBlur={() => setHover(false)}
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  );
+}
+
+const trigger: CSSProperties = {
+  ...btnPrimary,
+  width: 36,
+  height: 36,
+  padding: 0,
+  borderRadius: 999,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  lineHeight: 0,
+  flexShrink: 0,
+};
+
+function PlusIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M8 3.25v9.5M3.25 8h9.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 

@@ -37,6 +37,7 @@ import {
 import { formatCreditsFromLocal } from "../creditDisplay";
 import { chatSettleQuote, DEFAULT_CHAT_FEE_RATE } from "./settleQuote";
 import { btnGhost, btnPrimary, colors, inputStyle, settingsFieldLabel, settingsSectionCard, settingsSectionTitle } from "./styles";
+import { isCnInterfazeOrigin, resolveInterfazeOrigin } from "./interfazeHost";
 import { useModalA11y } from "./useModalA11y";
 
 /** Align with ACN / Gateway display-name rules (letter required). */
@@ -1600,6 +1601,7 @@ export function AgentOwnerSettings({
     supportedModels,
   );
   const openRouterBlocked = openRouterByoSelected && !openRouterOnRuntime;
+  const sellOpenRouter = !isCnInterfazeOrigin(resolveInterfazeOrigin());
   const canSavePricing =
     pricingDirty &&
     previewReady &&
@@ -2783,17 +2785,28 @@ export function AgentOwnerSettings({
                 lineHeight: 1.4,
               }}
             >
-              {openRouterOnRuntime
-                ? t.myAgentsNeedStoreKey
-                : t.myAgentsOpenRouterRuntimeRequired}{" "}
-              <a
-                href={storeOpenRouterUrl(_agentPlanetBaseUrl)}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: colors.text, textDecoration: "underline" }}
-              >
-                {t.myAgentsBuyStoreKey}
-              </a>
+              {openRouterOnRuntime ? (
+                t.myAgentsNeedStoreKey
+              ) : (
+                <>
+                  {t.myAgentsOpenRouterRuntimeRequired}
+                  {sellOpenRouter ? (
+                    <>
+                      {" "}
+                      {t.myAgentsOpenRouterCopyBefore}
+                      <a
+                        href={storeOpenRouterUrl(_agentPlanetBaseUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: colors.text, textDecoration: "underline" }}
+                      >
+                        {t.myAgentsBuyStoreKey}
+                      </a>
+                      {t.myAgentsOpenRouterCopyAfter}
+                    </>
+                  ) : null}
+                </>
+              )}
               {onOpenKeys ? (
                 <>
                   {" · "}
@@ -2825,14 +2838,16 @@ export function AgentOwnerSettings({
               }}
             >
               {t.myAgentsListingStaleHint}{" "}
-              <a
-                href={storeOpenRouterUrl(_agentPlanetBaseUrl)}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: colors.text, textDecoration: "underline" }}
-              >
-                {t.myAgentsBuyStoreKey}
-              </a>
+              {sellOpenRouter ? (
+                <a
+                  href={storeOpenRouterUrl(_agentPlanetBaseUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: colors.text, textDecoration: "underline" }}
+                >
+                  {t.myAgentsBuyStoreKey}
+                </a>
+              ) : null}
               {onOpenKeys ? (
                 <>
                   {" · "}

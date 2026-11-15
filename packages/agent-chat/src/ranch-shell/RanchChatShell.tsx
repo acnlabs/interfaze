@@ -118,12 +118,14 @@ import {
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import {
   AccountKeysPanel,
-  AccountManagePanel,
   AccountPlanUsagePanel,
   AccountProfilePanel,
+  AccountShell,
   AccountWalletPanel,
+  type AccountSubnav,
   AccountBillingPanel,
   ChatCollabBudgetSection,
+  type AccountShellSection,
 } from "./AccountPanels";
 import {
   accountPanelHref,
@@ -144,7 +146,7 @@ import { NewChatPicker } from "./NewChatPicker";
 import { NewComposeMenu } from "./NewComposeMenu";
 import { ConnectAgentModal } from "./ConnectAgentModal";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { copyConnectPromptWithInvite } from "./connectPrompt";
+import { copyConnectPromptWithInvite, copyText } from "./connectPrompt";
 import { officialShelfAllows, officialV0SupportsModel } from "./officialV0";
 import { isCnInterfazeOrigin, resolveInterfazeOrigin } from "./interfazeHost";
 import {
@@ -326,6 +328,15 @@ function chatActivityTs(c: ChatSummary): number {
 
 function isGlobalDirect(c: ChatSummary): boolean {
   return !c.embed?.context;
+}
+
+/** Same agent can have several direct chats. The sidebar row is the latest one. */
+function latestDirect(chats: ChatSummary[], agentId: string): ChatSummary | undefined {
+  const key = agentIdKey(agentId);
+  if (!key) return undefined;
+  return chats
+    .filter((c) => !isGroupChat(c) && agentIdKey(c.agent_id) === key)
+    .sort((a, b) => chatActivityTs(b) - chatActivityTs(a))[0];
 }
 
 function hostCaption(origin?: string | null): string {
@@ -1098,33 +1109,109 @@ function hopUsageFromMessage(m: ChatMessage): {
   return { input: hasIn ? input : 0, output: hasOut ? output : 0, modelId };
 }
 
-function AgentUsageFooter({
+function formatMessageStamp(iso: string, locale: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return new Intl.DateTimeFormat(locale, {
+    year: sameYear ? undefined : "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function MessageMetaLine({
   usage,
+  text,
+  createdAt,
+  align,
+  locale,
   t,
 }: {
-  usage: { input: number; output: number; modelId: string | null };
+  usage: { input: number; output: number; modelId: string | null } | null;
+  text: string;
+  createdAt: string;
+  align: "start" | "end";
+  locale: string;
   t: RanchMessages;
 }) {
-  const model = compactModelLabel(usage.modelId);
-  const tokens = t.agentHopUsage(usage.input, usage.output);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const id = window.setTimeout(() => setCopied(false), 1200);
+    return () => window.clearTimeout(id);
+  }, [copied]);
+  const stamp = formatMessageStamp(createdAt, locale);
+  const model = usage ? compactModelLabel(usage.modelId) : "";
+  const tokens = usage ? t.agentHopUsage(usage.input, usage.output) : "";
+  if (!model && !tokens && !stamp && !text) return null;
+  const dot = (key: string) => (
+    <span key={key} aria-hidden style={{ flexShrink: 0 }}>
+      ·
+    </span>
+  );
   return (
-    <details
+    <div
+      className="ranch-msg-meta"
       style={{
-        paddingLeft: 4,
+        position: "absolute",
+        top: "100%",
+        ...(align === "end" ? { right: 0 } : { left: 0 }),
+        zIndex: 2,
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "1px 4px",
+        borderRadius: 6,
+        background: colors.bg,
         fontSize: 11,
         lineHeight: 1.35,
         color: colors.muted,
-        maxWidth: "100%",
+        whiteSpace: "nowrap",
       }}
     >
-      <summary
-        title={usage.modelId || tokens}
-        style={{ cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-      >
-        {model ? `${model} · ${t.agentHopDetails}` : t.agentHopDetails}
-      </summary>
-      <div>{tokens}</div>
-    </details>
+      {model ? (
+        <span
+          title={usage?.modelId || undefined}
+          style={{ flexShrink: 0 }}
+        >
+          {model}
+        </span>
+      ) : null}
+      {model && tokens ? dot("tokens") : null}
+      {tokens ? <span style={{ flexShrink: 0 }}>{tokens}</span> : null}
+      {(model || tokens) && stamp ? dot("stamp") : null}
+      {stamp ? (
+        <time dateTime={createdAt} style={{ flexShrink: 0 }}>
+          {stamp}
+        </time>
+      ) : null}
+      {(model || tokens || stamp) && text ? dot("copy") : null}
+      {text ? (
+        <button
+          type="button"
+          onClick={() => {
+            void copyText(text).then((ok) => {
+              if (ok) setCopied(true);
+            });
+          }}
+          style={{
+            flexShrink: 0,
+            border: 0,
+            margin: 0,
+            padding: "2px 4px",
+            background: "transparent",
+            color: "inherit",
+            font: "inherit",
+            cursor: "pointer",
+          }}
+        >
+          {copied ? t.messageCopied : t.messageCopy}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -2178,7 +2265,7 @@ function trailingMentionQuery(text: string): string | null {
   return m ? m[1] : null;
 }
 
-type SlashCmdId = "agent" | "members" | "info";
+type SlashCmdId = "new" | "agent" | "members" | "info";
 
 /** Insert 「显示名」 reference — not a delivery @mention. */
 function formatAgentRef(displayName: string): string {
@@ -2197,6 +2284,8 @@ type SlashCmdDef = {
   description: string;
   /** Hide in direct chats. */
   groupOnly?: boolean;
+  /** Hide in group chats. */
+  directOnly?: boolean;
 };
 
 /** Parse leading slash command: `/topic Title` → { cmd: "topic", arg: "Title" }. */
@@ -2665,9 +2754,8 @@ function AccountFooter({
   onProfile,
   onManage,
   onWallet,
-  onComputer,
-  onKeys,
   onPlanUsage,
+  onKeys,
   onBilling,
   onDiscoverAgents,
   t,
@@ -2677,9 +2765,8 @@ function AccountFooter({
   onProfile?: () => void;
   onManage?: () => void;
   onWallet?: () => void;
-  onComputer?: () => void;
-  onKeys?: () => void;
   onPlanUsage?: () => void;
+  onKeys?: () => void;
   onBilling?: () => void;
   onDiscoverAgents?: () => void;
   t: RanchMessages;
@@ -2750,7 +2837,7 @@ function AccountFooter({
     };
 
   const hasUpper =
-    !!(onProfile || onManage || onWallet || onComputer || onKeys || onPlanUsage || onBilling || onDiscoverAgents);
+    !!(onProfile || onManage || onWallet || onPlanUsage || onKeys || onBilling || onDiscoverAgents);
 
   return (
     <div
@@ -2797,17 +2884,6 @@ function AccountFooter({
               <span style={{ flex: 1 }}>{t.accountProfile}</span>
             </a>
           ) : null}
-          {onManage ? (
-            <a
-              href={accountPanelHref("manage")}
-              role="menuitem"
-              style={menuLinkStyle}
-              onClick={accountLinkClick(onManage)}
-              {...hoverHandlers}
-            >
-              <span style={{ flex: 1 }}>{t.accountManage}</span>
-            </a>
-          ) : null}
           {onWallet ? (
             <a
               href={accountPanelHref("wallet")}
@@ -2819,37 +2895,15 @@ function AccountFooter({
               <span style={{ flex: 1 }}>{t.accountWallet}</span>
             </a>
           ) : null}
-          {onComputer ? (
+          {onManage ? (
             <a
-              href="#computer"
+              href={accountPanelHref("manage")}
               role="menuitem"
               style={menuLinkStyle}
-              onClick={accountLinkClick(onComputer)}
+              onClick={accountLinkClick(onManage)}
               {...hoverHandlers}
             >
-              <span style={{ flex: 1 }}>{t.accountComputer}</span>
-            </a>
-          ) : null}
-          {onBilling ? (
-            <a
-              href={accountPanelHref("billing")}
-              role="menuitem"
-              style={menuLinkStyle}
-              onClick={accountLinkClick(onBilling)}
-              {...hoverHandlers}
-            >
-              <span style={{ flex: 1 }}>{t.accountBilling}</span>
-            </a>
-          ) : null}
-          {onKeys ? (
-            <a
-              href={accountPanelHref("keys")}
-              role="menuitem"
-              style={menuLinkStyle}
-              onClick={accountLinkClick(onKeys)}
-              {...hoverHandlers}
-            >
-              <span style={{ flex: 1 }}>{t.accountKeys}</span>
+              <span style={{ flex: 1 }}>{t.accountManage}</span>
             </a>
           ) : null}
           {onPlanUsage ? (
@@ -2863,7 +2917,29 @@ function AccountFooter({
               <span style={{ flex: 1 }}>{t.accountPlanUsage}</span>
             </a>
           ) : null}
-          {(onProfile || onManage || onWallet || onKeys || onPlanUsage || onBilling) && onDiscoverAgents ? (
+          {onKeys ? (
+            <a
+              href={accountPanelHref("keys")}
+              role="menuitem"
+              style={menuLinkStyle}
+              onClick={accountLinkClick(onKeys)}
+              {...hoverHandlers}
+            >
+              <span style={{ flex: 1 }}>{t.accountKeys}</span>
+            </a>
+          ) : null}
+          {onBilling ? (
+            <a
+              href={accountPanelHref("billing")}
+              role="menuitem"
+              style={menuLinkStyle}
+              onClick={accountLinkClick(onBilling)}
+              {...hoverHandlers}
+            >
+              <span style={{ flex: 1 }}>{t.accountBilling}</span>
+            </a>
+          ) : null}
+          {(onProfile || onManage || onWallet || onPlanUsage || onKeys || onBilling) && onDiscoverAgents ? (
             <div style={{ height: 1, background: colors.border, margin: "2px 0" }} />
           ) : null}
           {onDiscoverAgents ? (
@@ -2898,17 +2974,27 @@ function AccountFooter({
         </div>
       ) : null}
 
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          padding: "6px 8px 6px 12px",
+          background: menuOpen ? colors.hover : "transparent",
+        }}
+      >
       <button
         type="button"
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         onClick={() => setMenuOpen((v) => !v)}
         style={{
-          width: "100%",
+          flex: 1,
+          minWidth: 0,
           border: "none",
-          background: menuOpen ? colors.hover : "transparent",
+          background: "transparent",
           color: colors.text,
-          padding: "10px 12px",
+          padding: "4px 0",
           display: "flex",
           alignItems: "center",
           gap: 10,
@@ -2977,24 +3063,33 @@ function AccountFooter({
             </div>
           ) : null}
         </div>
-        <span
-          aria-hidden
-          title={t.account}
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 6,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: colors.muted,
-            fontSize: 14,
-            flexShrink: 0,
-          }}
-        >
-          <IconGear />
-        </span>
       </button>
+      <button
+        type="button"
+        aria-label={t.account}
+        title={t.account}
+        onClick={() => {
+          setMenuOpen(false);
+          onProfile?.();
+        }}
+        style={{
+          width: 28,
+          height: 28,
+          border: "none",
+          borderRadius: 6,
+          background: "transparent",
+          color: colors.muted,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          cursor: "pointer",
+          padding: 0,
+        }}
+      >
+        <IconGear />
+      </button>
+      </div>
     </div>
   );
 }
@@ -3226,12 +3321,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [showAccountKeys, setShowAccountKeys] = useState(false);
   const [showAccountPlan, setShowAccountPlan] = useState(false);
   const [showAccountBilling, setShowAccountBilling] = useState(false);
+  const [walletHomeEpoch, setWalletHomeEpoch] = useState(0);
+  const [accountScrollNonce, setAccountScrollNonce] = useState(0);
   const [showComputer, setShowComputer] = useState(false);
   const [homeTargetId, setHomeTargetId] = useState<string | null>(null);
   const pickHomeTargetRef = useRef(false);
   const pendingHomeSendRef = useRef<{ chatId: string; text: string } | null>(null);
   const [screenComputer, setScreenComputer] = useState<{ id: string; label: string } | null>(null);
   const [cloudComputers, setCloudComputers] = useState<ComputerNameRow[]>([]);
+  const [computerEpoch, setComputerEpoch] = useState(0);
+  const noteComputerUnpaid = useCallback(() => setComputerEpoch((n) => n + 1), []);
   const [chatPlace, setChatPlace] = useState<ChatComputerPlace | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     message: string;
@@ -3405,14 +3504,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
     return () => {
       gone = true;
     };
-  }, [active?.chat_id, gatewayBaseUrl, getAccessToken]);
+  }, [active?.chat_id, computerEpoch, gatewayBaseUrl, getAccessToken]);
 
   const applyAccountPanel = (panel: AccountDeepLinkPanel | null) => {
     closeAccountSurfaces();
+    if (panel) setAccountScrollNonce((n) => n + 1);
     if (panel === "plan") setShowAccountPlan(true);
     else if (panel === "wallet") setShowAccountWallet(true);
     else if (panel === "keys") setShowAccountKeys(true);
-    else if (panel === "manage") setShowAccountManage(true);
+    else if (panel === "manage") setShowMyAgents(true);
     else if (panel === "profile") setShowAccountProfile(true);
     else if (panel === "billing") setShowAccountBilling(true);
     else if (panel === "computer") setShowComputer(true);
@@ -3720,7 +3820,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const replySlotChatIdRef = useRef<string | null>(null);
   const awaitingSinceRef = useRef(0);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const listContentRef = useRef<HTMLDivElement | null>(null);
+  /** Stay on the newest row until the reader scrolls up. */
+  const followBottomRef = useRef(true);
+  const ignoreListScrollRef = useRef(false);
   const socketRef = useRef<ChatSocket | null>(null);
+  /** Latest startFreshDirect / target agent for the /new command. */
+  const startFreshDirectRef = useRef<(agentId: string) => Promise<void>>(async () => {});
+  const freshChatAgentRef = useRef("");
   /** Latest send() for slash /topic (defined later in the component body). */
   const sendRef = useRef<
     | ((opts?: {
@@ -4139,7 +4246,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, [open, directoryAgents, client, refreshChats]);
 
   const openConversation = useCallback(
-    async (chat: ChatSummary, opts?: { keepChatsPanel?: boolean; preserveDraft?: boolean }) => {
+    async (chat: ChatSummary, opts?: { keepChatsPanel?: boolean; preserveDraft?: boolean; openSettings?: boolean }) => {
       const seq = ++loadSeqRef.current;
       activeChatIdRef.current = chat.chat_id;
       setActive(chat);
@@ -4154,9 +4261,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setGroupParticipants([]);
       setAgentStatuses({});
       const keepChats = !!opts?.keepChatsPanel && !isGroupChat(chat);
-      setShowMembersPanel(keepChats);
+      const openSettings = !!opts?.openSettings && !isGroupChat(chat);
+      setShowMembersPanel(keepChats || openSettings);
       setShowAddMember(false);
-      setInfoTab(isGroupChat(chat) ? "members" : keepChats ? "chats" : "info");
+      setInfoTab(
+        isGroupChat(chat) ? "members" : openSettings ? "settings" : keepChats ? "chats" : "info",
+      );
       setOwnedAgentDetail(null);
       setShowCreateTopic(false);
       setTopicTitleDraft("");
@@ -4392,6 +4502,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
 
   const runSlashCommand = useCallback(
     async (cmdId: SlashCmdId, arg = "") => {
+      if (cmdId === "new") {
+        const agentId = freshChatAgentRef.current.trim();
+        if (!agentId) return;
+        setDraft("");
+        void startFreshDirectRef.current(agentId);
+        return;
+      }
       if (!active) return;
       const group = isGroupChat(active);
       if (cmdId === "agent") {
@@ -4576,10 +4693,43 @@ export function RanchChatShell(props: RanchChatShellProps) {
     noteAgentActivity,
   ]);
 
+  const pinListToBottom = useCallback(() => {
+    const el = listRef.current;
+    if (!el || pendingMailboxRef.current || !followBottomRef.current) return;
+    const max = el.scrollHeight - el.clientHeight;
+    if (max <= 0 || el.scrollTop >= max - 1) return;
+    ignoreListScrollRef.current = true;
+    el.scrollTop = max;
+    requestAnimationFrame(() => {
+      ignoreListScrollRef.current = false;
+    });
+  }, []);
+
   useEffect(() => {
     if (pendingMailboxRef.current) return;
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [messages, view, replySlot]);
+    followBottomRef.current = true;
+    pinListToBottom();
+  }, [messages, view, replySlot, pinListToBottom]);
+
+  useEffect(() => {
+    const scroller = listRef.current;
+    const content = listContentRef.current;
+    if (!scroller || !content) return;
+    const onScroll = () => {
+      if (ignoreListScrollRef.current) return;
+      const distance = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
+      followBottomRef.current = distance < 64;
+    };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    const observer = new ResizeObserver(() => {
+      pinListToBottom();
+    });
+    observer.observe(content);
+    return () => {
+      scroller.removeEventListener("scroll", onScroll);
+      observer.disconnect();
+    };
+  }, [pinListToBottom, view, active?.chat_id]);
 
   useEffect(() => {
     if (!pendingCreateJobId) return;
@@ -4618,11 +4768,38 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setBusy(true);
     setError(null);
     try {
-      const c = await client.createDirect(agentId, {
+      const key = agentIdKey(agentId);
+      const chat = await client.createDirect(agentId, {
         context: `new:${crypto.randomUUID()}`,
       });
+      copyComposerBinding(`home:${key}`, chat.chat_id);
+      setPickerMode(null);
       await refreshChats();
-      await openConversation(c);
+      await openConversation(chat);
+    } catch (e) {
+      setError(
+        e instanceof ChatGatewayError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Failed to start chat",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  startFreshDirectRef.current = startFreshDirect;
+
+  const openOwnedAgentSettings = async (agentId: string) => {
+    closeAccountSurfaces();
+    writeAccountPanelToUrl(null, "replace");
+    setBusy(true);
+    setError(null);
+    try {
+      const c = latestDirect(chats, agentId) ?? (await client.createOrGetDirectChat(agentId));
+      setPickerMode(null);
+      await refreshChats();
+      await openConversation(c, { openSettings: true });
     } catch (e) {
       setError(
         e instanceof ChatGatewayError
@@ -4640,11 +4817,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setBusy(true);
     setError(null);
     try {
-      const key = agentIdKey(agentId);
-      const global = chats.find(
-        (c) => !isGroupChat(c) && agentIdKey(c.agent_id) === key && isGlobalDirect(c),
-      );
-      const c = global ?? (await client.createOrGetDirectChat(agentId));
+      const c = latestDirect(chats, agentId) ?? (await client.createOrGetDirectChat(agentId));
       setPickerMode(null);
       await refreshChats();
       await openConversation(c);
@@ -5667,26 +5840,16 @@ export function RanchChatShell(props: RanchChatShellProps) {
     );
     const named = (fromDirectory?.name || "").trim();
     if (named) return named;
-    const fromChat = chats.find(
-      (c) => !isGroupChat(c) && agentIdKey(c.agent_id) === agentIdKey(homeRecipientId),
-    );
+    const fromChat = latestDirect(chats, homeRecipientId);
     return (fromChat?.title || "").trim();
   })();
 
-  const homeComposerChat = homeRecipientId
-    ? chats.find(
-        (c) =>
-          !isGroupChat(c) &&
-          isGlobalDirect(c) &&
-          agentIdKey(c.agent_id) === agentIdKey(homeRecipientId),
-      ) ?? null
-    : null;
   const composerDirect: { chatId: string; agentId: string } | null =
     active && !isGroupChat(active) && (active.agent_id || "").trim()
       ? { chatId: active.chat_id, agentId: (active.agent_id || "").trim() }
       : !active && homeRecipientId
         ? {
-            chatId: homeComposerChat?.chat_id || `home:${agentIdKey(homeRecipientId)}`,
+            chatId: `home:${agentIdKey(homeRecipientId)}`,
             agentId: homeRecipientId,
           }
         : null;
@@ -5713,11 +5876,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
     setError(null);
     try {
       const key = agentIdKey(targetId);
-      const existing = chats.find(
-        (c) => !isGroupChat(c) && agentIdKey(c.agent_id) === key && isGlobalDirect(c),
-      );
-      const chat = existing ?? (await client.createOrGetDirectChat(targetId));
-      if (!existing) copyComposerBinding(`home:${key}`, chat.chat_id);
+      const chat = await client.createDirect(targetId, { context: `new:${crypto.randomUUID()}` });
+      copyComposerBinding(`home:${key}`, chat.chat_id);
       pendingHomeSendRef.current = { chatId: chat.chat_id, text };
       setDraft("");
       await refreshChats();
@@ -6853,6 +7013,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             locale={uiLocale}
             chatId={active?.chat_id ?? null}
             embedded
+            onUnpaid={noteComputerUnpaid}
             onRequestOpen={(run) => {
               const id = activeDock.id.slice("computer:".length);
               const row = cloudComputers.find((item) => item.computer_id === id);
@@ -6935,10 +7096,23 @@ export function RanchChatShell(props: RanchChatShellProps) {
     };
   }, [renewHostTicket]);
 
+  freshChatAgentRef.current =
+    active && !isGroupChat(active) && (active.agent_id || "").trim()
+      ? (active.agent_id || "").trim()
+      : !active
+        ? homeRecipientId.trim()
+        : "";
+
   const slashParsed = parseSlashDraft(draft);
   const slashMenuOpen = isSlashMenuDraft(draft) && !slashMenuDismissed;
   const slashCommands: SlashCmdDef[] = (
     [
+      {
+        id: "new" as const,
+        label: "/new",
+        description: t.slashNewDesc,
+        directOnly: true,
+      },
       { id: "agent" as const, label: "/agent", description: t.slashAgentDesc },
       {
         id: "members" as const,
@@ -6955,6 +7129,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     ] satisfies SlashCmdDef[]
   ).filter((c) => {
     if (c.groupOnly && !groupActive) return false;
+    if (c.directOnly && (groupActive || !freshChatAgentRef.current)) return false;
     return true;
   });
   const slashCandidates = slashCommands.filter((c) => {
@@ -7329,72 +7504,171 @@ export function RanchChatShell(props: RanchChatShellProps) {
     Date.now() - stickyMention.setAt <= STICKY_MENTION_TTL_MS &&
     agentIdsRef.current.includes(stickyMention.agentId);
 
-  // Account panels mount in the right pane on desktop (full) and cover the
-  // list column in narrow (side) mode. PanelChrome fills its positioned parent.
-  const accountPanels = (
-    <>
+  // One account page. Wide right pane: left rail. Narrow column: top strip.
+  const accountShellSection: AccountShellSection | null = showAccountProfile
+    ? "profile"
+    : showAccountManage || showMyAgents || showComputer
+      ? "manage"
+      : showAccountWallet
+        ? "wallet"
+        : showAccountBilling
+          ? "billing"
+          : showAccountKeys
+            ? "keys"
+            : showAccountPlan
+              ? "plan"
+              : null;
 
-      {showAccountProfile && account ? (
-        <AccountProfilePanel
-          account={account}
-          messages={t}
-          onClose={() => closeAccountPanel()}
-        />
-      ) : null}
+  const focusAccountSection = (panel: AccountDeepLinkPanel) => {
+    if (panel === "wallet") setWalletHomeEpoch((n) => n + 1);
+    applyAccountPanel(panel);
+    if (panel !== "center") writeAccountPanelToUrl(panel, "replace");
+  };
 
-      {showAccountManage ? (
-        <AccountManagePanel
-          messages={t}
-          onClose={() => closeAccountPanel()}
-          onOpenAgents={() => {
-            setShowAccountManage(false);
-            setShowMyAgents(true);
-          }}
-        />
-      ) : null}
+  const accountSubnav: AccountSubnav = {
+    section: "manage",
+    items: [
+      {
+        id: "agents",
+        label: t.hubAgents,
+        href: accountPanelHref("manage"),
+        onSelect: () => focusAccountSection("manage"),
+      },
+      {
+        id: "computers",
+        label: t.hubComputers,
+        href: accountPanelHref("computer"),
+        onSelect: () => focusAccountSection("computer"),
+      },
+      { id: "subnets", label: t.networkSubnets, disabled: true, badge: t.comingSoon },
+      { id: "orgs", label: t.networkOrgs, disabled: true, badge: t.comingSoon },
+    ],
+  };
 
-      {showAccountWallet ? (
+  const accountScrollPanel: AccountDeepLinkPanel | null = showAccountProfile
+    ? "profile"
+    : showComputer
+      ? "computer"
+      : showMyAgents || showAccountManage
+        ? "manage"
+        : showAccountWallet
+          ? "wallet"
+          : showAccountBilling
+            ? "billing"
+            : showAccountKeys
+              ? "keys"
+              : showAccountPlan
+                ? "plan"
+                : null;
+
+  const accountScrollDomId =
+    accountScrollPanel === "profile"
+      ? "account-profile"
+      : accountScrollPanel === "wallet"
+        ? "account-wallet"
+        : accountScrollPanel === "manage"
+          ? "account-agents"
+          : accountScrollPanel === "computer"
+            ? "account-computers"
+            : accountScrollPanel === "plan"
+              ? "account-plan"
+              : accountScrollPanel === "keys"
+                ? "account-keys"
+                : accountScrollPanel === "billing"
+                  ? "account-billing"
+                  : null;
+
+  const accountPanels = accountShellSection ? (
+    <AccountShell
+      section={accountShellSection}
+      placement={accountPanelsInConversation && viewportWidth >= 980 ? "side" : "top"}
+      messages={t}
+      onClose={() => closeAccountPanel()}
+      onSelect={focusAccountSection}
+      subnav={accountSubnav}
+      scrollRequest={
+        accountScrollDomId ? { id: accountScrollDomId, nonce: accountScrollNonce } : null
+      }
+      onActiveSection={(id) => {
+        const panel =
+          id === "agents"
+            ? "manage"
+            : id === "computers"
+              ? "computer"
+              : id === "profile" || id === "wallet" || id === "plan" || id === "billing" || id === "keys"
+                ? id
+                : null;
+        if (panel) writeAccountPanelToUrl(panel, "replace");
+      }}
+    >
+      <section id="account-profile" data-account-section="profile">
+        {account ? (
+          <AccountProfilePanel
+            account={account}
+            messages={t}
+            onClose={() => closeAccountPanel()}
+          />
+        ) : null}
+      </section>
+
+      <section id="account-wallet" data-account-section="wallet">
         <AccountWalletPanel
           client={client}
           messages={t}
           interfazeBaseUrl={interfazeBaseUrl}
           locale={uiLocale}
           onClose={() => closeAccountPanel()}
-          onOpenBilling={() => openAccountPanel("billing")}
+          onOpenBilling={() => focusAccountSection("billing")}
+          homeEpoch={walletHomeEpoch}
         />
-      ) : null}
+      </section>
 
-      {showComputer ? (
+      <section id="account-agents" data-account-section="agents">
+        <MyAgentsPanel
+          embedded
+          rootBack={false}
+          client={client}
+          connectGuideUrl={connectGuideUrl}
+          agentPlanetBaseUrl={agentPlanetBaseUrl}
+          interfazeBaseUrl={interfazeBaseUrl}
+          locale={uiLocale}
+          messages={t}
+          busy={busy}
+          onClose={() => closeAccountPanel()}
+          onConnectExisting={() => setShowConnect(true)}
+          onCreateHosted={() => setShowCreateDialog(true)}
+          onOpenChat={(id) => {
+            closeAccountSurfaces();
+            writeAccountPanelToUrl(null, "replace");
+            void startFreshDirect(id);
+          }}
+          onOpenSettings={(id) => {
+            void openOwnedAgentSettings(id);
+          }}
+          onAgentUpdated={(row, previousName) => {
+            applyOwnedAgentProfileUpdate(row, previousName);
+          }}
+          onAgentRemoved={applyOwnedAgentRemoved}
+          onOpenKeys={() => focusAccountSection("keys")}
+        />
+      </section>
+
+      <section id="account-computers" data-account-section="computers">
         <ComputerManagePanel
+          embedded
           chatId={active?.chat_id ?? null}
           gatewayBaseUrl={gatewayBaseUrl}
           getAccessToken={getAccessToken}
           locale={uiLocale}
           cn={cnSite}
-          onClose={() => closeAccountPanel()}
+          heading={t.hubComputers}
+          showBack={false}
+          onClose={() => focusAccountSection("manage")}
           onOpenScreen={openCloudScreen}
         />
-      ) : null}
+      </section>
 
-      {showAccountBilling ? (
-        <AccountBillingPanel
-          client={client}
-          messages={t}
-          interfazeBaseUrl={interfazeBaseUrl}
-          onClose={() => closeAccountPanel()}
-        />
-      ) : null}
-
-      {showAccountKeys ? (
-        <AccountKeysPanel
-          client={client}
-          messages={t}
-          agentPlanetBaseUrl={agentPlanetBaseUrl}
-          onClose={() => closeAccountPanel()}
-        />
-      ) : null}
-
-      {showAccountPlan ? (
+      <section id="account-plan" data-account-section="plan">
         <AccountPlanUsagePanel
           client={client}
           messages={t}
@@ -7434,37 +7708,27 @@ export function RanchChatShell(props: RanchChatShellProps) {
             });
           }}
         />
-      ) : null}
+      </section>
 
-      {showMyAgents ? (
-        <MyAgentsPanel
+      <section id="account-keys" data-account-section="keys">
+        <AccountKeysPanel
           client={client}
-          connectGuideUrl={connectGuideUrl}
-          agentPlanetBaseUrl={agentPlanetBaseUrl}
-          interfazeBaseUrl={interfazeBaseUrl}
-          locale={uiLocale}
           messages={t}
-          busy={busy}
-          onClose={() => {
-            setShowMyAgents(false);
-            setShowAccountManage(true);
-          }}
-          onConnectExisting={() => setShowConnect(true)}
-          onCreateHosted={() => setShowCreateDialog(true)}
-          onOpenChat={(id) => {
-            setShowMyAgents(false);
-            setShowAccountManage(false);
-            void startDirect(id);
-          }}
-          onAgentUpdated={(row, previousName) => {
-            applyOwnedAgentProfileUpdate(row, previousName);
-          }}
-          onAgentRemoved={applyOwnedAgentRemoved}
-          onOpenKeys={() => openAccountPanel("keys")}
+          agentPlanetBaseUrl={agentPlanetBaseUrl}
+          onClose={() => closeAccountPanel()}
         />
-      ) : null}
-    </>
-  );
+      </section>
+
+      <section id="account-billing" data-account-section="billing">
+        <AccountBillingPanel
+          client={client}
+          messages={t}
+          interfazeBaseUrl={interfazeBaseUrl}
+          onClose={() => closeAccountPanel()}
+        />
+      </section>
+    </AccountShell>
+  ) : null;
 
   return (
     <div style={shellRoot(mode)} data-ranch-chat-shell data-mode={mode}>
@@ -7504,6 +7768,37 @@ export function RanchChatShell(props: RanchChatShellProps) {
         .ranch-thin-scroll {
           scrollbar-width: thin;
           scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+        }
+        .ranch-msg::after {
+          content: "";
+          position: absolute;
+          z-index: 1;
+          left: 0;
+          right: 0;
+          top: 100%;
+          height: 28px;
+          pointer-events: none;
+        }
+        .ranch-msg:hover::after,
+        .ranch-msg:focus-within::after {
+          pointer-events: auto;
+        }
+        .ranch-msg-meta {
+          opacity: 0;
+          pointer-events: none;
+          transition:
+            opacity 80ms linear 420ms,
+            pointer-events 0s linear 500ms;
+          transition-behavior: allow-discrete;
+        }
+        .ranch-msg:hover > .ranch-msg-meta,
+        .ranch-msg:focus-within > .ranch-msg-meta {
+          opacity: 1;
+          pointer-events: auto;
+          transition:
+            opacity 40ms linear 0s,
+            pointer-events 0s linear 0s;
+          transition-behavior: allow-discrete;
         }
         .ranch-thin-scroll::-webkit-scrollbar {
           width: 10px;
@@ -7632,7 +7927,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           </div>
         </div>
 
-        <div style={{ padding: 12, borderBottom: `1px solid ${colors.border}`, display: "flex", gap: 8 }}>
+        <div style={{ padding: "10px 14px", borderBottom: `1px solid ${colors.border}`, display: "flex", gap: 8, alignItems: "center" }}>
           <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
             <input
               value={search}
@@ -7642,7 +7937,14 @@ export function RanchChatShell(props: RanchChatShellProps) {
               }}
               placeholder={t.searchChats}
               aria-label={t.searchChats}
-              style={{ ...inputStyle, width: "100%", paddingRight: search ? 28 : undefined }}
+              style={{
+                ...inputStyle,
+                width: "100%",
+                height: 36,
+                lineHeight: "20px",
+                padding: "7px 10px",
+                ...(search ? { paddingRight: 28 } : null),
+              }}
             />
             {search ? (
               <button
@@ -7950,13 +8252,15 @@ export function RanchChatShell(props: RanchChatShellProps) {
             onProfile={() => openAccountPanel("profile")}
             onManage={() => openAccountPanel("manage")}
             onWallet={() => openAccountPanel("wallet")}
-            onComputer={() => openAccountPanel("computer")}
-            onKeys={() => openAccountPanel("keys")}
             onPlanUsage={() => openAccountPanel("plan")}
+            onKeys={() => openAccountPanel("keys")}
             onBilling={() => openAccountPanel("billing")}
             onDiscoverAgents={() => {
+              if (activeTopic) exitTopicFilter();
+              setPickerMode(null);
               closeAccountPanel();
-              setPickerMode("direct");
+              setView("list");
+              setActive(null);
             }}
             t={t}
           />
@@ -8020,6 +8324,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   messages={t}
                   onOpenPlan={() => openAccountPanel("plan")}
                   onOpenWallet={() => openAccountPanel("wallet")}
+                  onStartChat={(agentId) => {
+                    void startFreshDirect(agentId);
+                  }}
+                  getAccessToken={getAccessToken}
                 />
               )}
             </>
@@ -8220,6 +8528,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       openCloudScreen(id, label, rate, hint);
                     }}
                     onPlace={setChatPlace}
+                    refreshToken={`${messages.length}:${computerEpoch}`}
                   />
                   {!compactHeader && canOpenTalk ? (
                     <button
@@ -8597,11 +8906,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   flex: 1,
                   overflow: "auto",
                   padding: "16px 16px 56px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 10,
                 }}
               >
+                <div
+                  ref={listContentRef}
+                  style={{ display: "flex", flexDirection: "column", gap: 10 }}
+                >
                 {loadingMessages ? (
                   <p role="status" style={{ color: colors.muted, fontSize: 13, margin: 0 }}>{t.loading}</p>
                 ) : messagesLoadError ? (
@@ -8713,8 +9023,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         </div>
                       ) : null}
                     <div
+                      className="ranch-msg"
                       data-message-id={m.message_id}
                       style={{
+                        position: "relative",
                         minWidth: 0,
                         alignSelf: isUser ? "flex-end" : "flex-start",
                         maxWidth: "min(85%, 36rem)",
@@ -8997,11 +9309,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                     }
                                   />
                                 ) : null}
-                                {usage ? <AgentUsageFooter usage={usage} t={t} /> : null}
                               </>
                             );
                           })()
                         : null}
+                      <MessageMetaLine
+                        usage={isUser ? null : hopUsageFromMessage(m)}
+                        text={(m.content || "").trim()}
+                        createdAt={m.created_at}
+                        align={isUser ? "end" : "start"}
+                        locale={uiLocale === "zh" ? "zh-CN" : "en-US"}
+                        t={t}
+                      />
                     </div>
                     </Fragment>
                   );
@@ -9039,6 +9358,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     storeUrl={storeOpenRouterUrl(agentPlanetBaseUrl)}
                   />
                 ) : null}
+                </div>
               </div>
 
               {spendCapBanner ? (
@@ -11497,7 +11817,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               disabled={busy}
                               onClick={() => {
                                 setShowMembersPanel(false);
-                                void startDirect(id);
+                                void startFreshDirect(id);
                               }}
                             >
                               {t.openDirectChat}
@@ -11779,7 +12099,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
               setPickerMode(null);
               return;
             }
-            void startDirect(id);
+            void startFreshDirect(id);
           }}
           onCreateGroup={(titleText, ids) => void startGroup(titleText, ids)}
           createJoinInvite={() => client.createJoinInvite()}

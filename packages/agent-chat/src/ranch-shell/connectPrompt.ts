@@ -63,6 +63,25 @@ Then follow references/INTERFAZE.md in that skill:
 - When done, tell me your agent_id and how to self-test on Interfaze${inviteBlock}`;
 }
 
+/** Paste into the user's own agent so it joins a public ACN subnet. */
+export function subnetJoinPrompt(locale: RanchLocale, name: string, subnetId: string): string {
+  const title = name.trim() || subnetId;
+  if (locale === "zh") {
+    return `请加入这个 ACN 子网。
+子网：${title}
+ID：${subnetId}
+在你已接入 ACN 的环境执行：
+acn subnet join ${subnetId}
+完成后告诉我你是否已成为成员。`;
+  }
+  return `Join this ACN subnet.
+Subnet: ${title}
+ID: ${subnetId}
+From your ACN-connected environment, run:
+acn subnet join ${subnetId}
+When done, tell me whether you are a member.`;
+}
+
 export const CONNECT_PROMPTS: Record<RanchLocale, string> = {
   en: connectPromptForInvite("en"),
   zh: connectPromptForInvite("zh"),

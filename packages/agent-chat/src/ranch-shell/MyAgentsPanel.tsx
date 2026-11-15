@@ -10,6 +10,7 @@ import {
 import { AgentOwnerWallet } from "./AgentOwnerWallet";
 import { copyConnectPromptWithInvite } from "./connectPrompt";
 import type { RanchLocale, RanchMessages } from "./i18n";
+import { fillCount, ListFoldButton, useListPreview } from "./listPreview";
 import { btnGhost, btnPrimary, colors } from "./styles";
 
 type Props = {
@@ -23,10 +24,16 @@ type Props = {
   messages: RanchMessages;
   busy?: boolean;
   onClose: () => void;
+  /** When false, the list itself has no back control. Detail still steps back to the list. */
+  rootBack?: boolean;
+  /** Sit in the account scroll instead of covering the pane. */
+  embedded?: boolean;
   onConnectExisting?: () => void;
   /** Open hosted-agent create on the current shell, not this panel. */
   onCreateHosted?: () => void;
   onOpenChat: (agentId: string) => void;
+  /** Leave the account page and open this agent's own settings. */
+  onOpenSettings?: (agentId: string) => void;
   /** Notify shell/host after a successful profile save (for chat title / directory). */
   onAgentUpdated?: (agent: MyAgentSummary, previousName?: string | null) => void;
   /** After permanent delete — leave detail and refresh list. */
@@ -58,9 +65,12 @@ export function MyAgentsPanel({
   messages: t,
   busy,
   onClose,
+  rootBack = true,
+  embedded = false,
   onConnectExisting,
   onCreateHosted,
   onOpenChat,
+  onOpenSettings,
   onAgentUpdated,
   onAgentRemoved,
   onOpenKeys,
@@ -138,6 +148,8 @@ export function MyAgentsPanel({
     };
   }, [selectedId, client, t.myAgentsLoadFailed]);
 
+  const agentList = useListPreview(agents);
+
   const copyPrompt = () => {
     void copyConnectPromptWithInvite(
       locale,
@@ -150,44 +162,71 @@ export function MyAgentsPanel({
     });
   };
 
+  const sectionRule = "1px solid rgba(255,255,255,0.12)";
   return (
     <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 40,
-        background: colors.bg,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "10px 12px",
-          borderBottom: `1px solid ${colors.border}`,
-          flexShrink: 0,
-        }}
-      >
-        <button
-          type="button"
-          style={btnGhost}
-          onClick={() => {
-            if (selectedId) {
-              setSelectedId(null);
-              return;
+      style={
+        embedded
+          ? {
+              padding: "22px 20px 36px",
+              borderBottom: sectionRule,
             }
-            onClose();
-          }}
-          aria-label={selectedId ? t.myAgentsBack : t.close}
-        >
-          ←
-        </button>
-        <strong style={{ fontSize: 14, flex: 1 }}>
-          {selectedId ? detail?.name || shortId(selectedId) : t.myAgentsTitle}
-        </strong>
+          : {
+              position: "absolute",
+              inset: 0,
+              zIndex: 40,
+              background: colors.bg,
+              display: "flex",
+              flexDirection: "column",
+            }
+      }
+    >
+      <div style={embedded ? { maxWidth: 680, width: "100%", margin: "0 auto" } : { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      <div
+        style={
+          embedded
+            ? {
+                display: "flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 8,
+                marginBottom: 14,
+              }
+            : {
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "10px 12px",
+                borderBottom: `1px solid ${colors.border}`,
+                flexShrink: 0,
+              }
+        }
+      >
+        {selectedId || rootBack ? (
+          <button
+            type="button"
+            style={btnGhost}
+            onClick={() => {
+              if (selectedId) {
+                setSelectedId(null);
+                return;
+              }
+              onClose();
+            }}
+            aria-label={t.myAgentsBack}
+          >
+            ←
+          </button>
+        ) : null}
+        {embedded && !selectedId ? (
+          <h2 style={{ margin: 0, flex: "1 1 120px", fontSize: 16, fontWeight: 650, letterSpacing: "-0.01em" }}>
+            {t.hubAgents}
+          </h2>
+        ) : (
+          <strong style={{ fontSize: 14, flex: 1 }}>
+            {selectedId ? detail?.name || shortId(selectedId) : t.myAgentsTitle}
+          </strong>
+        )}
         {!selectedId ? (
           <div style={{ display: "flex", gap: 6 }}>
             {createAvailable ? (
@@ -208,7 +247,7 @@ export function MyAgentsPanel({
         )}
       </div>
 
-      <div style={{ flex: 1, overflow: "auto", padding: selectedId ? 16 : 0 }}>
+      <div style={{ flex: embedded ? undefined : 1, overflow: embedded ? "visible" : "auto", padding: !embedded && selectedId ? 16 : 0 }}>
         {selectedId ? (
           detail ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -332,14 +371,19 @@ export function MyAgentsPanel({
             </div>
           </div>
         ) : (
-          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-            {agents.map((a) => {
+          <>
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: embedded ? "flex" : undefined, flexDirection: embedded ? "column" : undefined, gap: embedded ? 8 : undefined }}>
+            {agentList.shown.map((a) => {
               const online = a.status === "online";
               return (
                 <li key={a.agent_id}>
                   <button
                     type="button"
                     onClick={() => {
+                      if (embedded && onOpenSettings) {
+                        onOpenSettings(a.agent_id);
+                        return;
+                      }
                       // Clear detail before paint so we show loading, not a stale
                       // card — and never the false "couldn't load" empty state.
                       setDetail(null);
@@ -349,9 +393,13 @@ export function MyAgentsPanel({
                     style={{
                       width: "100%",
                       textAlign: "left",
-                      border: "none",
-                      borderBottom: `1px solid ${colors.border}`,
-                      background: "transparent",
+                      appearance: "none",
+                      font: "inherit",
+                      borderStyle: "solid",
+                      borderWidth: embedded ? 1 : "0 0 1px",
+                      borderColor: colors.border,
+                      borderRadius: embedded ? 12 : 0,
+                      background: embedded ? colors.panel : "transparent",
                       color: colors.text,
                       padding: "12px 14px",
                       cursor: "pointer",
@@ -394,7 +442,16 @@ export function MyAgentsPanel({
               );
             })}
           </ul>
+          <ListFoldButton
+            hidden={agentList.hidden}
+            open={agentList.open}
+            onToggle={agentList.toggle}
+            moreLabel={fillCount(t.listShowMore, agentList.hidden)}
+            lessLabel={t.listShowLess}
+          />
+          </>
         )}
+      </div>
       </div>
     </div>
   );
