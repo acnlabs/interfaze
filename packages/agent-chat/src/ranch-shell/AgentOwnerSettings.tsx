@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -964,6 +965,8 @@ type Props = {
   busy?: boolean;
   /** When false, hide receiving-messages section (Info already shows a summary). */
   showConnectSection?: boolean;
+  /** Chat controls that belong under identity and above pricing. */
+  afterIdentity?: ReactNode;
   /** Called after a successful profile save with refreshed detail. */
   onUpdated?: (detail: MyAgentSummary) => void;
   /** Called after permanent delete succeeds. */
@@ -987,6 +990,7 @@ export function AgentOwnerSettings({
   connectGuideUrl,
   busy,
   showConnectSection = true,
+  afterIdentity,
   onUpdated,
   onRemoved,
   onOpenKeys,
@@ -2507,6 +2511,8 @@ export function AgentOwnerSettings({
           <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.recommended }}>{profileMsg}</p>
         ) : null}
       </section>
+
+      {afterIdentity}
 
       <section style={settingsSectionCard}>
         <h3
