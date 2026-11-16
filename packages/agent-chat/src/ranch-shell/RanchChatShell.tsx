@@ -11468,47 +11468,62 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         gap: 14,
                       }}
                     >
-                      <ChatDecisionSettings
-                        auto={Boolean(active.decision?.auto)}
-                        hops={active.decision?.auto_hops ?? 0}
-                        hopCap={active.decision?.auto_hop_cap ?? 5}
-                        busy={decisionBusy}
-                        t={t}
-                        onToggle={(next) => void toggleChatDecision(next)}
-                      />
-                      <ChatCollabBudgetSection
-                        client={client}
-                        messages={t}
-                        chatId={active.chat_id}
-                        onUpdated={(prev, next) => {
-                          const prevCap = prev?.room_cap_credits ?? null;
-                          const nextCap = next.room_cap_credits ?? null;
-                          const raised =
-                            nextCap == null ? prevCap != null : prevCap != null && nextCap > prevCap;
-                          if (raised) acknowledgeRaisedCap("room");
-                        }}
-                        reloadKey={roomSpendReloadKey}
-                      />
-                      {activeIsOwned ? (
-                        ownedAgentDetail ? (
-                          <AgentOwnerSettings
-                            client={client}
-                            detail={ownedAgentDetail}
-                            messages={t}
-                            agentPlanetBaseUrl={agentPlanetBaseUrl}
-                            interfazeBaseUrl={interfazeBaseUrl}
-                            connectGuideUrl={connectGuideUrl}
-                            busy={busy}
-                            onUpdated={applyOwnedAgentProfileUpdate}
-                            onRemoved={applyOwnedAgentRemoved}
-                            onOpenKeys={() => openAccountPanel("keys")}
-                          />
-                        ) : ownedAgentLoading ? (
-                          <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
-                        ) : (
-                          <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>
-                        )
-                      ) : null}
+                      {(() => {
+                        const chatControls = (
+                          <>
+                            <ChatDecisionSettings
+                              auto={Boolean(active.decision?.auto)}
+                              hops={active.decision?.auto_hops ?? 0}
+                              hopCap={active.decision?.auto_hop_cap ?? 5}
+                              busy={decisionBusy}
+                              t={t}
+                              onToggle={(next) => void toggleChatDecision(next)}
+                            />
+                            <ChatCollabBudgetSection
+                              client={client}
+                              messages={t}
+                              chatId={active.chat_id}
+                              onUpdated={(prev, next) => {
+                                const prevCap = prev?.room_cap_credits ?? null;
+                                const nextCap = next.room_cap_credits ?? null;
+                                const raised =
+                                  nextCap == null ? prevCap != null : prevCap != null && nextCap > prevCap;
+                                if (raised) acknowledgeRaisedCap("room");
+                              }}
+                              reloadKey={roomSpendReloadKey}
+                            />
+                          </>
+                        );
+                        if (activeIsOwned && ownedAgentDetail) {
+                          return (
+                            <AgentOwnerSettings
+                              client={client}
+                              detail={ownedAgentDetail}
+                              messages={t}
+                              agentPlanetBaseUrl={agentPlanetBaseUrl}
+                              interfazeBaseUrl={interfazeBaseUrl}
+                              connectGuideUrl={connectGuideUrl}
+                              busy={busy}
+                              afterIdentity={chatControls}
+                              onUpdated={applyOwnedAgentProfileUpdate}
+                              onRemoved={applyOwnedAgentRemoved}
+                              onOpenKeys={() => openAccountPanel("keys")}
+                            />
+                          );
+                        }
+                        return (
+                          <>
+                            {activeIsOwned && ownedAgentLoading ? (
+                              <p style={{ color: colors.muted, fontSize: 13 }}>{t.loading}</p>
+                            ) : (
+                              chatControls
+                            )}
+                            {activeIsOwned && !ownedAgentLoading ? (
+                              <p style={{ color: colors.danger, fontSize: 13 }}>{t.myAgentsLoadFailed}</p>
+                            ) : null}
+                          </>
+                        );
+                      })()}
                     </div>
                   ) : infoTab === "wallet" && !groupActive && activeIsOwned && active?.agent_id ? (
                     <div
