@@ -2489,6 +2489,34 @@ function IconCollapse() {
   );
 }
 
+/** Centered plus for the composer. The text glyph sits low in the font box. */
+function IconPlus() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 5v14M5 12h14"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** One centered spark — composer switch for auto-decide. */
+function IconAutoDecide() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 4 13.6 10.4 20 12 13.6 13.6 12 20 10.4 13.6 4 12 10.4 10.4 12 4Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function IconClose() {
   return (
     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
@@ -3669,6 +3697,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   };
   const [stagedMailbox, setStagedMailbox] = useState<StagedMailboxFile[]>([]);
   const [plusOpen, setPlusOpen] = useState(false);
+  const [autoDecideTip, setAutoDecideTip] = useState(false);
   const [plusPane, setPlusPane] = useState<"root" | "files" | "commands">("root");
   const [chatFileRows, setChatFileRows] = useState<
     Array<{
@@ -7277,6 +7306,71 @@ export function RanchChatShell(props: RanchChatShellProps) {
       });
   };
 
+  const composerAutoDecideControl = () => {
+    if (!active || isGroupChat(active)) return null;
+    const on = Boolean(active.decision?.auto);
+    const disabled = decisionBusy || healthOk === false;
+    return (
+      <div
+        style={{ position: "relative", flexShrink: 0 }}
+        onMouseEnter={() => setAutoDecideTip(true)}
+        onMouseLeave={() => setAutoDecideTip(false)}
+      >
+        <button
+          type="button"
+          aria-pressed={on}
+          aria-label={t.decisionAuto}
+          aria-describedby={autoDecideTip ? "composer-auto-decide-tip" : undefined}
+          disabled={disabled}
+          onFocus={() => setAutoDecideTip(true)}
+          onBlur={() => setAutoDecideTip(false)}
+          onClick={() => {
+            if (disabled) return;
+            void toggleChatDecision(!on);
+          }}
+          style={{
+            ...composerRoundPlus,
+            width: 28,
+            height: 28,
+            border: on ? "1px solid rgba(59,130,246,0.45)" : "1px solid transparent",
+            background: on ? colors.accentSoft : "transparent",
+            color: on ? colors.text : colors.muted,
+            cursor: disabled ? "default" : "pointer",
+            opacity: disabled ? 0.4 : 1,
+          }}
+        >
+          <IconAutoDecide />
+        </button>
+        {autoDecideTip ? (
+          <div
+            id="composer-auto-decide-tip"
+            role="tooltip"
+            style={{
+              position: "absolute",
+              left: 0,
+              bottom: "calc(100% + 8px)",
+              width: 220,
+              padding: "8px 10px",
+              background: colors.panel,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 8,
+              boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+              zIndex: 8,
+              textAlign: "left",
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 650, color: colors.text, marginBottom: 4 }}>
+              {t.decisionAuto}
+            </div>
+            <div style={{ fontSize: 12, lineHeight: 1.45, color: colors.muted }}>
+              {t.decisionAutoHint}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   const composerPlusControl = () => {
     const disabled = busy || attachBusy || healthOk === false;
     const itemStyle = {
@@ -7311,7 +7405,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
             opacity: disabled ? 0.4 : 1,
           }}
         >
-          +
+          <IconPlus />
         </button>
         {plusOpen ? (
           <div
@@ -10066,10 +10160,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     }}
                   >
                     {composerPlusControl()}
+                    {composerAutoDecideControl()}
                     <span
                       style={{
                         fontWeight: 600,
                         fontSize: 12,
+                        lineHeight: "16px",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -10087,7 +10183,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           style={{
                             color: colors.muted,
                             fontSize: 11,
-                            lineHeight: 1.3,
+                            lineHeight: "16px",
                             whiteSpace: "nowrap",
                             flexShrink: 0,
                           }}
@@ -10111,6 +10207,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     }}
                   >
                     {composerPlusControl()}
+                    {composerAutoDecideControl()}
                     {(() => {
                       const listed = (composerModel.listed_model_id || "").trim();
                       const official = composerModel.official_channel;
@@ -10327,6 +10424,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               style={{
                                 fontWeight: 600,
                                 fontSize: 12,
+                                lineHeight: "16px",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
@@ -10340,8 +10438,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 aria-hidden
                                 style={{
                                   color: colors.muted,
-                                  fontSize: 10,
-                                  lineHeight: 1,
+                                  fontSize: 12,
+                                  lineHeight: "16px",
                                   flexShrink: 0,
                                 }}
                               >
@@ -10353,8 +10451,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                 title={selectedPrice.title || undefined}
                                 style={{
                                   color: colors.muted,
-                                  fontSize: 11,
-                                  lineHeight: 1.3,
+                                  fontSize: 12,
+                                  lineHeight: "16px",
                                   whiteSpace: "nowrap",
                                   flexShrink: 0,
                                 }}
@@ -10753,6 +10851,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     }}
                   >
                     {composerPlusControl()}
+                    {composerAutoDecideControl()}
                   </div>
                 ) : null}
                 <button
