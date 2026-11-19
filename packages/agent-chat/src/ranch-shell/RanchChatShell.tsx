@@ -3729,6 +3729,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [decisionBusy, setDecisionBusy] = useState(false);
+  const decisionModelUnsupportedRef = useRef(false);
   /** Detail panel tab. Group: members. Direct: info | settings? | wallet? | chats. */
   const [infoTab, setInfoTab] = useState<"info" | "settings" | "wallet" | "members" | "chats">("info");
   const [historyKind, setHistoryKind] = useState<"chats" | "plans" | "tasks" | "files">("chats");
@@ -5411,26 +5412,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
           : null;
       // Shelf-only agents must send the official shelf id as picked — do not
       // rewrite to a leftover BYO preferred_model via priceTail.
-      const reportedForSend = composerModel?.shelf_only
-        ? composerModel.supported_models
-        : reportedIdsForSend(composerModel);
-      const ownPricedMenu = composerPricedMenuIds(
-        reportedForSend,
-        composerModel?.model_options ?? [],
-      );
-      const sendSelected =
-        composerModel &&
-        !composerModel.official_channel &&
-        !composerModel.shelf_only &&
-        ownPricedMenu.length
-          ? agentModelIdForSend(selectedModelId, reportedForSend)
-          : selectedModelId;
-      const quotedModel = requestedModelForSend(
-        sendSelected,
-        composerModel?.listed_model_id ?? null,
-        Boolean(composerModel?.official_channel || composerModel?.shelf_only),
-        composerModel?.official_key_geo,
-      );
+      const quotedModel = composerRequestedModelId();
       const seen = seenMenuPrices(
         quotedModel || selectedModelId,
         composerModel,
@@ -5638,17 +5620,45 @@ export function RanchChatShell(props: RanchChatShellProps) {
   };
   sendRef.current = send;
 
+  const composerRequestedModelId = (): string | null => {
+    const reportedForSend = composerModel?.shelf_only
+      ? composerModel.supported_models
+      : reportedIdsForSend(composerModel);
+    const ownPricedMenu = composerPricedMenuIds(
+      reportedForSend,
+      composerModel?.model_options ?? [],
+    );
+    const sendSelected =
+      composerModel &&
+      !composerModel.official_channel &&
+      !composerModel.shelf_only &&
+      ownPricedMenu.length
+        ? agentModelIdForSend(selectedModelId, reportedForSend)
+        : selectedModelId;
+    return requestedModelForSend(
+      sendSelected,
+      composerModel?.listed_model_id ?? null,
+      Boolean(composerModel?.official_channel || composerModel?.shelf_only),
+      composerModel?.official_key_geo,
+    );
+  };
+
   const toggleChatDecision = async (next: boolean) => {
     if (!active || isGroupChat(active)) return;
     const chatId = active.chat_id;
+    const model = composerRequestedModelId();
     setDecisionBusy(true);
     setError(null);
     try {
-      const updated = await client.patchChatDecision(chatId, next);
+      const updated = await client.patchChatDecision(chatId, {
+        auto: next,
+        ...(model ? { requested_model: model } : {}),
+      });
       const decision = updated.decision ?? {
         ...(active.decision || {}),
         auto: next,
         auto_hops: next ? 0 : active.decision?.auto_hops,
+        ...(model ? { requested_model: model } : {}),
       };
       setActive((cur) => (cur && cur.chat_id === chatId ? { ...cur, decision } : cur));
       setChats((prev) =>
@@ -5660,6 +5670,40 @@ export function RanchChatShell(props: RanchChatShellProps) {
       setDecisionBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (!active || isGroupChat(active) || decisionBusy) return;
+    if (decisionModelUnsupportedRef.current) return;
+    const model = composerRequestedModelId();
+    if (!model) return;
+    if ((active.decision?.requested_model || "").trim() === model) return;
+    const chatId = active.chat_id;
+    let cancelled = false;
+    void client
+      .patchChatDecision(chatId, { requested_model: model })
+      .then((updated) => {
+        if (cancelled) return;
+        const echoed = (updated.decision?.requested_model || "").trim();
+        if (echoed !== model) {
+          decisionModelUnsupportedRef.current = true;
+          return;
+        }
+        setActive((cur) =>
+          cur && cur.chat_id === chatId ? { ...cur, decision: updated.decision } : cur,
+        );
+        setChats((prev) =>
+          prev.map((c) => (c.chat_id === chatId ? { ...c, decision: updated.decision } : c)),
+        );
+      })
+      .catch((e) => {
+        if (e instanceof ChatGatewayError && (e.status === 422 || e.status === 400)) {
+          decisionModelUnsupportedRef.current = true;
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [active, client, composerModel, decisionBusy, selectedModelId]);
 
   const retryLastUserMessage = () => {
     if (!active) return;
