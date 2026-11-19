@@ -680,7 +680,10 @@ export type GatewayClient = {
   }>;
   /** Remove an unsent owner upload. */
   deleteOwnerFile: (chatId: string, attachmentId: string) => Promise<void>;
-  patchChatDecision: (chatId: string, auto: boolean) => Promise<ChatSummary>;
+  patchChatDecision: (
+    chatId: string,
+    body: { auto?: boolean; requested_model?: string },
+  ) => Promise<ChatSummary>;
   listThreads: (chatId: string) => Promise<ThreadSummary[]>;
   createThread: (
     chatId: string,
@@ -1732,10 +1735,10 @@ export function createGatewayClient(
         `/api/chats/${encodeURIComponent(chatId)}/owner-files/${encodeURIComponent(attachmentId)}`,
         { method: "DELETE" },
       ),
-    patchChatDecision: (chatId, auto) =>
+    patchChatDecision: (chatId, body) =>
       request<ChatSummary>(`/api/chats/${encodeURIComponent(chatId)}/decision`, {
         method: "PATCH",
-        body: JSON.stringify({ auto }),
+        body: JSON.stringify(body),
       }),
     listThreads: async (chatId) => {
       const data = await request<{ data?: ThreadSummary[]; total?: number }>(

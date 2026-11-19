@@ -100,6 +100,7 @@ export type ChatSummary = {
     auto?: boolean;
     auto_hops?: number;
     auto_hop_cap?: number;
+    requested_model?: string | null;
     plan?: {
       title: string;
       summary?: string;
