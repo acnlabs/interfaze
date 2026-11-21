@@ -246,6 +246,12 @@ export type ChatMessage = {
       meter_source?: string;
     };
     requested_model?: string;
+    /** Set when this user turn was sent by auto-decide. The transcript draws it as a decision line. */
+    decision?: {
+      auto?: boolean;
+      option_id?: string;
+      source_message_id?: string;
+    };
     /** Downstream agents this hop invoked (writeback contract). */
     orchestration?: {
       callees?: Array<{

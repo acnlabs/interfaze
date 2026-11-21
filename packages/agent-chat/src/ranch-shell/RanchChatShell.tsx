@@ -98,6 +98,7 @@ import { OwnerFileThumbs } from "../OwnerFileThumbs";
 import { anchorAttachment } from "../anchorAttachment";
 import { HistoryFilesPanel } from "../HistoryFilesPanel";
 import { ManuscriptPanel } from "../ManuscriptPanel";
+import { decisionAutoLine, isAutoDecisionMessage } from "../decisionLine";
 import { blockLabel, pageOpLine, pageRefLine, type PageOpRecord, type PageRefRecord } from "../pageOpText";
 import { blockKeyFromSearch, chatIdFromSearch } from "../chatLink";
 import { visibleManuscriptBlocks } from "../manuscriptPage";
@@ -9137,6 +9138,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     (prev?.thread_id || null) !== m.thread_id;
                   const dividerTitle = topicLabel || t.topics;
                   const highlight = !!m.thread_id && highlightTopicId === m.thread_id;
+                  const autoDecisionText = isAutoDecisionMessage(m)
+                    ? decisionAutoLine(uiLocale, m.content || "")
+                    : "";
                   const pageOp =
                     m.sender_type === "system" &&
                     m.metadata?.kind === "canvas_op" &&
@@ -9179,6 +9183,40 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           accentSoft={colors.accentSoft}
                         />
                       </div>
+                    );
+                  }
+                  if (autoDecisionText) {
+                    return (
+                      <Fragment key={m.message_id}>
+                        {enteringTopic &&
+                        topicLabel &&
+                        !(prev && isLocalTopicStartMessage(prev)) ? (
+                          <div data-topic-id={m.thread_id || undefined}>
+                            <TopicDivider
+                              title={topicLabel}
+                              highlighted={highlight}
+                              onHighlight={
+                                m.thread_id ? () => flashTopicHighlight(m.thread_id!) : undefined
+                              }
+                              borderColor={colors.border}
+                              accentSoft={colors.accentSoft}
+                            />
+                          </div>
+                        ) : null}
+                        <div
+                          data-message-id={m.message_id}
+                          style={{
+                            alignSelf: "center",
+                            maxWidth: "min(92%, 36rem)",
+                            fontSize: 12,
+                            lineHeight: 1.45,
+                            color: colors.muted,
+                            textAlign: "center",
+                          }}
+                        >
+                          {autoDecisionText}
+                        </div>
+                      </Fragment>
                     );
                   }
                   return (
