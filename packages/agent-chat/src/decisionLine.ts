@@ -2,10 +2,12 @@
 export function isAutoDecisionMessage(message: {
   sender_type?: string | null;
   content?: string | null;
-  metadata?: { decision?: unknown } | null;
+  metadata?: object | null;
 }): boolean {
   if (message.sender_type !== "user") return false;
-  const raw = message.metadata?.decision;
+  const metadata = message.metadata;
+  if (!metadata || !("decision" in metadata)) return false;
+  const raw = (metadata as { decision?: unknown }).decision;
   if (!raw || typeof raw !== "object") return false;
   if ((raw as { auto?: unknown }).auto !== true) return false;
   return typeof message.content === "string" && message.content.trim().length > 0;
