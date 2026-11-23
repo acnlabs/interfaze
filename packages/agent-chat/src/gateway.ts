@@ -1,4 +1,5 @@
 import type { ChatMessage, ChatParticipant, ChatSummary, ThreadSummary } from "./types";
+import type { AgentHarness } from "./agentHarness";
 import { createInflightGate } from "./inflight";
 import { filesFromMessages, normalizeChatMessage } from "./mailbox";
 
@@ -72,6 +73,7 @@ export type ChatAgentSearchHit = {
   description?: string | null;
   status?: string | null;
   acl_reason?: string | null;
+  harness?: AgentHarness | null;
 };
 
 export type AgentCreateTier = {
@@ -515,6 +517,8 @@ export type MyAgentSummary = {
   cap_credits?: number | null;
   /** Present after a successful delivery PATCH when ACN returns follow-up copy. */
   next_step_hint?: string | null;
+  /** Heartbeat self-report of the agent stack. Not verified. */
+  harness?: AgentHarness | null;
 };
 
 export type PieceSku = {
@@ -724,6 +728,7 @@ export type GatewayClient = {
     byo_degraded?: boolean;
     /** Provider catalog rejected the BYO API key (401/403). */
     byo_key_invalid?: boolean;
+    harness?: AgentHarness | null;
     price_book_source?: string | null;
     providers?: Array<{
       id: string;

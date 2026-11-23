@@ -10,6 +10,8 @@ import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import { harnessLabel, parseAgentHarness, readReportedHarness, type AgentHarness } from "../agentHarness";
+import { HarnessBadge } from "../harnessBadge";
 import {
   ChatGatewayError,
   createGatewayClient,
@@ -3772,6 +3774,36 @@ export function RanchChatShell(props: RanchChatShellProps) {
   }, [client, planViewer]);
   /** Owned-agent ACN detail for Info (read-only) + Settings (manage). */
   const [ownedAgentDetail, setOwnedAgentDetail] = useState<MyAgentSummary | null>(null);
+  const [harnessByAgent, setHarnessByAgent] = useState<
+    Record<string, AgentHarness | null>
+  >({});
+  const rememberHarness = useCallback((agentId: string, raw: unknown) => {
+    const key = agentIdKey(agentId);
+    if (!key) return;
+    const parsed = parseAgentHarness(raw);
+    setHarnessByAgent((prev) => {
+      if (Object.prototype.hasOwnProperty.call(prev, key) && prev[key] === parsed) return prev;
+      const cur = prev[key];
+      if (
+        cur &&
+        parsed &&
+        cur.name === parsed.name &&
+        cur.version === parsed.version &&
+        cur.logo_url === parsed.logo_url
+      ) {
+        return prev;
+      }
+      return { ...prev, [key]: parsed };
+    });
+  }, []);
+  const harnessFor = (agentId?: string | null): AgentHarness | null => {
+    const key = agentIdKey(agentId);
+    if (!key) return null;
+    if (Object.prototype.hasOwnProperty.call(harnessByAgent, key)) {
+      return harnessByAgent[key] ?? null;
+    }
+    return directoryAgents.find((a) => agentIdKey(a.agent_id) === key)?.harness ?? null;
+  };
   const [composerModel, setComposerModel] = useState<ComposerStatusSnapshot | null>(null);
   /** User pick for this hop (S1). Sticky per chat until changed. */
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
@@ -4028,12 +4060,18 @@ export function RanchChatShell(props: RanchChatShellProps) {
         (a) => a.group === "recommended" && isAcnCatalogAgentId(a.agent_id),
       );
       const hits = await client.searchAgents(q, 20);
-      const mapped = hits.map((h) => ({
-        agent_id: h.agent_id,
-        name: h.name,
-        description: h.description,
-        group: "recommended" as const,
-      }));
+      const mapped = hits.map((h) => {
+        const reported = readReportedHarness(h);
+        const harness = parseAgentHarness(reported.value);
+        if (reported.present) rememberHarness(h.agent_id, reported.value ?? null);
+        return {
+          agent_id: h.agent_id,
+          name: h.name,
+          description: h.description,
+          group: "recommended" as const,
+          harness,
+        };
+      });
       const qn = q.trim().toLowerCase();
       const pinnedShown = qn
         ? pinned.filter((a) => {
@@ -4046,7 +4084,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       const extra = pinnedShown.filter((a) => !seen.has(agentIdKey(a.agent_id)));
       return [...extra, ...mapped];
     },
-    [client, directoryAgents],
+    [client, directoryAgents, rememberHarness],
   );
 
   useEffect(() => {
@@ -6045,6 +6083,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
           return;
         }
         setOwnedAgentDetail(row);
+        const reported = readReportedHarness(row);
+        if (reported.present) rememberHarness(row.agent_id, reported.value ?? null);
       })
       .catch(() => {
         if (!cancelled) setOwnedAgentDetail(null);
@@ -6055,7 +6095,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     return () => {
       cancelled = true;
     };
-  }, [showMembersPanel, activeIsOwned, active?.agent_id, infoTab, client]);
+  }, [showMembersPanel, activeIsOwned, active?.agent_id, infoTab, client, rememberHarness]);
 
   // M1/M2: composer model picker. Home uses the pinned recipient before a chat is open.
   useEffect(() => {
@@ -6121,6 +6161,8 @@ export function RanchChatShell(props: RanchChatShellProps) {
             !hasDeclaredProviderModels(row.agent_providers);
           // Quota-exhausted Owner key: force official shelf picks (drop sticky BYO).
           const forceOfficialShelf = shelfOnly || byoDegraded;
+          const reported = readReportedHarness(row);
+          if (reported.present) rememberHarness(bare, reported.value ?? null);
           const nextStatus: ComposerStatusSnapshot = {
             listed_model_id: listed,
             runtime_model_id: runtime,
@@ -6254,7 +6296,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
     // Owner profile is not read here. Those fields used to be deps, and each
     // time they arrived the cleanup dropped the in-flight model-status call
     // (several seconds) so the model row stayed blank until a later attempt.
-  }, [composerDirect?.chatId, composerDirect?.agentId, client]);
+  }, [composerDirect?.chatId, composerDirect?.agentId, client, rememberHarness]);
 
   const missingPriceKey = composerModel?.shelf_only
     ? ""
@@ -6290,6 +6332,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
       })
       .then(({ row, prices }) => {
         if (cancelled) return;
+        if (row) {
+          const reported = readReportedHarness(row);
+          if (reported.present) rememberHarness(bare, reported.value ?? null);
+        }
         let still: string[] = [];
         setComposerModel((prev) => {
           if (!prev) return prev;
@@ -6332,7 +6378,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
       cancelled = true;
       if (quoteFlightRef.current === flight) quoteFlightRef.current = "";
     };
-  }, [composerDirect?.agentId, composerDirect?.chatId, client, composerModel?.official_channel, missingPriceKey, quoteAttempts]);
+  }, [composerDirect?.agentId, composerDirect?.chatId, client, composerModel?.official_channel, missingPriceKey, quoteAttempts, rememberHarness]);
 
   useEffect(() => {
     setComposerMenuOpen(false);
@@ -6616,10 +6662,12 @@ export function RanchChatShell(props: RanchChatShellProps) {
       }
     }
 
+    const reported = readReportedHarness(row);
     onOwnedAgentUpdated?.({
       agent_id: row.agent_id,
       name: row.name,
       description: row.description,
+      harness: reported.present ? parseAgentHarness(reported.value) : row.harness,
     });
   };
 
@@ -8297,6 +8345,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     >
                       {avatarGlyph(title)}
                     </span>
+                    {!isGroupChat(c) && harnessFor(c.agent_id) ? (
+                      <HarnessBadge
+                        harness={harnessFor(c.agent_id)!}
+                        size={40}
+                        ring={colors.panel}
+                      />
+                    ) : null}
                     {dot ? (
                       <span
                         aria-hidden
@@ -8598,6 +8653,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       >
                         {avatarGlyph(labelForOpen(active))}
                       </span>
+                      {!isGroupChat(active) && harnessFor(active.agent_id) ? (
+                        <HarnessBadge
+                          harness={harnessFor(active.agent_id)!}
+                          size={32}
+                          ring={colors.bg}
+                        />
+                      ) : null}
                       {!isGroupChat(active) && agentStatusDotColor(activePresence) ? (
                         <span
                           aria-hidden
@@ -9732,6 +9794,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         <span
                           aria-hidden
                           style={{
+                            position: "relative",
                             width: 18,
                             height: 18,
                             borderRadius: 999,
@@ -9748,6 +9811,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           }}
                         >
                           {avatarGlyph(homeRecipientName)}
+                          {harnessFor(homeRecipientId) ? (
+                            <HarnessBadge
+                              harness={harnessFor(homeRecipientId)!}
+                              size={18}
+                              ring={colors.bg}
+                            />
+                          ) : null}
                         </span>
                         <span
                           style={{
@@ -11054,6 +11124,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                       >
                         {avatarGlyph(labelForOpen(active))}
                       </div>
+                      {!groupActive && harnessFor(active.agent_id) ? (
+                        <HarnessBadge
+                          harness={harnessFor(active.agent_id)!}
+                          size={56}
+                          ring={colors.bg}
+                        />
+                      ) : null}
                       {!groupActive && agentStatusDotColor(activePresence) ? (
                         <span
                           aria-hidden
@@ -11786,6 +11863,24 @@ export function RanchChatShell(props: RanchChatShellProps) {
                                   : agentStatusTitle(activePresence, t) || t.offline}
                           </div>
                         </div>
+                        {harnessFor(active.agent_id) ? (
+                          <div>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                letterSpacing: "0.06em",
+                                color: colors.muted,
+                                marginBottom: 6,
+                              }}
+                            >
+                              {t.harnessLabel}
+                            </div>
+                            <div style={{ fontSize: 13, color: colors.text }}>
+                              {harnessLabel(harnessFor(active.agent_id)!)}
+                            </div>
+                          </div>
+                        ) : null}
                         {ownedAgentDetail?.name ? (
                           <div>
                             <div
@@ -12010,6 +12105,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                               >
                                 {avatarGlyph(name)}
                               </span>
+                              {!person && harnessFor(id) ? (
+                                <HarnessBadge
+                                  harness={harnessFor(id)!}
+                                  size={36}
+                                  ring={colors.bg}
+                                />
+                              ) : null}
                               {dot ? (
                                 <span
                                   aria-hidden

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { agentPickerSubtitle, agentRefusesChat } from "../agentPicker";
+import { harnessLabel } from "../agentHarness";
+import { HarnessBadge } from "../harnessBadge";
 import { avatarBackground, avatarGlyph, directShortId } from "../inboxList";
 import type { AgentDirectoryItem } from "../types";
 import { copyConnectPromptWithInvite } from "./connectPrompt";
@@ -136,6 +138,7 @@ export function NewChatPicker({
       >
         <span
           style={{
+            position: "relative",
             width: 36,
             height: 36,
             borderRadius: 999,
@@ -149,11 +152,28 @@ export function NewChatPicker({
           }}
         >
           {avatarGlyph(label)}
+          {a.harness ? (
+            <HarnessBadge harness={a.harness} size={36} ring={colors.bg} />
+          ) : null}
         </span>
         <span style={{ textAlign: "left", minWidth: 0, flex: 1 }}>
           <span style={{ display: "block", fontWeight: 600, fontSize: 13 }}>
             {label}
           </span>
+          {a.harness ? (
+            <span
+              style={{
+                display: "block",
+                fontSize: 11,
+                color: colors.muted,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {harnessLabel(a.harness)}
+            </span>
+          ) : null}
           <span
             style={{
               display: "block",

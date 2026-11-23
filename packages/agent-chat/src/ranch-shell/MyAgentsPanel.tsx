@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
+import { harnessLabel } from "../agentHarness";
 import type { GatewayClient, MyAgentSummary } from "../gateway";
 import {
   AgentOwnerSettings,
@@ -261,6 +262,9 @@ export function MyAgentsPanel({
                       value: detail.status === "online" ? t.online : t.offline,
                     },
                     { label: t.myAgentsShortId, value: detail.agent_id },
+                    ...(detail.harness
+                      ? [{ label: t.harnessLabel, value: harnessLabel(detail.harness) }]
+                      : []),
                     {
                       label: "Claim",
                       value: detail.claim_status || t.unknown,
@@ -433,6 +437,7 @@ export function MyAgentsPanel({
                         {a.name || shortId(a.agent_id)}
                       </span>
                       <span style={{ fontSize: 11, color: colors.muted }}>
+                        {a.harness ? `${harnessLabel(a.harness)} · ` : ""}
                         {deliveryLabel(a.delivery, t)} · {shortId(a.agent_id)}
                       </span>
                     </span>
