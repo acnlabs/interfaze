@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { imageBoxFrameStyle, type ImageBox } from "./imageBox";
 import { ownerIdsFromAttachments, parseMessageAttachments } from "./mailbox";
 import { colors } from "./ranch-shell/styles";
 import { SignedAttachmentLink } from "./SignedAttachmentLink";
@@ -55,6 +56,7 @@ export function OwnerFileThumbs({
   retryLabel = "Retry",
   unavailableLabel = "Attachment not found or no longer available",
   accessDeniedLabel = "Cannot access attachment. Check your login and chat access.",
+  box = null,
 }: {
   chatId: string;
   attachments?: string[] | string | null;
@@ -68,6 +70,7 @@ export function OwnerFileThumbs({
   retryLabel?: string;
   unavailableLabel?: string;
   accessDeniedLabel?: string;
+  box?: ImageBox | null;
 }) {
   const ids = ownerIdsFromAttachments(parseMessageAttachments(attachments ?? []));
   const [files, setFiles] = useState<OwnerFile[]>([]);
@@ -253,19 +256,24 @@ export function OwnerFileThumbs({
               ) : null}
             </div>
             {image ? (
-              <img
-                src={f.url}
-                alt={f.name}
-                onError={() => mediaFailed(f.id)}
-                style={{
-                  width: "100%",
-                  minHeight: 96,
-                  maxHeight: 320,
-                  objectFit: "contain",
-                  background: "rgba(127,127,127,0.08)",
-                  display: "block",
-                }}
-              />
+              <span style={{ position: "relative", display: "block" }}>
+                <img
+                  src={f.url}
+                  alt={f.name}
+                  onError={() => mediaFailed(f.id)}
+                  style={{
+                    width: "100%",
+                    minHeight: 96,
+                    maxHeight: 320,
+                    objectFit: "contain",
+                    background: "rgba(127,127,127,0.08)",
+                    display: "block",
+                  }}
+                />
+                {box && box.ref === `upl:${f.id}` ? (
+                  <span data-image-box="true" style={imageBoxFrameStyle(box)} />
+                ) : null}
+              </span>
             ) : null}
             <div style={{ padding: "0 12px 10px" }}>
               {f.remote ? (
