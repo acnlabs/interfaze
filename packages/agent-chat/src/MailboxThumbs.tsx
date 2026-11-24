@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { imageBoxFrameStyle, type ImageBox } from "./imageBox";
 import { mailboxIdsFromAttachments, parseMessageAttachments, isReadableAttachmentName } from "./mailbox";
 import { colors } from "./ranch-shell/styles";
 import { SignedAttachmentLink } from "./SignedAttachmentLink";
@@ -88,6 +89,7 @@ export function MailboxThumbs({
   unavailableLabel = "Attachment not found or no longer available",
   accessDeniedLabel = "Cannot access attachment. Check your login and chat access.",
   listedPriceLabel = (amount: number) => `${amount} Credits`,
+  box = null,
 }: {
   chatId: string;
   attachments?: string[] | string | null;
@@ -108,6 +110,7 @@ export function MailboxThumbs({
   unavailableLabel?: string;
   accessDeniedLabel?: string;
   listedPriceLabel?: (amount: number) => string;
+  box?: ImageBox | null;
 }) {
   const ids = mailboxIdsFromAttachments(parseMessageAttachments(attachments ?? []));
   const [files, setFiles] = useState<FileBlob[]>([]);
@@ -283,12 +286,17 @@ export function MailboxThumbs({
               style={{ width: "100%", display: "block" }}
             />
           ) : (
-            <img
-              src={f.url}
-              onError={() => mediaFailed(f.mailboxId)}
-              alt={f.name}
-              style={{ width: "100%", minHeight: 96, maxHeight: 320, objectFit: "contain", background: "rgba(127,127,127,0.08)", display: "block" }}
-            />
+            <span style={{ position: "relative", display: "block" }}>
+              <img
+                src={f.url}
+                onError={() => mediaFailed(f.mailboxId)}
+                alt={f.name}
+                style={{ width: "100%", minHeight: 96, maxHeight: 320, objectFit: "contain", background: "rgba(127,127,127,0.08)", display: "block" }}
+              />
+              {box && box.ref === `mbx:${f.mailboxId}` ? (
+                <span data-image-box="true" style={imageBoxFrameStyle(box)} />
+              ) : null}
+            </span>
           );
           return (
             <div key={f.url} data-mailbox-id={f.mailboxId} style={{ width: "100%", maxWidth: 480, overflow: "hidden", border: `1px solid ${colors.border}`, borderRadius: 12 }}>
