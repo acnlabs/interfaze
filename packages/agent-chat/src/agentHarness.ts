@@ -29,6 +29,28 @@ export function harnessLabel(harness: AgentHarness): string {
   return version ? `${harness.name} · ${version}` : harness.name;
 }
 
+/** Display-only marks we host. The stored name stays whatever the agent reported. */
+export type KnownHarnessMark = "openclaw" | "hermes" | "claude-code" | "codex";
+
+const KNOWN_HARNESS_MARKS: Record<string, KnownHarnessMark> = {
+  openclaw: "openclaw",
+  "open claw": "openclaw",
+  hermes: "hermes",
+  "claude code": "claude-code",
+  claudecode: "claude-code",
+  codex: "codex",
+  "openai codex": "codex",
+};
+
+export function knownHarnessMark(name: string): KnownHarnessMark | null {
+  const key = name
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+  return KNOWN_HARNESS_MARKS[key] ?? null;
+}
+
 /** `harness` wins. `framework` is the previous wire key. */
 export function readReportedHarness(raw: object): { present: boolean; value: unknown } {
   if ("harness" in raw) return { present: true, value: (raw as { harness?: unknown }).harness };

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { harnessLabel, parseAgentHarness, readReportedHarness } from "./agentHarness";
+import {
+  harnessLabel,
+  knownHarnessMark,
+  parseAgentHarness,
+  readReportedHarness,
+} from "./agentHarness";
 
 describe("parseAgentHarness", () => {
   it("keeps a name, version, and https logo", () => {
@@ -37,5 +42,17 @@ describe("parseAgentHarness", () => {
     expect(readReportedHarness({ framework: { name: "Codex" } }).value).toEqual({
       name: "Codex",
     });
+  });
+
+  it("picks a hosted mark only for names we have a logo for", () => {
+    expect(knownHarnessMark("OpenClaw")).toBe("openclaw");
+    expect(knownHarnessMark("open claw")).toBe("openclaw");
+    expect(knownHarnessMark("Hermes")).toBe("hermes");
+    expect(knownHarnessMark("Claude Code")).toBe("claude-code");
+    expect(knownHarnessMark("claude-code")).toBe("claude-code");
+    expect(knownHarnessMark("Codex")).toBe("codex");
+    expect(knownHarnessMark("OpenAI Codex")).toBe("codex");
+    expect(knownHarnessMark("Claude")).toBeNull();
+    expect(knownHarnessMark("Dots")).toBeNull();
   });
 });
