@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { harnessLabel, type AgentHarness } from "./agentHarness";
+import { harnessLabel, knownHarnessMark, type AgentHarness } from "./agentHarness";
+import { KnownHarnessGlyph } from "./harnessMarks";
 
 /** Corner mark for a self-reported harness. Sits top-right so the presence dot can stay bottom-right. */
 export function HarnessBadge({
@@ -15,7 +16,8 @@ export function HarnessBadge({
 }) {
   const [broken, setBroken] = useState(false);
   const dim = Math.max(10, Math.min(18, Math.round(size * 0.42)));
-  const logo = harness.logo_url && !broken ? harness.logo_url : "";
+  const reported = harness.logo_url && !broken ? harness.logo_url : "";
+  const known = knownHarnessMark(harness.name);
   const glyph = (Array.from(harness.name.trim())[0] || "?").toUpperCase();
   return (
     <span
@@ -40,14 +42,16 @@ export function HarnessBadge({
         boxSizing: "border-box",
       }}
     >
-      {logo ? (
+      {reported ? (
         <img
-          src={logo}
+          src={reported}
           alt=""
           referrerPolicy="no-referrer"
           onError={() => setBroken(true)}
           style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
         />
+      ) : known ? (
+        <KnownHarnessGlyph mark={known} />
       ) : (
         glyph
       )}
