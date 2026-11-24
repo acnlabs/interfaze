@@ -39,6 +39,12 @@ export {
   type AccountDeepLinkPanel,
 } from "./ranch-shell/accountDeepLink";
 export {
+  harnessLabel,
+  parseAgentHarness,
+  readReportedHarness,
+  type AgentHarness,
+} from "./agentHarness";
+export {
   CHAT_OPEN_EVENT,
   type AgentChatMode,
   type AgentChatVariant,

@@ -5,6 +5,8 @@ import { useAuth0 } from "@auth0/auth0-react";
 import {
   RanchChatShell,
   clearComposerUnsent,
+  parseAgentHarness,
+  readReportedHarness,
   readAccountPanelFromUrl,
   type AccountDeepLinkPanel,
   type AgentDirectoryItem,
@@ -60,7 +62,12 @@ function mergeOfficialConversationAgent(mine: AgentDirectoryItem[]): AgentDirect
 
 function upsertMineDirectoryAgent(
   prev: AgentDirectoryItem[],
-  agent: { agent_id: string; name?: string | null; description?: string | null },
+  agent: {
+    agent_id: string;
+    name?: string | null;
+    description?: string | null;
+    harness?: AgentDirectoryItem["harness"];
+  },
 ): AgentDirectoryItem[] {
   const key = agent.agent_id.replace(/^acn:/i, "");
   const idx = prev.findIndex((a) => {
@@ -75,6 +82,7 @@ function upsertMineDirectoryAgent(
             ...a,
             name: agent.name ?? a.name,
             description: agent.description ?? a.description,
+            harness: agent.harness !== undefined ? agent.harness : a.harness,
           }
         : a,
     );
@@ -84,6 +92,7 @@ function upsertMineDirectoryAgent(
       agent_id: agent.agent_id,
       name: agent.name,
       description: agent.description,
+      harness: agent.harness,
       group: "mine",
     },
     ...prev,
@@ -214,6 +223,7 @@ function CnChatHost() {
               agent_id?: string;
               name?: string | null;
               description?: string | null;
+              harness?: unknown;
             }>;
           };
           for (const a of data.agents ?? []) {
@@ -223,6 +233,7 @@ function CnChatHost() {
               agent_id: id,
               name: typeof a.name === "string" ? a.name : null,
               description: typeof a.description === "string" ? a.description : null,
+              harness: parseAgentHarness(readReportedHarness(a).value),
               group: "mine",
             });
           }
@@ -406,6 +417,7 @@ function GlobalChatHost() {
               agent_id?: string;
               name?: string | null;
               description?: string | null;
+              harness?: unknown;
             }>;
           };
           for (const a of data.agents ?? []) {
@@ -415,6 +427,7 @@ function GlobalChatHost() {
               agent_id: id,
               name: typeof a.name === "string" ? a.name : null,
               description: typeof a.description === "string" ? a.description : null,
+              harness: parseAgentHarness(readReportedHarness(a).value),
               group: "mine",
             });
           }

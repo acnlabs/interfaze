@@ -1,3 +1,4 @@
+import type { AgentHarness } from "./agentHarness";
 import type { PageOpRecord } from "./pageOpText";
 import type { AccountDeepLinkPanel } from "./ranch-shell/accountDeepLink";
 
@@ -17,6 +18,8 @@ export type AgentDirectoryItem = {
   name?: string | null;
   description?: string | null;
   group: "mine" | "recommended";
+  /** Heartbeat self-report. Absent when the agent has not declared a stack. */
+  harness?: AgentHarness | null;
 };
 
 export type AgentChatShellProps = {
@@ -196,6 +199,7 @@ export type RanchChatShellProps = {
     agent_id: string;
     name?: string | null;
     description?: string | null;
+    harness?: AgentHarness | null;
   }) => void;
   /**
    * Owner permanently deleted an ACN identity in Settings.

@@ -248,6 +248,7 @@ export type RanchMessages = {
   infoTab: string;
   settingsTab: string;
   statusLabel: string;
+  harnessLabel: string;
   agentIdLabel: string;
   slashCommands: string;
   slashTopicDesc: string;
@@ -1179,6 +1180,7 @@ const en: RanchMessages = {
   infoTab: "Info",
   settingsTab: "Settings",
   statusLabel: "Status",
+  harnessLabel: "Harness",
   agentIdLabel: "Agent id",
   slashCommands: "Commands",
   slashTopicDesc: "Start a topic and send the title as a message",
@@ -2176,6 +2178,7 @@ const zh: RanchMessages = {
   infoTab: "资料",
   settingsTab: "设置",
   statusLabel: "状态",
+  harnessLabel: "外壳",
   agentIdLabel: "Agent id",
   slashCommands: "命令",
   slashTopicDesc: "开始话题，并把标题作为一条消息发出",
