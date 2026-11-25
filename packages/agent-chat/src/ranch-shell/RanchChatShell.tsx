@@ -95,7 +95,7 @@ import {
 import { ComputerManagePanel } from "../ComputerManagePanel";
 import { ComputerScreenPanel } from "../ComputerScreenPanel";
 import { releaseScreenAway, screenAwayHeld } from "../computerScreenLive";
-import { shownImageBox } from "../imageBox";
+import { shownImageBoxFor } from "../imageBox";
 import { MailboxThumbs } from "../MailboxThumbs";
 import { OwnerFileThumbs } from "../OwnerFileThumbs";
 import { anchorAttachment } from "../anchorAttachment";
@@ -9405,7 +9405,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         <MailboxThumbs
                           chatId={m.chat_id || active?.chat_id || ""}
                           attachments={m.attachments}
-                          box={shownImageBox(m.metadata)}
+                          box={shownImageBoxFor(displayMessages, m.attachments)}
                           gatewayBaseUrl={gatewayBaseUrl}
                           getAccessToken={getAccessToken}
                           showListedPrice={attachmentListedPriceVisible(m.metadata?.piece)}
@@ -9425,7 +9425,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         <OwnerFileThumbs
                           chatId={m.chat_id || active?.chat_id || ""}
                           attachments={m.attachments}
-                          box={shownImageBox(m.metadata)}
+                          box={shownImageBoxFor(displayMessages, m.attachments)}
                           gatewayBaseUrl={gatewayBaseUrl}
                           getAccessToken={getAccessToken}
                           loadFailedLabel={t.attachmentLoadFailed}
