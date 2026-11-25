@@ -1,3 +1,5 @@
+import { parseMessageAttachments } from "./mailbox";
+
 export type ImageBox = {
   ref: string;
   top: number;
@@ -37,6 +39,22 @@ export function shownImageBox(meta: unknown): ImageBox | null {
     shown.push({ ref, top, bottom, left, right });
   }
   return shown.length === 1 ? shown[0] : null;
+}
+
+/** Draw a box on the picture it names, even when the answer is stored on the reply. */
+export function shownImageBoxFor(
+  messages: readonly { metadata?: unknown }[],
+  attachments: unknown,
+): ImageBox | null {
+  const refs = new Set(parseMessageAttachments(attachments));
+  if (refs.size === 0) return null;
+  const hits = new Map<string, ImageBox>();
+  for (const message of messages) {
+    const box = shownImageBox(message?.metadata);
+    if (!box || !refs.has(box.ref)) continue;
+    hits.set(`${box.ref}:${box.top}:${box.bottom}:${box.left}:${box.right}`, box);
+  }
+  return hits.size === 1 ? [...hits.values()][0] : null;
 }
 
 export function imageBoxFrameStyle(box: ImageBox): Record<string, string> {
