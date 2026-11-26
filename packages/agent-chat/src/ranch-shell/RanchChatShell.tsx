@@ -5684,9 +5684,9 @@ export function RanchChatShell(props: RanchChatShellProps) {
   };
 
   const toggleChatDecision = async (next: boolean) => {
-    if (!active || isGroupChat(active)) return;
+    if (!active) return;
     const chatId = active.chat_id;
-    const model = composerRequestedModelId();
+    const model = isGroupChat(active) ? "" : composerRequestedModelId();
     setDecisionBusy(true);
     setError(null);
     try {
@@ -7401,7 +7401,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
   };
 
   const composerAutoDecideControl = () => {
-    if (!active || isGroupChat(active)) return null;
+    if (!active) return null;
     const on = Boolean(active.decision?.auto);
     const disabled = decisionBusy || healthOk === false;
     return (
