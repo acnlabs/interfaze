@@ -13,41 +13,51 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const moduleExports = {};
 new Function("exports", js)(moduleExports);
-const { decisionAutoLine, decisionEventLine, decisionUsageFromMessage, isAutoDecisionMessage } = moduleExports;
+const {
+  decisionAutoLine,
+  decisionCallUsage,
+  decisionEventLine,
+  decisionStoppedLine,
+  isAutoDecisionMessage,
+  judgmentMark,
+  judgmentNeedsStoppedLine,
+} = moduleExports;
 
-test("a judgment's model sits on the decision event", () => {
-  const sent = {
-    sender_type: "user",
-    content: "再做一次刚才只回复 alpha 的那件事",
+test("an older picked line borrows the model from the judged reply", () => {
+  const reply = {
+    message_id: "reply-1",
+    sender_type: "agent",
     metadata: {
-      decision: { auto: true, model: "jev-1.14.0", input_tokens: 1895 },
+      orchestration: { decide: { shadow: { model: "jev-1.14.0", status: "scored" } } },
     },
   };
+  const picked = {
+    sender_type: "user",
+    content: "再做一次刚才只回复 alpha 的那件事",
+    metadata: { decision: { auto: true, source_message_id: "reply-1" } },
+  };
   assert.equal(
-    decisionEventLine("en", sent),
+    decisionEventLine("en", picked),
     "Auto-decide picked “再做一次刚才只回复 alpha 的那件事”.",
   );
-  assert.deepEqual(decisionUsageFromMessage(sent), { modelId: "jev-1.14.0", input: 1895 });
-  const stopped = {
-    sender_type: "system",
-    content: "",
-    metadata: { decision: { auto: true, event: "stopped", model: "jev-1.14.0", input_tokens: 1895 } },
-  };
-  assert.equal(decisionEventLine("zh", stopped), "自动决策停住了。");
-  assert.equal(decisionEventLine("en", stopped), "Auto-decide stopped.");
+  assert.deepEqual(decisionCallUsage(picked, [reply]), { modelId: "jev-1.14.0", input: null });
+  assert.equal(judgmentNeedsStoppedLine(reply, [reply, picked]), false);
 });
 
-test("an agent reply does not carry the judgment usage", () => {
-  assert.equal(
-    decisionUsageFromMessage({
-      sender_type: "agent",
-      metadata: {
-        usage: { input_tokens: 62618, output_tokens: 62, model_id: "deepseek-chat" },
-        orchestration: { decide: { shadow: { model: "jev-1.14.0", usage: { input_tokens: 1895 } } } },
+test("a judged reply that sent nothing shows a stopped event", () => {
+  const gamma = {
+    message_id: "gamma-1",
+    sender_type: "agent",
+    metadata: {
+      orchestration: {
+        decide: { shadow: { model: "jev-1.14.0", usage: { input_tokens: 1895 }, status: "ask_human" } },
       },
-    }),
-    null,
-  );
+    },
+  };
+  assert.equal(judgmentNeedsStoppedLine(gamma, [gamma]), true);
+  assert.deepEqual(judgmentMark(gamma), { modelId: "jev-1.14.0", input: 1895 });
+  assert.equal(decisionStoppedLine("zh"), "自动决策停住了。");
+  assert.equal(decisionStoppedLine("en"), "Auto-decide stopped.");
 });
 
 test("auto-decide turns render as a decision line", () => {
