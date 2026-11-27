@@ -13,7 +13,33 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const moduleExports = {};
 new Function("exports", js)(moduleExports);
-const { decisionAutoLine, isAutoDecisionMessage } = moduleExports;
+const { decisionAutoLine, decisionUsageFromMessage, isAutoDecisionMessage } = moduleExports;
+
+test("a judgment shows its model and input tokens on the reply", () => {
+  const usage = decisionUsageFromMessage({
+    metadata: {
+      orchestration: {
+        decide: {
+          shadow: {
+            model: "jev-1.14.0",
+            usage: { input_tokens: 1895, output_tokens: 40 },
+          },
+        },
+      },
+    },
+  });
+  assert.deepEqual(usage, { modelId: "jev-1.14.0", input: 1895 });
+});
+
+test("a reply with no judgment usage has no second line", () => {
+  assert.equal(decisionUsageFromMessage({ metadata: { usage: { input_tokens: 12 } } }), null);
+  assert.equal(
+    decisionUsageFromMessage({
+      metadata: { orchestration: { decide: { shadow: { usage: { input_tokens: 0 } } } } },
+    }),
+    null,
+  );
+});
 
 test("auto-decide turns render as a decision line", () => {
   const message = {
