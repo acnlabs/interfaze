@@ -101,7 +101,7 @@ import { OwnerFileThumbs } from "../OwnerFileThumbs";
 import { anchorAttachment } from "../anchorAttachment";
 import { HistoryFilesPanel } from "../HistoryFilesPanel";
 import { ManuscriptPanel } from "../ManuscriptPanel";
-import { decisionEventLine, decisionUsageFromMessage } from "../decisionLine";
+import { decisionCallUsage, decisionEventLine, decisionStoppedLine, judgmentNeedsStoppedLine } from "../decisionLine";
 import { blockLabel, pageOpLine, pageRefLine, type PageOpRecord, type PageRefRecord } from "../pageOpText";
 import { blockKeyFromSearch, chatIdFromSearch } from "../chatLink";
 import { visibleManuscriptBlocks } from "../manuscriptPage";
@@ -1136,7 +1136,7 @@ function MessageMetaLine({
   t,
 }: {
   usage: { input: number; output: number; modelId: string | null } | null;
-  decision: { input: number; modelId: string | null } | null;
+  decision: { input: number | null; modelId: string | null } | null;
   text: string;
   createdAt: string;
   align: "start" | "end";
@@ -1153,7 +1153,10 @@ function MessageMetaLine({
   const model = usage ? compactModelLabel(usage.modelId) : "";
   const tokens = usage ? t.agentHopUsage(usage.input, usage.output) : "";
   const decisionModel = decision ? compactModelLabel(decision.modelId) : "";
-  const decisionTokens = decision ? t.decisionHopUsage(decision.input) : "";
+  const decisionTokens =
+    decision && decision.input != null && decision.input > 0
+      ? t.decisionHopUsage(decision.input)
+      : "";
   if (!model && !tokens && !decisionModel && !decisionTokens && !stamp && !text) return null;
   const dot = (key: string) => (
     <span key={key} aria-hidden style={{ flexShrink: 0 }}>
@@ -9220,6 +9223,13 @@ export function RanchChatShell(props: RanchChatShellProps) {
                   const dividerTitle = topicLabel || t.topics;
                   const highlight = !!m.thread_id && highlightTopicId === m.thread_id;
                   const autoDecisionText = decisionEventLine(uiLocale, m);
+                  const eventUsage = decisionCallUsage(m, displayMessages);
+                  const stoppedMark = judgmentNeedsStoppedLine(m, displayMessages)
+                    ? decisionCallUsage(
+                        { metadata: { decision: { auto: true, source_message_id: m.message_id } } },
+                        displayMessages,
+                      )
+                    : null;
                   const pageOp =
                     m.sender_type === "system" &&
                     m.metadata?.kind === "canvas_op" &&
@@ -9296,10 +9306,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           }}
                         >
                           {autoDecisionText}
-                          {decisionUsageFromMessage(m) ? (
+                          {eventUsage ? (
                             <MessageMetaLine
                               usage={null}
-                              decision={decisionUsageFromMessage(m)}
+                              decision={eventUsage}
                               text=""
                               createdAt={m.created_at}
                               align="start"
@@ -9631,6 +9641,31 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         t={t}
                       />
                     </div>
+                    {stoppedMark ? (
+                      <div
+                        className="ranch-msg"
+                        style={{
+                          position: "relative",
+                          alignSelf: "center",
+                          maxWidth: "min(92%, 36rem)",
+                          fontSize: 12,
+                          lineHeight: 1.45,
+                          color: colors.muted,
+                          textAlign: "center",
+                        }}
+                      >
+                        {decisionStoppedLine(uiLocale)}
+                        <MessageMetaLine
+                          usage={null}
+                          decision={stoppedMark}
+                          text=""
+                          createdAt={m.created_at}
+                          align="start"
+                          locale={uiLocale === "zh" ? "zh-CN" : "en-US"}
+                          t={t}
+                        />
+                      </div>
+                    ) : null}
                     </Fragment>
                   );
                 })}
