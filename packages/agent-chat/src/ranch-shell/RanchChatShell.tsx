@@ -101,7 +101,7 @@ import { OwnerFileThumbs } from "../OwnerFileThumbs";
 import { anchorAttachment } from "../anchorAttachment";
 import { HistoryFilesPanel } from "../HistoryFilesPanel";
 import { ManuscriptPanel } from "../ManuscriptPanel";
-import { decisionAutoLine, decisionUsageFromMessage, isAutoDecisionMessage } from "../decisionLine";
+import { decisionEventLine, decisionUsageFromMessage } from "../decisionLine";
 import { blockLabel, pageOpLine, pageRefLine, type PageOpRecord, type PageRefRecord } from "../pageOpText";
 import { blockKeyFromSearch, chatIdFromSearch } from "../chatLink";
 import { visibleManuscriptBlocks } from "../manuscriptPage";
@@ -9219,9 +9219,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                     (prev?.thread_id || null) !== m.thread_id;
                   const dividerTitle = topicLabel || t.topics;
                   const highlight = !!m.thread_id && highlightTopicId === m.thread_id;
-                  const autoDecisionText = isAutoDecisionMessage(m)
-                    ? decisionAutoLine(uiLocale, m.content || "")
-                    : "";
+                  const autoDecisionText = decisionEventLine(uiLocale, m);
                   const pageOp =
                     m.sender_type === "system" &&
                     m.metadata?.kind === "canvas_op" &&
@@ -9285,8 +9283,10 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           </div>
                         ) : null}
                         <div
+                          className="ranch-msg"
                           data-message-id={m.message_id}
                           style={{
+                            position: "relative",
                             alignSelf: "center",
                             maxWidth: "min(92%, 36rem)",
                             fontSize: 12,
@@ -9296,6 +9296,17 @@ export function RanchChatShell(props: RanchChatShellProps) {
                           }}
                         >
                           {autoDecisionText}
+                          {decisionUsageFromMessage(m) ? (
+                            <MessageMetaLine
+                              usage={null}
+                              decision={decisionUsageFromMessage(m)}
+                              text=""
+                              createdAt={m.created_at}
+                              align="start"
+                              locale={uiLocale === "zh" ? "zh-CN" : "en-US"}
+                              t={t}
+                            />
+                          ) : null}
                         </div>
                       </Fragment>
                     );
@@ -9612,7 +9623,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         : null}
                       <MessageMetaLine
                         usage={isUser ? null : hopUsageFromMessage(m)}
-                        decision={isUser ? null : decisionUsageFromMessage(m)}
+                        decision={null}
                         text={(m.content || "").trim()}
                         createdAt={m.created_at}
                         align={isUser ? "end" : "start"}

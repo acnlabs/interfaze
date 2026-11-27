@@ -13,29 +13,38 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const moduleExports = {};
 new Function("exports", js)(moduleExports);
-const { decisionAutoLine, decisionUsageFromMessage, isAutoDecisionMessage } = moduleExports;
+const { decisionAutoLine, decisionEventLine, decisionUsageFromMessage, isAutoDecisionMessage } = moduleExports;
 
-test("a judgment shows its model and input tokens on the reply", () => {
-  const usage = decisionUsageFromMessage({
+test("a judgment's model sits on the decision event", () => {
+  const sent = {
+    sender_type: "user",
+    content: "再做一次刚才只回复 alpha 的那件事",
     metadata: {
-      orchestration: {
-        decide: {
-          shadow: {
-            model: "jev-1.14.0",
-            usage: { input_tokens: 1895, output_tokens: 40 },
-          },
-        },
-      },
+      decision: { auto: true, model: "jev-1.14.0", input_tokens: 1895 },
     },
-  });
-  assert.deepEqual(usage, { modelId: "jev-1.14.0", input: 1895 });
+  };
+  assert.equal(
+    decisionEventLine("en", sent),
+    "Auto-decide picked “再做一次刚才只回复 alpha 的那件事”.",
+  );
+  assert.deepEqual(decisionUsageFromMessage(sent), { modelId: "jev-1.14.0", input: 1895 });
+  const stopped = {
+    sender_type: "system",
+    content: "",
+    metadata: { decision: { auto: true, event: "stopped", model: "jev-1.14.0", input_tokens: 1895 } },
+  };
+  assert.equal(decisionEventLine("zh", stopped), "自动决策停住了。");
+  assert.equal(decisionEventLine("en", stopped), "Auto-decide stopped.");
 });
 
-test("a reply with no judgment usage has no second line", () => {
-  assert.equal(decisionUsageFromMessage({ metadata: { usage: { input_tokens: 12 } } }), null);
+test("an agent reply does not carry the judgment usage", () => {
   assert.equal(
     decisionUsageFromMessage({
-      metadata: { orchestration: { decide: { shadow: { usage: { input_tokens: 0 } } } } },
+      sender_type: "agent",
+      metadata: {
+        usage: { input_tokens: 62618, output_tokens: 62, model_id: "deepseek-chat" },
+        orchestration: { decide: { shadow: { model: "jev-1.14.0", usage: { input_tokens: 1895 } } } },
+      },
     }),
     null,
   );
