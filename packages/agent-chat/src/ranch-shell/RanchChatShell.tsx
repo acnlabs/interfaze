@@ -101,7 +101,7 @@ import { OwnerFileThumbs } from "../OwnerFileThumbs";
 import { anchorAttachment } from "../anchorAttachment";
 import { HistoryFilesPanel } from "../HistoryFilesPanel";
 import { ManuscriptPanel } from "../ManuscriptPanel";
-import { decisionAutoLine, isAutoDecisionMessage } from "../decisionLine";
+import { decisionAutoLine, decisionUsageFromMessage, isAutoDecisionMessage } from "../decisionLine";
 import { blockLabel, pageOpLine, pageRefLine, type PageOpRecord, type PageRefRecord } from "../pageOpText";
 import { blockKeyFromSearch, chatIdFromSearch } from "../chatLink";
 import { visibleManuscriptBlocks } from "../manuscriptPage";
@@ -1128,6 +1128,7 @@ function formatMessageStamp(iso: string, locale: string): string {
 
 function MessageMetaLine({
   usage,
+  decision,
   text,
   createdAt,
   align,
@@ -1135,6 +1136,7 @@ function MessageMetaLine({
   t,
 }: {
   usage: { input: number; output: number; modelId: string | null } | null;
+  decision: { input: number; modelId: string | null } | null;
   text: string;
   createdAt: string;
   align: "start" | "end";
@@ -1150,7 +1152,9 @@ function MessageMetaLine({
   const stamp = formatMessageStamp(createdAt, locale);
   const model = usage ? compactModelLabel(usage.modelId) : "";
   const tokens = usage ? t.agentHopUsage(usage.input, usage.output) : "";
-  if (!model && !tokens && !stamp && !text) return null;
+  const decisionModel = decision ? compactModelLabel(decision.modelId) : "";
+  const decisionTokens = decision ? t.decisionHopUsage(decision.input) : "";
+  if (!model && !tokens && !decisionModel && !decisionTokens && !stamp && !text) return null;
   const dot = (key: string) => (
     <span key={key} aria-hidden style={{ flexShrink: 0 }}>
       ·
@@ -1165,8 +1169,9 @@ function MessageMetaLine({
         ...(align === "end" ? { right: 0 } : { left: 0 }),
         zIndex: 2,
         display: "flex",
-        alignItems: "center",
-        gap: 6,
+        flexDirection: "column",
+        alignItems: align === "end" ? "flex-end" : "flex-start",
+        gap: 1,
         padding: "1px 4px",
         borderRadius: 6,
         background: colors.bg,
@@ -1176,6 +1181,7 @@ function MessageMetaLine({
         whiteSpace: "nowrap",
       }}
     >
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       {model ? (
         <span
           title={usage?.modelId || undefined}
@@ -1214,6 +1220,18 @@ function MessageMetaLine({
         >
           {copied ? t.messageCopied : t.messageCopy}
         </button>
+      ) : null}
+      </div>
+      {decisionModel || decisionTokens ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {decisionModel ? (
+            <span title={decision?.modelId || undefined} style={{ flexShrink: 0 }}>
+              {decisionModel}
+            </span>
+          ) : null}
+          {decisionModel && decisionTokens ? dot("decision-tokens") : null}
+          {decisionTokens ? <span style={{ flexShrink: 0 }}>{decisionTokens}</span> : null}
+        </div>
       ) : null}
     </div>
   );
@@ -9594,6 +9612,7 @@ export function RanchChatShell(props: RanchChatShellProps) {
                         : null}
                       <MessageMetaLine
                         usage={isUser ? null : hopUsageFromMessage(m)}
+                        decision={isUser ? null : decisionUsageFromMessage(m)}
                         text={(m.content || "").trim()}
                         createdAt={m.created_at}
                         align={isUser ? "end" : "start"}

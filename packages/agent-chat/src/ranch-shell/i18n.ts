@@ -64,6 +64,8 @@ export type RanchMessages = {
   pricingMismatch: (listed: string, observed: string) => string;
   /** Agent bubble footer: this hop's token burn, in/out separately. */
   agentHopUsage: (input: number, output: number) => string;
+  /** Judgment call under the same reply. Input tokens only. */
+  decisionHopUsage: (input: number) => string;
   agentHopDetails: string;
   messageCopy: string;
   messageCopied: string;
@@ -1014,6 +1016,7 @@ const en: RanchMessages = {
   messageCopied: "Copied",
   agentHopUsage: (input, output) =>
     `in ${input.toLocaleString("en-US")} · out ${output.toLocaleString("en-US")}`,
+  decisionHopUsage: (input) => `in ${input.toLocaleString("en-US")}`,
   orchCalled: (name) => `Called ${name}`,
   orchAsked: (name) => `Asked ${name}`,
   orchFailed: (name) => `Couldn't reach ${name}`,
@@ -2015,6 +2018,7 @@ const zh: RanchMessages = {
   messageCopied: "已复制",
   agentHopUsage: (input, output) =>
     `入 ${input.toLocaleString("zh-CN")} · 出 ${output.toLocaleString("zh-CN")}`,
+  decisionHopUsage: (input) => `入 ${input.toLocaleString("zh-CN")}`,
   orchCalled: (name) => `调用了 ${name}`,
   orchAsked: (name) => `已请 ${name}`,
   orchFailed: (name) => `没叫到 ${name}`,
