@@ -1172,9 +1172,8 @@ function MessageMetaLine({
         ...(align === "end" ? { right: 0 } : { left: 0 }),
         zIndex: 2,
         display: "flex",
-        flexDirection: "column",
-        alignItems: align === "end" ? "flex-end" : "flex-start",
-        gap: 1,
+        alignItems: "center",
+        gap: 6,
         padding: "1px 4px",
         borderRadius: 6,
         background: colors.bg,
@@ -1184,7 +1183,6 @@ function MessageMetaLine({
         whiteSpace: "nowrap",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       {model ? (
         <span
           title={usage?.modelId || undefined}
@@ -1195,7 +1193,14 @@ function MessageMetaLine({
       ) : null}
       {model && tokens ? dot("tokens") : null}
       {tokens ? <span style={{ flexShrink: 0 }}>{tokens}</span> : null}
-      {(model || tokens) && stamp ? dot("stamp") : null}
+      {decisionModel ? (
+        <span title={decision?.modelId || undefined} style={{ flexShrink: 0 }}>
+          {decisionModel}
+        </span>
+      ) : null}
+      {decisionModel && decisionTokens ? dot("decision-tokens") : null}
+      {decisionTokens ? <span style={{ flexShrink: 0 }}>{decisionTokens}</span> : null}
+      {(model || tokens || decisionModel || decisionTokens) && stamp ? dot("stamp") : null}
       {stamp ? (
         <time dateTime={createdAt} style={{ flexShrink: 0 }}>
           {stamp}
@@ -1223,18 +1228,6 @@ function MessageMetaLine({
         >
           {copied ? t.messageCopied : t.messageCopy}
         </button>
-      ) : null}
-      </div>
-      {decisionModel || decisionTokens ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {decisionModel ? (
-            <span title={decision?.modelId || undefined} style={{ flexShrink: 0 }}>
-              {decisionModel}
-            </span>
-          ) : null}
-          {decisionModel && decisionTokens ? dot("decision-tokens") : null}
-          {decisionTokens ? <span style={{ flexShrink: 0 }}>{decisionTokens}</span> : null}
-        </div>
       ) : null}
     </div>
   );
