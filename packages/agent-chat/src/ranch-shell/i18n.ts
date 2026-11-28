@@ -66,6 +66,7 @@ export type RanchMessages = {
   agentHopUsage: (input: number, output: number) => string;
   /** Judgment call under the same reply. Input tokens only. */
   decisionHopUsage: (input: number) => string;
+  decisionChargeSplit: (upstream: string, markup: string, fee: string) => string;
   agentHopDetails: string;
   messageCopy: string;
   messageCopied: string;
@@ -1017,6 +1018,8 @@ const en: RanchMessages = {
   agentHopUsage: (input, output) =>
     `in ${input.toLocaleString("en-US")} · out ${output.toLocaleString("en-US")}`,
   decisionHopUsage: (input) => `in ${input.toLocaleString("en-US")}`,
+  decisionChargeSplit: (upstream, markup, fee) =>
+    `upstream ${upstream} · channel ${markup} · fee ${fee}`,
   orchCalled: (name) => `Called ${name}`,
   orchAsked: (name) => `Asked ${name}`,
   orchFailed: (name) => `Couldn't reach ${name}`,
@@ -2019,6 +2022,8 @@ const zh: RanchMessages = {
   agentHopUsage: (input, output) =>
     `入 ${input.toLocaleString("zh-CN")} · 出 ${output.toLocaleString("zh-CN")}`,
   decisionHopUsage: (input) => `入 ${input.toLocaleString("zh-CN")}`,
+  decisionChargeSplit: (upstream, markup, fee) =>
+    `进货 ${upstream} · 通道 ${markup} · 抽成 ${fee}`,
   orchCalled: (name) => `调用了 ${name}`,
   orchAsked: (name) => `已请 ${name}`,
   orchFailed: (name) => `没叫到 ${name}`,

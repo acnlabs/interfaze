@@ -1157,6 +1157,7 @@ function MessageMetaLine({
     decision && decision.input != null && decision.input > 0
       ? t.decisionHopUsage(decision.input)
       : "";
+  const showDecision = Boolean(decisionModel && decisionTokens);
   if (!model && !tokens && !decisionModel && !decisionTokens && !stamp && !text) return null;
   const dot = (key: string) => (
     <span key={key} aria-hidden style={{ flexShrink: 0 }}>
@@ -1188,7 +1189,7 @@ function MessageMetaLine({
           {stamp}
         </time>
       ) : null}
-      {stamp && (model || tokens || decisionModel || decisionTokens) ? dot("stamp") : null}
+      {stamp && (model || tokens || showDecision) ? dot("stamp") : null}
       {model ? (
         <span
           title={usage?.modelId || undefined}
@@ -1199,15 +1200,15 @@ function MessageMetaLine({
       ) : null}
       {model && tokens ? dot("tokens") : null}
       {tokens ? <span style={{ flexShrink: 0 }}>{tokens}</span> : null}
-      {(model || tokens) && (decisionModel || decisionTokens) ? dot("decision") : null}
-      {decisionModel ? (
+      {(model || tokens) && showDecision ? dot("decision") : null}
+      {showDecision ? (
         <span title={decision?.modelId || undefined} style={{ flexShrink: 0 }}>
           {decisionModel}
         </span>
       ) : null}
-      {decisionModel && decisionTokens ? dot("decision-tokens") : null}
-      {decisionTokens ? <span style={{ flexShrink: 0 }}>{decisionTokens}</span> : null}
-      {(stamp || model || tokens || decisionModel || decisionTokens) && text ? dot("copy") : null}
+      {showDecision ? dot("decision-tokens") : null}
+      {showDecision ? <span style={{ flexShrink: 0 }}>{decisionTokens}</span> : null}
+      {(stamp || model || tokens || showDecision) && text ? dot("copy") : null}
       {text ? (
         <button
           type="button"

@@ -3070,7 +3070,7 @@ export function AccountWalletPanel({
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {txDetailLine(tx.subject, tx.created_at, t, locale)}
+                          {txDetailLine(tx.subject, tx.created_at, t, locale, tx.decision_split)}
                         </span>
                       </span>
                       <span

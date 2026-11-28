@@ -1,5 +1,12 @@
 import { computerName } from "../computerLabel";
+import { formatLedgerAmount } from "../creditDisplay";
 import type { RanchMessages } from "./i18n";
+
+export type DecisionSplit = {
+  upstream_cost_micros: number;
+  list_markup_micros: number;
+  usage_fee_micros: number;
+};
 
 export type TxSubject = {
   kind?: string | null;
@@ -80,10 +87,26 @@ export function txDetailLine(
   createdAt: string | null | undefined,
   t: RanchMessages,
   locale: "en" | "zh",
+  split?: DecisionSplit | null,
 ): string {
   const name = txSubjectLabel(subject, t, locale);
   const when = fmtTxTimeShort(createdAt);
-  return [name, when].filter(Boolean).join(" · ");
+  const parts = [name, when].filter(Boolean);
+  if (
+    split &&
+    Number.isFinite(split.upstream_cost_micros) &&
+    Number.isFinite(split.list_markup_micros) &&
+    Number.isFinite(split.usage_fee_micros)
+  ) {
+    parts.push(
+      t.decisionChargeSplit(
+        formatLedgerAmount(split.upstream_cost_micros, "micros"),
+        formatLedgerAmount(split.list_markup_micros, "micros"),
+        formatLedgerAmount(split.usage_fee_micros, "micros"),
+      ),
+    );
+  }
+  return parts.join(" · ");
 }
 
 /** Compact timestamp for ledger rows, e.g. "8/27, 11:12 PM" / "8/27 23:12". */

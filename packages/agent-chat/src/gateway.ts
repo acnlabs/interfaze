@@ -372,6 +372,12 @@ export type MyAgentWalletTx = {
   status: string;
   description?: string | null;
   created_at?: string | null;
+  /** Decision charge only: upstream, the 15% channel cover, and the usage fee, in micros. */
+  decision_split?: {
+    upstream_cost_micros: number;
+    list_markup_micros: number;
+    usage_fee_micros: number;
+  } | null;
   /** Which chat or computer this charge belongs to, when we know. */
   subject?: {
     kind?: string | null;
