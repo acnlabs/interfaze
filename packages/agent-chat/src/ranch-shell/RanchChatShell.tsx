@@ -1183,6 +1183,12 @@ function MessageMetaLine({
         whiteSpace: "nowrap",
       }}
     >
+      {stamp ? (
+        <time dateTime={createdAt} style={{ flexShrink: 0 }}>
+          {stamp}
+        </time>
+      ) : null}
+      {stamp && (model || tokens || decisionModel || decisionTokens) ? dot("stamp") : null}
       {model ? (
         <span
           title={usage?.modelId || undefined}
@@ -1193,6 +1199,7 @@ function MessageMetaLine({
       ) : null}
       {model && tokens ? dot("tokens") : null}
       {tokens ? <span style={{ flexShrink: 0 }}>{tokens}</span> : null}
+      {(model || tokens) && (decisionModel || decisionTokens) ? dot("decision") : null}
       {decisionModel ? (
         <span title={decision?.modelId || undefined} style={{ flexShrink: 0 }}>
           {decisionModel}
@@ -1200,13 +1207,7 @@ function MessageMetaLine({
       ) : null}
       {decisionModel && decisionTokens ? dot("decision-tokens") : null}
       {decisionTokens ? <span style={{ flexShrink: 0 }}>{decisionTokens}</span> : null}
-      {(model || tokens || decisionModel || decisionTokens) && stamp ? dot("stamp") : null}
-      {stamp ? (
-        <time dateTime={createdAt} style={{ flexShrink: 0 }}>
-          {stamp}
-        </time>
-      ) : null}
-      {(model || tokens || stamp) && text ? dot("copy") : null}
+      {(stamp || model || tokens || decisionModel || decisionTokens) && text ? dot("copy") : null}
       {text ? (
         <button
           type="button"
