@@ -589,7 +589,7 @@ export function AgentOwnerWallet({
             }}
           >
             {txList.shown.map((tx) => {
-              const detail = txDetailLine(tx.subject, tx.created_at, t, locale);
+              const detail = txDetailLine(tx.subject, tx.created_at, t, locale, tx.decision_split);
               return (
                 <li
                   key={tx.transaction_id}
